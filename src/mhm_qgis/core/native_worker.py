@@ -12,7 +12,7 @@ from .handlers.lookup import (
     SoilHorizon,
     SoilInput,
 )
-from ..advanced_input_processing import process_land_cover_input, process_soil_input
+from .morphology.layers.advanced_inputs import process_land_cover_input, process_soil_input
 from .handlers.lookup import run_lookup_job
 
 

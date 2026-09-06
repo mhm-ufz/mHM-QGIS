@@ -70,7 +70,9 @@ def test_relocated_worker_imports_without_gui_dependencies():
         [sys.executable, "-c",
          "import sys; "
          "sys.modules.update({name: None for name in ('qgis', 'PyQt5', 'PyQt6', 'PySide6', 'mhm_qgis.qt')}); "
-         "from mhm_qgis.core.native_worker import run; assert callable(run)"],
+         "from mhm_qgis.core.native_worker import run; assert callable(run); "
+         "from mhm_qgis.core.handlers.store.morphology import resolve_display_output; "
+         "assert callable(resolve_display_output)"],
         capture_output=True, text=True,
         env=dict(os.environ, PYTHONPATH=str(REPO / "src")),
     )

@@ -87,6 +87,74 @@ def test_dialog_maps_new_combos_and_discovers_relative_project_files(tmp_path):
     dialog.close()
 
 
+def test_main_configuration_buttons_use_dialog_first_controller(monkeypatch):
+    from mhm_qgis.qt.controllers import main
+
+    _app()
+    calls = []
+    for name in ("edit_namelists", "run_mhm", "handle_version_changed"):
+        monkeypatch.setattr(
+            main, name, lambda owner, action=name: calls.append((action, owner)),
+        )
+    dialog = MhmQgisDialog()
+    calls.clear()
+    dialog.pushButton_edit_nmls.click()
+    dialog.pushButton_execute_mHM.click()
+    dialog.comboBox_mHMversion.setCurrentIndex(
+        (dialog.comboBox_mHMversion.currentIndex() + 1) % dialog.comboBox_mHMversion.count()
+    )
+    assert calls == [(name, dialog) for name in (
+        "edit_namelists", "run_mhm", "handle_version_changed",
+    )]
+    assert not hasattr(dialog, "configuration_processor")
+    dialog.close()
+
+
+def test_morphology_display_wiring_selects_historical_band(tmp_path, monkeypatch):
+    from qgis.PyQt.QtCore import QDate
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+    from mhm_qgis.qgis_bridge.display import morphology
+    from mhm_qgis.qt.controllers import main
+
+    _app()
+    output = tmp_path / "lc_periods.nc"
+    output.touch()
+    update_section(tmp_path, "land_cover", {
+        "output_path": str(output),
+        "scenes": [
+            {"start_year": 1990, "end_year": 1999},
+            {"start_year": 2000, "end_year": 2010},
+        ],
+    })
+    rendered, warnings = [], []
+    monkeypatch.setattr(
+        morphology, "show_raster",
+        lambda owner, path, name, **options: rendered.append((path, options)),
+    )
+    monkeypatch.setattr(
+        main.QMessageBox, "warning", lambda *args: warnings.append(args[-1]),
+    )
+    dialog = MhmQgisDialog()
+    dialog.project_folder = str(tmp_path)
+    combo = dialog.comboBox_morphVariableToDisplay
+    editor = dialog.dateTimeEdit_forHistoricalInputs
+    combo.setCurrentIndex(combo.findData("land_cover"))
+    assert editor.isEnabled()
+    assert editor.minimumDate() == QDate(1990, 1, 1)
+    assert editor.maximumDate() == QDate(2010, 12, 31)
+    editor.setDate(QDate(2005, 1, 1))
+    dialog.pushButton_morphLayerDisplay.click()
+    assert rendered == [(output, {
+        "variable": "land_cover", "band": 2, "is_raster": True,
+    })]
+    combo.setCurrentIndex(combo.findData("dem"))
+    assert not editor.isEnabled()
+    dialog.pushButton_morphLayerDisplay.click()
+    assert warnings == ["The selected morphology output has not been prepared yet."]
+    assert len(rendered) == 1
+    dialog.close()
+
+
 def test_project_without_saved_state_clears_previous_project_inputs(tmp_path):
     _app()
     first_project = tmp_path / "first"

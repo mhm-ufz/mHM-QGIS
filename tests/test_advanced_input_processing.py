@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from mhm_qgis import advanced_input_processing as processing
+from mhm_qgis.core.morphology.layers import advanced_inputs as processing
 from mhm_qgis.core.handlers.lookup import (
     LandUseInput,
     LandUsePeriod,

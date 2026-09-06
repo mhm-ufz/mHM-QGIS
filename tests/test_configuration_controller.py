@@ -8,8 +8,13 @@ from pathlib import Path
 
 import nml_tools.gui
 
-from mhm_qgis import configuration_processor as controller_module
-from mhm_qgis.configuration_processor import ConfigurationProcessor
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from mhm_qgis import standalone
+
+standalone.install(force=True)
+
+from mhm_qgis.qt.controllers import main as controller_module
 from mhm_qgis.dependency_bootstrap import (
     configure_qtpy_api,
     dependency_from_requirement_line,
@@ -74,7 +79,7 @@ def test_edit_namelists_forwards_project_values_and_dimensions(
         lambda **kwargs: calls.append(kwargs) or 0,
     )
 
-    assert ConfigurationProcessor(dialog).edit_namelists() is True
+    assert controller_module.edit_namelists(dialog) is True
     assert prepared == [(str(tmp_path), "5.13")]
     assert calls == [{
         "schemas_dir": Path(controller_module.plugin_root()) / "nml-schemas" / "v5.13",
@@ -94,7 +99,7 @@ def test_run_mhm_uses_project_terminal(tmp_path: Path, monkeypatch) -> None:
         lambda path, version: [],
     )
 
-    assert ConfigurationProcessor(dialog).run_mhm() is True
+    assert controller_module.run_mhm(dialog) is True
     assert dialog.terminal.calls == [(
         "mhm",
         {"cwd": workspace_folder(tmp_path), "show": True},
@@ -105,16 +110,54 @@ def test_version_change_prepares_project_and_saves_state(
         tmp_path: Path, monkeypatch) -> None:
     dialog = Dialog(tmp_path, "5.13")
     prepared = []
+    refreshed = []
+    dialog.refresh_advanced_nml_settings = lambda: refreshed.append(True)
     monkeypatch.setattr(
         controller_module,
         "ensure_project_structure",
         lambda path, version: prepared.append((path, version)),
     )
 
-    ConfigurationProcessor(dialog).handle_version_changed()
+    controller_module.handle_version_changed(dialog)
 
     assert prepared == [(str(tmp_path), "5.13")]
+    assert refreshed == [True]
     assert dialog.saved == 1
+
+
+def test_configuration_defaults_and_missing_project(monkeypatch):
+    dialog = Dialog("", " ")
+    assert controller_module.selected_version(dialog) == "6.0"
+    del dialog.comboBox_mHMversion
+    assert controller_module.selected_version(dialog) == "6.0"
+    warnings = []
+    monkeypatch.setattr(
+        controller_module.QMessageBox, "warning",
+        lambda *args: warnings.append(args[1]),
+    )
+    assert controller_module.edit_namelists(dialog) is False
+    assert controller_module.run_mhm(dialog) is False
+    assert warnings == ["Project Folder Required"] * 2
+    assert dialog.terminal.calls == []
+
+
+def test_editor_failure_is_logged_and_reported(tmp_path, monkeypatch):
+    dialog = Dialog(tmp_path)
+    errors = []
+
+    def fail(*args):
+        raise OSError("Cannot prepare project")
+
+    monkeypatch.setattr(controller_module, "ensure_project_structure", fail)
+    monkeypatch.setattr(
+        controller_module.QMessageBox, "critical",
+        lambda parent, title, message: errors.append((title, message)),
+    )
+    assert controller_module.edit_namelists(dialog) is False
+    assert errors == [("Configuration Error", "Cannot prepare project")]
+    assert dialog.messages == [
+        "ERROR: Edit Namelists failed. Details: Cannot prepare project"
+    ]
 
 
 def test_qtpy_is_forced_to_pyqt5(monkeypatch) -> None:

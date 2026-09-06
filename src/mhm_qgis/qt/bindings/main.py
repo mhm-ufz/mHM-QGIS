@@ -17,7 +17,6 @@ except ImportError:
     from qgis.core import QgsProject
 
 from ...qgis_bridge.display import meteo as meteo_display
-from ...qgis_bridge.display import morphology as morphology_display
 from ...qgis_bridge.display import output as output_display
 from ..controllers import elevation_band
 
@@ -178,10 +177,10 @@ def bind(dialog):
             background=True,
         )
     dialog.pushButton_morphLayerDisplay.clicked.connect(
-        lambda checked=False: morphology_display.display_selected_layer(dialog)
+        lambda checked=False: dialog.display_selected_morphology_layer()
     )
     dialog.comboBox_morphVariableToDisplay.currentIndexChanged.connect(
-        lambda index=None: morphology_display.update_date_control(dialog, index)
+        lambda index=None: dialog.refresh_morphology_date_control()
     )
 
     # Meteorology display: the slider and the date editor drive one step index.
@@ -254,7 +253,7 @@ def bind(dialog):
     dialog.connect_processor_button(
         dialog.pushButton_edit_nmls,
         "Edit Namelists",
-        dialog.configuration_processor.edit_namelists,
+        dialog.edit_namelists,
     )
     run_mhm_button = dialog.pushButton_execute_mHM
     if run_mhm_button is not None:
@@ -262,13 +261,13 @@ def bind(dialog):
         dialog.connect_processor_button(
             run_mhm_button,
             "Run mHM",
-            dialog.configuration_processor.run_mhm,
+            dialog.run_mhm,
         )
     terminal_button = dialog.pushButton_terminal
     if terminal_button is not None:
         terminal_button.clicked.connect(dialog.open_project_terminal)
     dialog.comboBox_mHMversion.currentIndexChanged.connect(
-        lambda index=None: dialog.configuration_processor.handle_version_changed()
+        lambda index=None: dialog.handle_version_changed()
     )
     _bind_input_state(dialog)
     dialog.connect_input_state_teardown_guards()

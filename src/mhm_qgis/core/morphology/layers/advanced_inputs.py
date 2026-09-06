@@ -1,21 +1,20 @@
-"""Publish advanced land-cover and soil inputs through mHM-tools."""
+"""Prepare and stage advanced land-cover and soil inputs through mHM-tools."""
 
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from .core.handlers.lookup import (
+from ...handlers.lookup import (
     LandUseInput,
     SoilInput,
     write_land_use_manifest,
     write_soil_manifest,
 )
-from .applications.mhm_tools_handler import prepare_land_cover_periods, prepare_soil_horizons
-from .core.handlers.state.nml_settings import relative_workspace_path, update_section
-from .core.handlers.store.paths import geometry_folder, morph_staging_folder
+from ....applications.mhm_tools_handler import prepare_land_cover_periods, prepare_soil_horizons
+from ...handlers.state.nml_settings import relative_workspace_path, update_section
+from ...handlers.store.paths import geometry_folder, morph_staging_folder
 
 
 def process_land_cover_input(
@@ -26,14 +25,14 @@ def process_land_cover_input(
     *,
     log=None,
 ) -> tuple[Path, ...]:
-    """Write a period manifest, format it, and publish model-ready outputs."""
+    """Write a period manifest and stage outputs for common-L0 publication."""
     manifest = _manifest_path(project_folder, "land_cover")
     write_land_use_manifest(value, manifest)
     output_type = "asc" if str(version).startswith("5") else "nc"
     with TemporaryDirectory(
         prefix="mhm_qgis_land_cover_", dir=geometry_folder(project_folder)
     ) as temporary:
-        outputs = prepare_land_cover_periods(
+        prepare_land_cover_periods(
             manifest,
             dem_file,
             temporary,
@@ -93,7 +92,7 @@ def process_soil_input(
     *,
     log=None,
 ) -> tuple[Path, Path]:
-    """Write a horizon manifest, format it, and publish model-ready outputs."""
+    """Write a horizon manifest and stage outputs for common-L0 publication."""
     manifest = _manifest_path(project_folder, "soil")
     write_soil_manifest(value, manifest)
     output_type = "asc" if str(version).startswith("5") else "nc"
@@ -145,36 +144,6 @@ def process_soil_input(
     return data_path, definition_path
 
 
-def configure_ready_land_cover(project_folder, source, version) -> Path:
-    """Copy an already model-ready land-cover input into the project."""
-    source = Path(source).expanduser().resolve()
-    if not source.is_file() or source.suffix.lower() not in {".asc", ".nc", ".tif"}:
-        raise ValueError("Select an existing ASC, NetCDF, or TIFF land-cover file.")
-    target = Path(morph_staging_folder(project_folder)) / f"lc{source.suffix.lower()}"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_name(f".{target.name}.tmp")
-    shutil.copyfile(source, temporary)
-    os.replace(temporary, target)
-    update_section(
-        project_folder,
-        "land_cover",
-        {
-            "mode": "mhm_ready",
-            "output_path": relative_workspace_path(project_folder, target),
-            "variable": "land_cover",
-            "scenes": [
-                {
-                    "start_year": 1900,
-                    "end_year": 2100,
-                    "source_path": str(source),
-                    "output_path": relative_workspace_path(project_folder, target),
-                }
-            ],
-        },
-    )
-    return target
-
-
 def _manifest_path(project_folder, name):
     folder = Path(geometry_folder(project_folder)) / "format-data" / name
     folder.mkdir(parents=True, exist_ok=True)
@@ -202,7 +171,6 @@ def _published_match(outputs, name):
 
 
 __all__ = [
-    "configure_ready_land_cover",
     "process_land_cover_input",
     "process_soil_input",
 ]

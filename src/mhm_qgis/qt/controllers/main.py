@@ -11,12 +11,14 @@ import os
 from pathlib import Path
 
 try:
+    from qgis.PyQt.QtCore import QDate
     from qgis.PyQt.QtWidgets import (QComboBox, QDialog, QFileDialog,
                                      QMessageBox)
 except ImportError:
     from ...standalone import install
 
     install(force=True)
+    from qgis.PyQt.QtCore import QDate
     from qgis.PyQt.QtWidgets import (QComboBox, QDialog, QFileDialog,
                                      QMessageBox)
 
@@ -36,11 +38,101 @@ from ..dialogs.input_selection import (INPUT_EXTENSIONS, InputComboAdapter,
                                 scan_project_folders, scan_project_inputs)
 from ...core.meteorology.forcing import MeteoFolderSpec
 from ...core.meteorology.forcing import inspect_meteo_folder_cached
-from ...morphology_display import DISPLAY_KEYS
+from ...dependency_bootstrap import configure_qtpy_api
 from ...core.morphology.hydrology.outlets import StationIdError, outlet_ids_from_layer
 from ...core.handlers.state import processing
-from ...core.handlers.store.paths import data_folder, master_data_folder
+from ...core.handlers.store.layout import ensure_project_structure
+from ...core.handlers.store.morphology import land_cover_periods, resolve_display_output
+from ...core.handlers.store.paths import (
+    data_folder, master_data_folder, plugin_root, version_key, workspace_folder,
+)
 from ..reporting import error_detail
+
+
+DISPLAY_KEYS = (
+    "dem",
+    "slope",
+    "aspect",
+    "flow_accumulation",
+    "flow_direction",
+    "idgauges",
+    "land_cover",
+    "soil",
+    "geology",
+    "lai",
+    "domain_mask",
+)
+
+
+def selected_version(dialog) -> str:
+    """Return the selected mHM version, defaulting to v6."""
+    combo = getattr(dialog, "comboBox_mHMversion", None)
+    return (combo.currentText().strip() if combo is not None else "") or "6.0"
+
+
+def handle_version_changed(dialog) -> None:
+    """Prepare the selected project layout and persist the selection."""
+    if dialog.project_folder:
+        ensure_project_structure(dialog.project_folder, selected_version(dialog))
+        refresh = getattr(dialog, "refresh_advanced_nml_settings", None)
+        if refresh is not None:
+            refresh()
+    dialog.save_input_state()
+
+
+def edit_namelists(dialog) -> bool:
+    """Open nml-tools with mhm_qgis paths, values, and dimensions."""
+    if not _ensure_project_folder(dialog):
+        return False
+    try:
+        from ...vSpecific import build_dimensions, build_initial_values
+
+        version = selected_version(dialog)
+        workspace = workspace_folder(dialog.project_folder)
+        schemas_dir = Path(plugin_root()) / "nml-schemas" / version_key(version)
+        ensure_project_structure(dialog.project_folder, version)
+        configure_qtpy_api()
+
+        from ...applications.nml_tools_handler import launch_profile_editor
+
+        dialog.log_message(f"Opening namelist editor for mHM {version}...")
+        launch_profile_editor(
+            schemas_dir=schemas_dir,
+            output_dir=workspace,
+            initial_values=build_initial_values(version, dialog),
+            initial_dimensions=build_dimensions(version, dialog),
+            log=dialog.log_message,
+        )
+        return True
+    except Exception as exc:
+        dialog.log_message(f"ERROR: Edit Namelists failed. Details: {exc}")
+        QMessageBox.critical(dialog, "Configuration Error", str(exc))
+        return False
+
+
+def run_mhm(dialog) -> bool:
+    """Run mHM in the selected project folder through its terminal."""
+    if not _ensure_project_folder(dialog):
+        return False
+    ensure_project_structure(dialog.project_folder, selected_version(dialog))
+    workspace = workspace_folder(dialog.project_folder)
+    terminal = dialog.open_project_terminal()
+    if terminal is None:
+        return False
+    dialog.log_message(f"Running mHM in project directory: {workspace}")
+    return terminal.run_command("mhm", cwd=workspace, show=True)
+
+
+def _ensure_project_folder(dialog) -> bool:
+    if dialog.project_folder:
+        return True
+    QMessageBox.warning(
+        dialog,
+        "Project Folder Required",
+        "Select a project folder before editing namelists.",
+    )
+    return False
+
 
 def configure_input_adapters(dialog):
     """Wrap each plain input combo in the layer-combo interface the code uses."""
@@ -79,6 +171,53 @@ def configure_morphology_display(dialog):
     editor = dialog.dateTimeEdit_forHistoricalInputs
     if editor is not None:
         editor.setEnabled(False)
+
+
+def refresh_morphology_date_control(dialog) -> None:
+    """Enable the date selector only for historical land cover."""
+    editor = dialog.dateTimeEdit_forHistoricalInputs
+    combo = dialog.comboBox_morphVariableToDisplay
+    if editor is None or combo is None:
+        return
+    periods = land_cover_periods(dialog.project_folder) if dialog.project_folder else []
+    enabled = combo.currentData() == "land_cover" and len(periods) > 1
+    editor.setEnabled(enabled)
+    if not enabled:
+        return
+    try:
+        first = min(int(period["start_year"]) for period in periods)
+        last = max(int(period["end_year"]) for period in periods)
+    except (KeyError, TypeError, ValueError):
+        editor.setEnabled(False)
+        return
+    editor.setMinimumDate(QDate(first, 1, 1))
+    editor.setMaximumDate(QDate(last, 12, 31))
+    editor.setDate(QDate(first, 1, 1))
+
+
+def display_selected_morphology_layer(dialog) -> None:
+    """Resolve the selected output and hand it to the QGIS renderer."""
+    if not dialog.project_folder:
+        QMessageBox.warning(dialog, "Display Layer", "Select a project folder first.")
+        return
+    key = dialog.comboBox_morphVariableToDisplay.currentData()
+    if not key:
+        QMessageBox.warning(dialog, "Display Layer", "Select a morphology layer.")
+        return
+    year = None
+    if dialog.dateTimeEdit_forHistoricalInputs.isEnabled():
+        year = dialog.dateTimeEdit_forHistoricalInputs.date().year()
+    output = resolve_display_output(dialog.project_folder, key, year=year)
+    if output is None:
+        QMessageBox.warning(
+            dialog,
+            "Display Layer",
+            "The selected morphology output has not been prepared yet.",
+        )
+        return
+    from ...qgis_bridge.display.morphology import show_output
+
+    show_output(dialog, output)
 
 
 def configure_input_layer_combo_boxes(dialog):

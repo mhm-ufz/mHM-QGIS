@@ -25,7 +25,6 @@ except ImportError:
 
 from ..threads.meteo_workflow import MeteorologyWorkflowWorker
 from ..reporting import error_detail
-from ...configuration_processor import ConfigurationProcessor
 from ...core.grid import (
     Extent,
     Grid,
@@ -69,7 +68,6 @@ from ...core.morphology.hydrology.outlets import (
 )
 from ...core.handlers.store.paths import data_folder, data_raw_folder, geometry_folder, output_folder, restart_folder, workspace_folder, z_temp_folder
 from ...core.handlers.store.layout import ensure_project_structure
-from ...morphology_display import DISPLAY_KEYS
 from ...standalone import is_active as standalone_is_active
 from ...qt.bindings.main import bind as bind_main_form
 from ...qt.controllers import main as main_controller
@@ -150,9 +148,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         )
         self._capture_workflow_button_default_styles()
 
-        # Configuration is the only remaining UI-owned processor. Morphology
-        # work is exposed as explicit core/QGIS commands by the task object.
-        self.configuration_processor = ConfigurationProcessor(self)
         self.morphology_tasks = MorphologyTaskBridge(self)
 
         # --- Connect signals and slots ---
@@ -203,10 +198,22 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         meteo_display.refresh(self)
 
     def refresh_morphology_date_control(self):
-        """Re-evaluate the historical-land-cover date selector."""
-        from ...qgis_bridge.display import morphology as morphology_display
+        return main_controller.refresh_morphology_date_control(self)
 
-        morphology_display.update_date_control(self)
+    def display_selected_morphology_layer(self):
+        return main_controller.display_selected_morphology_layer(self)
+
+    def selected_version(self):
+        return main_controller.selected_version(self)
+
+    def handle_version_changed(self):
+        return main_controller.handle_version_changed(self)
+
+    def edit_namelists(self):
+        return main_controller.edit_namelists(self)
+
+    def run_mhm(self):
+        return main_controller.run_mhm(self)
 
     def refresh_output_display(self):
         """Re-read the mHM output and re-range the display controls."""
@@ -1261,72 +1268,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def uses_advanced_categorical_input(self, *args, **kwargs):
         return main_controller.uses_advanced_categorical_input(self, *args, **kwargs)
 
-    def process_advanced_categorical_input(self, kind):
-        """Prepare configured historical land use or multi-horizon soil."""
-        if not self.check_prerequisites():
-            return False
-        try:
-            filled_dem = self.morphology_tasks.prepare_filled_dem()
-        except Exception as error:
-            self.log_message(f"ERROR preparing filled DEM: {error}")
-            return False
-        version = self.comboBox_mHMversion.currentText().strip()
-        try:
-            if kind == "lc" and self.categorical_input_mode("lc").lower() == "mhm ready":
-                from ...advanced_input_processing import configure_ready_land_cover
-
-                if not self._land_cover_ready_source:
-                    raise ValueError("Select an mHM-ready land-cover file first.")
-                outputs = (
-                    configure_ready_land_cover(
-                        self.project_folder,
-                        self._land_cover_ready_source,
-                        version,
-                    ),
-                )
-            elif kind == "lc":
-                from ...advanced_input_processing import process_land_cover_input
-
-                value = self._land_use_input_value(
-                    self._advanced_inputs.get("land_cover")
-                )
-                outputs = process_land_cover_input(
-                    self.project_folder,
-                    version,
-                    value,
-                    filled_dem,
-                    log=self.log_message,
-                )
-            else:
-                from ...advanced_input_processing import process_soil_input
-
-                value = self._soil_input_value(self._advanced_inputs.get("soil"))
-                outputs = process_soil_input(
-                    self.project_folder,
-                    version,
-                    value,
-                    filled_dem,
-                    log=self.log_message,
-                )
-            for output in outputs:
-                from ...core.handlers.store import registry
-
-                registry.register(
-                    self.project_folder,
-                    str(output),
-                    name=output.name,
-                    loaded=False,
-                )
-            self.log_message(
-                f"Advanced {'land-cover' if kind == 'lc' else 'soil'} data prepared."
-            )
-            self.refresh_morphology_date_control()
-            return True
-        except Exception as error:
-            self.log_message(f"ERROR preparing advanced {kind} data: {error}")
-            QMessageBox.critical(self, "Morphology Input Error", str(error))
-            return False
-
     def _save_land_cover_nml_input(self, value):
         from ...core.handlers.state.nml_settings import update_section
 
@@ -2070,7 +2011,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
             try:
                 created = ensure_project_structure(
-                    self.project_folder, self.configuration_processor.selected_version()
+                    self.project_folder, self.selected_version()
                 )
                 self.project_settings = project_settings.read(self.project_folder)
             except (OSError, ValueError) as error:

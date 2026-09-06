@@ -47,7 +47,8 @@ decision.
     `domain_state`, `settings`, `meteo_outputs`; `processing` is the single update boundary for
     `mhm_qgis_processing_state.json`.
   - `handlers/store/`: where a file is and whether it exists yet -- `paths` (pure
-    joins), `layout` (version branching, project structure), `registry` (what exists).
+    joins), `layout` (version branching, project structure), `registry` (what exists),
+    `morphology` (prepared-output discovery and historical-period selection).
   - `handlers/lookup/`: CSV/TXT lookup tables and the manifests built from them --
     `table`, `manifests`, `geology`, `job`.
   - `post/`: mHM output discovery and variable/time resolution.
@@ -55,7 +56,9 @@ decision.
   - `grid/`: QGIS-free exact resolutions, extents, headers, alignment, coordinate
     generation and NumPy/xarray grid matching.
   - `morphology/`: QGIS-free DEM/hydrology, categorical, LAI, domain-DEM and
-    elevation-band operations.
+    elevation-band operations. `layers/advanced_inputs.py` prepares historical land
+    cover and layered soil in staging; `layers/advanced_l0.py` handles final common-L0
+    alignment and publication.
   - `meteorology/`: QGIS-free forcing preparation; `forcing/` is the public API and
     `ERA5Land/mhm/` contains its internal ERA5 implementation.
   - `executions/`: canonical workflow plans and commands. `executions/morphology/`
@@ -68,9 +71,9 @@ decision.
 - `standalone/`: the Qt-backed shim for running without QGIS, plus the console entry.
 
 Top-level modules that remain include `mhm_qgis.py` (plugin lifecycle, reload-safe
-imports), `configuration_processor.py`,
-`advanced_input_processing.py`, and `dependency_bootstrap.py`. Morphology task
-scheduling now lives in `qt/objects/morphology_tasks.py`.
+imports) and `dependency_bootstrap.py`. Main-form configuration actions live in
+`qt/controllers/main.py`; morphology task scheduling lives in
+`qt/objects/morphology_tasks.py`.
 
 ## Qt Layering
 
@@ -553,6 +556,10 @@ Four JSON files are used by the plugin.
 
 ## Displaying Results
 
+- Morphology output discovery lives in `core/handlers/store/morphology.py`, reusing
+  `registry.variants` and `registry.first_existing`. Selection widgets, date ranges and
+  warnings belong to `qt/controllers/main.py`; `qgis_bridge/display/morphology.py`
+  only renders the resolved output.
 - Three group boxes share one render path: `groupBox_displayMorphLayers`,
   `groupBox_meteoDisplay` and `groupBox_outputDisplay`. Each picks a variable and a time,
   then `qgis_bridge/display` puts a 2-D raster on the canvas.
@@ -580,6 +587,9 @@ Four JSON files are used by the plugin.
   `state/nml_settings.load_settings`.
 - The handoff goes through `applications/nml_tools_handler.launch_profile_editor`.
   `configure_qtpy_api()` must run before it, because nml-tools loads Qt on first call.
+- `qt/controllers/main.py` owns version changes, Edit Namelists and Run mHM; the
+  main dialog exposes thin methods wired by `qt/bindings/main.py`. There is no
+  configuration processor object.
 - The editor runs modally on the QGIS event loop and its return code is not meaningful
   under QGIS, so the plugin cannot tell save from cancel.
 - nml-tools' modal dialogs became tabs (`ProfileDialog` -> `ProfileTab`); check the
@@ -722,6 +732,9 @@ is not found, this is why.
 | `qgis_compat.py` | `qgis_bridge/layers/compat.py` |
 | `load_layer`, layer construction | `qgis_bridge/layers/` (`load`, `open_layer`, `add`, `find_by_*`) |
 | `advanced_input_manifests.py` | `core/handlers/lookup/manifests.py` |
+| `advanced_input_processing.py` | `core/morphology/layers/advanced_inputs.py`; unused synchronous/ready-input code removed |
+| `configuration_processor.py` | dialog-first functions in `qt/controllers/main.py` |
+| `morphology_display.py` | `core/handlers/store/morphology.py`; widget logic in `qt/controllers/main.py` |
 | `geology_metadata.py` | `core/handlers/lookup/geology.py` |
 | `categorical_lookup.py` | `core/handlers/lookup/job.py` |
 | `read_categorical_lookup_table`, `read_lookup_fields` | `core/handlers/lookup/table.py` (`read`, `columns`) |

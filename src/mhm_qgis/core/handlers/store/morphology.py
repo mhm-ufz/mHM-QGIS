@@ -5,24 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .core.handlers.state.nml_settings import load_settings
-from .core.handlers.store.paths import geometry_folder, workspace_folder
-from .core.handlers.store.layout import MERGED_MASK_NAME, morph_folder
-
-
-DISPLAY_KEYS = (
-    "dem",
-    "slope",
-    "aspect",
-    "flow_accumulation",
-    "flow_direction",
-    "idgauges",
-    "land_cover",
-    "soil",
-    "geology",
-    "lai",
-    "domain_mask",
-)
+from ..state.nml_settings import load_settings
+from .paths import geometry_folder, workspace_folder
+from .layout import MERGED_MASK_NAME, morph_folder
+from .registry import first_existing, variants
 
 
 @dataclass(frozen=True)
@@ -60,7 +46,7 @@ def resolve_display_output(
         candidates += [
             morph / "soil_horizon_class.nc",
             morph / "soil_class.asc",
-            *_raster_variants(geometry / "3_soil.tif"),
+            *variants(geometry / "3_soil.tif"),
         ]
         return _first(candidates, "Soil", variable="soil_class")
     if key == "domain_mask":
@@ -76,24 +62,24 @@ def resolve_display_output(
         )
 
     candidates = {
-        "dem": [*_raster_variants(geometry / "1_dem_filled.tif"), morph / "dem.asc"],
-        "slope": [*_raster_variants(geometry / "1_dem_slope.tif"), morph / "slope.asc"],
-        "aspect": [*_raster_variants(geometry / "1_dem_aspect.tif"), morph / "aspect.asc"],
+        "dem": [*variants(geometry / "1_dem_filled.tif"), morph / "dem.asc"],
+        "slope": [*variants(geometry / "1_dem_slope.tif"), morph / "slope.asc"],
+        "aspect": [*variants(geometry / "1_dem_aspect.tif"), morph / "aspect.asc"],
         "flow_accumulation": [
-            *_raster_variants(geometry / "2_flow_accumulation.tif"),
+            *variants(geometry / "2_flow_accumulation.tif"),
             morph / "facc.asc",
         ],
         "flow_direction": [
-            *_raster_variants(geometry / "2_flow_direction.tif"),
+            *variants(geometry / "2_flow_direction.tif"),
             morph / "fdir.asc",
         ],
         "idgauges": [
-            *_raster_variants(geometry / "2_gauge_position.tif"),
+            *variants(geometry / "2_gauge_position.tif"),
             morph / "idgauges.asc",
         ],
         "geology": [
             morph / "geology_class.asc",
-            *_raster_variants(geometry / "3_geology_processed.tif"),
+            *variants(geometry / "3_geology_processed.tif"),
         ],
         "lai": [
             workspace / "data" / "master" / "lai" / "lai_masked.nc",
@@ -137,7 +123,7 @@ def _land_cover_output(settings, workspace, geometry, morph, year):
         [
             morph / "lc_periods.nc",
             morph / "lc.asc",
-            *_raster_variants(geometry / "3_land_use.tif"),
+            *variants(geometry / "3_land_use.tif"),
         ],
         "Land Cover",
         band=selected_index + 1,
@@ -162,25 +148,12 @@ def _configured_path(value, workspace):
     return workspace / "data" / "master" / Path(*path.parts[1:])
 
 
-def _raster_variants(path: Path) -> tuple[Path, Path, Path]:
-    return (
-        path.with_name(f"{path.stem}_masked{path.suffix}"),
-        path.with_name(f"{path.stem}_crop{path.suffix}"),
-        path,
-    )
-
-
 def _first(candidates, name, band=None, variable=None):
-    for candidate in candidates:
-        if candidate is not None and Path(candidate).is_file():
-            return DisplayOutput(
-                Path(candidate), name, band=band, variable=variable
-            )
-    return None
+    path = first_existing(candidates)
+    return DisplayOutput(path, name, band=band, variable=variable) if path else None
 
 
 __all__ = [
-    "DISPLAY_KEYS",
     "DisplayOutput",
     "land_cover_periods",
     "resolve_display_output",
