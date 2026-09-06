@@ -25,8 +25,19 @@ def _install_fake_mhm_tools(monkeypatch, **functions):
     for name, function in functions.items():
         setattr(pre, name, function)
     package.pre = pre
+    # The fake shadows the installed package, so the CSV reader the adapter
+    # reaches for through `lookup.read` has to be present too.
+    common = ModuleType("mhm_tools.common")
+    lookup_handler = ModuleType("mhm_tools.common.lookup_handler")
+    lookup_handler.read_lookup_table = lambda path: pd.read_csv(path)
+    common.lookup_handler = lookup_handler
+    package.common = common
     monkeypatch.setitem(sys.modules, "mhm_tools", package)
     monkeypatch.setitem(sys.modules, "mhm_tools.pre", pre)
+    monkeypatch.setitem(sys.modules, "mhm_tools.common", common)
+    monkeypatch.setitem(
+        sys.modules, "mhm_tools.common.lookup_handler", lookup_handler
+    )
 
 
 def _capture_counter(monkeypatch):
@@ -104,9 +115,22 @@ def test_vector_geology_rasterizes_then_uses_identity_mapping(tmp_path, monkeypa
     rasterize_calls = []
     formatter_calls = []
 
-    def rasterize_map_data(**kwargs):
-        rasterize_calls.append(kwargs)
-        kwargs["output_file"].write_bytes(b"rasterized")
+    # Signature copied from mhm_tools.pre.rasterize_map_data: `burn_field` is
+    # positional-or-keyword and required, so a stale call shape fails here
+    # instead of in QGIS.
+    def rasterize_map_data(
+        input_file, dem_file, output_file, burn_field, **kwargs
+    ):
+        rasterize_calls.append(
+            dict(
+                kwargs,
+                input_file=input_file,
+                dem_file=dem_file,
+                output_file=output_file,
+                burn_field=burn_field,
+            )
+        )
+        output_file.write_bytes(b"rasterized")
 
     def format_geology_data(**kwargs):
         formatter_calls.append(kwargs)
@@ -120,11 +144,6 @@ def test_vector_geology_rasterizes_then_uses_identity_mapping(tmp_path, monkeypa
         monkeypatch,
         rasterize_map_data=rasterize_map_data,
         format_geology_data=format_geology_data,
-    )
-    monkeypatch.setattr(
-        lookup,
-        "resolve_vector_mapping_field",
-        lambda *_args: "xx",
     )
     captures = _capture_counter(monkeypatch)
 
@@ -148,13 +167,14 @@ def test_vector_geology_rasterizes_then_uses_identity_mapping(tmp_path, monkeypa
     assert len(rasterize_calls) == len(formatter_calls) == 1
     rasterize_call = rasterize_calls[0]
     temporary_input = rasterize_call.pop("output_file")
+    # Lookup-based preparation burns the class field and joins on the mapping
+    # field, both passed through under the names the lookup table uses.
     assert rasterize_call == {
         "input_file": input_file,
         "dem_file": dem_file,
-        "mapping_field": "xx",
+        "burn_field": "GEOLOGY_CLASS",
         "lookup_table": lookup_table,
-        "lookup_mapping_field": "Class",
-        "lookup_value_field": "GEOLOGY_CLASS",
+        "mapping_field": "Class",
         "input_crs": "EPSG:4326",
         "dem_crs": "EPSG:32645",
     }

@@ -24,6 +24,7 @@ except ImportError:
 
 
 from ..threads.meteo_workflow import MeteorologyWorkflowWorker
+from ..reporting import error_detail
 from ...configuration_processor import ConfigurationProcessor
 from ...core.grid import (
     Extent,
@@ -858,9 +859,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog, DialogUtils):
             self.update_gauged_outlet_count()
 
     def _domain_delineator_preflight_failed(self, message):
-        message = str(message).split("\n", 1)[0]
         self.log_message(f"ERROR: Domain Delineator preparation failed: {message}")
-        QMessageBox.critical(self, "Domain Delineator", message)
+        QMessageBox.critical(self, "Domain Delineator", error_detail(message))
 
     def morphology_workflow_specs(self):
         """Return metadata for threaded morphology workflows."""

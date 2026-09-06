@@ -2362,7 +2362,7 @@
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="page_configuration">
+     <widget class="QWidget" name="page_execution">
       <layout class="QVBoxLayout" name="verticalLayout_page_configuration">
        <property name="spacing">
         <number>6</number>

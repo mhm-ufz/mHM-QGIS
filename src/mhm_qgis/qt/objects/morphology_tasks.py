@@ -25,6 +25,7 @@ from ...core.morphology.layers import categorical, lai
 from ...core.morphology.layers.categorical import SPECS
 from ...qgis_bridge import layers
 from ...qgis_bridge.layers.domain import snap_points_to_network
+from ..reporting import error_detail
 
 
 # Worker implementations are public core commands. These aliases keep the
@@ -110,8 +111,10 @@ class MorphologyTaskBridge(QtCore.QObject):
         return controls
 
     def _error(self, label, message, callback=None):
-        detail = str(message).split("\n", 1)[0]
-        self.dialog.log_message(f"ERROR: {label}: {detail}")
+        detail = error_detail(message)
+        # The dialog gets the one useful line; the log keeps the whole
+        # traceback the worker sent, so nothing is lost.
+        self.dialog.log_message(f"ERROR: {label}: {message}")
         if callback is not None:
             callback(detail)
         else:

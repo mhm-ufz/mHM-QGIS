@@ -48,6 +48,7 @@ from ...qt.controllers import domain_delineator as domain_delineator_controller
 from ...qt.bindings.domain_delineator import bind as bind_domain_delineator
 from ...qt.ui.pyui.ui_domain_delineator_dialog import Ui_DomainDelineatorDialog
 from ..objects.viewport_raster_range import ViewportRasterRangeController
+from ..reporting import error_detail
 
 
 MASK_COLOR = QColor(255, 105, 180)
@@ -325,7 +326,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 result["channel_network"]
             ),
             failed=lambda message: self._show_error(
-                "Channel Network", str(message).split("\n", 1)[0]
+                "Channel Network", error_detail(message)
             ),
         )
 
@@ -435,7 +436,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 outlet_id, result
             ),
             on_error=lambda message: self._show_error(
-                "Watershed Delineation", str(message).split("\n", 1)[0]
+                "Watershed Delineation", error_detail(message)
             ),
             resource="morphology-files",
             task_aware=True,
@@ -573,7 +574,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                         previously_gauged,
                 ),
                 on_error=lambda message: self._show_error(
-                    "Save Domain Inputs", str(message).split("\n", 1)[0]
+                    "Save Domain Inputs", error_detail(message)
                 ),
                 resource="morphology-files",
             )

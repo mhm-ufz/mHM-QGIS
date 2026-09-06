@@ -40,6 +40,7 @@ from ...morphology_display import DISPLAY_KEYS
 from ...core.morphology.hydrology.outlets import StationIdError, outlet_ids_from_layer
 from ...core.handlers.state import processing
 from ...core.handlers.store.paths import data_folder, master_data_folder
+from ..reporting import error_detail
 
 def configure_input_adapters(dialog):
     """Wrap each plain input combo in the layer-combo interface the code uses."""
@@ -939,8 +940,8 @@ def connect_processor_button(
 
 
 def _background_processor_failed(dialog, action_name, message):
-    detail = str(message).split("\n", 1)[0]
-    dialog.log_message(f"ERROR: {action_name}: {detail}")
+    detail = error_detail(message)
+    dialog.log_message(f"ERROR: {action_name}: {message}")
     QMessageBox.critical(dialog, action_name, detail)
 
 

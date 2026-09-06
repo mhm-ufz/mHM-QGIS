@@ -154,17 +154,16 @@ def prepare_categorical_file(
 
                 if is_vector:
                     formatted_input = temporary_path / f"{kind}_rasterized.tif"
-                    vector_mapping_field = lookup.resolve_vector_mapping_field(
-                        input_path, lookup_for_tools, mapping_field
-                    )
+                    # Lookup-based preparation always burns the class field and
+                    # joins on the mapping field, both named as the user chose
+                    # them in the lookup table.
                     rasterize_kwargs = {
                         "input_file": input_path,
                         "dem_file": dem_path,
                         "output_file": formatted_input,
-                        "mapping_field": vector_mapping_field,
+                        "burn_field": class_field,
                         "lookup_table": lookup_for_tools,
-                        "lookup_mapping_field": mapping_field,
-                        "lookup_value_field": class_field,
+                        "mapping_field": mapping_field,
                     }
                     if input_crs is not None:
                         rasterize_kwargs["input_crs"] = input_crs

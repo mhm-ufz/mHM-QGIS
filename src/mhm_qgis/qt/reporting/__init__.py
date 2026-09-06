@@ -12,7 +12,7 @@ standalone CLI never blocks on a dialog that has no one to answer it.
 """
 from __future__ import annotations
 
-from ...core.utils.report import CRITICAL, INFORMATION, WARNING
+from ...core.utils.report import CRITICAL, INFORMATION, WARNING, error_detail
 
 
 def dialog_reporter(parent, *, log=None):
@@ -57,6 +57,7 @@ def log_reporter(log):
 
 
 __all__ = [
+    "error_detail",
     "CRITICAL",
     "INFORMATION",
     "WARNING",
