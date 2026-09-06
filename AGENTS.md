@@ -39,6 +39,8 @@ decision.
     `QgsProject` vocabulary -- `loader` (build + validate), `project` (register, find,
     remove), `crs` (`crs_of`, `transform_to_raster`), `compat` (QGIS version shims).
 - `core/`: computes without knowing Qt or QGIS exist, which is what makes it testable.
+  - `native_worker.py`: Qt/QGIS-free entry point for disposable raster subprocesses,
+    launched as `python -m mhm_qgis.core.native_worker`.
   - `handlers/file/json/`: atomic JSON read/write (`read`, `write`, `merge_sections`).
   - `handlers/file/netcdf/`: grid variables, time axes, slices.
   - `handlers/state/`: state persistence -- `cache` (fingerprints), `nml_settings`,
@@ -67,7 +69,7 @@ decision.
 
 Top-level modules that remain include `mhm_qgis.py` (plugin lifecycle, reload-safe
 imports), `configuration_processor.py`,
-`advanced_input_processing.py`, `native_worker.py`, `utils.py` (the `DialogUtils`
+`advanced_input_processing.py`, `utils.py` (the `DialogUtils`
 mixin), and `dependency_bootstrap.py`. Morphology task scheduling now lives in
 `qt/objects/morphology_tasks.py`.
 
@@ -84,7 +86,9 @@ A module belongs to exactly one layer.
 - `qt/controllers/`: what a widget shows and whether it is enabled -- reads and writes
   widget values, populates combos, validates and warns.
 - `qt/dialogs/`: the dialog classes themselves, one module per form.
-- `qt/threads/`: `QThread` workers.
+- `qt/threads/`: `QThread` workers, `task_coordinator.py` (QgsTask scheduling and
+  standalone fallback). The native raster subprocess entry point belongs to `core/`,
+  not this Qt package.
 - `qt/objects/`: a long-lived `QObject` attached to a widget rather than defined by one
   -- `viewport_raster_range.py` watches a map canvas and keeps a renderer in step. Not
   keyed to a single form, so it belongs in none of the three layers above.
@@ -595,9 +599,10 @@ Four JSON files are used by the plugin.
 - Use `TaskCoordinator`/`QgsTask` for path-only computation and return paths or
   serializable results to a main-thread completion callback. `QgsTask` jobs receive only
   copied primitive values and filesystem paths.
-- **All heavy categorical formatting runs in `mhm_qgis.native_worker`**, a child process,
-  dispatched through `_run_in_worker`: advanced land cover and soil, and the lookup mode
-  used by geology. The lookup path used to run inside QGIS and OOM-killed it --
+- **All heavy categorical formatting runs in `mhm_qgis.core.native_worker`**,
+  a child process dispatched through `core/executions/morphology/commands.native_worker`:
+  advanced land cover and soil, and the lookup mode used by geology. The lookup path
+  used to run inside QGIS and OOM-killed it --
   `anon-rss:5756792kB`, i.e. 5.5 GiB, formatting a vector input onto a 13201 x 6001 grid.
   The worker sets `oom_score_adj=500` so the kernel takes the child first. Cancellation
   must terminate that child; a nonzero or signal exit is reported as a task failure

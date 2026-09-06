@@ -1,4 +1,4 @@
-"""Small subprocess boundary for native raster libraries."""
+"""Qt/QGIS-free subprocess entry point for native raster libraries."""
 from __future__ import annotations
 
 import json
@@ -6,14 +6,14 @@ import sys
 import traceback
 from pathlib import Path
 
-from .core.handlers.lookup import (
+from .handlers.lookup import (
     LandUseInput,
     LandUsePeriod,
     SoilHorizon,
     SoilInput,
 )
-from .advanced_input_processing import process_land_cover_input, process_soil_input
-from .core.handlers.lookup import run_lookup_job
+from ..advanced_input_processing import process_land_cover_input, process_soil_input
+from .handlers.lookup import run_lookup_job
 
 
 def _prefer_worker_termination():
@@ -63,7 +63,7 @@ def run(job):
         return run_lookup_job(job["job"])
     if job["kind"] == "dem-derivatives":
         # Imported here so the worker never pulls in the QGIS-only packages.
-        from .applications.mhm_tools_handler import create_dem_derivative_files
+        from ..applications.mhm_tools_handler import create_dem_derivative_files
 
         outputs = create_dem_derivative_files(
             job["input_file"], job["output_folder"], "tif"

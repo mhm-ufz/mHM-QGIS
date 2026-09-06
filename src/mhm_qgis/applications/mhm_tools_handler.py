@@ -420,7 +420,7 @@ def create_dem_derivative_files(
     """Create the DEM derivatives through mHM-tools, keyed by derivative name.
 
     The whole pass is held in memory, so callers that can afford a subprocess
-    should run it through `mhm_qgis.native_worker` -- see
+    should run it through `mhm_qgis.core.native_worker` -- see
     `core.handlers.raster.dem_derivative_files`, which injects a worker-backed
     `compute` hook. This function is the one entry point either route uses.
     """

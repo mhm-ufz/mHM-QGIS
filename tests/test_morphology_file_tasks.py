@@ -475,7 +475,7 @@ def test_dem_derivatives_delegate_the_expensive_pass_to_the_caller(tmp_path):
 
 
 def test_native_worker_runs_the_dem_derivative_job(tmp_path):
-    from mhm_qgis.native_worker import run
+    from mhm_qgis.core.native_worker import run
 
     source = tmp_path / "dem.tif"
     _dem(source)

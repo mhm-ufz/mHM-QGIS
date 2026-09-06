@@ -9,10 +9,10 @@ description = "Python package for mesoscale Hydrological Model"
 readme = "README.md"
 license = {text = "GPL-2.0"}
 authors = [
-    {name = "Sanjeev Bashyal", email = "sanjeev.bashyal01@gmail.com"}
+    {name = "Sanjeev Bashyal", email = "sanjeev.bashyal@ufz.de"}
 ]
 maintainers = [
-    {name = "Sanjeev Bashyal", email = "sanjeev.bashyal01@gmail.com"}
+    {name = "Sanjeev Bashyal", email = "sanjeev.bashyal@ufz.de"}
 ]
 keywords = ["hydrology", "modeling", "mesoscale", "water", "environment", "qgis", "plugin"]
 classifiers = [

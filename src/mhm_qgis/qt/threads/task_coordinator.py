@@ -8,7 +8,7 @@ try:
     from qgis.PyQt import QtCore
     from qgis.core import QgsApplication, QgsTask
 except ImportError:
-    from .standalone import install
+    from ...standalone import install
 
     install(force=True)
     from qgis.PyQt import QtCore

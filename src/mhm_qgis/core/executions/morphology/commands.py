@@ -159,7 +159,7 @@ def native_worker(task, payload, working_folder):
                 [
                     sys.executable,
                     "-m",
-                    "mhm_qgis.native_worker",
+                    "mhm_qgis.core.native_worker",
                     str(job_file),
                     str(result_file),
                 ],

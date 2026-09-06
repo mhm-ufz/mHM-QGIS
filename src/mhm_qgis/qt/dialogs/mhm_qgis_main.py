@@ -76,7 +76,7 @@ from ...qt.controllers import main as main_controller
 from ...qgis_bridge import layers as qgis_layers
 from ...qgis_bridge.layers import map_layer_filters
 from .project_terminal import ProjectTerminalDialog
-from ...task_coordinator import TaskCoordinator
+from ..threads.task_coordinator import TaskCoordinator
 from .thread_display import ThreadDisplayDialog
 from ..objects.morphology_tasks import MorphologyTaskBridge
 from ...qt.ui.pyui.ui_mhm_qgis_main import Ui_MhmQgisDialog
