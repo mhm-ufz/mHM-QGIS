@@ -80,13 +80,9 @@ from ..threads.task_coordinator import TaskCoordinator
 from .thread_display import ThreadDisplayDialog
 from ..objects.morphology_tasks import MorphologyTaskBridge
 from ...qt.ui.pyui.ui_mhm_qgis_main import Ui_MhmQgisDialog
-# Import utility mixin and processors
-from ...utils import DialogUtils
 
 
-
-
-class MhmQgisDialog(QDialog, Ui_MhmQgisDialog, DialogUtils):
+class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def __init__(self, parent=None):
         """Constructor."""
 
@@ -166,6 +162,33 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog, DialogUtils):
         self.refresh_output_display()
         self.refresh_meteo_folder_sources()
         self.refresh_grid_resolution_controls()
+
+    def log_message(self, message):
+        """Append to the UI log without feeding back into captured stdout."""
+        try:
+            console = getattr(sys, "__stdout__", None)
+            if console is not None:
+                print(message, file=console)
+        except Exception:
+            pass
+        self.LogText.append(message)
+        QgsApplication.processEvents()
+
+    def check_prerequisites(self, needs_pour_points=False):
+        """Check if the project folder and necessary layers are selected."""
+        if not self.project_folder:
+            QMessageBox.critical(
+                self, "Missing Input", "Please select a project folder before proceeding.")
+            return False
+        if not self.input_combo("dem").currentLayer():
+            QMessageBox.critical(self, "Missing Input",
+                                 "Please select a DEM Raster Layer.")
+            return False
+        if needs_pour_points and not self.input_combo("pour_points").currentLayer():
+            QMessageBox.critical(self, "Missing Input",
+                                 "Please select a Pour Points Layer.")
+            return False
+        return True
 
     def configure_input_adapters(self, *args, **kwargs):
         return main_controller.configure_input_adapters(self, *args, **kwargs)

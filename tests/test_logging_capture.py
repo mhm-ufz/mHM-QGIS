@@ -9,7 +9,7 @@ from mhm_qgis import standalone
 standalone.install(force=True)
 
 from mhm_qgis.applications.mhm_tools_handler import capture_messages  # noqa: E402
-from mhm_qgis.utils import DialogUtils  # noqa: E402
+from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog  # noqa: E402
 
 
 class _LogText:
@@ -20,7 +20,9 @@ class _LogText:
         self.messages.append(message)
 
 
-class _Dialog(DialogUtils):
+class _Dialog:
+    log_message = MhmQgisDialog.log_message
+
     def __init__(self):
         self.LogText = _LogText()
 

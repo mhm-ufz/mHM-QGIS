@@ -69,9 +69,8 @@ decision.
 
 Top-level modules that remain include `mhm_qgis.py` (plugin lifecycle, reload-safe
 imports), `configuration_processor.py`,
-`advanced_input_processing.py`, `utils.py` (the `DialogUtils`
-mixin), and `dependency_bootstrap.py`. Morphology task scheduling now lives in
-`qt/objects/morphology_tasks.py`.
+`advanced_input_processing.py`, and `dependency_bootstrap.py`. Morphology task
+scheduling now lives in `qt/objects/morphology_tasks.py`.
 
 ## Qt Layering
 
@@ -86,6 +85,7 @@ A module belongs to exactly one layer.
 - `qt/controllers/`: what a widget shows and whether it is enabled -- reads and writes
   widget values, populates combos, validates and warns.
 - `qt/dialogs/`: the dialog classes themselves, one module per form.
+  `MhmQgisDialog` owns its logging and prerequisite checks directly.
 - `qt/threads/`: `QThread` workers, `task_coordinator.py` (QgsTask scheduling and
   standalone fallback). The native raster subprocess entry point belongs to `core/`,
   not this Qt package.
@@ -720,7 +720,7 @@ is not found, this is why.
 | `time_utils.py` | `core/utils/time.py` |
 | `viewport_raster_range.py` | `qt/objects/viewport_raster_range.py` |
 | `qgis_compat.py` | `qgis_bridge/layers/compat.py` |
-| `DialogUtils.load_layer`, layer construction | `qgis_bridge/layers/` (`load`, `open_layer`, `add`, `find_by_*`) |
+| `load_layer`, layer construction | `qgis_bridge/layers/` (`load`, `open_layer`, `add`, `find_by_*`) |
 | `advanced_input_manifests.py` | `core/handlers/lookup/manifests.py` |
 | `geology_metadata.py` | `core/handlers/lookup/geology.py` |
 | `categorical_lookup.py` | `core/handlers/lookup/job.py` |

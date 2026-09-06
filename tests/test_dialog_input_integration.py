@@ -35,6 +35,33 @@ def _app():
     return _APPLICATION
 
 
+def test_dialog_prerequisites_keep_required_and_optional_input_checks(monkeypatch):
+    from types import SimpleNamespace
+
+    messages = []
+    monkeypatch.setattr(
+        "mhm_qgis.qt.dialogs.mhm_qgis_main.QMessageBox.critical",
+        lambda _parent, _title, message: messages.append(message),
+    )
+    layers = {}
+    dialog = SimpleNamespace(
+        project_folder="",
+        input_combo=lambda name: SimpleNamespace(currentLayer=lambda: layers.get(name)),
+    )
+    for folder, dem, points, needs_points, expected_message in (
+        ("", None, None, False, "Please select a project folder before proceeding."),
+        ("project", None, None, False, "Please select a DEM Raster Layer."),
+        ("project", object(), None, True, "Please select a Pour Points Layer."),
+        ("project", object(), None, False, None),
+        ("project", object(), object(), True, None),
+    ):
+        dialog.project_folder = folder
+        layers.update(dem=dem, pour_points=points)
+        messages.clear()
+        assert MhmQgisDialog.check_prerequisites(dialog, needs_points) is (expected_message is None)
+        assert messages == ([] if expected_message is None else [expected_message])
+
+
 def test_dialog_maps_new_combos_and_discovers_relative_project_files(tmp_path):
     _app()
     raster = tmp_path / "0 GIS" / "dem.tif"
