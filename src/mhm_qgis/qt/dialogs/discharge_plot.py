@@ -11,6 +11,7 @@ class DischargePlotDialog(QDialog):
         self.plot = pg.PlotWidget(
             axisItems={"bottom": pg.DateAxisItem(utcOffset=0)},
         )
+        self.plot.setBackground("w")
         self.plot.setLabel("bottom", "Date")
         self.plot.setLabel("left", "Discharge", units="m³/s")
         self.plot.getAxis("left").enableAutoSIPrefix(False)

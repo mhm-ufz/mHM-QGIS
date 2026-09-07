@@ -13,6 +13,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
+from ...handlers.file.netcdf.raster import file_path
 from ...handlers.raster.tasks import write_domain_dem_ascii
 from .domain_dem_nc import write_domain_dem_netcdf
 from ...handlers.state.domain_state import (
@@ -21,7 +22,7 @@ from ...handlers.state.domain_state import (
     resolve_output_path,
 )
 from ...handlers.store.paths import domain_data_folder
-from ...handlers.store.layout import domain_dem_path, is_v6, morph_folder
+from ...handlers.store.layout import domain_dem_path, morph_folder
 
 
 # mHM reads its morphology per domain from `dir_Morpho`, so each domain needs
@@ -50,7 +51,7 @@ DOMAIN_INPUT_NAMES = tuple(
 SIDECAR_SUFFIXES = (".prj",)
 
 
-def link_master_inputs(project_folder, directory, log=None) -> list[Path]:
+def link_master_inputs(project_folder, directory, log=None, *, strict=False) -> list[Path]:
     """Symlink the shared morphology inputs from data/master into one domain.
 
     Run this after `advanced_l0.publish_model_inputs`: an advanced or
@@ -81,6 +82,8 @@ def link_master_inputs(project_folder, directory, log=None) -> list[Path]:
                 if sidecar.is_file()
             )
 
+    if absent and strict:
+        raise FileNotFoundError(f"Published domain inputs missing from {master}: " + ", ".join(absent))
     linked = _link_shared_inputs(master, destination, names, log) if names else []
     if log:
         log(
@@ -179,7 +182,7 @@ def write_domain_dems(
     plan = domain_dem_plan(project_folder)
     if not plan:
         return []
-    if not Path(cropped_dem).is_file():
+    if not file_path(cropped_dem).is_file():
         raise FileNotFoundError(
             f"The cropped L0 DEM is required before writing domain DEMs: "
             f"{cropped_dem}"
@@ -210,13 +213,6 @@ def write_domain_dems(
             mask,
             reference_path=reference_path,
         )
-        # v6 reads every shared layer from master's input.nc, so a domain folder
-        # holds only its own DEM.
-        entry["linked"] = [] if is_v6(project_folder) else [
-            str(path)
-            for path in link_master_inputs(
-                project_folder, entry["directory"], log=log)
-        ]
         written.append(entry)
         if log:
             log(f"Domain {entry['name']} DEM written: {entry['dem_path']}")

@@ -65,12 +65,12 @@ def run(job):
         # Imported here so the worker never pulls in the QGIS-only packages.
         from ..applications.mhm_tools_handler import create_dem_derivative_files
 
-        outputs = create_dem_derivative_files(
-            job["input_file"], job["output_folder"], "tif"
+        output = create_dem_derivative_files(
+            job["input_file"], job["output_folder"]
         )
         return {
             "kind": job["kind"],
-            "outputs": {name: str(path) for name, path in outputs.items()},
+            "output": str(output),
         }
     common = (job["project_folder"], job["version"])
     if job["kind"] == "lc":

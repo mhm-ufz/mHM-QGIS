@@ -7,6 +7,8 @@ import re
 import math
 from dataclasses import dataclass
 from pathlib import Path
+
+from ...core.handlers.file.netcdf.raster import file_path, source
 from typing import Callable, Iterable
 
 from ...core.handlers.file.discharge import (
@@ -283,13 +285,11 @@ class DomainWorkflow:
 
     @property
     def filled_dem_path(self) -> str:
-        return str(Path(geometry_folder(self.project_folder)) / "1_dem_filled.tif")
+        return str(Path(geometry_folder(self.project_folder)) / "filled_dem.nc")
 
     @property
     def flow_accumulation_path(self) -> str:
-        return str(
-            Path(geometry_folder(self.project_folder)) / "2_flow_accumulation.tif"
-        )
+        return source(Path(geometry_folder(self.project_folder)) / "dem_derivatives.nc", "facc")
 
     @property
     def channel_network_path(self) -> str:
@@ -303,7 +303,7 @@ class DomainWorkflow:
 
     def _require_prepared(self, *paths: str) -> None:
         self.prepare()
-        missing = [path for path in paths if not Path(path).is_file()]
+        missing = [path for path in paths if not file_path(path).is_file()]
         if missing:
             raise RuntimeError(
                 "Domain prerequisites were not prepared: "

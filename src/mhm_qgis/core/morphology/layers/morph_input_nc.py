@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ...grid import header_center_arrays
+from ...handlers.file.netcdf.raster import source, variables
 from ...handlers.raster.tasks import _aligned_l0_window, _dependencies
 
 
@@ -26,20 +27,20 @@ BLOCK_ROWS = 256
 # on purpose: mhm_qgis has no LAI class product yet, so `lai_class_path` is left
 # unset rather than pointing at a variable that does not exist.
 MORPH_VARIABLES = (
-    ("dem", "1_dem_filled", "f8", {
+    ("dem", "dem", "f8", {
         "long_name": "elevation",
         "standard_name": "height_above_mean_sea_level",
         "units": "m",
     }),
-    ("fdir", "2_flow_direction", "i4", {
+    ("fdir", "fdir", "i4", {
         "long_name": "d8 flow direction",
     }),
-    ("slope", "1_dem_slope", "f8", {
+    ("slope", "slope", "f8", {
         "long_name": "slope",
         "standard_name": "ground_slope_angle",
         "units": "%",
     }),
-    ("aspect", "1_dem_aspect", "f8", {
+    ("aspect", "aspect", "f8", {
         "long_name": "aspect",
         "units": "degree",
     }),
@@ -51,27 +52,31 @@ MORPH_VARIABLES = (
         "long_name": "soil class",
         "units": "1",
     }),
-    ("facc", "2_flow_accumulation", "i4", {
+    ("facc", "facc", "i4", {
         "long_name": "flow accumulation",
         "units": "1",
     }),
 )
 
 
-def available_layers(geometry_folder, suffix="_masked") -> dict[str, Path]:
+def available_layers(geometry_folder, suffix="_masked") -> dict[str, Path | str]:
     """Return the masked rasters present for each `input.nc` variable."""
     folder = Path(geometry_folder)
-    found: dict[str, Path] = {}
+    found = {}
+    bundle = folder / f"dem_derivatives{suffix}.nc"
+    names = variables(bundle)
     for name, stem, _dtype, _attrs in MORPH_VARIABLES:
         candidate = folder / f"{stem}{suffix}.tif"
-        if candidate.is_file():
+        if name in names:
+            found[name] = source(bundle, name)
+        elif stem.startswith("3_") and candidate.is_file():
             found[name] = candidate
     return found
 
 
 def write_morph_input_nc(
         output_path,
-        layers: Mapping[str, Path],
+        layers: Mapping[str, Path | str],
         target_header: Mapping[str, Any],
         *,
         crs_string=None,

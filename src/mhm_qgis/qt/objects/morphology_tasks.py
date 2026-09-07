@@ -13,6 +13,7 @@ from qgis.core import QgsVectorLayer
 
 from ...core.executions import morphology
 from ...core.executions.morphology import commands
+from ...core.handlers.file.netcdf.raster import file_path
 from ...core.handlers.store.paths import (
     geometry_folder,
     morph_staging_folder,
@@ -32,10 +33,8 @@ from ..reporting import error_detail
 # scheduler's call sites compact and make it obvious that no computation lives
 # in the Qt package.
 _saved_categorical_outputs = commands.categorical_outputs
-_run_fill = commands.fill
 _run_dem_derivatives = commands.dem_derivatives
 _run_hydrology = commands.hydrology
-_run_terrain = commands.terrain
 _run_lai = commands.lai
 _run_lookup = commands.lookup
 _run_advanced = commands.advanced
@@ -56,7 +55,7 @@ class MorphologyTaskBridge(QtCore.QObject):
 
     @property
     def filled_dem_path(self) -> str:
-        return self.path("1_dem_filled.tif")
+        return self.path("filled_dem.nc")
 
     @property
     def snapped_points_path(self) -> str:
@@ -68,9 +67,10 @@ class MorphologyTaskBridge(QtCore.QObject):
 
     @property
     def gauge_position_path(self) -> str:
-        return self.path("2_gauge_position.tif")
+        return self.path("idgauges.nc")
 
     def _register(self, path, *, name=None, loaded=False, algorithm=None):
+        path = file_path(path)
         return registry.register(
             self.dialog.project_folder,
             path,
@@ -132,7 +132,7 @@ class MorphologyTaskBridge(QtCore.QObject):
         folder = Path(geometry_folder(self.dialog.project_folder))
         return {
             "source": source,
-            "output_path": str(folder / "1_dem_filled.tif"),
+            "output_folder": str(folder),
             "source_crs": (
                 source_crs.authid() or source_crs.toWkt()
                 if source_crs is not None and source_crs.isValid()
@@ -143,63 +143,24 @@ class MorphologyTaskBridge(QtCore.QObject):
                 if target_crs is not None and target_crs.isValid()
                 else ""
             ),
-            "reprojected_path": str(folder / "0_dem_reprojected.tif"),
+            "reprojected_path": str(folder / "dem_reprojected.nc"),
         }
 
     def prepare_filled_dem(self) -> str:
         """Synchronously ensure the fixed filled-DEM prerequisite exists.
 
         This is used only by GUI calculations that need the grid immediately;
-        processing buttons and Execute All use ``start_fill`` instead.
+        processing buttons and Execute All use ``start_dem_derivatives`` instead.
         """
         options = self._dem_options()
-        result = _run_fill(None, options)
+        result = _run_dem_derivatives(None, options)
         path = str(result["filled_dem"])
         self._register(path, name="1_DEM_Filled", loaded=False)
         if not result.get("reused"):
             self.dialog.log_message(
-                f'DEM filled successfully ({result.get("filled_cells", 0)} adjusted cells).'
+                "DEM derivatives prepared successfully."
             )
         return path
-
-    def start_fill(
-        self,
-        *,
-        key="fill-dem",
-        controls=(),
-        load=True,
-        done=None,
-        failed=None,
-    ):
-        try:
-            options = self._dem_options()
-        except Exception as error:
-            self._error("Fill DEM", error, failed)
-            return False
-        started = self.coordinator.submit(
-            key,
-            "Fill DEM",
-            partial(_run_fill, options=options),
-            controls=self._controls(controls),
-            resource="morphology-files",
-            task_aware=True,
-            on_success=lambda result: self._filled(result, load, done),
-            on_error=lambda message: self._error("Fill DEM", message, failed),
-        )
-        return started
-
-    def _filled(self, result, load, done):
-        path = str(result["filled_dem"])
-        self._register(path, name="1_DEM_Filled", loaded=False)
-        if load:
-            self._load(path, "1_DEM_Filled")
-        if not result.get("reused"):
-            self.dialog.log_message(
-                f'DEM filled successfully ({result.get("filled_cells", 0)} adjusted cells).'
-            )
-        self.dialog.update_l0_resolution_from_dem()
-        if done is not None:
-            done(result)
 
     def _hydrology_options(
         self,
@@ -214,15 +175,9 @@ class MorphologyTaskBridge(QtCore.QObject):
         folder = Path(geometry_folder(self.dialog.project_folder))
         return {
             "filled_dem": self.filled_dem_path,
-            "accumulation_path": (
-                str(folder / "2_flow_accumulation.tif")
-                if write_flow and accumulation
-                else ""
-            ),
-            "area_path": (
-                str(folder / "2_flow_accumulation_area.tif") if write_flow else ""
-            ),
-            "direction_path": str(folder / "2_flow_direction.tif") if direction else "",
+            "accumulation": write_flow and accumulation,
+            "area_path": str(folder / "facc_area.nc") if write_flow else "",
+            "direction": direction,
             "channel_path": (
                 str(channel_path or folder / "2_channel_network.shp")
                 if include_channel
@@ -246,8 +201,8 @@ class MorphologyTaskBridge(QtCore.QObject):
         done=None,
         failed=None,
     ):
-        if not os.path.isfile(self.filled_dem_path):
-            return self.start_fill(
+        if not all(os.path.isfile(self.path(name)) for name in ("filled_dem.nc", "dem_derivatives.nc")):
+            return self.start_dem_derivatives(
                 key=f"{key}-dem",
                 controls=controls,
                 load=False,
@@ -437,9 +392,6 @@ class MorphologyTaskBridge(QtCore.QObject):
         except Exception as error:
             self._error("DEM derivatives", error, failed)
             return False
-        options.pop("output_path", None)
-        options["output_folder"] = str(geometry_folder(self.dialog.project_folder))
-        options["log"] = self.dialog.log_message
         return self.coordinator.submit(
             key,
             "Prepare DEM derivatives",
@@ -452,50 +404,14 @@ class MorphologyTaskBridge(QtCore.QObject):
         )
 
     def _dem_derivatives_ready(self, result, load, done):
-        self._filled(result, load, None)
-        for key in ("slope", "aspect", "flow_accumulation", "flow_direction"):
-            self._register(
-                result[key], name=Path(result[key]).name, loaded=False
-            )
-        if done is not None:
-            done(result)
-
-    def start_terrain(
-        self,
-        *,
-        key="execute-all-terrain",
-        controls=(),
-        load="",
-        done=None,
-        failed=None,
-    ):
-        folder = Path(geometry_folder(self.dialog.project_folder))
-        layer = self.dialog.input_combo("dem").currentLayer()
-        scale = 111200.0 if layer.crs().isValid() and layer.crs().isGeographic() else 1.0
-        options = {
-            "filled_dem": self.filled_dem_path,
-            "slope_path": str(folder / "1_dem_slope.tif"),
-            "aspect_path": str(folder / "1_dem_aspect.tif"),
-            "scale": scale,
-        }
-        return self.coordinator.submit(
-            key,
-            "Prepare slope and aspect",
-            partial(_run_terrain, options=options),
-            controls=self._controls(controls),
-            resource="morphology-files",
-            task_aware=True,
-            on_success=lambda result: self._terrain_ready(result, load, done),
-            on_error=lambda message: self._error("Terrain", message, failed),
-        )
-
-    def _terrain_ready(self, result, load, done):
-        for path in result.values():
-            self._register(path, name=Path(path).name, loaded=False)
-        if load in result:
-            self._load(
-                result[load], "1_DEM_Slope" if load == "slope" else "1_DEM_Aspect"
-            )
+        self._register(result["filled_dem"], name="1_DEM_Filled")
+        self._register(result["dem_derivatives"], name="DEM derivatives")
+        if load:
+            key = "filled_dem" if load is True else load
+            self._load(result[key], key.replace("_", " ").title())
+        if not result.get("reused"):
+            self.dialog.log_message("DEM derivatives prepared successfully.")
+        self.dialog.update_l0_resolution_from_dem()
         if done is not None:
             done(result)
 
@@ -627,7 +543,7 @@ class MorphologyTaskBridge(QtCore.QObject):
         failed=None,
     ):
         if not os.path.isfile(self.filled_dem_path):
-            return self.start_fill(
+            return self.start_dem_derivatives(
                 key=f"{key or kind}-dem",
                 controls=controls,
                 load=False,
@@ -909,8 +825,8 @@ class MorphologyTaskBridge(QtCore.QObject):
             return False
         folder = Path(geometry_folder(self.dialog.project_folder))
         paths = (
-            folder / "1_dem_filled.tif",
-            folder / "2_flow_accumulation.tif",
+            folder / "filled_dem.nc",
+            folder / "dem_derivatives.nc",
             folder / "2_channel_network.shp",
         )
         if all(path.is_file() for path in paths):

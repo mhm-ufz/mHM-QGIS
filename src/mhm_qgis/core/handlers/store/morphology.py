@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..state.nml_settings import load_settings
+from ..file.netcdf.raster import variables
 from .paths import geometry_folder, workspace_folder
 from .layout import MERGED_MASK_NAME, morph_folder
 from .registry import first_existing, variants
@@ -63,22 +64,22 @@ def resolve_display_output(
             "Domain Mask",
         )
 
+    derivative = {
+        "dem": "dem", "slope": "slope", "aspect": "aspect",
+        "flow_accumulation": "facc", "flow_direction": "fdir", "idgauges": "idgauges",
+    }.get(key)
+    if derivative:
+        name = key.replace("_", " ").title()
+        for suffix in ("_masked", "_crop", ""):
+            path = geometry / f"dem_derivatives{suffix}.nc"
+            variable = "dem_filled" if key == "dem" and not suffix else derivative
+            if variable in variables(path):
+                return DisplayOutput(path, name, variable=variable)
+        if derivative in variables(morph / "input.nc"):
+            return DisplayOutput(morph / "input.nc", name, variable=derivative)
+        return _first([geometry / f"{derivative}.nc", morph / f"{derivative}.asc"], name, variable=derivative)
+
     candidates = {
-        "dem": [*variants(geometry / "1_dem_filled.tif"), morph / "dem.asc"],
-        "slope": [*variants(geometry / "1_dem_slope.tif"), morph / "slope.asc"],
-        "aspect": [*variants(geometry / "1_dem_aspect.tif"), morph / "aspect.asc"],
-        "flow_accumulation": [
-            *variants(geometry / "2_flow_accumulation.tif"),
-            morph / "facc.asc",
-        ],
-        "flow_direction": [
-            *variants(geometry / "2_flow_direction.tif"),
-            morph / "fdir.asc",
-        ],
-        "idgauges": [
-            *variants(geometry / "2_gauge_position.tif"),
-            morph / "idgauges.asc",
-        ],
         "geology": [
             morph / "geology_class.asc",
             *variants(geometry / "3_geology_processed.tif"),

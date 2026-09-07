@@ -64,6 +64,7 @@ MORPH_SETUP_STAGES = (
     Stage("latlon", "Create latlon.nc", condition="v5"),
     Stage("write", "Write model inputs"),
     Stage("publish", "Publish model inputs"),
+    Stage("link_domains", "Link domain inputs"),
     Stage("domain_dems", "Write domain DEMs"),
 )
 

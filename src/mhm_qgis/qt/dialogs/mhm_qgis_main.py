@@ -617,39 +617,16 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         failed = lambda message: self._background_processor_failed(
             action_name, message
         )
-        if action_name == "Fill DEM":
-            started = self.morphology_tasks.start_fill(
-                controls=controls, load=True, failed=failed
+        if action_name in {"Fill DEM", "Slope", "Aspect", "Flow Accumulation", "Flow Direction"}:
+            variable = "filled_dem" if action_name == "Fill DEM" else action_name.lower().replace(" ", "_")
+            started = self.morphology_tasks.start_dem_derivatives(
+                controls=controls, load=variable, failed=failed
             )
         elif action_name == "Create Channel Network":
             started = self.morphology_tasks.start_hydrology(
                 key="create-channel-network",
                 controls=controls,
                 load="channel_network",
-                failed=failed,
-            )
-        elif action_name == "Flow Accumulation":
-            started = self.morphology_tasks.start_hydrology(
-                key="flow-accumulation",
-                controls=controls,
-                load="flow_accumulation",
-                direction=False,
-                include_channel=False,
-                failed=failed,
-            )
-        elif action_name == "Flow Direction":
-            started = self.morphology_tasks.start_hydrology(
-                key="flow-direction",
-                controls=controls,
-                load="flow_direction",
-                include_channel=False,
-                failed=failed,
-            )
-        elif action_name in {"Slope", "Aspect"}:
-            started = self.morphology_tasks.start_terrain(
-                key=f"terrain-{action_name.lower()}",
-                controls=controls,
-                load=action_name.lower(),
                 failed=failed,
             )
         elif action_name == "Snap Pour Points":

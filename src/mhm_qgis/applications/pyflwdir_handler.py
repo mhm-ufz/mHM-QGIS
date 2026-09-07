@@ -112,31 +112,24 @@ def normalise_dem(array, nodata):
     return dem, invalid
 
 
-def fill_depressions(array, nodata):
-    """Fill DEM depressions, returning the filled array and the changed mask."""
-    deps = dependencies()
-    dem, invalid = normalise_dem(array, nodata)
-    filled, changed = deps["pfd"].dem.fill_depressions(dem, nodata=NODATA)
-    filled[invalid] = NODATA
-    return filled, changed, invalid
-
-
-def flwdir_context(reference) -> dict:
-    """Build the flow grid from an already-read filled-DEM raster.
+def flwdir_context(reference, *, is_direction=False) -> dict:
+    """Build the flow grid from an already-read D8 or filled-DEM raster.
 
     `reference` is a raster read as `{array, nodata, geotransform, projection,
     rows, cols}`. Taking it rather than a path keeps this module free of raster
     IO, which lives in `core/handlers/raster`.
     """
     deps = dependencies()
-    dem, invalid = normalise_dem(reference["array"], reference["nodata"])
     transform = deps["Affine"].from_gdal(*reference["geotransform"])
-    flwdir = deps["pfd"].from_dem(
-        dem,
-        nodata=NODATA,
-        transform=transform,
-        latlon=is_geographic(reference.get("projection")),
-    )
+    options = {"transform": transform, "latlon": is_geographic(reference.get("projection"))}
+    if is_direction:
+        invalid = reference["array"] == reference["nodata"]
+        direction = reference["array"].astype("uint8")
+        direction[invalid] = FLOW_DIRECTION_NODATA
+        flwdir = deps["pfd"].from_array(direction, ftype="d8", **options)
+    else:
+        dem, invalid = normalise_dem(reference["array"], reference["nodata"])
+        flwdir = deps["pfd"].from_dem(dem, nodata=NODATA, **options)
     return {
         "flwdir": flwdir,
         "reference": reference,
@@ -148,27 +141,11 @@ def flwdir_context(reference) -> dict:
     }
 
 
-def upstream_cells(context):
-    """Return upstream area in cells as int32, with invalid cells set to nodata."""
-    np = context["np"]
-    values = np.rint(context["flwdir"].upstream_area(unit="cell")).astype(np.int32)
-    values[context["invalid"]] = int(NODATA)
-    return values
-
-
 def upstream_area_m2(context):
     """Return upstream area in m2 as float32, with invalid cells set to nodata."""
     np = context["np"]
     values = context["flwdir"].upstream_area(unit="m2").astype(np.float32)
     values[context["invalid"]] = NODATA
-    return values
-
-
-def flow_direction(context):
-    """Return the D8 direction array as uint8, with invalid cells set to 247."""
-    np = context["np"]
-    values = context["flwdir"].to_array().astype(np.uint8)
-    values[context["invalid"]] = FLOW_DIRECTION_NODATA
     return values
 
 
@@ -212,8 +189,6 @@ __all__ = [
     "cell_area_m2",
     "cell_for_point",
     "dependencies",
-    "fill_depressions",
-    "flow_direction",
     "flwdir_context",
     "is_geographic",
     "missing_packages",
@@ -222,5 +197,4 @@ __all__ = [
     "stream_mask",
     "stream_order",
     "upstream_area_m2",
-    "upstream_cells",
 ]

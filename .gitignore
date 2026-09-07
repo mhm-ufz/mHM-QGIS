@@ -1,7 +1,9 @@
 # Temporary files
+.codex/
 .scripts/
 .vscode/
 .ruff_cache/
+graphify-out/
 
 # Doxy files
 src/mhm_qgis/docs/sphinx/

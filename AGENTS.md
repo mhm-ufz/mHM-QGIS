@@ -42,7 +42,8 @@ decision.
   - `native_worker.py`: Qt/QGIS-free entry point for disposable raster subprocesses,
     launched as `python -m mhm_qgis.core.native_worker`.
   - `handlers/file/json/`: atomic JSON read/write (`read`, `write`, `merge_sections`).
-  - `handlers/file/netcdf/`: grid variables, time axes, slices.
+  - `handlers/file/netcdf/`: grid variables, time axes, slices; `raster.py` owns
+    exact, windowed NetCDF raster copies with GDAL-readable grid/CRS metadata.
   - `handlers/state/`: state persistence -- `cache` (fingerprints), `nml_settings`,
     `domain_state`, `settings`, `meteo_outputs`; `processing` is the single update boundary for
     `mhm_qgis_processing_state.json`.
@@ -221,10 +222,26 @@ Four JSON files are used by the plugin.
   `data/master/static/morph`.
 - Crop/mask outputs in `Z Temp/Geometry` use `_crop` and `_masked` suffixes. Do not
   auto-add them to QGIS; groupBox processing buttons show them.
-- `core/executions/morphology/setup.py` owns crop, mask, lat/lon, write, publish and
-  domain-DEM steps. There is no separate `pushButton_writeAll` path.
+- `core/executions/morphology/setup.py` owns crop, mask, lat/lon, write, publish,
+  domain-link and domain-DEM steps. There is no separate `pushButton_writeAll` path.
 - Check raster dimensions across levels: L0 must be an integer multiple of L1, and
   L1/L11 must be compatible with L2 as mHM requires.
+
+- Execute All and individual DEM/terrain/flow buttons use the same
+  `commands.dem_derivatives` native subprocess. mHM-tools is not modified: its
+  NetCDF output becomes `Z Temp/Geometry/dem_derivatives.nc` (original DEM,
+  filled DEM, slope, aspect, facc, fdir). The plugin extracts `dem_filled` into
+  `filled_dem.nc` with one raster variable, `dem`, plus x/y/CRS metadata.
+  Existing mHM-tools formatters can therefore open that file without variable selection.
+- DEM derivatives are no longer temporary TIFFs. Setup window-copies their variables
+  into `dem_derivatives_crop.nc`, then watershed-masks them into
+  `dem_derivatives_masked.nc`. The original bundle is retained for extent expansion.
+  Channel, gauge and watershed jobs reuse the saved D8 `fdir` instead of deriving
+  it again. Gauge positions and accumulation area use `idgauges.nc` and `facc_area.nc`;
+  categorical rasters and delineation masks retain their existing formats.
+- Reuse fingerprints the selected DEM and CRS configuration; a missing filled DEM is
+  extracted again without recomputing an unchanged bundle. Legacy derivative TIFFs
+  are not reused or automatically deleted; rerun Execute All to prepare the new files.
 
 ## Domain Delineator And Project Settings
 
@@ -317,7 +334,7 @@ Four JSON files are used by the plugin.
   grid and then placed on the common L0 header by
   `core/morphology/layers/advanced_l0.py`, which uses
   `core/handlers/file/ascii/morphology.pad_l0_file_to_header()` (cell lookup plus
-  padding, never interpolation). This is Morphology Setup step 5/6.
+  padding, never interpolation). This is Morphology Setup's publish step.
 - **ASCII grids are cropped/padded by streaming text**, in
   `core/handlers/file/ascii/pad.py`.
   Loading one to pad it costs gigabytes: measured at 3238 MiB for a 13201 x 6001 soil
@@ -326,7 +343,7 @@ Four JSON files are used by the plugin.
   soil *class* raster is padded; the horizon inputs (clay, sand, silt, bulk density) are
   never touched.
 - Each Morphology Setup step records its own status in `workflows` as `<workflow>_crop`,
-  `_mask`, `_latlon`, `_write`, `_publish`, so a failure points at the failing step.
+  `_mask`, `_latlon`, `_write`, `_publish`, `_link_domains`, `_domain_dems`, so a failure points at the failing step.
 - L2 meteorology inputs already on the target grid are sliced and padded by
   `core/grid/arrays.py`. Only misaligned or reprojected inputs are resampled, and
   then nearest-neighbour only. Every written file and header is checked against the saved
@@ -350,8 +367,8 @@ Four JSON files are used by the plugin.
   streamflow observations must not be written back to the former direct `data/*` folders.
 - **Domain DEMs are written during Morphology Setup, not at delineation.** Delineation
   records each domain's polygon and its target `data/<name>/dem.asc` in
-  `mhm_qgis_processing_state.json` under `domains`; step 6/6 (`write_domain_dems_to_l0`
-  -> `layers/domain_dem.py`) then masks the *cropped* L0 DEM with each polygon and
+  `mhm_qgis_processing_state.json` under `domains`; the final `domain_dems` step
+  (`layers/domain_dem.py`) then masks the *cropped* L0 DEM with each polygon and
   writes the ASCII. Every domain therefore shares the common L0 extent and matches the
   other inputs cell for cell, which is what mHM needs. Cropping each domain to its own
   bounding box produced mismatched matrices -- measured on one project: 3748x2824,
@@ -366,11 +383,14 @@ Four JSON files are used by the plugin.
   list is explicit rather than a glob so nothing unrelated leaks out of `data/master`;
   `dem.asc` is excluded because each domain writes its own, and land cover, LAI and
   `idgauges.asc` are excluded because the namelist points every domain at the shared copy.
-- **This is why Publish runs before Write Domain DEMs.** An advanced or mHM-ready soil,
+- **The final Setup order is `publish → link_domains → domain_dems`.** An advanced or mHM-ready soil,
   geology or land-cover raster stays in `Z Temp/Morphology/morph` until
   `publish_model_inputs` publishes it into `data/master`, so copying first found nothing and
-  left every domain with a bare `dem.asc` -- silently. `copy_master_inputs` now logs what
-  `data/master` could not supply. Do not move `domain_dems` back ahead of `publish`.
+  left every domain with a bare `dem.asc` -- silently. `link_domains` links published shared inputs and fails on missing required
+  groups. Domain DEM writers do not link anything: they atomically replace each
+  domain's DEM last, never writing through a symlink into master. Execute All never
+  links domain inputs. The v6 link stage is a no-op because shared inputs live in
+  master’s `input.nc`.
 - `core/handlers/raster/tasks.write_domain_dem_ascii()` streams rows straight to text,
   so a domain DEM costs flat memory whatever the grid size. Do not reintroduce
   `materialize_domain_dem_file` into the delineation path; it crops to the cutline and is
@@ -412,7 +432,7 @@ Four JSON files are used by the plugin.
   (`morph_staging_folder`), never straight into `data/master`. Nothing is model-ready
   until the common L0 extent is known, and that only happens once meteorology has fixed
   the L2 grid.
-- Morphology Setup step 5/6 (`align_advanced_inputs_to_l0` ->
+- Morphology Setup's publish step (`setup.publish` ->
   `advanced_l0.publish_model_inputs`) crops/pads raster copies onto the L0 header in
   `data/master/static/morph`, retaining untouched staged rasters for later extent
   expansion. Class definitions and `.prj` sidecars are moved unchanged. Reused legacy
@@ -754,3 +774,16 @@ is not found, this is why.
 One known boundary exception remains: `core/handlers/lookup/job.py` calls
 `prepare_categorical_file` from `applications/` at call time. Keep the import lazy so
 importing the core package does not load mHM-tools.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

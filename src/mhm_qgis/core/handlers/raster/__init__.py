@@ -14,10 +14,8 @@ from .tasks import (
     delineate_domains_file,
     delineate_outlet_file,
     dem_derivative_files,
-    fill_dem_file,
     hydrology_files,
     mask_aligned_l0_raster,
-    terrain_files,
     write_domain_dem_ascii,
 )
 
@@ -26,9 +24,7 @@ __all__ = [
     "delineate_domains_file",
     "delineate_outlet_file",
     "dem_derivative_files",
-    "fill_dem_file",
     "hydrology_files",
     "mask_aligned_l0_raster",
-    "terrain_files",
     "write_domain_dem_ascii",
 ]

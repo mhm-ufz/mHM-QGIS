@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from osgeo import gdal, osr
+from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters, source
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -50,6 +51,10 @@ def _masked_set(folder, names=None):
         if names is not None and name not in names:
             continue
         written[name] = _raster(folder / f"{stem}_masked.tif", base + index * 100)
+    bundle = folder / "dem_derivatives_masked.nc"
+    derivatives = {name: path for name, path in written.items() if name not in {"soil_class", "geology_class"}}
+    if derivatives:
+        copy_rasters(bundle, derivatives)
     return written
 
 
@@ -57,7 +62,7 @@ def test_available_layers_finds_the_masked_rasters(tmp_path):
     _masked_set(tmp_path, names={"dem", "slope"})
     found = available_layers(tmp_path)
     assert sorted(found) == ["dem", "slope"]
-    assert found["dem"].name == "1_dem_filled_masked.tif"
+    assert found["dem"] == source(tmp_path / "dem_derivatives_masked.nc", "dem")
 
 
 def test_input_nc_has_the_example_structure(tmp_path):
@@ -124,7 +129,7 @@ def test_a_geographic_project_writes_lon_lat_without_transforming(tmp_path):
     }
     folder = tmp_path / "geo"
     folder.mkdir()
-    path = folder / "1_dem_filled_masked.tif"
+    path = folder / "source.tif"
     dataset = gdal.GetDriverByName("GTiff").Create(str(path), 2, 2, 1, gdal.GDT_Float32)
     dataset.SetGeoTransform((79.0, 0.1, 0, 30.2, 0, -0.1))
     crs = osr.SpatialReference()
@@ -133,6 +138,7 @@ def test_a_geographic_project_writes_lon_lat_without_transforming(tmp_path):
     dataset.GetRasterBand(1).WriteArray(np.ones((2, 2), dtype="float32"))
     dataset = None
 
+    copy_rasters(folder / "dem_derivatives_masked.nc", {"dem": path})
     output = write_morph_input_nc(
         tmp_path / "input.nc", available_layers(folder), geographic,
         crs_string="EPSG:4326")

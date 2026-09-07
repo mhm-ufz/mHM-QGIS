@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import math
 import os
-import shutil
 from pathlib import Path
 
 from ....applications import pyflwdir_handler
@@ -11,7 +10,6 @@ from ...grid import (
     aligned_window,
     geotransform_from_header,
     header_from_geotransform,
-    raster_grids_match,
 )
 
 
@@ -56,6 +54,10 @@ def _read_raster(path, *, as_float=False):
 
 
 def _write_raster(path, array, reference, nodata, data_type):
+    if Path(path).suffix == ".nc":
+        from ..file.netcdf.raster import write_array
+
+        return write_array(path, Path(path).stem, array, reference, nodata)
     _np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
     path = os.path.abspath(str(path))
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -81,15 +83,6 @@ def _write_raster(path, array, reference, nodata, data_type):
     band = None
     dataset = None
     return path
-
-
-def _same_grid(first, second):
-    try:
-        a = _read_raster(first)
-        b = _read_raster(second)
-    except RuntimeError:
-        return False
-    return raster_grids_match(a, b)
 
 
 def _aligned_l0_window(source, source_path, target_header, reference_path=None):
@@ -211,6 +204,12 @@ def _copy_aligned_l0_raster(
     destination = None
     source = None
     os.replace(temporary, output)
+    if projection:
+        try:
+            temporary.write_text(projection, encoding="utf-8")
+            os.replace(temporary, output.with_suffix(".prj"))
+        finally:
+            temporary.unlink(missing_ok=True)
     return str(output)
 
 
@@ -373,7 +372,7 @@ def write_domain_dem_ascii(
     projection = source.GetProjection()
     window = _aligned_l0_window(source, source_path, target_header, reference_path)
     band = source.GetRasterBand(1)
-    keep = _target_mask(mask_path, target_header, projection, reference_path)
+    keep = _target_mask(mask_path, target_header, projection, reference_path) if mask_path else None
 
     cellsize = float(target_header["cellsize"])
     rows = int(target_header["nrows"])
@@ -416,7 +415,8 @@ def write_domain_dem_ascii(
                     if source_nodata is not None:
                         values = np.where(
                             values == source_nodata, float(nodata), values)
-                values = np.where(keep[row], values, float(nodata))
+                if keep is not None:
+                    values = np.where(keep[row], values, float(nodata))
                 stream.write(" ".join(_ascii_value(value) for value in values))
                 stream.write("\n")
                 if task is not None and rows:
@@ -458,6 +458,7 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
         dstSRS=str(target_crs),
         resampleAlg="near",
         multithread=True,
+        format="netCDF",
     )
     if result is None:
         raise RuntimeError("DEM reprojection failed.")
@@ -465,145 +466,121 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
     return str(reprojected_path)
 
 
-def fill_dem_file(
-    source,
-    output_path,
-    *,
-    source_crs="",
-    target_crs="",
-    reprojected_path="",
-    task=None,
-):
-    """Reproject when needed and fill DEM depressions using file-only inputs."""
-    np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
-    _cancelled(task)
-    prepared = _prepared_dem_source(
-        source, source_crs, target_crs, reprojected_path
-    )
-    _progress(task, 15)
-    if os.path.exists(output_path) and _same_grid(output_path, prepared):
-        _progress(task, 100)
-        return {"filled_dem": str(output_path), "dem_source": prepared, "reused": True}
-    reference = _read_raster(prepared, as_float=True)
-    _cancelled(task)
-    _progress(task, 30)
-    filled, changed, _invalid = pyflwdir_handler.fill_depressions(
-        reference["array"], reference["nodata"]
-    )
-    _cancelled(task)
-    _progress(task, 85)
-    path = _write_raster(output_path, filled, reference, -9999.0, gdal.GDT_Float32)
-    _progress(task, 100)
-    return {
-        "filled_dem": path,
-        "dem_source": prepared,
-        "filled_cells": int(np.count_nonzero(changed)) if changed is not None else 0,
-        "reused": False,
-    }
-
-
-#: mHM-tools derivative -> (result key, canonical geometry-folder file name).
-DEM_DERIVATIVE_OUTPUTS = {
-    "dem_filled": ("filled_dem", "1_dem_filled.tif"),
-    "slope": ("slope", "1_dem_slope.tif"),
-    "aspect": ("aspect", "1_dem_aspect.tif"),
-    "facc": ("flow_accumulation", "2_flow_accumulation.tif"),
-    "fdir": ("flow_direction", "2_flow_direction.tif"),
+DEM_DERIVATIVE_VARIABLES = {
+    "slope": "slope", "aspect": "aspect",
+    "flow_accumulation": "facc", "flow_direction": "fdir",
 }
 
 
 def dem_derivative_files(
-    source,
-    output_folder,
-    *,
-    source_crs="",
-    target_crs="",
-    reprojected_path="",
-    compute=None,
-    log=None,
-    task=None,
+    source, output_folder, *, source_crs="", target_crs="",
+    reprojected_path="", compute=None, log=None, task=None,
 ):
-    """Create the filled DEM, slope, aspect, facc and fdir in one mHM-tools pass.
+    """Prepare one derivative dataset and a single-variable filled DEM."""
+    from netCDF4 import Dataset
+    from ..file.netcdf.raster import copy_rasters, file_path, source as raster_source
+    from ..state.cache import fingerprint
 
-    Reprojection and the same-grid reuse check stay here because they are
-    project concerns; the derivatives themselves come from mHM-tools. `compute`
-    lets the caller run that step out of process -- it holds every derivative in
-    memory at once, which is several gigabytes on a country-scale DEM.
-    """
     _cancelled(task)
-    prepared = _prepared_dem_source(
-        source, source_crs, target_crs, reprojected_path
-    )
-    _progress(task, 10)
     folder = Path(output_folder)
-    targets = {
-        key: folder / name for key, (_result, name) in DEM_DERIVATIVE_OUTPUTS.items()
-    }
+    folder.mkdir(parents=True, exist_ok=True)
+    bundle = folder / "dem_derivatives.nc"
+    filled = folder / "filled_dem.nc"
     result = {
-        result_key: str(targets[key])
-        for key, (result_key, _name) in DEM_DERIVATIVE_OUTPUTS.items()
+        "filled_dem": str(filled), "dem_derivatives": str(bundle),
+        **{key: raster_source(bundle, var) for key, var in DEM_DERIVATIVE_VARIABLES.items()},
     }
-    result["dem_source"] = prepared
-    if all(path.exists() for path in targets.values()) and _same_grid(
-        str(targets["dem_filled"]), prepared
-    ):
-        _progress(task, 100)
-        return {**result, "reused": True}
-
-    staging = folder / "0_dem_derivatives"
+    digest = fingerprint((file_path(source),), {
+        "source": str(source), "source_crs": source_crs, "target_crs": target_crs,
+        "format": "dem-netcdf-1",
+    })
     try:
-        written = (compute or _compute_dem_derivatives)(prepared, staging, log)
-        _cancelled(task)
-        _progress(task, 85)
-        for key, target in targets.items():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            Path(written[key]).replace(target)
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
+        with Dataset(bundle) as dataset:
+            reusable = (
+                getattr(dataset, "input_fingerprint", "") == digest
+                and {"dem", "dem_filled", *DEM_DERIVATIVE_VARIABLES.values()} <= set(dataset.variables)
+            )
+    except (OSError, RuntimeError):
+        reusable = False
+    if reusable:
+        try:
+            with Dataset(filled) as dataset:
+                filled_valid = getattr(dataset, "input_fingerprint", "") == digest and "dem" in dataset.variables
+        except (OSError, RuntimeError):
+            filled_valid = False
+        if filled_valid:
+            return {**result, "reused": True}
+    else:
+        from tempfile import TemporaryDirectory
+
+        prepared = _prepared_dem_source(
+            source, source_crs, target_crs,
+            reprojected_path or str(folder / "dem_reprojected.nc"),
+        )
+        with TemporaryDirectory(prefix="dem_derivatives_", dir=folder) as staging:
+            written = (compute or _compute_dem_derivatives)(prepared, staging, log)
+            _cancelled(task)
+            with Dataset(written, "r+") as dataset:
+                if not {"dem", "dem_filled", *DEM_DERIVATIVE_VARIABLES.values()} <= set(dataset.variables):
+                    raise ValueError("DEM derivative NetCDF is missing required variables.")
+                dataset.input_fingerprint = digest
+            os.replace(written, bundle)
+    copy_rasters(filled, {"dem": raster_source(bundle, "dem_filled")}, task=task)
+    with Dataset(filled, "r+") as dataset:
+        dataset.input_fingerprint = digest
     _progress(task, 100)
     return {**result, "reused": False}
 
 
 def _compute_dem_derivatives(prepared, staging, log):
-    """Run the mHM-tools derivative pass in this process."""
     from ....applications.mhm_tools_handler import create_dem_derivative_files
 
-    return create_dem_derivative_files(prepared, staging, "tif", log=log)
+    return create_dem_derivative_files(prepared, staging, log=log)
 
 
 def _flow_context(filled_dem):
-    """Build the flow grid from a filled DEM on disk."""
+    """Reuse canonical D8 directions; allow a plain DEM for standalone callers."""
+    from ..file.netcdf.raster import source
+
+    bundle = Path(filled_dem).with_name("dem_derivatives.nc")
+    if Path(filled_dem).name == "filled_dem.nc" and bundle.is_file():
+        return pyflwdir_handler.flwdir_context(_read_raster(source(bundle, "fdir")), is_direction=True)
     return pyflwdir_handler.flwdir_context(_read_raster(filled_dem, as_float=True))
 
 
 def hydrology_files(
     filled_dem,
     *,
-    accumulation_path="",
+    accumulation=False,
     area_path="",
-    direction_path="",
+    direction=False,
     channel_path="",
     threshold_cells=None,
     task=None,
 ):
-    """Create requested flow rasters and channel vector in one flow-grid pass."""
+    """Reuse bundled flow variables; compute only channel and area products."""
+    from ..file.netcdf.raster import source
+
+    bundle = Path(filled_dem).with_name("dem_derivatives.nc")
+    result = {}
+    for requested, key, variable in ((accumulation, "flow_accumulation", "facc"), (direction, "flow_direction", "fdir")):
+        if requested:
+            if not bundle.is_file():
+                raise FileNotFoundError("Prepare DEM derivatives first.")
+            result[key] = source(bundle, variable)
+    if not area_path and not channel_path:
+        return result
     _np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
     _cancelled(task)
     context = _flow_context(filled_dem)
     reference = context["reference"]
-    result = {}
     _progress(task, 20)
     cells = None
-    if accumulation_path or area_path or channel_path:
+    if channel_path:
         # Raw, unrounded and unstamped: the channel threshold compares against
         # these, whereas the written raster uses `upstream_cells`, which rounds
         # to int32 and stamps nodata.
         cells = context["flwdir"].upstream_area(unit="cell")
-    if accumulation_path:
-        values = pyflwdir_handler.upstream_cells(context)
-        result["flow_accumulation"] = _write_raster(
-            accumulation_path, values, reference, -9999, gdal.GDT_Int32
-        )
     if area_path:
         values = pyflwdir_handler.upstream_area_m2(context)
         result["flow_accumulation_area"] = _write_raster(
@@ -611,11 +588,6 @@ def hydrology_files(
         )
     _cancelled(task)
     _progress(task, 55)
-    if direction_path:
-        values = pyflwdir_handler.flow_direction(context)
-        result["flow_direction"] = _write_raster(
-            direction_path, values, reference, 247, gdal.GDT_Byte
-        )
     if channel_path:
         result["channel_network"] = _write_channel_network(
             channel_path, cells, context, threshold_cells
@@ -624,49 +596,6 @@ def hydrology_files(
     return result
 
 
-def terrain_files(filled_dem, slope_path, aspect_path, scale=1.0, *, task=None):
-    """Create slope and aspect rasters with GDAL's file API."""
-    _np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
-    outputs = {}
-    for index, (name, path, options) in enumerate(
-        (
-            (
-                "slope",
-                slope_path,
-                gdal.DEMProcessingOptions(
-                    format="GTiff",
-                    slopeFormat="percent",
-                    scale=float(scale),
-                    computeEdges=False,
-                    alg="Horn",
-                    creationOptions=["COMPRESS=LZW"],
-                ),
-            ),
-            (
-                "aspect",
-                aspect_path,
-                gdal.DEMProcessingOptions(
-                    format="GTiff",
-                    zeroForFlat=False,
-                    computeEdges=False,
-                    alg="Horn",
-                    creationOptions=["COMPRESS=LZW"],
-                ),
-            ),
-        )
-    ):
-        _cancelled(task)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        if os.path.exists(path):
-            outputs[name] = str(path)
-        else:
-            result = gdal.DEMProcessing(str(path), str(filled_dem), name, options=options)
-            if result is None:
-                raise RuntimeError(f"Could not create {name} raster.")
-            result = None
-            outputs[name] = str(path)
-        _progress(task, 50 * (index + 1))
-    return outputs
 
 
 def gauge_position_file(filled_dem, gauges, output_path, *, task=None):
@@ -963,10 +892,8 @@ __all__ = [
     "merge_domain_masks",
     "delineate_domains_file",
     "delineate_outlet_file",
-    "fill_dem_file",
     "gauge_position_file",
     "hydrology_files",
     "mask_aligned_l0_raster",
     "write_domain_dem_ascii",
-    "terrain_files",
 ]

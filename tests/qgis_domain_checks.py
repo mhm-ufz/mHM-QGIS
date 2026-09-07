@@ -15,7 +15,7 @@ from qgis.PyQt.QtWidgets import QDialog, QCheckBox
 from mhm_qgis.qgis_bridge.layers.domain import snap_points_to_network, DomainWorkflow
 from mhm_qgis.core.handlers.state import domain_state
 from mhm_qgis.core.executions.morphology import delineation
-from mhm_qgis.core.handlers.raster.tasks import hydrology_files
+from mhm_qgis.core.handlers.raster.tasks import dem_derivative_files, hydrology_files
 from mhm_qgis.qt.controllers.domain_delineator import colour_outlets
 
 
@@ -68,13 +68,19 @@ def navigation(folder):
     points = layer("Point", "EPSG:32632", "id", [(1, "POINT(850 150)"), (2, "POINT(950 50)")])
     workflow = DomainWorkflow(folder, points, "id", ["1", "2"])
     Path(workflow.filled_dem_path).parent.mkdir(parents=True, exist_ok=True)
-    dem = gdal.GetDriverByName("GTiff").Create(workflow.filled_dem_path, 10, 10, 1, gdal.GDT_Float32)
+    original = folder / "source.tif"
+    dem = gdal.GetDriverByName("GTiff").Create(str(original), 10, 10, 1, gdal.GDT_Float32)
     dem.SetGeoTransform((0, 100, 0, 1000, 0, -100))
     crs = osr.SpatialReference(); crs.ImportFromEPSG(32632)
     dem.SetProjection(crs.ExportToWkt())
     dem.GetRasterBand(1).WriteArray(np.add.outer(np.arange(10, 0, -1), np.arange(10, 0, -1)))
     dem.GetRasterBand(1).SetNoDataValue(-9999)
     dem = None
+    result = dem_derivative_files(original, Path(workflow.filled_dem_path).parent)
+    for name in ("filled_dem", "slope", "aspect", "flow_accumulation", "flow_direction"):
+        assert QgsRasterLayer(result[name], name).isValid(), name
+    from mhm_qgis.qt.objects.viewport_raster_range import raster_window_range
+    assert raster_window_range(workflow.flow_accumulation_path, (0, 0, 1000, 1000))[1] > 1
     hydrology_files(workflow.filled_dem_path, channel_path=workflow.channel_network_path, threshold_cells=1)
     main = QDialog()
     main.project_folder = str(folder)

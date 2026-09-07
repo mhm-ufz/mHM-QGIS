@@ -43,13 +43,21 @@ def test_historical_land_cover_resolves_the_selected_period(tmp_path):
 def test_display_prefers_masked_then_cropped_then_raw(tmp_path):
     ensure_project_structure(tmp_path, "5.13")
     geometry = Path(geometry_folder(tmp_path))
-    raw = geometry / "1_dem_filled.tif"
-    crop = geometry / "1_dem_filled_crop.tif"
-    masked = geometry / "1_dem_filled_masked.tif"
+    raw = geometry / "dem_derivatives.nc"
+    crop = geometry / "dem_derivatives_crop.nc"
+    masked = geometry / "dem_derivatives_masked.nc"
     assert resolve_display_output(tmp_path, "dem") is None
+    from netCDF4 import Dataset
+
     for path in (raw, crop, masked):
-        path.touch()
-        assert resolve_display_output(tmp_path, "dem").path == path
+        variable = "dem_filled" if path == raw else "dem"
+        with Dataset(path, "w") as dataset:
+            dataset.createDimension("x", 2)
+            dataset.createDimension("y", 2)
+            dataset.createVariable(variable, "f8", ("y", "x"))
+        output = resolve_display_output(tmp_path, "dem")
+        assert output.path == path
+        assert output.variable == variable
     assert resolve_display_output(tmp_path, "unknown") is None
 
 

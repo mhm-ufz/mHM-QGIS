@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from osgeo import gdal, ogr, osr
+from mhm_qgis.core.handlers.file.netcdf.raster import file_path, variables
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,15 +16,12 @@ standalone.install(force=True)
 
 from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE  # noqa: E402
 from mhm_qgis.core.handlers.raster.tasks import (  # noqa: E402
-    DEM_DERIVATIVE_OUTPUTS,
     crop_aligned_l0_raster,
     delineate_domains_file,
     delineate_outlet_file,
     dem_derivative_files,
-    fill_dem_file,
     hydrology_files,
     mask_aligned_l0_raster,
-    terrain_files,
 )
 
 
@@ -218,15 +216,12 @@ def test_file_jobs_create_hydrology_and_watershed_outputs(tmp_path):
     source = tmp_path / "dem.tif"
     _dem(source)
 
-    filled = fill_dem_file(source, tmp_path / "filled.tif")
-    terrain = terrain_files(
-        filled["filled_dem"], tmp_path / "slope.tif", tmp_path / "aspect.tif"
-    )
+    filled = dem_derivative_files(source, tmp_path / "geometry")
     hydrology = hydrology_files(
         filled["filled_dem"],
-        accumulation_path=tmp_path / "accumulation.tif",
-        area_path=tmp_path / "area.tif",
-        direction_path=tmp_path / "direction.tif",
+        accumulation=True,
+        area_path=tmp_path / "facc_area.nc",
+        direction=True,
         channel_path=tmp_path / "channel.shp",
         threshold_cells=1,
     )
@@ -238,11 +233,11 @@ def test_file_jobs_create_hydrology_and_watershed_outputs(tmp_path):
     )
 
     outputs = (
-        *terrain.values(),
+        filled["slope"], filled["aspect"],
         *hydrology.values(),
         watershed["raster_path"],
     )
-    assert all(os.path.isfile(path) for path in outputs)
+    assert all(file_path(path).is_file() for path in outputs)
     assert watershed["cell_center"] == (950.0, 50.0)
     assert watershed["catchment_area_m2"] > 0
     # Delineation writes the pyflwdir mask only; nothing is polygonized.
@@ -392,14 +387,14 @@ def test_dem_derivatives_land_on_the_canonical_geometry_names(tmp_path):
     result = dem_derivative_files(str(source), str(folder), log=lambda _m: None)
 
     assert result["reused"] is False
-    for _key, (result_key, name) in DEM_DERIVATIVE_OUTPUTS.items():
-        assert result[result_key] == str(folder / name)
-        assert (folder / name).is_file()
-    # The staging folder the tool wrote into must not survive.
-    assert not (folder / "0_dem_derivatives").exists()
+    assert (folder / "dem_derivatives.nc").is_file()
+    assert (folder / "filled_dem.nc").is_file()
+    assert not list(folder.glob("*.tif"))
+    assert not list(folder.glob("dem_derivatives_*/"))
+    assert set(variables(folder / "filled_dem.nc")) == {"dem", "x", "y", "crs"}
 
-    for name in ("1_dem_filled.tif", "1_dem_slope.tif", "2_flow_accumulation.tif"):
-        dataset = gdal.Open(str(folder / name))
+    for key in ("filled_dem", "slope", "flow_accumulation"):
+        dataset = gdal.Open(result[key])
         assert (dataset.RasterXSize, dataset.RasterYSize) == (10, 10)
         assert dataset.GetGeoTransform() == (0, 100, 0, 1000, 0, -100)
         assert dataset.GetRasterBand(1).GetNoDataValue() == -9999
@@ -413,13 +408,13 @@ def test_dem_derivatives_reuse_outputs_that_match_the_source_grid(tmp_path):
 
     dem_derivative_files(str(source), str(folder), log=lambda _m: None)
     stamps = {
-        path.name: path.stat().st_mtime_ns for path in sorted(folder.glob("*.tif"))
+        path.name: path.stat().st_mtime_ns for path in sorted(folder.glob("*.nc"))
     }
     again = dem_derivative_files(str(source), str(folder), log=lambda _m: None)
 
     assert again["reused"] is True
     assert {
-        path.name: path.stat().st_mtime_ns for path in sorted(folder.glob("*.tif"))
+        path.name: path.stat().st_mtime_ns for path in sorted(folder.glob("*.nc"))
     } == stamps
 
 
@@ -444,7 +439,7 @@ def test_dem_derivatives_rebuild_when_the_source_grid_changes(tmp_path):
 
     again = dem_derivative_files(str(source), str(folder), log=lambda _m: None)
     assert again["reused"] is False
-    dataset = gdal.Open(str(folder / "1_dem_filled.tif"))
+    dataset = gdal.Open(str(folder / "filled_dem.nc"))
     assert dataset.RasterXSize == 12
     dataset = None
 
@@ -460,7 +455,7 @@ def test_dem_derivatives_delegate_the_expensive_pass_to_the_caller(tmp_path):
         calls.append((prepared, Path(staging)))
         from mhm_qgis.applications.mhm_tools_handler import create_dem_derivative_files
 
-        return create_dem_derivative_files(prepared, staging, "tif", log=log)
+        return create_dem_derivative_files(prepared, staging, log=log)
 
     result = dem_derivative_files(
         str(source), str(folder), compute=compute, log=lambda _m: None
@@ -471,7 +466,7 @@ def test_dem_derivatives_delegate_the_expensive_pass_to_the_caller(tmp_path):
     assert prepared == str(source)
     assert staging.parent == folder
     assert result["reused"] is False
-    assert (folder / "1_dem_filled.tif").is_file()
+    assert (folder / "filled_dem.nc").is_file()
 
 
 def test_native_worker_runs_the_dem_derivative_job(tmp_path):
@@ -487,7 +482,5 @@ def test_native_worker_runs_the_dem_derivative_job(tmp_path):
     })
 
     assert result["kind"] == "dem-derivatives"
-    assert set(result["outputs"]) == {
-        "dem", "dem_filled", "slope", "aspect", "facc", "fdir"
-    }
-    assert all(Path(path).is_file() for path in result["outputs"].values())
+    assert {"dem", "dem_filled", "slope", "aspect", "facc", "fdir"} <= set(variables(result["output"]))
+    assert Path(result["output"]).is_file()

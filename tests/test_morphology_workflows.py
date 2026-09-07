@@ -64,9 +64,10 @@ def test_combined_setup_runs_the_public_plan_in_order(tmp_path, monkeypatch):
         "latlon",
         "write",
         "publish",
+        "link_domains",
         "domain_dems",
     ]
-    assert calls.index("publish") < calls.index("domain_dems")
+    assert calls.index("publish") < calls.index("link_domains") < calls.index("domain_dems")
     assert processing.workflow(tmp_path, "meteo_morph_setup")["status"] == "completed"
 
 
@@ -106,7 +107,7 @@ def test_v6_plan_omits_the_v5_only_latlon_command(tmp_path, monkeypatch):
     setup.run(_request(tmp_path))
 
     assert "latlon" not in calls
-    assert calls == ["crop", "mask", "write", "publish", "domain_dems"]
+    assert calls == ["crop", "mask", "write", "publish", "link_domains", "domain_dems"]
 
 
 def test_execute_all_plan_contains_every_user_visible_command():

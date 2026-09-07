@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pytest
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -53,6 +54,20 @@ def test_execute_all_uses_managed_pipeline():
     dialog.start_execute_all_processing()
 
     assert calls == [True]
+    dialog.close()
+
+
+@pytest.mark.parametrize("action,variable", [
+    ("Fill DEM", "filled_dem"), ("Slope", "slope"), ("Aspect", "aspect"),
+    ("Flow Accumulation", "flow_accumulation"), ("Flow Direction", "flow_direction"),
+])
+def test_derivative_buttons_share_the_netcdf_command(action, variable):
+    _app()
+    dialog = MhmQgisDialog()
+    calls = []
+    dialog.morphology_tasks.start_dem_derivatives = lambda **options: calls.append(options) or True
+    dialog.run_background_processor_action(action, lambda: None, QPushButton())
+    assert calls[0]["load"] == variable
     dialog.close()
 
 

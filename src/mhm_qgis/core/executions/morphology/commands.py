@@ -11,10 +11,8 @@ from tempfile import TemporaryDirectory
 from ....applications.mhm_tools_handler import prepare_lai_file
 from ...handlers.raster.tasks import (
     dem_derivative_files,
-    fill_dem_file,
     gauge_position_file,
     hydrology_files,
-    terrain_files,
 )
 from ...handlers.state.cache import (
     cached_payload,
@@ -25,10 +23,6 @@ from ...handlers.state.cache import (
 )
 from ...handlers.store.paths import geometry_folder
 from ...morphology.layers.categorical import saved_outputs
-
-
-def fill(task, options):
-    return fill_dem_file(task=task, **options)
 
 
 def dem_derivatives(task, options):
@@ -44,17 +38,13 @@ def dem_derivatives(task, options):
             },
             Path(staging).parent,
         )
-        return {name: Path(path) for name, path in result["outputs"].items()}
+        return Path(result["output"])
 
     return dem_derivative_files(task=task, compute=compute, **options)
 
 
 def hydrology(task, options):
     return hydrology_files(task=task, **options)
-
-
-def terrain(task, options):
-    return terrain_files(task=task, **options)
 
 
 def gauge_position(task, options):
@@ -136,9 +126,10 @@ def categorical_outputs(project_folder, kind):
 
 def native_worker(task, payload, working_folder):
     """Run one native job without risking the long-lived QGIS process."""
-    if task.isCanceled():
+    if task is not None and task.isCanceled():
         raise RuntimeError("Task cancelled.")
-    task.setProgress(5)
+    if task is not None:
+        task.setProgress(5)
     with TemporaryDirectory(
         prefix="mhm_qgis_native_", dir=str(working_folder)
     ) as temporary:
@@ -169,7 +160,7 @@ def native_worker(task, payload, working_folder):
                 env=environment,
             )
             while process.poll() is None:
-                if task.isCanceled():
+                if task is not None and task.isCanceled():
                     process.terminate()
                     try:
                         process.wait(timeout=5)
@@ -192,7 +183,8 @@ def native_worker(task, payload, working_folder):
                 response.get("traceback") or response.get("error") or log
             )
         result = response["result"]
-    task.setProgress(100)
+    if task is not None:
+        task.setProgress(100)
     return result
 
 
@@ -200,7 +192,6 @@ __all__ = [
     "advanced",
     "categorical_outputs",
     "dem_derivatives",
-    "fill",
     "gauge_position",
     "hydrology",
     "lai",
@@ -209,5 +200,4 @@ __all__ = [
     "record_stage",
     "reusable_stage",
     "stage_digest",
-    "terrain",
 ]

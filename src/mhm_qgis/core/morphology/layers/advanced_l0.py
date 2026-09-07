@@ -4,7 +4,7 @@
 Execute All writes land cover, soil, and geology outputs into
 `Z Temp/Morphology/morph`. Nothing is model-ready until the common L0 extent is
 known, which only happens once meteorology has fixed the L2 grid, so publication
-is the last step of Morphology Setup: each staged raster is padded onto the L0
+precedes domain linking and domain DEM writing in Morphology Setup: each staged raster is padded onto the L0
 header, copied into `data/master/static/morph`, and the paths recorded in
 `nml-settings.json` are rewritten to point at the published copies.
 """

@@ -412,12 +412,11 @@ def lai_time_step(output_temporal_resolution: str) -> int:
 def create_dem_derivative_files(
     input_file: str | Path,
     output_folder: str | Path,
-    output_extension: str = "tif",
     crs: str | None = None,
     *,
     log: LogCallback | None = None,
-) -> dict[str, Path]:
-    """Create the DEM derivatives through mHM-tools, keyed by derivative name.
+) -> Path:
+    """Create the multi-variable NetCDF derivative dataset through mHM-tools.
 
     The whole pass is held in memory, so callers that can afford a subprocess
     should run it through `mhm_qgis.core.native_worker` -- see
@@ -425,19 +424,23 @@ def create_dem_derivative_files(
     `compute` hook. This function is the one entry point either route uses.
     """
     from mhm_tools.pre.dem_derivatives import create_dem_derivatives
+    from ..core.handlers.file.netcdf.raster import file_path
+
+    variable = str(input_file).rsplit(":", 1)[-1] if str(input_file).startswith('NETCDF:"') else None
 
     folder = Path(output_folder)
     folder.mkdir(parents=True, exist_ok=True)
     with capture_messages(log):
         written = create_dem_derivatives(
-            input_file=str(input_file),
+            input_file=str(file_path(input_file)),
             output_path=folder,
-            output_extension=output_extension,
+            output_extension="nc",
             crs=crs,
+            var_name=variable,
         )
     paths = tuple(Path(path) for path in written)
     _require_outputs(paths)
-    return {path.stem: path for path in paths}
+    return paths[0]
 
 
 def link_folder_tree(
