@@ -42,12 +42,14 @@ def resolve_display_output(
         return _land_cover_output(settings, workspace, geometry, morph, year)
     if key == "soil":
         configured = _configured_path(settings.get("soil"), workspace)
-        candidates = [configured] if configured else []
+        candidates = [morph / configured.name] if configured else []
         candidates += [
             morph / "soil_horizon_class.nc",
             morph / "soil_class.asc",
             *variants(geometry / "3_soil.tif"),
         ]
+        if configured:
+            candidates.append(configured)
         return _first(candidates, "Soil", variable="soil_class")
     if key == "domain_mask":
         merged_vector = geometry / "Watersheds" / "4_watershed_merged_vector.shp"
@@ -109,22 +111,19 @@ def _land_cover_output(settings, workspace, geometry, morph, year):
                 continue
     if scenes:
         configured = _configured_path(scenes[selected_index], workspace)
+        if configured and (morph / configured.name).is_file():
+            configured = morph / configured.name
         if configured and configured.is_file():
             return DisplayOutput(
                 configured, "Land Cover", band=1, variable="land_cover"
             )
     configured = _configured_path(land_cover, workspace)
-    if configured and configured.is_file():
-        band = selected_index + 1 if configured.suffix.lower() == ".nc" else 1
-        return DisplayOutput(
-            configured, "Land Cover", band=band, variable="land_cover"
-        )
     return _first(
-        [
+        ([morph / configured.name] if configured else []) + [
             morph / "lc_periods.nc",
             morph / "lc.asc",
             *variants(geometry / "3_land_use.tif"),
-        ],
+        ] + ([configured] if configured else []),
         "Land Cover",
         band=selected_index + 1,
         variable="land_cover",

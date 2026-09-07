@@ -106,12 +106,14 @@ def test_an_already_matching_grid_is_left_untouched(tmp_path):
     assert path.read_bytes() == before
 
 
-def test_padding_only_expands_never_crops(tmp_path):
+def test_aligned_cropping_and_partial_overlap(tmp_path):
     path = _grid(tmp_path / "a.asc", ncols=4, nrows=4)
     smaller = {"ncols": 2, "nrows": 2, "xllcorner": 100.0, "yllcorner": 200.0,
                "cellsize": 10.0}
-    with pytest.raises(ValueError, match="never crops"):
-        pad_ascii_grid(path, smaller)
+    pad_ascii_grid(path, smaller)
+    assert _rows(path) == [["9", "10"], ["13", "14"]]
+    pad_ascii_grid(path, {**smaller, "xllcorner": 110.0, "yllcorner": 190.0}, pad=1)
+    assert _rows(path) == [["14", "1"], ["1", "1"]]
 
 
 def test_a_row_count_mismatch_is_reported_and_leaves_the_file_intact(tmp_path):

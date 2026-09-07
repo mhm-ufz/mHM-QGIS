@@ -5,7 +5,7 @@ Execute All writes land cover, soil, and geology outputs into
 `Z Temp/Morphology/morph`. Nothing is model-ready until the common L0 extent is
 known, which only happens once meteorology has fixed the L2 grid, so publication
 is the last step of Morphology Setup: each staged raster is padded onto the L0
-header, moved into `data/master/static/morph`, and the paths recorded in
+header, copied into `data/master/static/morph`, and the paths recorded in
 `nml-settings.json` are rewritten to point at the published copies.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ from . import CATEGORICAL_PAD_VALUE, LAI_PAD_VALUE
 from ...handlers.state.nml_settings import load_settings, relative_workspace_path, save_settings
 from ...handlers.store.paths import morph_staging_folder, workspace_folder
 from ...handlers.store.layout import morph_folder
-from ...handlers.file.ascii.morphology import pad_l0_file_to_header
+from ...handlers.file.ascii.morphology import file_matches_header, pad_l0_file_to_header
 
 
 # Rasters are padded onto the L0 grid; everything else is carried across as is.
@@ -71,22 +71,40 @@ def publish_model_inputs(
         l0_header: Mapping[str, Any],
         *,
         log=None) -> list[Path]:
-    """Pad every staged raster onto L0 and move the staged set into data/master."""
+    """Publish exact-L0 copies, retaining full source rasters for extent changes."""
     master = Path(morph_folder(project_folder))
     master.mkdir(parents=True, exist_ok=True)
     published: list[Path] = []
 
+    # Older projects moved their sources into master. Preserve those before
+    # cropping; never let a smaller domain destroy the reusable coverage.
+    staging = Path(morph_staging_folder(project_folder))
+    for path in _configured_rasters(project_folder):
+        source = staging / path.name
+        if path.is_file() and not source.exists() and not file_matches_header(path, l0_header):
+            staging.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, source)
+
     for path in staged_files(project_folder):
         suffix = path.suffix.lower()
+        target = master / path.name
         if suffix in RASTER_SUFFIXES:
+            if (target.is_file() and target.stat().st_mtime_ns >= path.stat().st_mtime_ns
+                    and file_matches_header(target, l0_header)):
+                continue
             pad_value, integer = pad_spec_for(path)
-            pad_l0_file_to_header(
-                path,
-                l0_header,
-                nodata_value=-9999,
-                integer=integer,
-                pad_value=pad_value,
-            )
+            temporary = target.with_name(f".{target.stem}.publish{suffix}")
+            try:
+                shutil.copy2(path, temporary)
+                pad_l0_file_to_header(
+                    temporary, l0_header, nodata_value=-9999,
+                    integer=integer, pad_value=pad_value,
+                )
+                if not file_matches_header(temporary, l0_header):
+                    raise ValueError(f"{path.name} does not match the common L0 grid.")
+                os.replace(temporary, target)
+            finally:
+                temporary.unlink(missing_ok=True)
             if log:
                 padding = "nodata" if pad_value is None else str(pad_value)
                 log(
@@ -97,16 +115,31 @@ def publish_model_inputs(
             if log:
                 log(f"Skipping unexpected staged file: {path.name}")
             continue
-        target = master / path.name
-        if target.exists():
-            target.unlink()
-        shutil.move(str(path), str(target))
+        else:
+            os.replace(path, target)
         published.append(target)
         if log:
             log(f"Published {target.name} to {master}.")
 
     _repoint_settings(project_folder, published, log=log)
+    for path in _configured_rasters(project_folder):
+        if path.is_file() and not file_matches_header(path, l0_header):
+            raise ValueError(f"Published input {path} does not match the common L0 grid.")
     return published
+
+
+def _configured_rasters(project_folder):
+    """Only model products, never the original soil horizon inputs."""
+    workspace = Path(workspace_folder(project_folder))
+    settings = load_settings(project_folder)
+    paths = set()
+    for section in SECTIONS:
+        record = settings.get(section, {})
+        for item in [record, *record.get("scenes", [])]:
+            value = item.get("output_path")
+            if value and Path(value).suffix.lower() in RASTER_SUFFIXES:
+                paths.add(workspace / value)
+    return sorted(paths)
 
 
 def _repoint_settings(project_folder, published, log=None) -> None:

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Pad an Arc/Info ASCII grid onto a larger aligned header by streaming text.
+"""Crop/pad an Arc/Info ASCII grid onto an aligned header by streaming text.
 
 An ASCII grid is row-major
 text, so padding is a line-by-line rewrite with constant memory instead.
@@ -58,7 +58,8 @@ def ascii_window_offsets(source: Mapping[str, Any],
                 f"cell size {target['cellsize']}; it cannot be padded without resampling."
             ) from error
         raise
-    return window["target_y"], window["target_x"]
+    return (window["target_y"] - window["source_y"],
+            window["target_x"] - window["source_x"])
 
 
 def _format_header(target: Mapping[str, Any], nodata) -> str:
@@ -73,7 +74,7 @@ def _format_header(target: Mapping[str, Any], nodata) -> str:
 
 
 def pad_ascii_grid(path, target: Mapping[str, Any], nodata=-9999, pad=None) -> Path:
-    """Pad an ASCII grid onto ``target`` in place, streaming row by row.
+    """Crop/pad an ASCII grid onto ``target`` in place, streaming row by row.
 
     Returns the path unchanged when the grid already matches the target. Cells
     outside the source extent become ``pad``, or ``nodata`` when no pad value
@@ -85,20 +86,17 @@ def pad_ascii_grid(path, target: Mapping[str, Any], nodata=-9999, pad=None) -> P
     if headers_match(source, target):
         return path
 
-    row_offset, column_offset = ascii_window_offsets(source, target)
+    window = aligned_window(source, target, label="The source grid")
     source_rows, source_columns = int(source["nrows"]), int(source["ncols"])
     target_rows, target_columns = int(target["nrows"]), int(target["ncols"])
-    if row_offset < 0 or column_offset < 0 or (
-            row_offset + source_rows > target_rows
-            or column_offset + source_columns > target_columns):
-        raise ValueError(
-            "The target grid does not contain the source grid; padding only "
-            "expands, it never crops."
-        )
+    row_offset, column_offset = window["target_y"], window["target_x"]
+    copy_rows, copy_columns = max(0, window["copy_rows"]), max(0, window["copy_cols"])
+    if not copy_rows or not copy_columns:
+        row_offset = copy_rows = column_offset = copy_columns = 0
 
     text = str(nodata if pad is None else pad)
     left = f"{text} " * column_offset
-    right = f" {text}" * (target_columns - column_offset - source_columns)
+    right = f" {text}" * (target_columns - column_offset - copy_columns)
     blank = " ".join([text] * target_columns)
     temporary = path.with_name(f".{path.name}.pad.tmp")
     temporary.unlink(missing_ok=True)
@@ -112,17 +110,21 @@ def pad_ascii_grid(path, target: Mapping[str, Any], nodata=-9999, pad=None) -> P
                 output_stream.write(blank + "\n")
             written = 0
             for line in source_stream:
-                values = line.strip()
+                values = line.split()
                 if not values:
                     continue
-                output_stream.write(f"{left}{values}{right}\n")
+                if len(values) != source_columns:
+                    raise ValueError(f"{path.name} has a row with {len(values)} cells; expected {source_columns}.")
+                if window["source_y"] <= written < window["source_y"] + copy_rows:
+                    cells = " ".join(values[window["source_x"]:window["source_x"] + copy_columns])
+                    output_stream.write(f"{left}{cells}{right}\n")
                 written += 1
             if written != source_rows:
                 raise ValueError(
                     f"{path.name} has {written} data row(s) but its header "
                     f"declares {source_rows}."
                 )
-            for _ in range(target_rows - row_offset - source_rows):
+            for _ in range(target_rows - row_offset - copy_rows):
                 output_stream.write(blank + "\n")
     except BaseException:
         temporary.unlink(missing_ok=True)

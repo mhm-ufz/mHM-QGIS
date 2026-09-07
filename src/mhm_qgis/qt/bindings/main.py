@@ -18,7 +18,7 @@ except ImportError:
 
 from ...qgis_bridge.display import meteo as meteo_display
 from ...qgis_bridge.display import output as output_display
-from ..controllers import elevation_band
+from ..controllers import elevation_band, main
 
 
 def _bind_input_sources(dialog):
@@ -81,6 +81,9 @@ def bind(dialog):
     dialog.tabWidget_steps.currentChanged.connect(dialog.on_tab_changed)
     _bind_input_sources(dialog)
     dialog.pushButton_threads.clicked.connect(dialog.open_thread_display)
+    dialog.pushButton_observationDisplay_discharge.clicked.connect(
+        lambda checked=False: main.display_observation_discharge(dialog)
+    )
 
     # Morphology/Geometry processing is dispatched by the Qt task API. The
     # callback is intentionally empty for background actions: the dispatcher

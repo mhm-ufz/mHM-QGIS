@@ -51,7 +51,8 @@ decision.
     `morphology` (prepared-output discovery and historical-period selection).
   - `handlers/lookup/`: CSV/TXT lookup tables and the manifests built from them --
     `table`, `manifests`, `geology`, `job`.
-  - `post/`: mHM output discovery and variable/time resolution.
+  - `post/`: mHM output discovery and variable/time resolution. `graph/` resolves
+    saved gauges and Qt-free discharge series; the pyqtgraph window lives in `qt/dialogs/`.
   - `utils/`: dependency-free leaf helpers (`time`).
   - `grid/`: QGIS-free exact resolutions, extents, headers, alignment, coordinate
     generation and NumPy/xarray grid matching.
@@ -317,7 +318,7 @@ Four JSON files are used by the plugin.
   `core/morphology/layers/advanced_l0.py`, which uses
   `core/handlers/file/ascii/morphology.pad_l0_file_to_header()` (cell lookup plus
   padding, never interpolation). This is Morphology Setup step 5/6.
-- **ASCII grids are padded by streaming text**, in
+- **ASCII grids are cropped/padded by streaming text**, in
   `core/handlers/file/ascii/pad.py`.
   Loading one to pad it costs gigabytes: measured at 3238 MiB for a 13201 x 6001 soil
   class raster, which is why soil failed inside QGIS once crop and mask had already
@@ -367,7 +368,7 @@ Four JSON files are used by the plugin.
   `idgauges.asc` are excluded because the namelist points every domain at the shared copy.
 - **This is why Publish runs before Write Domain DEMs.** An advanced or mHM-ready soil,
   geology or land-cover raster stays in `Z Temp/Morphology/morph` until
-  `publish_model_inputs` moves it into `data/master`, so copying first found nothing and
+  `publish_model_inputs` publishes it into `data/master`, so copying first found nothing and
   left every domain with a bare `dem.asc` -- silently. `copy_master_inputs` now logs what
   `data/master` could not supply. Do not move `domain_dems` back ahead of `publish`.
 - `core/handlers/raster/tasks.write_domain_dem_ascii()` streams rows straight to text,
@@ -412,9 +413,11 @@ Four JSON files are used by the plugin.
   until the common L0 extent is known, and that only happens once meteorology has fixed
   the L2 grid.
 - Morphology Setup step 5/6 (`align_advanced_inputs_to_l0` ->
-  `advanced_l0.publish_model_inputs`) pads each staged raster onto the L0 header, moves
-  the whole staged set into `data/master/static/morph` (class definitions and `.prj`
-  sidecars included), and rewrites the `output_path` / `classdefinition_path` /
+  `advanced_l0.publish_model_inputs`) crops/pads raster copies onto the L0 header in
+  `data/master/static/morph`, retaining untouched staged rasters for later extent
+  expansion. Class definitions and `.prj` sidecars are moved unchanged. Reused legacy
+  master rasters are preserved in staging before realignment. Publication validates
+  the grids and rewrites the `output_path` / `classdefinition_path` /
   `scenes[].output_path` entries in `nml-settings.json` to the published locations. Those
   values feed `vSpecific/v5_13` and `vSpecific/v6`, so they must name files that exist.
 - Repointing also fixes paths left pointing at staging when the file is already in
@@ -566,7 +569,8 @@ Four JSON files are used by the plugin.
 - `core/handlers/file/netcdf` reads the file; `core/post` resolves which variable and
   time step; `qgis_bridge/display` renders. Keep that order -- the resolver is Qt-free
   and testable, the renderer is not.
-- `show_raster` reuses the layer already loaded under the same name. A time scrubber
+- `show_raster` reuses the layer already loaded under the same name, refreshing its
+  provider when its source or file stamp changes. A time scrubber
   calls it on every step and `layers.load` does not uniquify names, so reloading would
   both stack duplicates in the layer tree and reopen the file each tick.
 - Prepared forcing can be addressed through a `NETCDF:"path":var` URI with
@@ -587,6 +591,9 @@ Four JSON files are used by the plugin.
   `state/nml_settings.load_settings`.
 - The handoff goes through `applications/nml_tools_handler.launch_profile_editor`.
   `configure_qtpy_api()` must run before it, because nml-tools loads Qt on first call.
+- Before handoff, saved domain-indexed arrays are reconciled in memory against schema
+  dimensions and stable domain paths. Surviving-domain values are preserved; added
+  domains receive schema defaults. Only the editor's Save writes `nml.json`.
 - `qt/controllers/main.py` owns version changes, Edit Namelists and Run mHM; the
   main dialog exposes thin methods wired by `qt/bindings/main.py`. There is no
   configuration processor object.

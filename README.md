@@ -1,159 +1,43 @@
-# mHM QGIS - Python Mesoscale Hydrological Model
+# mHM QGIS — QGIS plugin for Mesoscale Hydrological Model
 
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
-[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
-[![PyPI version](https://badge.fury.io/py/mhm_qgis.svg)](https://badge.fury.io/py/mhm_qgis)
+Prepare model inputs and namelists for **mHM 5.13 and v6** in QGIS.
 
-A Python package for mesoscale hydrological modeling, designed to work both as a standalone library and as a QGIS plugin.
+- Delineate domains, snap outlets, and assign discharge observations.
+- Prepare DEM derivatives, soil, land cover, geology, and LAI.
+- Align morphology and meteorology on compatible model grids.
+- Edit namelists with nml-tools and inspect rasters or discharge time series.
 
-## Features
+This plugin prepares and configures mHM; running simulations requires a
+separately installed `mhm` executable.
 
-- **Hydrological Modeling**: Core functionality for mesoscale hydrological processes
-- **QGIS Integration**: Seamless integration with QGIS 3.0+ as a plugin
-- **Data Processing**: Tools for handling hydrological data and model inputs
-- **Visualization**: Built-in plotting and visualization capabilities
-- **Extensible**: Modular design for easy extension and customization
-
-## Installation
-
-`mhm_qgis` is published as a Python/PyPI package, not as an Ubuntu/Debian APT
-package. This will not work unless a separate Debian package is published to an
-APT repository:
+## Install from source
 
 ```bash
-sudo apt install python3-mhm_qgis
-```
-
-### From PyPI (Recommended)
-
-For an isolated command-line application install:
-
-```bash
-sudo apt install pipx
-pipx ensurepath
-pipx install mhm_qgis
-```
-
-If you prefer a project virtual environment:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install mhm_qgis
-```
-
-### From Source
-
-```bash
-git clone https://github.com/SanjeevBashyal/mhm-qgis.git
-cd mhm_qgis
+git clone https://git.ufz.de/mhm/mhm-qgis
+cd mhm-qgis
 python3 -m pip install -e .
 ```
 
-### For QGIS Plugin
+For QGIS, copy or symlink `src/mhm_qgis` into your QGIS profile's
+`python/plugins/` directory and enable **mHM QGIS** in the Plugin Manager.
+Install Python dependencies into the environment used by QGIS.
 
-1. Download the plugin from the QGIS Plugin Manager
-2. Or install manually by copying the `mhm_qgis` folder to your QGIS plugins directory
+## Workflow
 
-## Quick Start
+Select a project folder and mHM version, configure inputs, prepare morphology
+and domains, then run **Meteorology/Morphology Setup**. Review the prepared
+layers, edit namelists, and run mHM. Project settings and processing state are
+saved for reuse.
 
-### As a Python Package
-
-```python
-import mhm_qgis
-
-# Initialize the model
-model = mhm_qgis.HydrologicalModel()
-
-# Run simulation
-results = model.run_simulation()
-```
-
-### As a QGIS Plugin
-
-1. Open QGIS
-2. Go to Plugins → Manage and Install Plugins
-3. Search for "mHM QGIS"
-4. Install and activate the plugin
-5. Access the plugin from the Plugins menu
-
-## Documentation
-
-- [User Guide](https://github.com/SanjeevBashyal/mhm-qgis/wiki)
-- [API Reference](https://github.com/SanjeevBashyal/mhm-qgis/wiki/API-Reference)
-- [Examples](https://github.com/SanjeevBashyal/mhm-qgis/tree/main/examples)
-
-## Requirements
-
-- Python 3.8+
-- NumPy >= 1.20.0
-- SciPy >= 1.7.0
-- Pandas >= 1.3.0
-- For QGIS plugin: QGIS 3.0+
+The `mhm-qgis` command opens the standalone GUI. It is currently a partial
+Qt-backed runtime: interactive delineation and remaining QGIS-backed actions
+still require QGIS. See the [standalone strategy](src/mhm_qgis/standalone/STANDALONE.md).
 
 ## Development
 
-### Setting up Development Environment
-
 ```bash
-git clone https://github.com/SanjeevBashyal/mhm-qgis.git
-cd mhm_qgis
-pip install -e .[dev]
+python3 -m pip install -e '.[dev]'
+python3 -m pytest tests/ -q
 ```
 
-### Running Tests
-
-```bash
-pytest
-```
-
-### Building Documentation
-
-```bash
-pip install -e .[docs]
-sphinx-build -b html docs/ docs/_build/
-```
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the GNU General Public License v2.0 - see the [LICENSE](LICENSE) file for details.
-
-## Citation
-
-If you use mHM QGIS in your research, please cite:
-
-```bibtex
-@software{mhm_qgis2025,
-  title={mHM QGIS: Python Mesoscale Hydrological Model},
-  author={Sanjeev Bashyal},
-  year={2025},
-  url={https://github.com/SanjeevBashyal/mhm-qgis},
-  version={0.1.0}
-}
-```
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/SanjeevBashyal/mhm-qgis/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/SanjeevBashyal/mhm-qgis/discussions)
-- **Email**: sanjeev.bashyal01@gmail.com
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for a list of changes and version history.
-
-## Acknowledgments
-
-- QGIS Development Team for the excellent platform
-- Python Scientific Community for the amazing tools
-- Contributors and users of mHM QGIS
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).

@@ -17,7 +17,7 @@ def show_output(dialog, output: DisplayOutput):
         output.path,
         output.name,
         variable=output.variable,
-        band=output.band if output.band and output.band > 1 else None,
+        band=output.band,
         is_raster=output.is_raster,
     )
 

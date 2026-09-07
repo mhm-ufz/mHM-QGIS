@@ -81,4 +81,25 @@ def load(path, name: str, *, is_raster: bool = True, log=None):
     return layer
 
 
-__all__ = ["load", "open_layer", "raster_source", "source_uri"]
+def refresh_source(layer, source, name, *, is_raster=True, log=None):
+    """Refresh provider metadata, replacing the layer only if its type changes."""
+    from qgis.core import QgsRasterLayer
+    from . import project
+
+    if isinstance(layer, QgsRasterLayer) != is_raster:
+        replacement = open_layer(source, name, is_raster=is_raster)
+        if replacement is not None:
+            project._project().removeMapLayer(layer.id())
+            project.add(replacement)
+        layer = replacement
+    else:
+        layer.setDataSource(source, name, layer.providerType())
+    if layer is None or not layer.isValid():
+        if log:
+            log(f"ERROR: Failed to refresh layer: {name}")
+        return None
+    layer.triggerRepaint()
+    return layer
+
+
+__all__ = ["load", "open_layer", "raster_source", "refresh_source", "source_uri"]

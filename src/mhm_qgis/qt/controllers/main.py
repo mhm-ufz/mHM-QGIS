@@ -70,6 +70,49 @@ def selected_version(dialog) -> str:
     return (combo.currentText().strip() if combo is not None else "") or "6.0"
 
 
+def refresh_observation_stations(dialog):
+    from ...core.post.graph import stations
+
+    combo = getattr(dialog, "comboBox_displayOutletStation", None)
+    if combo is None:
+        return
+    selected = combo.currentText()
+    blocked = combo.blockSignals(True)
+    try:
+        combo.clear()
+        for station in stations(dialog.project_folder):
+            combo.addItem(station["id"], station["path"])
+        index = combo.findText(selected)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+    finally:
+        combo.blockSignals(blocked)
+    combo.setEnabled(combo.count() > 0)
+    dialog.pushButton_observationDisplay_discharge.setToolTip(
+        "Plot discharge observations for the selected station"
+    )
+    dialog.pushButton_observationDisplay_discharge.setEnabled(combo.count() > 0)
+
+
+def display_observation_discharge(dialog):
+    from ...core.post.graph import discharge_series
+
+    combo = dialog.comboBox_displayOutletStation
+    if not combo.currentData():
+        QMessageBox.warning(dialog, "Discharge", "Save a gauged outlet in the domain delineator first.")
+        return
+    try:
+        timestamps, values = discharge_series(combo.currentData())
+        from ..dialogs.discharge_plot import DischargePlotDialog
+
+        if getattr(dialog, "_discharge_plot", None) is None:
+            dialog._discharge_plot = DischargePlotDialog(dialog)
+        dialog._discharge_plot.show_series(combo.currentText(), timestamps, values)
+    except (OSError, ValueError, ImportError) as error:
+        dialog.log_message(f"ERROR: Discharge plot failed: {error}")
+        QMessageBox.warning(dialog, "Discharge", str(error))
+
+
 def handle_version_changed(dialog) -> None:
     """Prepare the selected project layout and persist the selection."""
     if dialog.project_folder:
@@ -1657,4 +1700,5 @@ def update_gauged_outlet_count(dialog, layer=None):
     )
     if hasattr(dialog, "label_numberOfGaugedOutletsValue"):
         dialog.label_numberOfGaugedOutletsValue.setText(count)
+    refresh_observation_stations(dialog)
     return count

@@ -268,6 +268,19 @@ def _grid_matches_header(dataset, header: Mapping[str, Any]) -> bool:
     return grid_matches_header(dataset, x_key, y_key, header)
 
 
+def file_matches_header(path, header) -> bool:
+    """Check a prepared grid without loading its raster values."""
+    path = Path(path)
+    if path.suffix.lower() == ".asc":
+        from .pad import read_ascii_header
+
+        return headers_match(read_ascii_header(path), header)
+    import xarray as xr
+
+    with xr.open_dataset(path) as dataset:
+        return _grid_matches_header(dataset, header)
+
+
 def _assert_cells_align(dataset, x_key, y_key, header) -> None:
     """Reject a source whose cells are not on the header cell grid."""
     if not axes_match_header(
@@ -383,6 +396,7 @@ __all__ = [
     "MorphologyAsciiLayer",
     "MorphologyAsciiResult",
     "align_dataset_to_header",
+    "file_matches_header",
     "pad_dataset_to_header",
     "pad_l0_file_to_header",
     "prepare_morphology_ascii_files",

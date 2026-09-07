@@ -161,11 +161,41 @@ def test_rasters_are_padded_then_moved_and_definitions_carried(tmp_path):
     assert sorted(path.name for path in published) == [
         "soil_class.asc", "soil_classdefinition.txt",
     ]
-    # Staging is emptied; both files now live under data/master.
-    assert staged_files(tmp_path) == []
+    # Keep the uncropped raster for later changes to the common extent.
+    assert [path.name for path in staged_files(tmp_path)] == ["soil_class.asc"]
     assert (master / "soil_classdefinition.txt").read_text(encoding="utf-8") == "1 sand\n"
     header = (master / "soil_class.asc").read_text(encoding="utf-8").splitlines()
     assert header[0].split()[1] == "4" and header[1].split()[1] == "4"
+
+
+def test_reused_legacy_products_shrink_then_expand_without_losing_cells(tmp_path):
+    from mhm_qgis.core.handlers.file.ascii.pad import read_ascii_header
+    from mhm_qgis.core.handlers.store.morphology import resolve_display_output
+
+    master = Path(morph_folder(tmp_path))
+    master.mkdir(parents=True, exist_ok=True)
+    names = ("soil_class.asc", "lc_2015_2015.asc", "lc_2016_2016.asc")
+    originals = {}
+    for name in names:
+        path = _staged_asc(tmp_path, name, ncols=4, nrows=4, xll=0, yll=0)
+        originals[name] = path.read_text().splitlines()[6:]
+        path.replace(master / name)  # Older publication discarded staging.
+    update_section(tmp_path, "soil", {"output_path": str(master / names[0])})
+    update_section(tmp_path, "land_cover", {"scenes": [
+        {"start_year": year, "end_year": year, "output_path": str(master / name)}
+        for year, name in zip((2015, 2016), names[1:])
+    ]})
+    small = {**L0_TARGET, "ncols": 2, "nrows": 2, "xllcorner": 100, "yllcorner": 100}
+    publish_model_inputs(tmp_path, small)
+    for name in names:
+        assert read_ascii_header(master / name)["ncols"] == 2
+        assert (master / name).read_text().splitlines()[6:] == ["6 7", "10 11"]
+    assert resolve_display_output(tmp_path, "soil").path == master / names[0]
+    assert resolve_display_output(tmp_path, "land_cover", year=2016).path == master / names[2]
+    assert publish_model_inputs(tmp_path, small) == []
+    publish_model_inputs(tmp_path, L0_TARGET)
+    for name in names:
+        assert (master / name).read_text().splitlines()[6:] == originals[name]
 
 
 def test_class_layers_are_padded_with_a_class_and_lai_with_zero(tmp_path):

@@ -32,17 +32,32 @@ def select_band(layer, band: int, log=None) -> bool:
 
 
 def show_raster(dialog, path, name, *, variable=None, band=None, is_raster=True):
-    """Show one raster, reusing the loaded layer when the name already exists.
+    """Reuse by name, refreshing when the source or its file stamp changes.
 
     A time scrubber calls this on every step, and `layers.load` does not
     uniquify names, so reloading would both stack duplicates in the layer tree
     and re-open the file each tick.
     """
+    source = layers.source_uri(path, variable)
+    try:
+        stat = Path(path).stat()
+        stamp = f"{stat.st_mtime_ns}:{stat.st_size}"
+    except OSError:
+        stamp = ""
+    signature = f"{source}:{stamp}"
     layer = layers.find_by_name(name)
     if layer is None:
         layer = layers.load(
-            layers.source_uri(path, variable), name,
+            source, name,
             is_raster=is_raster, log=getattr(dialog, "log_message", None))
+    elif (layer.source() != source
+          or layer.customProperty("mhm_qgis/display_source", "") != signature):
+        layer = layers.refresh_source(
+            layer, source, name, is_raster=is_raster,
+            log=getattr(dialog, "log_message", None),
+        )
+    if layer is not None:
+        layer.setCustomProperty("mhm_qgis/display_source", signature)
     if layer is not None and band:
         select_band(layer, band, log=getattr(dialog, "log_message", None))
     return layer

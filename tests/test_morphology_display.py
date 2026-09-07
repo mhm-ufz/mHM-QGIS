@@ -65,3 +65,19 @@ def test_domain_mask_prefers_vector_to_raster(tmp_path):
     output = resolve_display_output(tmp_path, "domain_mask")
     assert output.path == vector
     assert not output.is_raster
+
+
+def test_published_classes_win_over_configured_raw_inputs(tmp_path):
+    ensure_project_structure(tmp_path, "5.13")
+    morph = Path(morph_folder(tmp_path))
+    geometry = Path(geometry_folder(tmp_path))
+    for key, raw_name, final_name in (
+        ("soil", "3_soil.tif", "soil_class.asc"),
+        ("land_cover", "3_land_use.tif", "lc.asc"),
+    ):
+        raw = geometry / raw_name
+        raw.touch()
+        update_section(tmp_path, key, {"output_path": str(raw)})
+        published = morph / final_name
+        published.touch()
+        assert resolve_display_output(tmp_path, key).path == published

@@ -20,7 +20,7 @@ from .grid import (
     merged_domain_bounds,
     raster_resolution_info,
 )
-from .loader import load, open_layer, raster_source, source_uri
+from .loader import load, open_layer, raster_source, refresh_source, source_uri
 from .materialize import (
     local_layer_source,
     materialize_raster_layer,
@@ -57,6 +57,7 @@ __all__ = [
     "qgs_field",
     "raster_resolution_info",
     "raster_source",
+    "refresh_source",
     "remove_under",
     "remove_vector_dataset",
     "source_uri",

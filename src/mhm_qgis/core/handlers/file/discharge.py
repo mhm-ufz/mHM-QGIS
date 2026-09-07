@@ -8,7 +8,7 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -22,6 +22,39 @@ class DischargeRecord:
 
     timestamp: datetime
     value: float
+
+
+def records_from_mhm_file(path: Path) -> list[DischargeRecord]:
+    """Read saved mHM observations, preserving nodata and omitted steps as gaps."""
+    records = {}
+    with Path(path).open(encoding="utf-8-sig") as stream:
+        next(stream, "")  # Station description.
+        header = [next(stream, "").split() for _ in range(4)]
+        if (any(len(row) < 2 for row in header)
+                or [row[0].lower() for row in header] != ["nodata", "n", "start", "end"]):
+            raise ValueError(f"Not an mHM streamflow observation file: {path}")
+        nodata, frequency = float(header[0][1]), int(header[1][1])
+        if not 1 <= frequency <= 1440:
+            raise ValueError("Measurements per day must be between 1 and 1440.")
+        step = timedelta(days=1 / frequency)
+        for number, line in enumerate(stream, 6):
+            if not line.strip():
+                continue
+            try:
+                year, month, day, hour, minute, value = line.split()
+                timestamp = datetime(*map(int, (year, month, day, hour, minute)))
+                value = float(value)
+            except ValueError as error:
+                raise ValueError(f"Invalid observation at {path}:{number}") from error
+            records[timestamp] = value if value != nodata and math.isfinite(value) else math.nan
+    if not records:
+        raise ValueError(f"No observations in {path}")
+    result = []
+    for timestamp, value in sorted(records.items()):
+        if result and timestamp - result[-1].timestamp > step:
+            result.append(DischargeRecord(result[-1].timestamp + step, math.nan))
+        result.append(DischargeRecord(timestamp, value))
+    return result
 
 
 def write_streamflow_observation(layer, station_id: str, output_folder: Path) -> Path:

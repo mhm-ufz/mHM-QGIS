@@ -1646,6 +1646,9 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             self.refresh_grid_resolution_controls()
         finally:
             self._loading_input_state = False
+            main_controller.refresh_observation_stations(self)
+            if getattr(self, "_discharge_plot", None) is not None:
+                self._discharge_plot.close()
 
         for kind, _, _ in self.meteo_input_widgets():
             self.inspect_meteo_selection(kind, show_errors=False)

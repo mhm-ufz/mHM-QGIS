@@ -35,6 +35,7 @@ dependencies = [
     "pandas>=1.3.0",
     "pyproj>=3.0.0",
     "PyQt5>=5.15",
+    "pyqtgraph>=0.13.3",
     "mhm-tools>=0.3.0",
     "nml-tools[gui]",
     "qtpy",
