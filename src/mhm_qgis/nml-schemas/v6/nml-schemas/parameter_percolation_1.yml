@@ -1,0 +1,20 @@
+title: Percolation - Case 1
+description: Parameters for percolation and karst recharge.
+x-fortran-namelist: percolation_1
+type: object
+properties:
+  recharge_coefficient:
+    $ref: parameter.yml#/$defs/parameter
+    title: Percolation and recharge time [d]
+    default: {min: 0.0, max: 50.0}
+    properties:
+      value: {examples: [35.0]}
+      optimize: {examples: [true]}
+  karstic_recharge_factor:
+    $ref: parameter.yml#/$defs/parameter
+    title: Karstic recharge factor [1]
+    default: {min: -5.0, max: 5.0}
+    properties:
+      value: {examples: [-1.0]}
+      optimize: {examples: [true]}
+required: [recharge_coefficient, karstic_recharge_factor]

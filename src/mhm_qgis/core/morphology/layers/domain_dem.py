@@ -30,13 +30,14 @@ from ...handlers.store.layout import domain_dem_path, morph_folder
 # globbed so an unrelated file in data/master never leaks into a domain, and
 # they are grouped so that a group with several spellings -- v5 writes a soil
 # class raster where v6 writes a horizon cube -- only counts as missing when
-# none of them is there. Land cover, LAI, and idgauges are absent on purpose:
+# none of them is there. Land cover and LAI are absent on purpose:
 # the namelist points every domain at the shared copy under data/master.
 DOMAIN_INPUT_GROUPS = (
     ("slope", ("slope.asc",)),
     ("aspect", ("aspect.asc",)),
     ("flow accumulation", ("facc.asc",)),
     ("flow direction", ("fdir.asc",)),
+    ("gauge positions", ("idgauges.asc",)),
     ("soil class", ("soil_class.asc", "soil_horizon_class.nc")),
     (
         "soil class definition",
@@ -69,7 +70,9 @@ def link_master_inputs(project_folder, directory, log=None, *, strict=False) -> 
     for label, group in DOMAIN_INPUT_GROUPS:
         present = [name for name in group if (master / name).is_file()]
         if not present:
-            absent.append(label)
+            # Ungauged projects do not produce a gauge-position raster.
+            if group != ("idgauges.asc",):
+                absent.append(label)
             continue
         for name in present:
             names.append(name)

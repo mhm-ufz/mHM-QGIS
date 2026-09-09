@@ -10,7 +10,7 @@ properties:
       format: date-time
       x-fortran-len: buf
     x-fortran-shape: n_domains
-    examples: [["2020-06-01 00:00", "2025-01-01"]]
+    examples: ["2020-06-01 00:00", "2025-01-01"]
     title: Simulation start
     description: |-
       Start date of the simulation. Only hours are supported; minutes and seconds are set to zero.
@@ -22,7 +22,7 @@ properties:
       format: date-time
       x-fortran-len: buf
     x-fortran-shape: n_domains
-    examples: [["2021-01-01 00:00", "2025-02-15"]]
+    examples: ["2021-01-01 00:00", "2025-02-15"]
     title: Evaluation start
     description: |-
       Start date of the evaluation period. Only hours are supported; minutes and seconds are set to zero.
@@ -34,7 +34,7 @@ properties:
       format: date-time
       x-fortran-len: buf
     x-fortran-shape: n_domains
-    examples: [["2022-01-01 00:00", "2026-01-01"]]
+    examples: ["2022-01-01 00:00", "2026-01-01"]
     title: Simulation end
     description: |-
       End date of the simulation. Only hours are supported; minutes and seconds are set to zero.
@@ -52,9 +52,14 @@ properties:
       type: integer
       x-fortran-kind: i4
       default: 1
+      enum: [1, 2, 3, 4, 6, 8, 12, 24]
     x-fortran-shape: n_domains
-    title: Time step of the simulation
-    description: Time step of the simulation (1 or 24, in hours).
+    title: Global model time step
+    description: |-
+      Global model update cadence in hours. The supported values are whole divisors of one day.
+      This controls how often process containers are updated and is independent of the support
+      interval of input data. Individual process components may support only a subset of these
+      globally valid cadences.
   share_time_step:
     type: boolean
     default: true

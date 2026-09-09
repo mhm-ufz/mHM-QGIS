@@ -236,8 +236,9 @@ def test_the_shared_morphology_inputs_are_linked_into_the_domain(tmp_path):
         "slope.asc", "slope.prj", "aspect.asc", "facc.asc", "fdir.asc",
         "soil_class.asc", "soil_classdefinition.txt",
         "geology_class.asc", "geology_classdefinition.txt",
+        "idgauges.asc", "idgauges.prj",
         # Not requested for domains, so it must stay behind.
-        "lc_2015_2015.asc", "idgauges.asc", "dem.asc",
+        "lc_2015_2015.asc", "dem.asc",
     ))
     domain = tmp_path / "data" / "280"
 
@@ -246,7 +247,8 @@ def test_the_shared_morphology_inputs_are_linked_into_the_domain(tmp_path):
     names = sorted(path.name for path in linked)
     assert names == [
         "aspect.asc", "facc.asc", "fdir.asc", "geology_class.asc",
-        "geology_classdefinition.txt", "slope.asc", "slope.prj",
+        "geology_classdefinition.txt", "idgauges.asc", "idgauges.prj",
+        "slope.asc", "slope.prj",
         "soil_class.asc", "soil_classdefinition.txt",
     ]
     # Every shared input is a link back to data/master, not a second copy.
@@ -257,7 +259,7 @@ def test_the_shared_morphology_inputs_are_linked_into_the_domain(tmp_path):
     # The domain keeps its own dem.asc; master's is not linked over it.
     assert not (domain / "dem.asc").exists()
     assert not (domain / "lc_2015_2015.asc").exists()
-    assert not (domain / "idgauges.asc").exists()
+    assert (domain / "idgauges.asc").read_text(encoding="utf-8") == "content of idgauges.asc\n"
 
 
 def test_relinking_is_idempotent(tmp_path):
@@ -343,7 +345,7 @@ def test_one_spelling_of_a_group_is_enough_to_stay_quiet(tmp_path):
     ))
     messages = []
 
-    link_master_inputs(tmp_path, tmp_path / "data" / "280", log=messages.append)
+    link_master_inputs(tmp_path, tmp_path / "data" / "280", log=messages.append, strict=True)
 
     assert not [line for line in messages if line.startswith("WARNING")]
 

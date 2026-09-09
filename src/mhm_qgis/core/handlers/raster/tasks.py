@@ -204,12 +204,6 @@ def _copy_aligned_l0_raster(
     destination = None
     source = None
     os.replace(temporary, output)
-    if projection:
-        try:
-            temporary.write_text(projection, encoding="utf-8")
-            os.replace(temporary, output.with_suffix(".prj"))
-        finally:
-            temporary.unlink(missing_ok=True)
     return str(output)
 
 
@@ -428,6 +422,12 @@ def write_domain_dem_ascii(
         band = None
         source = None
     os.replace(temporary, output)
+    if projection:
+        try:
+            temporary.write_text(projection, encoding="utf-8")
+            os.replace(temporary, output.with_suffix(".prj"))
+        finally:
+            temporary.unlink(missing_ok=True)
     return str(output)
 
 

@@ -51,17 +51,6 @@ properties:
       type: number
       x-fortran-kind: dp
     x-fortran-shape: [12, n_domains]
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Month
-          labels: [January, February, March, April, May, June, July, August, September, October, November, December]
-        "2":
-          title: Domain
-          label-template: "Domain {index}"
-      table:
-        row-axis: 2
-        column-axis: 1
     examples: [[1.3, 1.2, 0.72, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5]]
     title: Evaporation coefficients
     description: |-

@@ -124,12 +124,15 @@ def test_setup_publishes_then_links_then_replaces_domain_dem(tmp_path, version):
     original = _raster(tmp_path / "source.tif")
     result = dem_derivative_files(original, folder)
     bundle_bytes = Path(result["dem_derivatives"]).read_bytes()
+    gauges = np.full((10, 10), -9999.0)
+    gauges[4, 4] = 280
+    copy_rasters(folder / "idgauges.nc", {"idgauges": _raster(tmp_path / "gauges.tif", gauges)})
     keep = np.zeros((10, 10))
     keep[:, 2:8] = 1
     mask = _raster(folder / "Watersheds" / MERGED_MASK_NAME, keep)
     domain_state.save_state(tmp_path, {
-        "definition_mode": "domain_delineator", "outlet_order": ["001"],
-        "outlets": {"001": {"is_domain": True, "mask_path": str(mask)}},
+        "definition_mode": "domain_delineator", "outlet_order": ["001", "002"],
+        "outlets": {name: {"is_domain": True, "mask_path": str(mask)} for name in ("001", "002")},
     })
     for name in ("3_land_use.tif", "3_soil.tif", "3_geology_processed.tif"):
         _raster(folder / name, np.full((10, 10), 2.0))
@@ -147,7 +150,14 @@ def test_setup_publishes_then_links_then_replaces_domain_dem(tmp_path, version):
     shared_dem.write_bytes(b"master must not change")
     target.symlink_to(shared_dem)
     messages = []
-    assert setup.run(request, log=messages.append)
+
+    def log(message):
+        messages.append(message)
+        if version == "5.13" and message.endswith("Link domain inputs"):
+            assert (master / "idgauges.asc").is_file()
+            assert not (target.parent / "idgauges.asc").exists()
+
+    assert setup.run(request, log=log)
     assert shared_dem.read_bytes() == b"master must not change"
     assert target.is_file() and not target.is_symlink()
     assert Path(result["dem_derivatives"]).read_bytes() == bundle_bytes
@@ -166,6 +176,12 @@ def test_setup_publishes_then_links_then_replaces_domain_dem(tmp_path, version):
         assert (target.parent / "slope.prj").is_file()
         assert target.with_suffix(".prj").is_file()
         assert (target.parent / "soil_class.asc").resolve() == master / "soil_class.asc"
+        for name in ("001", "002"):
+            directory = Path(domain_dem_path(tmp_path, name)).parent
+            for filename in ("idgauges.asc", "idgauges.prj"):
+                assert (directory / filename).is_symlink()
+                assert (directory / filename).resolve() == master / filename
+            assert gdal.Open(str(directory / "idgauges.asc")).ReadAsArray()[5, 5] == 280
         classes = gdal.Open(str(master / "soil_class.asc")).ReadAsArray()
     else:
         assert "dem" in variables(master / "input.nc")

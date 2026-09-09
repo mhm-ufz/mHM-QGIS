@@ -191,7 +191,7 @@
       </sizepolicy>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>3</number>
      </property>
      <widget class="QWidget" name="tab_geometry">
       <attribute name="title">
@@ -231,7 +231,7 @@
              </sizepolicy>
             </property>
             <property name="text">
-             <string>DEM Raster Layer:</string>
+             <string>DEM Raster:</string>
             </property>
            </widget>
           </item>
@@ -244,7 +244,7 @@
              </sizepolicy>
             </property>
             <property name="text">
-             <string>Geology Layer:</string>
+             <string>Geology:</string>
             </property>
            </widget>
           </item>
@@ -260,7 +260,7 @@
              </sizepolicy>
             </property>
             <property name="text">
-             <string>Leaf Area Index File:</string>
+             <string>Leaf Area Index:</string>
             </property>
            </widget>
           </item>
@@ -296,7 +296,7 @@
              </sizepolicy>
             </property>
             <property name="text">
-             <string>Land Use Layer:</string>
+             <string>Land Use:</string>
             </property>
            </widget>
           </item>
@@ -322,7 +322,7 @@
              </sizepolicy>
             </property>
             <property name="text">
-             <string>Soil Layer:</string>
+             <string>Soil:</string>
             </property>
            </widget>
           </item>
@@ -338,7 +338,7 @@
              <string>Select the unique outlet ID column from the attribute table</string>
             </property>
             <property name="text">
-             <string>Pour Points Layer:</string>
+             <string>Gauges:</string>
             </property>
            </widget>
           </item>
@@ -397,7 +397,7 @@
               </item>
               <item>
                <property name="text">
-                <string>Multi Historical Layers (with Lookup Table)</string>
+                <string>Multi Historical Periods (with Lookup Table)</string>
                </property>
               </item>
              </widget>
@@ -1411,7 +1411,7 @@
    <item>
     <widget class="QStackedWidget" name="stackedWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="page_geometry">
       <layout class="QVBoxLayout" name="verticalLayout_page_geom">

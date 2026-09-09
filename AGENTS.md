@@ -377,12 +377,14 @@ Four JSON files are used by the plugin.
   used as directory names must reject path separators and traversal components, and
   directories are created from saved outlet IDs, not literal template placeholders.
 - Each domain folder also receives the shared morphology inputs listed in
-  `DOMAIN_INPUT_NAMES` (slope, aspect, facc, fdir, soil class, geology class and their
+  `DOMAIN_INPUT_NAMES` (slope, aspect, facc, fdir, gauge positions, soil class, geology class and their
   class-definition files, plus `.prj` sidecars), because mHM reads morphology per domain
   from `dir_Morpho`. Unchanged destinations are skipped so a rerun does not recopy. The
   list is explicit rather than a glob so nothing unrelated leaks out of `data/master`;
-  `dem.asc` is excluded because each domain writes its own, and land cover, LAI and
-  `idgauges.asc` are excluded because the namelist points every domain at the shared copy.
+  `dem.asc` is excluded because each domain writes its own; land cover and LAI remain
+  shared-only. For v5, `write` publishes `idgauges.asc` in master before
+  `link_domains` links it and its `.prj` into every domain. Gauge positions are optional
+  when no gauge raster was prepared. The v6 layout is unchanged.
 - **The final Setup order is `publish → link_domains → domain_dems`.** An advanced or mHM-ready soil,
   geology or land-cover raster stays in `Z Temp/Morphology/morph` until
   `publish_model_inputs` publishes it into `data/master`, so copying first found nothing and

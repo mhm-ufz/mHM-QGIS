@@ -1,0 +1,28 @@
+$defs:
+  parameter:
+    title: Calibration parameter
+    description: A model parameter with optional calibration metadata.
+    type: object
+    x-fortran-type: parameter_t
+    x-fortran-module: mo_parameter_types
+    properties:
+      value:
+        title: Parameter value
+        type: number
+        x-fortran-kind: dp
+      optimize:
+        title: Include parameter in calibration
+        type: boolean
+        default: false
+      min:
+        title: Minimum calibration value
+        type: number
+        x-fortran-kind: dp
+      max:
+        title: Maximum calibration value
+        type: number
+        x-fortran-kind: dp
+    required:
+      - value
+      - min
+      - max

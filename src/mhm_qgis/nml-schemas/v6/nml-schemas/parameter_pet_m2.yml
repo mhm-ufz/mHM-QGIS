@@ -1,0 +1,27 @@
+title: PET - Case -2
+description: Parameters for aspect correction of externally supplied PET.
+x-fortran-namelist: pet_m2
+type: object
+properties:
+  correction_factor_min:
+    $ref: parameter.yml#/$defs/parameter
+    title: Minimum PET aspect-correction factor
+    default: {min: 0.7, max: 1.3}
+    properties:
+      value: {examples: [0.9]}
+      optimize: {examples: [true]}
+  correction_factor_delta:
+    $ref: parameter.yml#/$defs/parameter
+    title: Delta added to the minimum PET aspect-correction factor
+    default: {min: 0.0, max: 0.2}
+    properties:
+      value: {examples: [0.1]}
+      optimize: {examples: [true]}
+  aspect_threshold:
+    $ref: parameter.yml#/$defs/parameter
+    title: Aspect threshold
+    default: {min: 160.0, max: 200.0}
+    properties:
+      value: {examples: [180.0]}
+      optimize: {examples: [true]}
+required: [correction_factor_min, correction_factor_delta, aspect_threshold]
