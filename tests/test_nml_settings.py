@@ -1,8 +1,6 @@
 """Tests for the project-local namelist handoff."""
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 from mhm_qgis.core.handlers.state.domain_state import save_state
 from mhm_qgis.core.handlers.state.nml_settings import load_settings, sync_domain_settings, update_section

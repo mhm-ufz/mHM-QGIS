@@ -1,17 +1,13 @@
 """Task monitor dialog for the plugin worker queue."""
 from __future__ import annotations
 
-try:
-    from qgis.PyQt import QtWidgets
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt import QtWidgets
+from qgis.PyQt import QtWidgets
 
 from ...qt.controllers import thread_display as thread_display_controller
 from ...qt.bindings.thread_display import bind as bind_thread_display
-from ...qt.ui.pyui.ui_thread_display_dialog import Ui_ThreadDisplayDialog
+from ..ui import load_form
+
+Ui_ThreadDisplayDialog = load_form("thread_display_dialog.ui")
 
 
 class ThreadDisplayDialog(QtWidgets.QDialog, Ui_ThreadDisplayDialog):

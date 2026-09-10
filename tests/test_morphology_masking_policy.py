@@ -6,9 +6,7 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone  # noqa: E402
 
-standalone.install(force=True)
 
 from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE  # noqa: E402
 from mhm_qgis.core.executions.morphology.setup import raster_plan  # noqa: E402

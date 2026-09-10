@@ -6,9 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 # isort: off
 from mhm_qgis.core.handlers.state.domain_state import (

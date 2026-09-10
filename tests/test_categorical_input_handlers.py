@@ -13,11 +13,11 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 # isort: off
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
+
 from qgis.PyQt.QtWidgets import QApplication, QDialog  # noqa: E402
 
 from mhm_qgis.qt.controllers import main as main_controller  # noqa: E402
@@ -48,7 +48,7 @@ def _stub(result):
             pass
 
         def exec_(self):
-            return QDialog.Accepted
+            return QDialog.DialogCode.Accepted
 
         def selected_config(self):
             return result

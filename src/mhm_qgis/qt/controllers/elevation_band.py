@@ -4,20 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-try:
-    from qgis.PyQt.QtWidgets import QDialog
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt.QtWidgets import QDialog
+from qgis.PyQt.QtWidgets import QDialog
 
 from ...core.handlers.store import registry
 from ...core.handlers.store.paths import geometry_folder
 from ...core.morphology import elevation_bands
 from ...core.utils.report import CRITICAL, INFORMATION, WARNING
 from ...qgis_bridge import layers as qgis_layers
-from ...qt.ui.pyui.ui_elevation_band_dialog import Ui_ElevationBandDialog
+from ..ui import load_form
+
+Ui_ElevationBandDialog = load_form("elevation_band_dialog.ui")
 from ..reporting import dialog_reporter
 
 
@@ -38,7 +34,7 @@ def ask_elevation_band_width(
     ui.width_spin_box.setMaximum(max(elevation_range * 10.0, suggested_width))
     ui.width_spin_box.setSingleStep(max(suggested_width / 10.0, 0.001))
     ui.width_spin_box.setValue(suggested_width)
-    return ui.width_spin_box.value() if band_dialog.exec_() == QDialog.Accepted else None
+    return ui.width_spin_box.value() if band_dialog.exec() == QDialog.DialogCode.Accepted else None
 
 
 def _report(dialog, level: str, title: str, message: str) -> None:

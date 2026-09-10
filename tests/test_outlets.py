@@ -7,9 +7,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 # isort: off
 from mhm_qgis.core.morphology.hydrology.outlets import (

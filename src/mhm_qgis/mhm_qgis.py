@@ -23,10 +23,10 @@ sys.path[:] = [
 
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
-
-# Initialize the resources generated beside the Qt Designer modules.
-from .qt.ui.pyui import resources_rc  # noqa: F401
+try:
+    from qgis.PyQt.QtGui import QAction
+except ImportError:  # Qt5
+    from qgis.PyQt.QtWidgets import QAction
 
 
 def classFactory(iface):  # pylint: disable=invalid-name
@@ -175,7 +175,7 @@ class MhmQgis:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ":/plugins/mhm_qgis/Resources/icon.png"
+        icon_path = os.path.join(self.plugin_dir, "qt", "ui", "forms", "Resources", "icon.png")
         self.add_action(
             icon_path,
             text=self.tr("mHM QGIS"),
@@ -240,7 +240,7 @@ class MhmQgis:
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
-        result = self.dlg.exec_()
+        result = self.dlg.exec()
         # See if OK was pressed
         if result:
             # Do something useful here - delete the line containing pass and

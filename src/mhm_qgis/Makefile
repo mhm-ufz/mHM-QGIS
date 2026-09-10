@@ -52,9 +52,7 @@ EXTRAS = metadata.txt
 
 EXTRA_DIRS =
 
-COMPILED_RESOURCE_FILES = resources.py
-
-PEP8EXCLUDE=pydev,resources.py,conf.py,third_party,ui
+PEP8EXCLUDE=pydev,conf.py,third_party
 
 # QGISDIR points to the location where your plugin should be installed.
 # This varies by platform, relative to your HOME directory:
@@ -75,7 +73,6 @@ HELP = help/build/html
 
 PLUGIN_UPLOAD = $(c)/plugin_upload.py
 
-RESOURCE_SRC=$(shell grep '^ *<file' qt/ui/forms/resources.qrc | sed 's@</file>@@g;s/.*>//g' | tr '\n' ' ')
 
 .PHONY: default
 default:
@@ -86,10 +83,8 @@ default:
 	@echo You can install pb_tool using: pip install pb_tool
 	@echo See https://g-sherman.github.io/plugin_build_tool/ for info. 
 
-compile: $(COMPILED_RESOURCE_FILES)
-
-%.py : %.qrc $(RESOURCES_SRC)
-	pyrcc5 -o $*.py  $<
+compile:
+	@echo "Designer forms and icons are loaded directly; no UI compilation required."
 
 %.qm : %.ts
 	$(LRELEASE) $<
@@ -123,7 +118,6 @@ deploy: compile doc transcompile
 	mkdir -p $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
 	cp -vf $(PY_FILES) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
 	cp -vf $(UI_FILES) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
-	cp -vf $(COMPILED_RESOURCE_FILES) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
 	cp -vf $(EXTRAS) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
 	cp -vfr i18n $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
 	cp -vfr $(HELP) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)/help
@@ -208,7 +202,6 @@ clean:
 	@echo "------------------------------------"
 	@echo "Removing uic and rcc generated files"
 	@echo "------------------------------------"
-	rm $(COMPILED_UI_FILES) $(COMPILED_RESOURCE_FILES)
 
 doc:
 	@echo

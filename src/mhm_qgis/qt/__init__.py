@@ -1,2 +1,2 @@
 # -*- coding: utf-8 -*-
-"""Qt-level glue that is independent of QGIS."""
+"""GUI components using the Qt binding provided by the QGIS runtime."""

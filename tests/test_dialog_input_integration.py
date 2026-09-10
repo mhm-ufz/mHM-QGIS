@@ -10,11 +10,11 @@ import xarray as xr
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 # isort: off
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
+
 from qgis.core import (QgsCoordinateReferenceSystem,  # noqa: E402
                        QgsVectorLayer)
 from qgis.PyQt.QtWidgets import QApplication  # noqa: E402

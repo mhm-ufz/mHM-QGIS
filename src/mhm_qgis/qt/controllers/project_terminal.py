@@ -2,17 +2,11 @@
 """Widget state for `project_terminal_dialog.ui`."""
 from __future__ import annotations
 
-try:
-    from qgis.PyQt import QtGui
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt import QtGui
+from qgis.PyQt import QtGui
 
 def _append_text(dialog, text: str) -> None:
     cursor = dialog.output.textCursor()
-    cursor.movePosition(QtGui.QTextCursor.End)
+    cursor.movePosition(QtGui.QTextCursor.MoveOperation.End)
     cursor.insertText(text)
     dialog.output.setTextCursor(cursor)
     dialog.output.ensureCursorVisible()

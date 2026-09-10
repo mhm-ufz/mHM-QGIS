@@ -1,13 +1,15 @@
 """Offscreen tests for dynamic land-use and soil input rows."""
 from __future__ import annotations
 
+import pytest
+
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis.standalone import install
 
-install(force=True)
+
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from qgis.PyQt import QtWidgets  # noqa: E402
 

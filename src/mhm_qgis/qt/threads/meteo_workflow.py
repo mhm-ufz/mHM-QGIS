@@ -4,13 +4,7 @@ from __future__ import annotations
 
 import traceback
 
-try:
-    from qgis.PyQt import QtCore
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt import QtCore
+from qgis.PyQt import QtCore
 
 
 class MeteorologyWorkflowWorker(QtCore.QObject):

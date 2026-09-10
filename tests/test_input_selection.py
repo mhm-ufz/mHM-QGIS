@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import pytest
+
 import os
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis.standalone import install
 
-install(force=True)
 
 # isort: off
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
+
 from qgis.core import (  # noqa: E402
     QgsCoordinateReferenceSystem,
     QgsProject,

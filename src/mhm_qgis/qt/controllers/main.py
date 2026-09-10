@@ -10,17 +10,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-try:
-    from qgis.PyQt.QtCore import QDate
-    from qgis.PyQt.QtWidgets import (QComboBox, QDialog, QFileDialog,
-                                     QMessageBox)
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt.QtCore import QDate
-    from qgis.PyQt.QtWidgets import (QComboBox, QDialog, QFileDialog,
-                                     QMessageBox)
+from qgis.PyQt.QtCore import QDate, QSignalBlocker
+from qgis.PyQt.QtWidgets import (QComboBox, QDialog, QFileDialog,
+                                 QMessageBox)
 
 from ...core.grid import (
     crs_equal,
@@ -831,8 +823,8 @@ def refresh_l1_l11_resolution_options(dialog):
         l1_values = possible_resolutions(l0_resolution, l2_resolution, unit)
 
     preferred_l1 = dialog._preferred_l1_resolution
-    matched_l1 = dialog._populate_resolution_combo(
-        dialog.comboBox_L1,
+    matched_l1 = _populate_resolution_input(
+        dialog, "L1",
         l1_values,
         preferred_l1,
         unit,
@@ -846,7 +838,6 @@ def refresh_l1_l11_resolution_options(dialog):
                 unit,
             )
         dialog._preferred_l1_resolution = None
-    dialog.label_L1ResolutionUnit.setText(unit if l1_values else "")
 
     dialog.handle_l1_resolution_changed()
 
@@ -867,8 +858,8 @@ def handle_l1_resolution_changed(dialog):
     l11_values = possible_resolutions(l1_resolution, l2_resolution, unit)
 
     preferred_l11 = dialog._preferred_l11_resolution
-    matched_l11 = dialog._populate_resolution_combo(
-        dialog.comboBox_L11,
+    matched_l11 = _populate_resolution_input(
+        dialog, "L11",
         l11_values,
         preferred_l11,
         unit,
@@ -882,38 +873,21 @@ def handle_l1_resolution_changed(dialog):
                 unit,
             )
         dialog._preferred_l11_resolution = None
-    dialog.label_L11ResolutionUnit.setText(unit if l11_values else "")
     dialog.update_l11_resolution_label()
     dialog.update_latlon_button_state()
 
 
 def disable_l1_l11_resolution_options(dialog):
     """Disable L1/L11 controls until meteo L2 grid metadata exists."""
-    dialog.disable_resolution_combo(dialog.comboBox_L1)
+    _populate_resolution_input(dialog, "L1", [])
     dialog.disable_l11_resolution_options()
-    dialog._set_resolution_labels("L1", "", "")
+    dialog.update_l1_resolution_label()
 
 
 def disable_l11_resolution_options(dialog):
     """Disable L11 controls and clear its labels."""
-    dialog.disable_resolution_combo(dialog.comboBox_L11)
-    dialog._set_resolution_labels("L11", "", "")
-
-
-def disable_resolution_combo(dialog, combo_box):
-    """Clear and disable a grid-resolution combo box."""
-    if combo_box is None:
-        return
-    try:
-        combo_box.blockSignals(True)
-    except Exception:
-        pass
-    combo_box.clear()
-    combo_box.setEnabled(False)
-    try:
-        combo_box.blockSignals(False)
-    except Exception:
-        pass
+    _populate_resolution_input(dialog, "L11", [])
+    dialog.update_l11_resolution_label()
 
 
 def update_l1_resolution_label(dialog):
@@ -924,9 +898,9 @@ def update_l1_resolution_label(dialog):
     if label is None:
         return
     if value and l0_resolution:
-        label.setText(f"{value / l0_resolution:g} x L0")
+        label.setToolTip(f"{value / l0_resolution:g} x L0")
     else:
-        label.setText("")
+        label.setToolTip("")
 
 
 def update_l11_resolution_label(dialog):
@@ -937,9 +911,9 @@ def update_l11_resolution_label(dialog):
     if label is None:
         return
     if value and l1_resolution:
-        label.setText(f"{value / l1_resolution:g} x L1")
+        label.setToolTip(f"{value / l1_resolution:g} x L1")
     else:
-        label.setText("")
+        label.setToolTip("")
     dialog.update_latlon_button_state()
 
 
@@ -964,12 +938,12 @@ def current_l2_resolution(dialog):
 
 def current_l1_resolution(dialog):
     """Return selected L1 resolution."""
-    return dialog._current_combo_resolution(dialog.comboBox_L1)
+    return _current_resolution_input(dialog, "L1")
 
 
 def current_l11_resolution(dialog):
     """Return selected L11 resolution."""
-    return dialog._current_combo_resolution(dialog.comboBox_L11)
+    return _current_resolution_input(dialog, "L11")
 
 
 def current_grid_unit(dialog):
@@ -1041,35 +1015,23 @@ def _set_resolution_labels(dialog, level, value_text, unit_text):
         unit_label.setText(unit_text or "")
 
 
-def _populate_resolution_combo(dialog, combo_box, values, preferred_value=None, unit=None):
-    """Populate a resolution combo box while preserving a compatible selection."""
-    if combo_box is None:
-        return False
-    current_value = dialog._current_combo_resolution(combo_box)
-    preferred = preferred_value or current_value
-    try:
-        combo_box.blockSignals(True)
-    except Exception:
-        pass
-    combo_box.clear()
-    for value in values:
-        combo_box.addItem(format_resolution(value, unit), float(value))
-    matched_preferred = preferred is None
-    if values:
-        selected_index = 0
-        if preferred:
-            for index, value in enumerate(values):
-                if dialog.resolution_values_match(value, preferred, unit):
-                    selected_index = index
-                    matched_preferred = True
-                    break
-        combo_box.setCurrentIndex(selected_index)
-    combo_box.setEnabled(True)
-    try:
-        combo_box.blockSignals(False)
-    except Exception:
-        pass
-    return matched_preferred
+def _populate_resolution_input(dialog, level, values, preferred_value=None, unit=None):
+    """Keep exact compatible grid values behind the form's numeric text field."""
+    field = getattr(dialog, f"lineEdit_{level}Resolution")
+    preferred = preferred_value or _current_resolution_input(dialog, level)
+    selected = next((value for value in values
+                     if preferred and dialog.resolution_values_match(value, preferred, unit)), None)
+    matched = preferred is None or selected is not None
+    field.setProperty("resolutions", values)
+    with QSignalBlocker(field):
+        field.setText(repr(float(selected if selected is not None else values[0])) if values else "")
+    field.setEnabled(bool(values))
+    field.setToolTip("Compatible resolutions: " + ", ".join(format_resolution(value, unit) for value in values))
+    units = getattr(dialog, f"comboBox_{level}ResolutionUnit")
+    units.clear()
+    units.addItem(unit or "")
+    units.setEnabled(False)  # Grid units belong to the selected CRS, not a display override.
+    return matched
 
 
 def log_resolution_preference_warning(
@@ -1088,20 +1050,15 @@ def log_resolution_preference_warning(
     )
 
 
-def _current_combo_resolution(dialog, combo_box):
-    """Return current numeric resolution from a combo box."""
-    if combo_box is None or combo_box.count() == 0:
-        return None
+def _current_resolution_input(dialog, level):
+    """Accept only a compatible cell size and return its unrounded grid value."""
+    field = getattr(dialog, f"lineEdit_{level}Resolution")
     try:
-        data = combo_box.currentData()
-        if data is not None:
-            return float(data)
-    except Exception:
-        pass
-    try:
-        return float(combo_box.currentText())
-    except (TypeError, ValueError):
+        entered = float(field.text())
+    except ValueError:
         return None
+    return next((value for value in (field.property("resolutions") or [])
+                 if dialog.resolution_values_match(value, entered, dialog.current_grid_unit())), None)
 
 
 def connect_processor_button(
@@ -1175,9 +1132,10 @@ def morphology_workflow_button(dialog, workflow_key):
 
 def set_meteo_setup_controls_enabled(dialog, enabled):
     """Freeze all run-affecting dialog controls during the combined run."""
-    dialog.pushButton_BrowseProjectFolder.setEnabled(enabled)
-    dialog.tabWidget_steps.setEnabled(enabled)
-    dialog.stackedWidget.setEnabled(enabled)
+    for name in ("groupBox_mHMConfiguration", "groupBox_ProjectFolder",
+                 "groupBox_morphReferenceL0", "groupBox_meteoReferenceL2",
+                 "groupBox_4", "tabWidget_steps"):
+        getattr(dialog, name).setEnabled(enabled)
 
 
 def set_execute_all_button_state(dialog, status):
@@ -1353,7 +1311,7 @@ def handle_categorical_type(dialog, kind, text):
         dialog.save_input_state()
         dialog.invalidate_meteo_morph_setup()
         return
-    if _exec_dialog(input_dialog) != QDialog.Accepted or (
+    if _exec_dialog(input_dialog) != QDialog.DialogCode.Accepted or (
         input_dialog.selected_config() is None
     ):
         dialog._restore_categorical_mode(kind, previous)
@@ -1406,7 +1364,7 @@ def handle_lai_input_type(dialog, text, previous=""):
             dialog,
             initial=dialog._categorical_lookup_configs.get("lai"),
         )
-    if _exec_dialog(input_dialog) != QDialog.Accepted or (
+    if _exec_dialog(input_dialog) != QDialog.DialogCode.Accepted or (
         input_dialog.selected_config() is None
     ):
         dialog._restore_categorical_mode("lai", previous)
@@ -1476,7 +1434,7 @@ def handle_land_use_input_type(dialog, text, previous=""):
             dialog,
             initial=dialog._categorical_ready_configs.get("lc"),
         )
-        if _exec_dialog(input_dialog) != QDialog.Accepted or (
+        if _exec_dialog(input_dialog) != QDialog.DialogCode.Accepted or (
             input_dialog.selected_config() is None
         ):
             dialog._restore_categorical_mode("lc", previous)
@@ -1496,7 +1454,7 @@ def handle_land_use_input_type(dialog, text, previous=""):
             dialog,
             initial=dialog._categorical_lookup_configs.get("lc"),
         )
-        if _exec_dialog(input_dialog) != QDialog.Accepted or (
+        if _exec_dialog(input_dialog) != QDialog.DialogCode.Accepted or (
             input_dialog.selected_config() is None
         ):
             dialog._restore_categorical_mode("lc", previous)
@@ -1521,7 +1479,7 @@ def handle_land_use_input_type(dialog, text, previous=""):
             initial=initial,
             all_time="single layer" in str(text).lower(),
         )
-        if _exec_dialog(input_dialog) != QDialog.Accepted:
+        if _exec_dialog(input_dialog) != QDialog.DialogCode.Accepted:
             dialog._restore_categorical_mode("lc", previous)
             return
         value = input_dialog.selected_input()
@@ -1551,7 +1509,7 @@ def handle_multi_horizon_soil_input(dialog, text, previous=""):
         dialog,
         initial=dialog._advanced_inputs.get("soil"),
     )
-    if _exec_dialog(input_dialog) != QDialog.Accepted:
+    if _exec_dialog(input_dialog) != QDialog.DialogCode.Accepted:
         dialog._restore_categorical_mode("soil", previous)
         return
     value = input_dialog.selected_input()
@@ -1611,37 +1569,12 @@ def input_text_widgets(dialog):
 
 
 def on_tab_changed(dialog, index):
-    """Switches the stacked widget page when the tab is changed."""
-    page = dialog.page_for_tab_index(index)
-    if page is not None:
-        dialog.stackedWidget.setCurrentWidget(page)
-    else:
-        dialog.stackedWidget.setCurrentIndex(index)
+    """Refresh results when their tab is selected."""
     dialog.log_message(f"Switched to '{dialog.tabWidget_steps.tabText(index)}' tab.")
     # mHM reports nothing when it finishes, so the Outputs tab re-reads the
     # output folder each time it is shown.
     if dialog.tabWidget_steps.widget(index) is dialog.tab_outputs:
         dialog.refresh_output_display()
-
-
-def page_for_tab_index(dialog, index):
-    """Return the stacked page associated with a tab widget index.
-
-    The tabs and the stacked pages are not a one-to-one set: `tab_outputs`
-    has no page of its own, so it falls through and the caller keeps the
-    index-based mapping.
-    """
-    tab = dialog.tabWidget_steps.widget(index)
-    page_pairs = (
-        (dialog.tab_geometry, dialog.page_geometry),
-        (dialog.tab_meteo, dialog.page_meteo),
-        (dialog.tab_hydro, dialog.page_hydro),
-        (dialog.tab_execution, dialog.page_execution),
-    )
-    for tab_widget, page_widget in page_pairs:
-        if tab_widget is tab:
-            return page_widget
-    return None
 
 
 def browse_lai_file(dialog):

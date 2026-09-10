@@ -12,15 +12,8 @@ from pathlib import Path
 
 import copy
 
-try:
-    from qgis.core import QgsVectorLayer
-    from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.core import QgsVectorLayer
-    from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
+from qgis.core import QgsVectorLayer
+from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
 
 from ..dialogs.input_selection import scan_project_inputs
 

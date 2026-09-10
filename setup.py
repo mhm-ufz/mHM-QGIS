@@ -66,9 +66,6 @@ setup(
             "sphinx",
             "sphinx-rtd-theme",
         ],
-        "gui": [
-            "PyQt5>=5.15",
-        ],
     },
     include_package_data=True,
     package_data={
@@ -93,7 +90,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "mhm-qgis=mhm_qgis.standalone.cli:main",
+            "mhm-qgis=mhm_qgis.qt.__main__:main",
         ],
     },
     keywords="hydrology, modeling, mesoscale, water, environment, qgis, plugin",

@@ -6,9 +6,9 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
+
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from qgis.PyQt.QtWidgets import QApplication, QPushButton  # noqa: E402
 

@@ -9,7 +9,9 @@ from qgis.PyQt import QtCore, QtGui, QtWidgets
 
 from ...qt.controllers import project_terminal as terminal_controller
 from ...qt.bindings.project_terminal import bind as bind_terminal
-from ...qt.ui.pyui.ui_project_terminal_dialog import Ui_ProjectTerminalDialog
+from ..ui import load_form
+
+Ui_ProjectTerminalDialog = load_form("project_terminal_dialog.ui")
 
 
 class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
@@ -18,19 +20,19 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
     def __init__(self, parent=None):
         super(ProjectTerminalDialog, self).__init__(parent)
         self.setupUi(self)
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, False)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         self._cwd = None
         self._history = []
         self._history_index = 0
         self._process = QtCore.QProcess(self)
-        self._process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
+        self._process.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
         self._process.readyReadStandardOutput.connect(self._read_output)
         self._process.finished.connect(self._process_finished)
         self._process.errorOccurred.connect(self._process_error)
 
         font = QtGui.QFont("Monospace")
-        font.setStyleHint(QtGui.QFont.TypeWriter)
+        font.setStyleHint(QtGui.QFont.StyleHint.TypeWriter)
         self.output.setFont(font)
         self.command_edit.installEventFilter(self)
         bind_terminal(self)
@@ -86,7 +88,7 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
 
     def is_running(self) -> bool:
         """Return whether the backing shell process is alive."""
-        return self._process.state() != QtCore.QProcess.NotRunning
+        return self._process.state() != QtCore.QProcess.ProcessState.NotRunning
 
     def send_current_command(self) -> None:
         """Send the command line contents to the shell."""
@@ -102,11 +104,11 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
 
     def eventFilter(self, watched, event):
         """Provide a minimal command history for the input line."""
-        if watched is self.command_edit and event.type() == QtCore.QEvent.KeyPress:
-            if event.key() == QtCore.Qt.Key_Up:
+        if watched is self.command_edit and event.type() == QtCore.QEvent.Type.KeyPress:
+            if event.key() == QtCore.Qt.Key.Key_Up:
                 self._show_history(-1)
                 return True
-            if event.key() == QtCore.Qt.Key_Down:
+            if event.key() == QtCore.Qt.Key.Key_Down:
                 self._show_history(1)
                 return True
         return super(ProjectTerminalDialog, self).eventFilter(watched, event)

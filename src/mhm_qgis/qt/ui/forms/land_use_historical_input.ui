@@ -82,8 +82,8 @@
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="resources.qrc">
-             <normaloff>:/plugins/mhm_qgis/Resources/run.png</normaloff>:/plugins/mhm_qgis/Resources/run.png</iconset>
+            <iconset>
+             <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
            </property>
           </widget>
          </item>
@@ -281,9 +281,7 @@
    </item>
   </layout>
  </widget>
- <resources>
-  <include location="resources.qrc"/>
- </resources>
+ <resources/>
  <connections>
   <connection>
    <sender>buttonBox</sender>

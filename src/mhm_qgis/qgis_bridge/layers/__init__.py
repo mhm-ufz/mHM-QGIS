@@ -8,7 +8,7 @@ the QGIS layer classes directly, so the version shims and the validity checks
 live once.
 
 QGIS is imported inside the functions, never at module scope, so `qgis_bridge`
-stays importable in tests and under the standalone shim.
+stays importable before a QGIS application is initialized.
 """
 from .compat import create_vector_file_writer, map_layer_filters, qgs_field
 from .crs import crs_of, transform_between, transform_to_raster

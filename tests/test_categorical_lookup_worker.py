@@ -11,9 +11,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone  # noqa: E402
 
-standalone.install(force=True)
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -137,6 +135,7 @@ def test_the_bridge_sends_lookup_jobs_to_the_worker():
     import inspect
 
     from mhm_qgis.core.executions.morphology import commands
+    pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
     from mhm_qgis.qt.objects import morphology_tasks
 
     source = inspect.getsource(commands.lookup)

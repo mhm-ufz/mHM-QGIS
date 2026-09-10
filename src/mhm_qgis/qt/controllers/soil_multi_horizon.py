@@ -6,13 +6,7 @@ lists; growing or shrinking the horizon count has to move all four together.
 """
 from __future__ import annotations
 
-try:
-    from qgis.PyQt import QtWidgets
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt import QtWidgets
+from qgis.PyQt import QtWidgets
 
 from ...core.handlers.lookup import MAX_SOIL_HORIZONS, SoilInput
 

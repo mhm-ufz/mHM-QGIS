@@ -10,9 +10,7 @@ from mhm_qgis.core.handlers.file.netcdf.raster import file_path, variables
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE  # noqa: E402
 from mhm_qgis.core.handlers.raster.tasks import (  # noqa: E402

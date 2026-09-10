@@ -1,15 +1,17 @@
 """Focused tests for Designer-backed per-outlet assignment rows."""
 from __future__ import annotations
 
+import pytest
+
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 # isort: off
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
+
 from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
 
 from mhm_qgis.qt.dialogs.discharge_assignment import (  # noqa: E402

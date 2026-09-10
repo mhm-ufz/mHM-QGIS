@@ -2,13 +2,7 @@
 """Widget state for `thread_display_dialog.ui`."""
 from __future__ import annotations
 
-try:
-    from qgis.PyQt import QtWidgets
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt import QtWidgets
+from qgis.PyQt import QtWidgets
 
 def refresh(dialog):
     rows = dialog.coordinator.snapshots()

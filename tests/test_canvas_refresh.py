@@ -1,4 +1,8 @@
 """A display name must not hide a changed source or rewritten file."""
+import pytest
+
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
+
 from mhm_qgis.qgis_bridge.display import canvas
 
 

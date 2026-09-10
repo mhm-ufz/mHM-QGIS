@@ -1,4 +1,4 @@
-"""Run real-QGIS checks outside pytest's standalone-shim process."""
+"""Run QGIS domain checks in an isolated application process."""
 import os
 from pathlib import Path
 import subprocess

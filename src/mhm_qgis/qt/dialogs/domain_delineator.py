@@ -46,7 +46,9 @@ from ...core.handlers.store.paths import domain_data_folder
 from ...core.handlers.store.layout import domain_dem_path
 from ...qt.controllers import domain_delineator as domain_delineator_controller
 from ...qt.bindings.domain_delineator import bind as bind_domain_delineator
-from ...qt.ui.pyui.ui_domain_delineator_dialog import Ui_DomainDelineatorDialog
+from ..ui import load_form
+
+Ui_DomainDelineatorDialog = load_form("domain_delineator_dialog.ui")
 from ..objects.viewport_raster_range import ViewportRasterRangeController
 from ..reporting import error_detail
 
@@ -347,13 +349,13 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         self._map_tool = QgsMapToolEmitPoint(self.canvas)
         self._map_tool.canvasClicked.connect(self._point_picked)
         self.canvas.setMapTool(self._map_tool)
-        self.canvas.setCursor(Qt.CrossCursor)
+        self.canvas.setCursor(Qt.CursorShape.CrossCursor)
         self.pushButton_pickLocation.setText("Click on map…")
         self._picking = True
         QApplication.instance().installEventFilter(self)
 
     def eventFilter(self, watched, event):
-        if self._picking and event.type() == QEvent.MouseButtonPress:
+        if self._picking and event.type() == QEvent.Type.MouseButtonPress:
             position = self.canvas.mapFromGlobal(event.globalPos())
             if not self.canvas.rect().contains(position):
                 self._stop_picking()
@@ -383,7 +385,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         self.pushButton_pickLocation.setText("Update location")
 
     def _point_picked(self, point, button):
-        if button != Qt.LeftButton:
+        if button != Qt.MouseButton.LeftButton:
             return
         self._stop_picking()
         record = self._draft_state["outlets"][self.current_outlet_id]

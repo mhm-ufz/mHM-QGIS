@@ -20,9 +20,9 @@ from qgis.core import QgsMapLayer, QgsProject, QgsVectorLayer
 
 from ...qt.controllers import discharge_assignment as discharge_controller
 from ...core.morphology.hydrology.outlets import OutletAssignment
-from ...qt.ui.pyui.ui_discharge_table_assignment_dialog import (
-    Ui_DischargeTableAssignmentDialog,
-)
+from ..ui import load_form
+
+Ui_DischargeTableAssignmentDialog = load_form("discharge_table_assignment_dialog.ui")
 
 
 @dataclass

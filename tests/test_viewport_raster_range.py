@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 
 import numpy as np
 import rasterio
 from rasterio.transform import from_origin
+
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from mhm_qgis.qt.objects.viewport_raster_range import raster_window_range
 

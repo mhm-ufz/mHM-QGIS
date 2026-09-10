@@ -8,9 +8,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone  # noqa: E402
 
-standalone.install(force=True)
 
 from mhm_qgis.core.meteorology.forcing import cache as inspection_cache  # noqa: E402
 from mhm_qgis.core.meteorology.forcing import (  # noqa: E402

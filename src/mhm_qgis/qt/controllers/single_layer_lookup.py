@@ -8,13 +8,7 @@ refreshing is kept separate because they read different widgets.
 from __future__ import annotations
 from ...core.handlers import lookup
 
-try:
-    from qgis.PyQt import QtWidgets
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt import QtWidgets
+from qgis.PyQt import QtWidgets
 
 
 def _selection():
@@ -54,6 +48,6 @@ def _refresh_fields(dialog, _index=None):
 
 
 def _update_ok(dialog, _index=None):
-    button = dialog.buttons.button(QtWidgets.QDialogButtonBox.Ok)
+    button = dialog.buttons.button(QtWidgets.QDialogButtonBox.StandardButton.Ok)
     if button is not None:
         button.setEnabled(dialog.selected_config() is not None)

@@ -7,9 +7,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone  # noqa: E402
 
-standalone.install(force=True)
 
 from mhm_qgis.core.handlers.state.cache import (  # noqa: E402
     cached_payload,

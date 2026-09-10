@@ -28,8 +28,7 @@ def domain_count(dialog: Any) -> int:
     project = getattr(dialog, "project_folder", None)
     if project:
         try:
-            # Keep this QGIS-optional module importable before the standalone
-            # shim is installed.
+            # Keep version metadata importable without a GUI runtime.
             from ..core.handlers.state.domain_state import (
                 domain_count as saved_domain_count,
                 load_state as load_domain_state,

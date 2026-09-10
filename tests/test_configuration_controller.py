@@ -1,6 +1,8 @@
 """Focused tests for the nml-tools configuration bridge."""
 from __future__ import annotations
 
+import pytest
+
 import os
 import sys
 import types
@@ -10,9 +12,9 @@ import nml_tools.gui
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
+
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from mhm_qgis.qt.controllers import main as controller_module
 from mhm_qgis.dependency_bootstrap import (
@@ -160,11 +162,12 @@ def test_editor_failure_is_logged_and_reported(tmp_path, monkeypatch):
     ]
 
 
-def test_qtpy_is_forced_to_pyqt5(monkeypatch) -> None:
+def test_qtpy_uses_the_qgis_binding(monkeypatch) -> None:
+    from qgis.PyQt.QtCore import QT_VERSION_STR
     monkeypatch.setenv("QT_API", "pyside6")
-
-    assert configure_qtpy_api() == "pyqt5"
-    assert os.environ["QT_API"] == "pyqt5"
+    expected = "pyqt6" if QT_VERSION_STR.startswith("6.") else "pyqt5"
+    assert configure_qtpy_api() == expected
+    assert os.environ["QT_API"] == expected
 
 
 def test_gui_dependency_import_names() -> None:

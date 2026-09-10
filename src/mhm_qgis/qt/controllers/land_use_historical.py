@@ -8,13 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-try:
-    from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
 
 from qgis.PyQt import QtWidgets
 

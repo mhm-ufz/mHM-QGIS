@@ -2,8 +2,7 @@
 """Running QGIS Processing algorithms.
 
 The one place that imports `processing`. That import only resolves inside a
-real QGIS session -- the standalone shim does not provide a Processing backend
--- so keeping it here means a module that merely *sequences* algorithms stays
+configured QGIS runtime, so keeping it here means a module that merely *sequences* algorithms stays
 importable outside QGIS.
 
 `run` never raises: a failed algorithm returns None, having reported through
@@ -12,6 +11,21 @@ the callbacks, because every caller already branches on a falsy result.
 from __future__ import annotations
 
 from ...core.utils.report import CRITICAL
+
+
+def initialize():
+    """Initialize real Processing providers when running outside QGIS Desktop."""
+    import sys
+    from pathlib import Path
+    from qgis.core import QgsApplication
+
+    for root in (QgsApplication.pkgDataPath(), QgsApplication.prefixPath()):
+        plugins = str(Path(root) / "python" / "plugins")
+        if Path(plugins).is_dir() and plugins not in sys.path:
+            sys.path.append(plugins)
+    from processing.core.Processing import Processing
+
+    Processing.initialize()
 
 
 def run(name: str, params: dict, *, log=None, report=None):
@@ -43,4 +57,4 @@ def run(name: str, params: dict, *, log=None, report=None):
     return result
 
 
-__all__ = ["run"]
+__all__ = ["initialize", "run"]

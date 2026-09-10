@@ -4,13 +4,7 @@ from __future__ import annotations
 import math
 from functools import partial
 
-try:
-    from qgis.PyQt import QtCore
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt import QtCore
+from qgis.PyQt import QtCore
 
 
 def raster_window_range(path, bounds, bounds_crs="", max_samples=262_144):
@@ -121,7 +115,7 @@ class ViewportRasterRangeController(QtCore.QObject):
         contrast.setMinimumValue(float(minimum))
         contrast.setMaximumValue(float(maximum))
         contrast.setContrastEnhancementAlgorithm(
-            QgsContrastEnhancement.StretchToMinimumMaximum
+            QgsContrastEnhancement.ContrastEnhancementAlgorithm.StretchToMinimumMaximum
         )
         renderer.setContrastEnhancement(contrast)
         self.layer.setRenderer(renderer)

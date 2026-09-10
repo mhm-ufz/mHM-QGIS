@@ -43,9 +43,7 @@ def test_saved_gauges_and_missing_observations(tmp_path):
 
 def test_discharge_button_opens_reusable_plot_and_project_change_clears_stations(tmp_path):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from mhm_qgis import standalone
-
-    standalone.install(force=True)
+    pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
     pytest.importorskip("pyqtgraph")
     from qgis.PyQt.QtWidgets import QApplication
     from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog

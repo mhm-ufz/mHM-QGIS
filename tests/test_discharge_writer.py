@@ -1,9 +1,7 @@
 """Tests for discharge files that do not require a valid QGIS table layer."""
 from pathlib import Path
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 # isort: off
 from mhm_qgis.core.handlers.file.discharge import (

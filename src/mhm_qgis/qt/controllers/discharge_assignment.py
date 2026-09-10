@@ -11,15 +11,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-try:
-    from qgis.core import QgsMapLayer, QgsProject, QgsVectorLayer
-    from qgis.PyQt.QtWidgets import QComboBox, QFileDialog, QMessageBox
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.core import QgsMapLayer, QgsProject, QgsVectorLayer
-    from qgis.PyQt.QtWidgets import QComboBox, QFileDialog, QMessageBox
+from qgis.core import QgsMapLayer, QgsProject, QgsVectorLayer
+from qgis.PyQt.QtWidgets import QComboBox, QFileDialog, QMessageBox
 
 
 def _row_type():
@@ -64,7 +57,7 @@ def _populate_discharge_layers(dialog, combo: QComboBox) -> None:
         layers = ()
     for layer in layers:
         try:
-            if layer.isValid() and layer.type() == QgsMapLayer.VectorLayer:
+            if layer.isValid() and layer.type() == QgsMapLayer.LayerType.VectorLayer:
                 combo.addItem(layer.name(), layer)
         except Exception:
             continue

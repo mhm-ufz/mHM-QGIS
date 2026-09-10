@@ -29,9 +29,11 @@ _LAST_RESULT = None
 
 
 def configure_qtpy_api() -> str:
-    """Make QtPy use the PyQt5 binding provided by QGIS and mhm_qgis."""
+    """Select QGIS's active binding before QtPy or plotting libraries load."""
+    from qgis.PyQt.QtCore import QT_VERSION_STR
 
-    os.environ["QT_API"] = "pyqt5"
+    os.environ["QT_API"] = "pyqt6" if QT_VERSION_STR.startswith("6.") else "pyqt5"
+    os.environ["PYQTGRAPH_QT_LIB"] = "PyQt6" if QT_VERSION_STR.startswith("6.") else "PyQt5"
     return os.environ["QT_API"]
 
 
@@ -295,12 +297,12 @@ def confirm_install(parent, missing: list[Dependency]) -> bool:
         + user_site_path()
     )
     box = QMessageBox(parent)
-    box.setIcon(QMessageBox.Question)
+    box.setIcon(QMessageBox.Icon.Question)
     box.setWindowTitle("Install mHM QGIS Python dependencies?")
     box.setText(message)
-    install_button = box.addButton("Install", QMessageBox.AcceptRole)
-    box.addButton(QMessageBox.Cancel)
-    box.exec_()
+    install_button = box.addButton("Install", QMessageBox.ButtonRole.AcceptRole)
+    box.addButton(QMessageBox.StandardButton.Cancel)
+    box.exec()
     return box.clickedButton() is install_button
 
 
@@ -319,7 +321,7 @@ def create_progress_dialog(parent, missing: list[Dependency]):
             parent,
         )
         progress.setWindowTitle("mHM QGIS Dependency Installation")
-        progress.setWindowModality(Qt.WindowModal)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
         progress.setValue(0)
         return progress
@@ -335,7 +337,7 @@ def set_wait_cursor(enabled: bool) -> None:
         from qgis.PyQt.QtWidgets import QApplication
 
         if enabled:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         else:
             QApplication.restoreOverrideCursor()
     except Exception:

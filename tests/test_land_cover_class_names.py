@@ -2,9 +2,7 @@
 
 import pandas as pd
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 from mhm_qgis.core.morphology.elevation_bands import (  # noqa: E402
     read_land_cover_class_names,

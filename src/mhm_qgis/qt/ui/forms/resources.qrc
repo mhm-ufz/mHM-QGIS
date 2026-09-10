@@ -1,5 +1,5 @@
 <RCC>
-  <qresource prefix="/plugins/mhm_qgis">
+  <qresource prefix="/">
     <file>Resources/crop.png</file>
     <file>Resources/runSave.png</file>
     <file>Resources/band.png</file>

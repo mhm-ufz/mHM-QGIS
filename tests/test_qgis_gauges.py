@@ -1,11 +1,13 @@
 """Gauge extraction at the QGIS/core boundary."""
 from __future__ import annotations
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 # isort: off
+import pytest
+
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
+
 from qgis.core import QgsCoordinateReferenceSystem, QgsPointXY  # noqa: E402
 
 from mhm_qgis.core.handlers.state.domain_state import save_state  # noqa: E402

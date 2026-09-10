@@ -4,16 +4,8 @@ from __future__ import annotations
 import traceback
 from dataclasses import dataclass, field
 
-try:
-    from qgis.PyQt import QtCore
-    from qgis.core import QgsApplication, QgsTask
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.PyQt import QtCore
-    QgsApplication = None
-    QgsTask = None
+from qgis.PyQt import QtCore
+from qgis.core import QgsApplication, QgsTask
 
 
 @dataclass
@@ -29,30 +21,8 @@ class TaskRecord:
     progress: int = 0
     slot: int | None = None
     logs: list[str] = field(default_factory=list)
-    thread: object = None
-    worker: object = None
     task: object = None
     task_aware: bool = False
-
-
-class _TaskWorker(QtCore.QObject):
-    completed = QtCore.pyqtSignal(object)
-    failed = QtCore.pyqtSignal(str)
-    progress = QtCore.pyqtSignal(float)
-
-    def __init__(self, runner, task_aware=False):
-        super().__init__()
-        self.runner = runner
-        self.task_aware = bool(task_aware)
-
-    @QtCore.pyqtSlot()
-    def run(self):
-        try:
-            proxy = _StandaloneTask(self.progress.emit)
-            result = self.runner(proxy) if self.task_aware else self.runner()
-            self.completed.emit(result)
-        except Exception as error:
-            self.failed.emit(f"{error}\n{traceback.format_exc()}")
 
 
 class TaskCoordinator(QtCore.QObject):
@@ -241,10 +211,6 @@ class TaskCoordinator(QtCore.QObject):
         if task is not None and hasattr(task, "cancel"):
             task.cancel()
             return True
-        thread = record.thread
-        if thread is not None:
-            thread.requestInterruption()
-            return True
         return False
 
     def _free_slot(self):
@@ -274,10 +240,7 @@ class TaskCoordinator(QtCore.QObject):
             record.status = "running"
             record.logs.append(f"Started: {record.label}")
             self._active[record.key] = record
-            if QgsTask is not None and QgsApplication is not None:
-                self._start_qgis_task(record)
-            else:
-                self._start_standalone_task(record)
+            self._start_qgis_task(record)
             self.changed.emit()
 
     def _start_qgis_task(self, record):
@@ -311,28 +274,6 @@ class TaskCoordinator(QtCore.QObject):
         record.task = task
         QgsApplication.taskManager().addTask(task)
 
-    def _start_standalone_task(self, record):
-        """Use Qt only for the standalone shim, which has no QGIS task manager."""
-        thread = QtCore.QThread(self)
-        worker = _TaskWorker(record.runner, record.task_aware)
-        worker.setProperty("mhm_qgis_task_key", record.key)
-        worker.moveToThread(thread)
-        worker.completed.connect(
-            lambda result, task_key=record.key: self._finish(task_key, True, result)
-        )
-        worker.failed.connect(
-            lambda message, task_key=record.key: self._finish(task_key, False, message)
-        )
-        worker.progress.connect(self._task_progress_changed)
-        worker.completed.connect(lambda _result, current=thread: current.quit())
-        worker.failed.connect(lambda _message, current=thread: current.quit())
-        worker.completed.connect(worker.deleteLater)
-        worker.failed.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.started.connect(worker.run)
-        record.thread = thread
-        record.worker = worker
-        thread.start()
 
     def _finish(self, key, success, payload, status=None):
         record = self._active.pop(str(key), None)
@@ -346,10 +287,6 @@ class TaskCoordinator(QtCore.QObject):
         record.logs.append(
             f"Completed: {record.label}" if success else str(payload)
         )
-        thread = record.thread
-        if thread is not None and thread.isRunning():
-            thread.quit()
-            thread.wait(1000)
         self._set_controls(record, True)
         if record.slot is not None:
             self._history[record.slot] = record
@@ -368,8 +305,6 @@ class TaskCoordinator(QtCore.QObject):
                         record.on_error(details)
                     except Exception:
                         record.logs.append(traceback.format_exc())
-        record.thread = None
-        record.worker = None
         record.task = None
         self.changed.emit()
         self._start_available()
@@ -405,19 +340,6 @@ class TaskCoordinator(QtCore.QObject):
 
 
 _CANCELLED = object()
-
-
-class _StandaloneTask:
-    """Small QgsTask-compatible progress object for the standalone shim."""
-
-    def __init__(self, progress):
-        self._progress = progress
-
-    def isCanceled(self):
-        return QtCore.QThread.currentThread().isInterruptionRequested()
-
-    def setProgress(self, value):
-        self._progress(float(value))
 
 
 __all__ = ["TaskCoordinator", "TaskRecord"]

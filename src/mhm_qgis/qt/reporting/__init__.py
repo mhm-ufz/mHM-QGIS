@@ -8,7 +8,7 @@ raise an actual `QMessageBox`.
 
 Both default to inert: `report=None` means "stay quiet" and a missing `confirm`
 means "assume no", so a core function called from a worker, a test or the
-standalone CLI never blocks on a dialog that has no one to answer it.
+file-only caller never blocks on a dialog that has no one to answer it.
 """
 from __future__ import annotations
 
@@ -39,9 +39,9 @@ def dialog_confirmer(parent):
         from qgis.PyQt.QtWidgets import QMessageBox
 
         reply = QMessageBox.question(
-            parent, title, question, QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            parent, title, question, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No
         )
-        return reply == QMessageBox.Yes
+        return reply == QMessageBox.StandardButton.Yes
 
     return confirm
 

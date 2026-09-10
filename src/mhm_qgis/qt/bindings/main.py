@@ -8,13 +8,7 @@ rather than wiring.
 """
 from __future__ import annotations
 
-try:
-    from qgis.core import QgsProject
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.core import QgsProject
+from qgis.core import QgsProject
 
 from ...qgis_bridge.display import meteo as meteo_display
 from ...qgis_bridge.display import output as output_display
@@ -101,14 +95,13 @@ def bind(dialog):
         "Snap Pour Points",
         lambda: None,
     )
-    dialog.pushButton_delineate.clicked.connect(dialog.open_domain_delineator)
-    dialog.connect_processor_button(
-        dialog.pushButton_elevation_bands,
+    dialog.connect_optional_processor_button(
+        "pushButton_elevation_bands",
         "Elevation Bands",
         lambda: elevation_band.process_elevation_bands(dialog),
     )
-    dialog.connect_processor_button(
-        dialog.pushButton_bandDetails,
+    dialog.connect_optional_processor_button(
+        "pushButton_bandDetails",
         "Elevation Band Land Cover Details",
         lambda: elevation_band.process_band_details(dialog),
     )
@@ -208,9 +201,6 @@ def bind(dialog):
         lambda value=None: output_display.date_changed(dialog, value)
     )
 
-    # Reset geometry
-    dialog.pushButton_resetGeometry.clicked.connect(dialog.reset_geometry_processing)
-
     # Batch morphology workflows
     execute_all_button = dialog.morphology_workflow_button("execute_all")
     if execute_all_button is not None:
@@ -305,19 +295,12 @@ def _bind_grid_resolution(dialog):
     except Exception:
         pass
 
-    try:
-        dialog.comboBox_L1.currentIndexChanged.connect(
-            lambda index=None: dialog.handle_l1_resolution_changed()
-        )
-    except Exception:
-        pass
-
-    try:
-        dialog.comboBox_L11.currentIndexChanged.connect(
-            lambda index=None: dialog.update_l11_resolution_label()
-        )
-    except Exception:
-        pass
+    dialog.lineEdit_L1Resolution.textChanged.connect(
+        lambda _text: dialog.handle_l1_resolution_changed()
+    )
+    dialog.lineEdit_L11Resolution.textChanged.connect(
+        lambda _text: dialog.update_l11_resolution_label()
+    )
 
 
 def _bind_input_state(dialog):
@@ -349,17 +332,8 @@ def _bind_input_state(dialog):
     except Exception:
         pass
 
-    for combo_box in (
-            dialog.comboBox_L1,
-            dialog.comboBox_L11):
-        if combo_box is None:
-            continue
-        try:
-            combo_box.currentIndexChanged.connect(
-                dialog.handle_model_input_changed
-            )
-        except Exception:
-            pass
+    for field in (dialog.lineEdit_L1Resolution, dialog.lineEdit_L11Resolution):
+        field.editingFinished.connect(dialog.handle_model_input_changed)
 
     try:
         dialog.mProjectionSelectionWidget_crs.crsChanged.connect(

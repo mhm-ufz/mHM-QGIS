@@ -8,19 +8,10 @@ import traceback
 from pathlib import Path
 
 # QGIS and PyQt imports
-try:
-    from qgis.core import (QgsApplication, QgsMapLayer, QgsProject,
-                           QgsRasterLayer, QgsVectorLayer)
-    from qgis.PyQt import QtCore
-    from qgis.PyQt.QtWidgets import QComboBox, QDialog, QFileDialog, QMessageBox
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.core import (QgsApplication, QgsMapLayer, QgsProject,
-                           QgsRasterLayer, QgsVectorLayer)
-    from qgis.PyQt import QtCore
-    from qgis.PyQt.QtWidgets import QComboBox, QDialog, QFileDialog, QMessageBox
+from qgis.core import (QgsApplication, QgsMapLayer, QgsProject,
+                       QgsRasterLayer, QgsVectorLayer)
+from qgis.PyQt import QtCore
+from qgis.PyQt.QtWidgets import QComboBox, QDialog, QFileDialog, QMessageBox
 
 
 from ..threads.meteo_workflow import MeteorologyWorkflowWorker
@@ -68,7 +59,6 @@ from ...core.morphology.hydrology.outlets import (
 )
 from ...core.handlers.store.paths import data_folder, data_raw_folder, geometry_folder, output_folder, restart_folder, workspace_folder, z_temp_folder
 from ...core.handlers.store.layout import ensure_project_structure
-from ...standalone import is_active as standalone_is_active
 from ...qt.bindings.main import bind as bind_main_form
 from ...qt.controllers import main as main_controller
 from ...qgis_bridge import layers as qgis_layers
@@ -77,7 +67,9 @@ from .project_terminal import ProjectTerminalDialog
 from ..threads.task_coordinator import TaskCoordinator
 from .thread_display import ThreadDisplayDialog
 from ..objects.morphology_tasks import MorphologyTaskBridge
-from ...qt.ui.pyui.ui_mhm_qgis_main import Ui_MhmQgisDialog
+from ..ui import load_form
+
+Ui_MhmQgisDialog = load_form("mhm_qgis_main.ui")
 
 
 class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
@@ -442,8 +434,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def disable_l11_resolution_options(self, *args, **kwargs):
         return main_controller.disable_l11_resolution_options(self, *args, **kwargs)
 
-    def disable_resolution_combo(self, *args, **kwargs):
-        return main_controller.disable_resolution_combo(self, *args, **kwargs)
 
     def update_l1_resolution_label(self, *args, **kwargs):
         return main_controller.update_l1_resolution_label(self, *args, **kwargs)
@@ -517,8 +507,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def _set_resolution_labels(self, *args, **kwargs):
         return main_controller._set_resolution_labels(self, *args, **kwargs)
 
-    def _populate_resolution_combo(self, *args, **kwargs):
-        return main_controller._populate_resolution_combo(self, *args, **kwargs)
 
     def resolution_state_precision(self, unit):
         """Return precision used when restoring saved grid-resolution choices."""
@@ -543,8 +531,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def log_resolution_preference_warning(self, *args, **kwargs):
         return main_controller.log_resolution_preference_warning(self, *args, **kwargs)
 
-    def _current_combo_resolution(self, *args, **kwargs):
-        return main_controller._current_combo_resolution(self, *args, **kwargs)
 
     def connect_input_state_teardown_guards(self):
         """Avoid overwriting saved layer selections during QGIS teardown."""
@@ -685,10 +671,10 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             "Reset Geometry",
             "This will remove all geometry layers from QGIS and delete all files "
             "in the Geometry folder.\n\nAre you sure you want to continue?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if answer != QMessageBox.Yes:
+        if answer != QMessageBox.StandardButton.Yes:
             self.log_message("Reset cancelled by user.")
             return False
         folder = geometry_folder(self.project_folder)
@@ -720,13 +706,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
     def open_domain_assignment(self):
         """Open the non-interactive gauge assignment for the DEM-extent domain."""
-        if standalone_is_active():
-            QMessageBox.information(
-                self,
-                "Domain Assignment",
-                "Domain preparation requires the QGIS plugin runtime.",
-            )
-            return False
         if not self.project_folder:
             QMessageBox.warning(self, "Domain Assignment", "Select a project folder first.")
             return False
@@ -765,8 +744,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                 self,
                 initial_records=state.get("outlets", {}),
             )
-            execute = getattr(dialog, "exec", None) or dialog.exec_
-            if execute() != QDialog.Accepted:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
                 return False
             workflow.apply_dem_extent(dialog.selected_assignments())
             sync_domain_settings(self.project_folder)
@@ -780,16 +758,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             return False
 
 
-
     def open_domain_delineator(self, checked=False):
         """Open the per-outlet domain delineation dialog in QGIS."""
-        if standalone_is_active():
-            QMessageBox.information(
-                self,
-                "Domain Delineator",
-                "Interactive domain delineation requires the QGIS plugin runtime.",
-            )
-            return
         if not self.project_folder:
             QMessageBox.warning(
                 self,
@@ -816,7 +786,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         field = self.selected_outlet_id_field()
         controls = (
             self.comboBox_domainDefinitionType,
-            self.pushButton_delineate,
         )
         started = self.morphology_tasks.start_domain_preflight(
             controls,
@@ -846,8 +815,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                 prepared_context=context,
             )
             self._domain_delineator_dialog = dialog
-            execute = getattr(dialog, "exec", None) or dialog.exec_
-            execute()
+            dialog.exec()
         except Exception as error:
             self.log_message(f"ERROR: Domain delineator failed: {error}")
             self.log_message(f"Traceback: {traceback.format_exc()}")
@@ -1153,8 +1121,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def set_meteo_setup_controls_enabled(self, *args, **kwargs):
         return main_controller.set_meteo_setup_controls_enabled(self, *args, **kwargs)
 
-    def closeEvent(self, event):
-        """Prevent closing the dialog while a morphology workflow is running."""
+    def done(self, result):
+        """Guard window close, Escape and dialog buttons while work is running."""
         running_key = self.running_morphology_workflow_key()
         if running_key is not None or self.task_coordinator.is_busy():
             spec = self.morphology_workflow_specs().get(running_key, {})
@@ -1166,9 +1134,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                     "Wait for it to finish before closing mHM QGIS."
                 ),
             )
-            event.ignore()
             return
-        super().closeEvent(event)
+        super().done(result)
 
     def set_execute_all_button_state(self, *args, **kwargs):
         return main_controller.set_execute_all_button_state(self, *args, **kwargs)
@@ -1453,7 +1420,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             layer_type = (
                 "raster"
                 if isinstance(layer, QgsRasterLayer)
-                or layer.type() == QgsMapLayer.RasterLayer
+                or layer.type() == QgsMapLayer.LayerType.RasterLayer
                 else "vector"
             )
             layers[key] = {
@@ -2023,8 +1990,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def on_tab_changed(self, *args, **kwargs):
         return main_controller.on_tab_changed(self, *args, **kwargs)
 
-    def page_for_tab_index(self, *args, **kwargs):
-        return main_controller.page_for_tab_index(self, *args, **kwargs)
 
     # --- UI Helper Methods ---
 

@@ -52,7 +52,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 - Python 3.8+
 - Git
-- QGIS 3.0+ (for plugin development)
+- A QGIS Python runtime (test QGIS 3/Qt5 and QGIS 4/Qt6 separately)
 
 ### Installation
 
@@ -69,6 +69,15 @@ pre-commit install
 ```
 
 ### Running Tests
+
+Use the Python environment belonging to QGIS for GUI tests. Tests initialize
+an offscreen `QgsApplication`; without QGIS, GUI checks are skipped and core
+tests still run. No standalone shim is installed.
+
+Edit forms in `src/mhm_qgis/qt/ui/forms/`. They load directly through
+`qgis.PyQt.uic.loadUiType`; do not generate Python forms or compiled resources.
+Keep icons relative to the form and promoted-widget headers set to `qgis.gui`.
+Use Qt5-compatible XML enums; the runtime loader selects the Python binding.
 
 ```bash
 # Run all tests

@@ -115,7 +115,7 @@ def snap_points_to_network(
         raise ValueError("Pour points and channel network must have a valid CRS.")
     point_transform = transform_between(pour_points_layer.crs(), output_crs)
     channel_transform = transform_between(channel_network_layer.crs(), output_crs)
-    network_index = QgsSpatialIndex(flags=QgsSpatialIndex.FlagStoreFeatureGeometries)
+    network_index = QgsSpatialIndex(flags=QgsSpatialIndex.Flag.FlagStoreFeatureGeometries)
     network = {}
     for feature in channel_network_layer.getFeatures():
         geometry = QgsGeometry(feature.geometry())
@@ -129,7 +129,7 @@ def snap_points_to_network(
 
     _remove_vector_dataset(output_path, log)
     writer = create_vector_file_writer(
-        str(output_path), output_fields, QgsWkbTypes.Point, output_crs
+        str(output_path), output_fields, QgsWkbTypes.Type.Point, output_crs
     )
     if writer.hasError():
         raise RuntimeError(f"Could not create snapped points: {writer.errorMessage()}")

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
+
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from qgis.PyQt import QtCore, QtWidgets  # noqa: E402
 
@@ -49,7 +51,7 @@ def test_bounded_jobs_lock_controls_and_keep_per_slot_log():
         on_success=lambda value: (results.append(value), loop.quit()),
     )
     QtCore.QTimer.singleShot(5000, loop.quit)
-    loop.exec_()
+    loop.exec()
     app.processEvents()
 
     assert results == [1, 2]

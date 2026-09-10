@@ -51,11 +51,11 @@ def qgs_field(name, field_type):
         "Double": "Double",
     }
     qvariant_type_by_name = {}
-    if QVariant is not None:
+    if QVariant is not None and hasattr(QVariant, "Type"):
         qvariant_type_by_name = {
-            "String": QVariant.String,
-            "Int": QVariant.Int,
-            "Double": QVariant.Double,
+            "String": QVariant.Type.String,
+            "Int": QVariant.Type.Int,
+            "Double": QVariant.Type.Double,
         }
     qmeta_name = qmeta_name_by_qvariant_name.get(field_type, field_type)
     candidates = [_qmeta_type(qmeta_name)]

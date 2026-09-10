@@ -32,8 +32,10 @@ from ...qt.controllers import land_use_historical as land_use_controller
 from ...qt.controllers import soil_multi_horizon as soil_controller
 from ...qt.bindings.land_use_historical import bind_historical_land_use
 from ...qt.bindings.soil_multi_horizon import bind_multi_horizon_soil
-from ...qt.ui.pyui.ui_land_use_historical_input import Ui_Dialog as Ui_LandUse  # noqa: E402
-from ...qt.ui.pyui.ui_soil_multi_horizon_input import Ui_Dialog as Ui_Soil  # noqa: E402
+from ..ui import load_form
+
+Ui_LandUse = load_form("land_use_historical_input.ui")
+Ui_Soil = load_form("soil_multi_horizon_input.ui")
 
 
 @dataclass

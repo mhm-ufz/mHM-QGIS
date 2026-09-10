@@ -7,15 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-try:
-    from qgis.core import QgsMapLayer, QgsProject
-    from qgis.PyQt import QtCore, QtWidgets
-except ImportError:
-    from ...standalone import install
-
-    install(force=True)
-    from qgis.core import QgsMapLayer, QgsProject
-    from qgis.PyQt import QtCore, QtWidgets
+from qgis.core import QgsMapLayer, QgsProject
+from qgis.PyQt import QtCore, QtWidgets
 from ...qgis_bridge import layers
 from ...core.handlers.store.paths import WORKSPACE_FOLDER_NAME
 from ...qt.controllers import single_layer_input as single_layer_controller
@@ -24,11 +17,11 @@ from ...qt.bindings.lai_netcdf_input import bind_lai_netcdf
 from ...qt.bindings.mhm_ready_input import bind_mhm_ready
 from ...qt.bindings.single_layer_input import bind_single_layer_lookup
 from ...qt.bindings.single_layer_lookup import bind_lookup_config
-from ...qt.ui.pyui.ui_lai_netcdf_input_dialog import Ui_SingleLayerInputDialog as Ui_LaiNetcdfInputDialog
-from ...qt.ui.pyui.ui_mhm_ready_dialog import Ui_SingleLayerInputDialog as Ui_MhmReadyInputDialog
-from ...qt.ui.pyui.ui_single_layer_input_with_lookup_config_dialog import (
-    Ui_SingleLayerInputDialog as Ui_SingleLayerLookupDialog,
-)
+from ..ui import load_form
+
+Ui_LaiNetcdfInputDialog = load_form("lai_netcdf_input_dialog.ui")
+Ui_MhmReadyInputDialog = load_form("mhm_ready_dialog.ui")
+Ui_SingleLayerLookupDialog = load_form("single_layer_input_with_lookup_config_dialog.ui")
 
 EXCLUDED_PROJECT_FOLDERS = {WORKSPACE_FOLDER_NAME}
 INPUT_EXTENSIONS = {
@@ -181,10 +174,10 @@ def _layer_type(layer):
 def _accepts_layer(kind: str, layer) -> bool:
     layer_type = _layer_type(layer)
     if kind == "dem":
-        return layer_type == QgsMapLayer.RasterLayer
+        return layer_type == QgsMapLayer.LayerType.RasterLayer
     if kind in {"pour_points", "lookup"}:
-        return layer_type == QgsMapLayer.VectorLayer
-    return layer_type in {QgsMapLayer.RasterLayer, QgsMapLayer.VectorLayer}
+        return layer_type == QgsMapLayer.LayerType.VectorLayer
+    return layer_type in {QgsMapLayer.LayerType.RasterLayer, QgsMapLayer.LayerType.VectorLayer}
 
 
 def qgis_layer_item(layer, kind: str) -> InputItem | None:

@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from mhm_qgis import standalone
 
-standalone.install(force=True)
 
 # isort: off
+pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
+
 from qgis.core import QgsVectorLayer  # noqa: E402
 
 from mhm_qgis.core.morphology.hydrology.outlets import (  # noqa: E402

@@ -113,7 +113,7 @@ def navigation(folder):
         dialog.listWidget_outlets.setCurrentRow(0)
         dialog.pushButton_nextPourPoint.click()
         main.task_coordinator.submit.assert_not_called()
-        dialog._point_picked(QgsPointXY(950, 50), Qt.LeftButton)
+        dialog._point_picked(QgsPointXY(950, 50), Qt.MouseButton.LeftButton)
         main.task_coordinator.submit.assert_not_called()
         dialog.pushButton_showDelineation.click()
         call = main.task_coordinator.submit.call_args
@@ -146,7 +146,7 @@ def navigation(folder):
         reopened.listWidget_outlets.setCurrentRow(1)
         assert reopened._watershed_layer.isValid()
         main.task_coordinator.submit.assert_not_called()
-        reopened._point_picked(QgsPointXY(850, 150), Qt.LeftButton)
+        reopened._point_picked(QgsPointXY(850, 150), Qt.MouseButton.LeftButton)
         assert reopened._watershed_layer is None
         main.task_coordinator.submit.assert_not_called()
         reopened._cleanup()
