@@ -161,6 +161,10 @@ def morph_folder(project_folder, version: str | None = None) -> str:
     return os.path.join(static_folder(project_folder), "morph")
 
 
+def morph_mask_path(project_folder) -> Path:
+    return Path(morph_folder(project_folder)) / "morph_mask.nc"
+
+
 def lai_folder(project_folder, version: str | None = None) -> str:
     """Return the LAI data folder.
 

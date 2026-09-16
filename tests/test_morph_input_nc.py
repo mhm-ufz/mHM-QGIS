@@ -18,6 +18,7 @@ from mhm_qgis.core.morphology.layers.morph_input_nc import (  # noqa: E402
     available_layers,
     write_morph_input_nc,
 )
+from mhm_qgis.core.morphology.layers.mask import write_morph_mask
 
 xr = pytest.importorskip("xarray")
 
@@ -156,6 +157,32 @@ def test_missing_layers_are_simply_omitted(tmp_path):
     with xr.open_dataset(output) as result:
         assert "dem" in result and "facc" in result
         assert "slope" not in result and "soil_class" not in result
+
+
+def test_morph_mask_uses_selected_dem_cells_and_l0_coordinates(tmp_path):
+    values = np.arange(12, dtype="float32").reshape(3, 4)
+    values[1, 2] = -9999
+    raster = _raster(tmp_path / "dem.tif", values)
+    derivatives = copy_rasters(
+        tmp_path / "dem_derivatives_masked.nc", {"dem": raster})
+    lat = np.arange(12, dtype="float64").reshape(3, 4) + 40
+    lon = np.arange(12, dtype="float64").reshape(3, 4) + 5
+    from netCDF4 import Dataset
+    with Dataset(tmp_path / "latlon.nc", "w") as dataset:
+        dataset.createDimension("y", 3)
+        dataset.createDimension("x", 4)
+        dataset.createVariable("lat_l0", "f8", ("y", "x"))[:] = lat
+        dataset.createVariable("lon_l0", "f8", ("y", "x"))[:] = lon
+
+    output = write_morph_mask(tmp_path / "morph_mask.nc", derivatives,
+                              tmp_path / "latlon.nc")
+
+    with xr.open_dataset(output) as result:
+        expected = np.ones((3, 4), dtype="int8")
+        expected[1, 2] = 0
+        np.testing.assert_array_equal(result["mask"].values, expected)
+        np.testing.assert_array_equal(result["lat"].values, lat)
+        np.testing.assert_array_equal(result["lon"].values, lon)
 
 
 def test_writing_without_any_layer_is_rejected(tmp_path):

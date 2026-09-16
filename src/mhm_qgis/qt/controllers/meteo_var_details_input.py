@@ -2,7 +2,9 @@
 from pathlib import Path
 from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
 from ...core.meteorology.forcing.types import MeteoFolderSpec
-from ...core.meteorology.forcing.temporal import VARIABLES, normalize_unit, validate_spec
+from ...core.meteorology.forcing.temporal import (
+    CADENCES, VARIABLES, normalize_unit, validate_spec,
+)
 
 
 def populate(dialog, initial):
@@ -14,12 +16,41 @@ def populate(dialog, initial):
     dialog.comboBox_inputFolder.addItem(folder)
     dialog.lineEdit_fileNameGlobDefinition.setText(initial.get("pattern", "*.nc"))
     dialog.comboBox_temporalResolutionInput.setCurrentText(initial.get("temporal_resolution", "Daily"))
+    populate_output_resolutions(
+        dialog, initial.get("output_temporal_resolution") or
+        initial.get("temporal_resolution", "Daily"))
+    aggregation = initial.get("aggregation") or "<None>"
+    dialog.comboBox_temporalAggregationTypeMeteoOutput.setCurrentText(aggregation)
+    update_aggregation_control(dialog)
     dialog.comboBox_unitInput.addItems(VARIABLES[dialog.variable][2])
     dialog.comboBox_unitInput.setCurrentText(normalize_unit(initial.get("unit", VARIABLES[dialog.variable][2][0])))
     dialog.checkBox_cumulative.setChecked(bool(initial.get("cumulative")))
     dialog.comboBox_cumulativeTemporalResolution.setCurrentText(initial.get("cumulative_resolution") or "Daily")
     dialog.comboBox_cumulativeTemporalResolution.setEnabled(dialog.checkBox_cumulative.isChecked())
     dialog.checkBox_cumulative.setToolTip("Running amounts reset at UTC calendar boundaries. CF interval bounds are required unless ERA timing is recognized.")
+
+
+def populate_output_resolutions(dialog, selected=None):
+    """Offer the input cadence and every coarser cadence."""
+    combo = dialog.comboBox_temporalResolutionOutput
+    input_cadence = dialog.comboBox_temporalResolutionInput.currentText()
+    values = list(CADENCES)
+    allowed = values[values.index(input_cadence):] if input_cadence in values else []
+    combo.blockSignals(True)
+    combo.clear()
+    combo.addItems(allowed)
+    combo.setCurrentText(selected if selected in allowed else input_cadence)
+    combo.blockSignals(False)
+    update_aggregation_control(dialog)
+
+
+def update_aggregation_control(dialog):
+    combo = dialog.comboBox_temporalAggregationTypeMeteoOutput
+    same = (dialog.comboBox_temporalResolutionOutput.currentText()
+            == dialog.comboBox_temporalResolutionInput.currentText())
+    combo.setEnabled(not same)
+    if same:
+        combo.setCurrentText("<None>")
 
 
 def browse(dialog):
@@ -42,6 +73,9 @@ def validate(dialog):
         dialog.spec = MeteoFolderSpec(
             dialog.variable, folder.resolve(), pattern=pattern,
             temporal_resolution=dialog.comboBox_temporalResolutionInput.currentText(),
+            output_temporal_resolution=dialog.comboBox_temporalResolutionOutput.currentText(),
+            aggregation=("" if not dialog.comboBox_temporalAggregationTypeMeteoOutput.isEnabled()
+                         else dialog.comboBox_temporalAggregationTypeMeteoOutput.currentText()),
             unit=dialog.comboBox_unitInput.currentText(),
             cumulative=dialog.checkBox_cumulative.isChecked(),
             cumulative_resolution=dialog.comboBox_cumulativeTemporalResolution.currentText()).normalized()

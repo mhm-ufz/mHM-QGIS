@@ -96,6 +96,13 @@ def reuse_prepared(run: MeteorologyRun, state, *, log=None) -> bool:
          "Change the L2 grid or delete the files under "
          f"{meteo_output_root(run.project_folder)} to force a rebuild.")
     processing.save_grid_metadata(run.project_folder, run.grid_metadata)
+    from ...handlers.state.nml_outputs import register_meteo
+    expected = expected_meteo_outputs(run.project_folder)
+    register_meteo(
+        run.project_folder,
+        {name: expected[name]["netcdf"] for name in variables},
+        meteo_mask_path(run.project_folder) if is_v6(run.project_folder) else None,
+    )
     return True
 
 
@@ -124,6 +131,7 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None) -> boo
             log=log,
             inspections=run.inspections,
         )
+        mask = None
         if flat:
             # v6 names a meteorology mask in config_input.
             mask = write_meteo_mask(meteo_mask_path(run.project_folder), run.target_grid)
@@ -141,6 +149,8 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None) -> boo
         header_path = result.headers.get(variable)
         if header_path:
             state.mark_prepared(header_path, Path(header_path).name)
+    from ...handlers.state.nml_outputs import register_meteo
+    register_meteo(run.project_folder, result.outputs, mask)
     _say(log, "Meteorology forcing preparation completed.")
     _say(log, f"Prepared variables: {', '.join(sorted(result.outputs))}")
     processing.save_grid_metadata(run.project_folder, run.grid_metadata)

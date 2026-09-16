@@ -457,6 +457,8 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
     if target_ref.SetFromUserInput(str(target_crs)) != 0 or source_ref.IsSame(target_ref):
         return source
     os.makedirs(os.path.dirname(reprojected_path), exist_ok=True)
+    if Path(reprojected_path).is_symlink():
+        Path(reprojected_path).unlink()
     result = gdal.Warp(
         str(reprojected_path),
         source,

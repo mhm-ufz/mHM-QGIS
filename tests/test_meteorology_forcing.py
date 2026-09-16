@@ -131,6 +131,56 @@ def test_cumulative_hourly_cross_file_and_chunk_boundaries(tmp_path):
         assert ds.time_bnds[0, 0] == np.datetime64("2001-01-01T00")
 
 
+@pytest.mark.parametrize("variable,source,method,expected", [
+    ("tavg", "t2m", "Average", 11.5),
+    ("tmin", "t2m", "Minimum", 0.0),
+    ("tmax", "t2m", "Maximum", 23.0),
+    ("pre", "pre", "Sum", 276.0),
+])
+def test_hourly_values_are_aggregated_before_conversion(
+        tmp_path, variable, source, method, expected):
+    times = np.datetime64("2001-01-01T00") + np.arange(24) * np.timedelta64(1, "h")
+    values = np.broadcast_to(np.arange(24)[:, None, None], (24, 2, 2)).astype(float)
+    unit = "K" if variable.startswith("t") else "mm"
+    if unit == "K":
+        values += 273.15
+    _write_nc(tmp_path / "raw/values.nc", source, times=times, values=values, units=unit)
+    spec = MeteoFolderSpec(
+        variable, tmp_path / "raw", unit=unit, temporal_resolution="Hourly",
+        output_temporal_resolution="Daily", aggregation=method)
+    result = process_meteo_inputs([spec], tmp_path / "out", target())
+    with xr.open_dataset(result.outputs[variable]) as ds:
+        assert ds.sizes["time"] == 1
+        np.testing.assert_allclose(ds[variable], expected)
+
+
+def test_partial_output_interval_warns_and_is_written(tmp_path):
+    times = np.datetime64("2001-01-01T03") + np.arange(3) * np.timedelta64(1, "h")
+    _write_nc(tmp_path / "raw/pre.nc", "pre", times=times, units="mm")
+    messages = []
+    spec = MeteoFolderSpec(
+        "pre", tmp_path / "raw", unit="mm", temporal_resolution="Hourly",
+        output_temporal_resolution="Daily", aggregation="Sum")
+    result = process_meteo_inputs([spec], tmp_path / "out", target(), log=messages.append)
+    with xr.open_dataset(result.outputs["pre"]) as ds:
+        np.testing.assert_allclose(ds.pre, 3.0)
+    assert any("partial daily interval" in message for message in messages)
+
+
+def test_era_hourly_precipitation_can_use_daily_maximum(tmp_path):
+    times = np.datetime64("2001-01-01T01") + np.arange(24) * np.timedelta64(1, "h")
+    values = np.broadcast_to(
+        (np.arange(1, 25) / 1000.0)[:, None, None], (24, 2, 2))
+    _write_nc(tmp_path / "raw/tp.nc", "tp", times=times, values=values, units="m")
+    spec = MeteoFolderSpec(
+        "pre", tmp_path / "raw", unit="m", temporal_resolution="Hourly",
+        output_temporal_resolution="Daily", aggregation="Maximum")
+    result = process_meteo_inputs([spec], tmp_path / "out", target())
+    with xr.open_dataset(result.outputs["pre"]) as ds:
+        assert ds.sizes["time"] == 1
+        np.testing.assert_allclose(ds.pre, 24.0)
+
+
 @pytest.mark.parametrize("variable,source,unit,value,expected", [
     ("tavg", "t2m", "K", 274.15, 1.),
     ("tmin", "tmin", "Celsius", -5., -5.),

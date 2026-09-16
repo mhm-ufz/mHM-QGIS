@@ -15,6 +15,7 @@ from ...handlers.store.paths import geometry_folder, master_data_folder, workspa
 from ...morphology.layers import lai
 from ...morphology.layers.advanced_l0 import missing_model_inputs, publish_model_inputs
 from ...morphology.layers.morph_input_nc import available_layers, write_morph_input_nc
+from ...morphology.layers.mask import write_morph_mask
 from . import PUBLICATION_STAGES
 from .delineation import domain_mask
 
@@ -127,7 +128,18 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         dem = copy_rasters(destination / "dem.nc", {"dem": layers["dem"]},
                            request.headers["L0"], reference_path=folder / "filled_dem.nc", task=task)
         _record(request.project_folder, dem)
-        return (Path(output), Path(dem))
+        latlon_path = Path(master_data_folder(request.project_folder)) / "latlon.nc"
+        morph_mask = write_morph_mask(
+            destination / "morph_mask.nc",
+            folder / "dem_derivatives_masked.nc",
+            latlon_path,
+        )
+        _record(request.project_folder, morph_mask)
+        from ...handlers.state.nml_outputs import register_morphology
+        register_morphology(
+            request.project_folder, bundle=output, dem=dem,
+            mask=morph_mask, latlon=latlon_path)
+        return (Path(output), Path(dem), Path(morph_mask))
 
     outputs = []
     for name, uri in _derivative_sources(folder, "_masked").items():

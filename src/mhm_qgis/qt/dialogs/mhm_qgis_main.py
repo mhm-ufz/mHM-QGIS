@@ -80,6 +80,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.project_folder = None  # Active domain root, passed to core APIs.
         self.project_directory = None  # Outer folder shown in the project selector.
         self._meteo_inputs = {}
+        self._observation_inputs = {}
         self.geometry_folder = None  # Subfolder for geometry outputs
         self.input_state_filename = "mhm_qgis_input_state.json"
         self._loading_input_state = False
@@ -92,6 +93,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._preferred_l1_resolution = None
         self._preferred_l11_resolution = None
         self._meteo_inspections = {}
+        self._observation_inspections = {}
         self._pending_meteo_run = None
         self._terminal_dialog = None
         self._thread_display_dialog = None
@@ -884,6 +886,9 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
         self.start_morphology_workflow("execute_all_meteo")
 
+    def start_execute_all_observation_processing(self):
+        return main_controller.start_execute_all_observations(self)
+
     def start_morphology_workflow(self, workflow_key):
         """Start a named morphology workflow in a background worker thread."""
         if workflow_key == "execute_all":
@@ -1381,6 +1386,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             },
             "land_cover_ready_source": self._land_cover_ready_source,
             "meteo_inputs": self.serialized_meteo_inputs(),
+            "observation_inputs": self._observation_inputs,
             "pour_point_outlet_id_field": self.selected_outlet_id_field(),
             "dem_domain": self.checkBox_DEMdomain.isChecked(),
             "domain_definition_type": self.comboBox_domainDefinitionType.currentText().strip(),
@@ -1507,6 +1513,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             self.restore_input_layers(state.get("layers", {}))
             self.restore_domain_inputs(state)
             self.restore_meteo_inputs(state.get("meteo_inputs", {}))
+            self._observation_inputs = dict(state.get("observation_inputs", {}))
+            main_controller.populate_observation_table(self)
             main_controller.restore_simulation_times(self)
             self.refresh_grid_resolution_controls()
         finally:
@@ -1556,8 +1564,11 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._l2_multiplier_user_selected = False
         self._meteo_inspections = {}
         self._meteo_inputs = {}
+        self._observation_inspections = {}
+        self._observation_inputs = {}
         self._grid_l0_info = None
         main_controller.populate_meteo_table(self)
+        main_controller.populate_observation_table(self)
         self.clear_precipitation_resolution_labels()
         self.checkBox_enableFolderSearch.blockSignals(True)
         self.checkBox_enableFolderSearch.setChecked(False)

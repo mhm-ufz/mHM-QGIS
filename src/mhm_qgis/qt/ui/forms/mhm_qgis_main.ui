@@ -1703,7 +1703,7 @@
              <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents</enum>
             </property>
             <attribute name="horizontalHeaderDefaultSectionSize">
-             <number>150</number>
+             <number>200</number>
             </attribute>
             <column>
              <property name="text">
@@ -1722,7 +1722,17 @@
             </column>
             <column>
              <property name="text">
-              <string>Temporal Resolution</string>
+              <string>Input Temporal Resolution</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Output Temporal Resolution</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Aggregation Type</string>
              </property>
             </column>
             <column>
@@ -1963,7 +1973,7 @@
         </layout>
        </item>
        <item>
-        <widget class="QGroupBox" name="groupBox_3">
+        <widget class="QGroupBox" name="groupBox_additionalObservation">
          <property name="title">
           <string>Additional Observations</string>
          </property>
@@ -1971,8 +1981,181 @@
           <bool>true</bool>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_addObservationVar">
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QComboBox" name="comboBox_observationVar">
+              <property name="currentIndex">
+               <number>-1</number>
+              </property>
+              <item>
+               <property name="text">
+                <string>Q_bkfl</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>et</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>sm</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>neutrons</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>twsa</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="pushButton_addObservationVar">
+              <property name="maximumSize">
+               <size>
+                <width>30</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>+</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_addObservationVar">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QTableWidget" name="tableWidget_observationVarInputs">
+            <property name="midLineWidth">
+             <number>-4</number>
+            </property>
+            <property name="sizeAdjustPolicy">
+             <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents</enum>
+            </property>
+            <attribute name="horizontalHeaderDefaultSectionSize">
+             <number>200</number>
+            </attribute>
+            <column>
+             <property name="text">
+              <string>Variable</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Folder Path</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Glob Definition</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Input Temporal Resolution</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Output Temporal Resolution</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Aggregation Type</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Unit</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Edit</string>
+             </property>
+            </column>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_runObservation">
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="label_runObservation">
+              <property name="text">
+               <string>Run Observation Data Preparation:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_runObservation">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QPushButton" name="pushButton_executeAllObservation">
+              <property name="minimumSize">
+               <size>
+                <width>25</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>25</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>Prepare all gridded observations on the common L2 grid</string>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
         </widget>
        </item>
        <item>
@@ -2068,7 +2251,54 @@
         <number>4</number>
        </property>
        <item>
-        <widget class="QGroupBox" name="groupBox">
+        <layout class="QHBoxLayout" name="horizontalLayout_nmlFinal">
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="label_nmlFinal">
+           <property name="text">
+            <string>Edit Configuration Namelists:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_editNmlsFinal">
+           <property name="maximumSize">
+            <size>
+             <width>23</width>
+             <height>23</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Edit final configuration namelists</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset>
+             <normaloff>Resources/write.png</normaloff>Resources/write.png</iconset>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_nmlFinal">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="groupBox_editCalibrationNamelists">
          <property name="title">
           <string>Calibration</string>
          </property>
@@ -2080,19 +2310,19 @@
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_6">
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout">
+           <layout class="QHBoxLayout" name="horizontalLayout_optimizationOptions">
             <property name="topMargin">
              <number>0</number>
             </property>
             <item>
-             <widget class="QLabel" name="label_2">
+             <widget class="QLabel" name="label_optimizationOptions">
               <property name="text">
                <string>Optimization Options:</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_edit_nmls_2">
+             <widget class="QPushButton" name="pushButton_editOptimizationOptions">
               <property name="maximumSize">
                <size>
                 <width>23</width>
@@ -2100,7 +2330,7 @@
                </size>
               </property>
               <property name="toolTip">
-               <string>Write all morphological layers</string>
+               <string>Edit optimization options</string>
               </property>
               <property name="text">
                <string/>
@@ -2112,7 +2342,7 @@
              </widget>
             </item>
             <item>
-             <spacer name="horizontalSpacer_2">
+             <spacer name="horizontalSpacer_optimizationOptions">
               <property name="orientation">
                <enum>Qt::Orientation::Horizontal</enum>
               </property>
@@ -2127,19 +2357,19 @@
            </layout>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_5">
+           <layout class="QHBoxLayout" name="horizontalLayout_parameterOptions">
             <property name="topMargin">
              <number>0</number>
             </property>
             <item>
-             <widget class="QLabel" name="label_3">
+             <widget class="QLabel" name="label_parameterOptions">
               <property name="text">
                <string>Parameter Options:</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_edit_nmls_3">
+             <widget class="QPushButton" name="pushButton_editParameterOptions">
               <property name="maximumSize">
                <size>
                 <width>23</width>
@@ -2147,7 +2377,7 @@
                </size>
               </property>
               <property name="toolTip">
-               <string>Write all morphological layers</string>
+               <string>Edit parameter options</string>
               </property>
               <property name="text">
                <string/>
@@ -2159,7 +2389,7 @@
              </widget>
             </item>
             <item>
-             <spacer name="horizontalSpacer_3">
+             <spacer name="horizontalSpacer_parameterOptions">
               <property name="orientation">
                <enum>Qt::Orientation::Horizontal</enum>
               </property>
@@ -2177,7 +2407,7 @@
         </widget>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_L0_2" stretch="0,0,0">
+        <layout class="QHBoxLayout" name="horizontalLayout_run_mHM" stretch="0,0,0">
          <item>
           <widget class="QLabel" name="label_run_mHM">
            <property name="minimumSize">
@@ -2198,7 +2428,7 @@
           </widget>
          </item>
          <item>
-          <spacer name="horizontalSpacer_L0_2">
+          <spacer name="horizontalSpacer_run_mHM">
            <property name="orientation">
             <enum>Qt::Orientation::Horizontal</enum>
            </property>

@@ -117,6 +117,8 @@ def publish_model_inputs(
                 log(f"Skipping unexpected staged file: {path.name}")
             continue
         else:
+            if target.is_symlink():
+                target.unlink()
             shutil.copy2(path, target)
         published.append(target)
         if log:

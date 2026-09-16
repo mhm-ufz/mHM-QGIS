@@ -74,7 +74,11 @@ def create_project_structure(dialog):
             if prompt.exec() != QDialog.DialogCode.Accepted:
                 return
             path = prompt.path
-            path.mkdir(parents=True)
+            if prompt.source_path:
+                from ...core.handlers.store.clone import clone_domain_inputs
+                clone_domain_inputs(prompt.source_path, path)
+            else:
+                path.mkdir(parents=True)
         else:
             path = domain_folder(directory, name)
         from ...core.handlers.store.layout import input_state_path
@@ -271,19 +275,117 @@ def edit_meteo_input(dialog, variable=None):
 
 def populate_meteo_table(dialog):
     """Render one editable row per saved variable without rescanning."""
+    _populate_forcing_table(
+        dialog.tableWidget_meteoInputs, dialog._meteo_inputs,
+        lambda key: edit_meteo_input(dialog, key))
+
+
+def populate_observation_table(dialog):
+    """Render configured gridded observations without rescanning."""
+    table = getattr(dialog, "tableWidget_observationVarInputs", None)
+    if table is not None:
+        _populate_forcing_table(
+            table, dialog._observation_inputs,
+            lambda key: edit_observation_input(dialog, key))
+
+
+def _populate_forcing_table(table, inputs, edit):
     from qgis.PyQt.QtWidgets import QPushButton, QTableWidgetItem
-    table = dialog.tableWidget_meteoInputs
-    table.setRowCount(len(dialog._meteo_inputs))
-    for row, (variable, spec) in enumerate(dialog._meteo_inputs.items()):
-        for column, text in enumerate((variable, spec["folder"], spec["pattern"],
-                                       spec["temporal_resolution"], spec["unit"])):
+    table.setRowCount(len(inputs))
+    for row, (variable, spec) in enumerate(inputs.items()):
+        for column, text in enumerate((
+                variable, spec["folder"], spec["pattern"],
+                spec["temporal_resolution"],
+                spec.get("output_temporal_resolution") or spec["temporal_resolution"],
+                spec.get("aggregation") or "<None>", spec["unit"])):
             item = QTableWidgetItem(str(text))
             from qgis.PyQt.QtCore import Qt
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             table.setItem(row, column, item)
         button = QPushButton("Edit", table)
-        button.clicked.connect(lambda _checked=False, key=variable: edit_meteo_input(dialog, key))
-        table.setCellWidget(row, 5, button)
+        button.clicked.connect(lambda _checked=False, key=variable: edit(key))
+        table.setCellWidget(row, 7, button)
+
+
+def edit_observation_input(dialog, variable=None):
+    """Collect and inspect one L2 gridded observation."""
+    from dataclasses import asdict, replace
+    from functools import partial
+    from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
+
+    if not _ensure_project_folder(dialog) or domain_switch_busy(dialog):
+        return
+    variable = variable or dialog.comboBox_observationVar.currentText()
+    if not variable:
+        QMessageBox.warning(dialog, "Observation input", "Select a variable first.")
+        return
+    prompt = MeteoVarDetailsDialog(
+        variable, dialog.project_directory,
+        dict(dialog._observation_inputs.get(variable, {})), dialog)
+    if prompt.exec() != QDialog.DialogCode.Accepted:
+        return
+    spec = replace(prompt.spec, crs=dialog.selected_meteo_crs() or None)
+
+    def scanned(metadata):
+        data = asdict(spec)
+        data["folder"] = str(spec.folder)
+        dialog._observation_inputs[variable] = data
+        dialog._observation_inspections[variable] = metadata
+        populate_observation_table(dialog)
+        dialog.save_input_state()
+
+    dialog.task_coordinator.submit(
+        f"observation-scan-{variable}", f"Scan {variable}",
+        partial(inspect_meteo_folder_cached, dialog.project_folder, spec),
+        controls=(dialog.tabWidget_steps, dialog.pushButton_BrowseProjectFolder),
+        on_success=scanned,
+        on_error=lambda error: QMessageBox.warning(dialog, "Observation scan", str(error)),
+        resource="morphology-files")
+
+
+def selected_observation_specs(dialog):
+    return tuple(
+        MeteoFolderSpec(**dict(value, crs=dialog.selected_meteo_crs() or None)).normalized()
+        for value in dialog._observation_inputs.values())
+
+
+def start_execute_all_observations(dialog):
+    """Prepare every configured observation through the shared L2 API."""
+    from functools import partial
+    from ...core.executions.observations import ObservationRun, prepare
+    from ...core.grid import target_grid_from_header
+
+    try:
+        specs = selected_observation_specs(dialog)
+        if not specs:
+            raise ValueError("Configure at least one additional observation.")
+        metadata = require_common_grid(dialog)
+        run = ObservationRun(
+            Path(dialog.project_folder), specs,
+            target_grid_from_header(metadata["l2_header"], dialog.selected_meteo_crs()),
+            inspections={key: dialog._observation_inspections[key]
+                         for key in dialog._observation_inputs
+                         if key in dialog._observation_inspections} or None)
+        processing.mark_workflow(dialog.project_folder, "execute_all_observations", "running")
+    except (OSError, ValueError) as error:
+        QMessageBox.warning(dialog, "Observation setup", str(error))
+        return False
+
+    def completed(_result):
+        processing.mark_workflow(
+            dialog.project_folder, "execute_all_observations", "completed")
+        dialog.log_message("Observation preparation completed.")
+
+    def failed(error):
+        processing.mark_workflow(
+            dialog.project_folder, "execute_all_observations", "failed", str(error))
+        QMessageBox.warning(dialog, "Observation setup", str(error))
+
+    return dialog.task_coordinator.submit(
+        "execute-all-observations", "Prepare observations",
+        partial(prepare, run),
+        controls=(dialog.tabWidget_steps, dialog.pushButton_executeAllObservation),
+        on_success=completed, on_error=failed, resource="morphology-files")
 
 
 def precipitation_scanned(dialog, metadata):
@@ -393,9 +495,12 @@ def handle_version_changed(dialog) -> None:
             refresh()
     dialog.save_input_state()
     restore_simulation_times(dialog)
+    group = getattr(dialog, "groupBox_editCalibrationNamelists", None)
+    if group is not None:
+        group.setEnabled(selected_version(dialog).startswith("6"))
 
 
-def edit_namelists(dialog) -> bool:
+def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
     """Open nml-tools with mhm_qgis paths, values, and dimensions."""
     if not _ensure_project_folder(dialog):
         return False
@@ -404,8 +509,9 @@ def edit_namelists(dialog) -> bool:
 
         version = selected_version(dialog)
         from ...core.handlers.state import nml_settings
-        nml_settings.update_section(dialog.project_folder, "time", simulation_times(dialog))
-        nml_settings.sync_domain_settings(dialog.project_folder)
+        if update_inputs:
+            nml_settings.update_section(dialog.project_folder, "time", simulation_times(dialog))
+            nml_settings.sync_domain_settings(dialog.project_folder)
         workspace = workspace_folder(dialog.project_folder)
         schemas_dir = Path(plugin_root()) / "nml-schemas" / version_key(version)
         ensure_project_structure(dialog.project_folder, version)
@@ -417,8 +523,10 @@ def edit_namelists(dialog) -> bool:
         launch_profile_editor(
             schemas_dir=schemas_dir,
             output_dir=workspace,
-            initial_values=build_initial_values(version, dialog),
+            initial_values=(build_initial_values(version, dialog)
+                            if update_inputs else None),
             initial_dimensions=build_dimensions(version, dialog),
+            file_profiles=file_profiles,
             log=dialog.log_message,
         )
         return True

@@ -1,4 +1,4 @@
-"""Independent forcing variables, prepared at their native input cadence."""
+"""Independent forcing variables, streamed at a selected output cadence."""
 from __future__ import annotations
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -26,8 +26,16 @@ from .types import (
 )
 
 
-from .temporal import (VARIABLES, validate_spec, normalize_unit, time_index,
-                       interval_bounds, convert_values)
+from .temporal import (
+    VARIABLES,
+    convert_units,
+    deaccumulate_values,
+    interval_bounds,
+    normalize_unit,
+    output_period,
+    time_index,
+    validate_spec,
+)
 
 
 @dataclass(frozen=True)
@@ -75,7 +83,7 @@ def inspect_meteo_inputs(inputs):
 
 def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
                          log=None, inspections=None):
-    """Stream inputs onto L2 without aggregating or disaggregating time."""
+    """Stream inputs onto L2, optionally aggregating to a coarser cadence."""
     target_grid.validate()
     specs = [spec.normalized() for spec in inputs]
     if not specs or len({spec.kind for spec in specs}) != len(specs):
@@ -92,7 +100,7 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
             _validate_target_coverage(metadata, target_grid)
             output = stage / (f"{spec.kind}.nc" if flat_layout else f"{spec.kind}/{spec.kind}.nc")
             count = 0
-            for block in _prepared_blocks(spec, metadata, target_grid):
+            for block in _prepared_blocks(spec, metadata, target_grid, log=log):
                 assert_matches_header(block, spec.kind, target_grid.header)
                 _write_time_block(block, spec.kind, output, count)
                 count += block.sizes["time"]
@@ -107,17 +115,20 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
                 assert_header_file_matches(header, target_grid.header)
                 headers[spec.kind] = header
             if log:
-                log(f"{spec.kind}: prepared {count} {spec.temporal_resolution.lower()} intervals.")
+                log(f"{spec.kind}: prepared {count} {spec.output_temporal_resolution.lower()} intervals.")
         return _publish_meteo_result(MeteoForcingResult(outputs, headers, files_used),
                                      root, flat_layout=flat_layout)
 
 
-def _prepared_blocks(spec, metadata, target):
-    """Keep memory bounded to a time block and one previous accumulation plane."""
+def _prepared_blocks(spec, metadata, target, *, log=None):
+    """Aggregate one interval at a time, then convert and align it."""
     import numpy as np
     import xarray as xr
     previous = None
+    pending = None
+    last_path = None
     for path in metadata.files:
+        last_path = path
         with _open_dataset(path) as ds:
             variable = _find_variable(ds, spec.kind)
             raw = ds[variable]
@@ -135,18 +146,95 @@ def _prepared_blocks(spec, metadata, target):
             for start in range(0, raw.sizes["time"], block_size):
                 chunk = raw.isel(time=slice(start, start + block_size)).load()
                 chunk_bounds = bounds[start:start + block_size]
-                values, previous = convert_values(chunk.values, chunk_bounds, spec, variable, previous)
-                chunk = _resample_ready(chunk.copy(data=values), ds, spec.crs, target, np, xr).load()
-                chunk.name = spec.kind
-                chunk.attrs = {"units": VARIABLES[spec.kind][1],
-                               "long_name": spec.kind, "input_cadence": spec.temporal_resolution}
-                output = chunk.to_dataset()
-                output["time_bnds"] = (("time", "bnds"), chunk_bounds)
-                output["time"].attrs = {"standard_name": "time", "axis": "T", "bounds": "time_bnds"}
-                output["lat"].attrs = {"standard_name": "latitude", "units": "degrees_north"}
-                output["lon"].attrs = {"standard_name": "longitude", "units": "degrees_east"}
-                output.attrs = {"Conventions": "CF-1.8", "history": "Prepared by mhm_qgis; input cadence preserved"}
-                yield _attach_target_coordinates(output, spec.kind, target)
+                values, previous = deaccumulate_values(
+                    chunk.values, chunk_bounds, spec, previous)
+                if spec.output_temporal_resolution == spec.temporal_resolution:
+                    converted = convert_units(values, chunk_bounds, spec, variable)
+                    yield _prepared_dataset(
+                        chunk.copy(data=converted), chunk_bounds, ds, spec,
+                        target, np, xr)
+                    continue
+                for number, plane in enumerate(values):
+                    expected = output_period(
+                        chunk_bounds[number], spec.output_temporal_resolution)
+                    if pending is not None and pending["expected"] != expected:
+                        yield _finish_interval(pending, ds, spec, target, np, xr, log)
+                        pending = None
+                    if pending is None:
+                        pending = {
+                            "expected": expected,
+                            "start": chunk_bounds[number, 0],
+                            "end": chunk_bounds[number, 1],
+                            "value": np.where(np.isfinite(plane), plane, 0.0),
+                            "count": np.isfinite(plane).astype("int32"),
+                            "template": chunk.isel(time=slice(number, number + 1)),
+                            "source": variable,
+                            "input_seconds": float(
+                                (chunk_bounds[number, 1] - chunk_bounds[number, 0])
+                                / np.timedelta64(1, "s")),
+                        }
+                    else:
+                        _accumulate(pending, plane, spec.aggregation, np)
+                        pending["end"] = chunk_bounds[number, 1]
+    if pending is not None and last_path is not None:
+        with _open_dataset(last_path) as ds:
+            yield _finish_interval(pending, ds, spec, target, np, xr, log)
+
+
+def _finish_interval(pending, ds, spec, target, np, xr, log):
+    actual = np.asarray([[pending["start"], pending["end"]]], dtype="datetime64[ns]")
+    if tuple(actual[0]) != pending["expected"] and log:
+        log(
+            f"WARNING: {spec.kind}: partial {spec.output_temporal_resolution.lower()} "
+            f"interval {actual[0, 0]} to {actual[0, 1]}; aggregating available values."
+        )
+    values = _aggregate_result(pending, spec.aggregation, np)[None, ...]
+    values = convert_units(
+        values, actual, spec, pending["source"],
+        input_seconds=pending["input_seconds"])
+    template = pending["template"].assign_coords(time=[actual[0, 0]]).copy(data=values)
+    return _prepared_dataset(template, actual, ds, spec, target, np, xr)
+
+
+def _accumulate(pending, plane, method, np):
+    valid = np.isfinite(plane)
+    if method in {"Average", "Sum"}:
+        pending["value"] += np.where(valid, plane, 0.0)
+    elif method == "Minimum":
+        pending["value"] = np.where(
+            pending["count"] == 0, plane, np.fmin(pending["value"], plane))
+    else:
+        pending["value"] = np.where(
+            pending["count"] == 0, plane, np.fmax(pending["value"], plane))
+    pending["count"] += valid
+
+
+def _aggregate_result(pending, method, np):
+    if method == "Average":
+        return np.divide(
+            pending["value"], pending["count"],
+            out=np.full_like(pending["value"], np.nan),
+            where=pending["count"] > 0)
+    return np.where(pending["count"] > 0, pending["value"], np.nan)
+
+
+def _prepared_dataset(chunk, bounds, ds, spec, target, np, xr):
+    chunk = _resample_ready(chunk, ds, spec.crs, target, np, xr).load()
+    chunk.name = spec.kind
+    chunk.attrs = {
+        "units": VARIABLES[spec.kind][1],
+        "long_name": spec.kind,
+        "input_cadence": spec.temporal_resolution,
+        "output_cadence": spec.output_temporal_resolution,
+    }
+    output = chunk.to_dataset()
+    output["time_bnds"] = (("time", "bnds"), bounds)
+    output["time"].attrs = {
+        "standard_name": "time", "axis": "T", "bounds": "time_bnds"}
+    output["lat"].attrs = {"standard_name": "latitude", "units": "degrees_north"}
+    output["lon"].attrs = {"standard_name": "longitude", "units": "degrees_east"}
+    output.attrs = {"Conventions": "CF-1.8", "history": "Prepared by mhm_qgis"}
+    return _attach_target_coordinates(output, spec.kind, target)
 
 
 def _write_time_block(ds, variable, path, offset):

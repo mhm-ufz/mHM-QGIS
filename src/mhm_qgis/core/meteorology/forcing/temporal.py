@@ -1,4 +1,4 @@
-"""Variable units and time-interval conversions without changing input cadence."""
+"""Variable units and bounded-memory temporal aggregation."""
 from __future__ import annotations
 
 # Output name: source aliases, output unit, selectable input units.
@@ -6,15 +6,22 @@ VARIABLES = {
     "pre": (("pre", "tp", "total_precipitation", "Total_precipitation_surface_1_Hour_Accumulation"), "mm", ("mm", "m", "kg m-2", "kg m-2 s-1", "mm/day")),
     "pet": (("pet", "pev", "potential_evaporation"), "mm", ("mm", "m", "kg m-2", "kg m-2 s-1", "mm/day")),
     "tavg": (("tavg", "t2m", "2m_temperature", "Temperature_height_above_ground"), "Celsius", ("Celsius", "K")),
-    "tmin": (("tmin", "minimum_temperature"), "Celsius", ("Celsius", "K")),
-    "tmax": (("tmax", "maximum_temperature"), "Celsius", ("Celsius", "K")),
+    "tmin": (("tmin", "minimum_temperature", "t2m", "2m_temperature", "Temperature_height_above_ground"), "Celsius", ("Celsius", "K")),
+    "tmax": (("tmax", "maximum_temperature", "t2m", "2m_temperature", "Temperature_height_above_ground"), "Celsius", ("Celsius", "K")),
     "tann": (("tann", "annual_mean_temperature"), "Celsius", ("Celsius", "K")),
     "ssrd": (("ssrd", "surface_solar_radiation_downwards"), "W m-2", ("W m-2", "J m-2")),
     "strd": (("strd", "surface_thermal_radiation_downwards"), "W m-2", ("W m-2", "J m-2")),
     "eabs": (("eabs", "vapour_pressure", "vapor_pressure"), "Pa", ("Pa", "hPa", "kPa")),
     "windspeed": (("windspeed", "wind_speed"), "m s-1", ("m s-1", "km/h")),
+    # Additional observations are already expressed in their model units.
+    "Q_bkfl": (("Q_bkfl", "q_bkfl"), "m3 s-1", ("m3 s-1",)),
+    "et": (("et", "evapotranspiration"), "mm", ("mm",)),
+    "sm": (("sm", "soil_moisture"), "m3 m-3", ("m3 m-3",)),
+    "neutrons": (("neutrons",), "counts", ("counts",)),
+    "twsa": (("twsa", "tws"), "mm", ("mm",)),
 }
 CADENCES = {"Hourly": "h", "Daily": "D", "Monthly": "MS", "Yearly": "YS"}
+AGGREGATIONS = ("Average", "Sum", "Minimum", "Maximum")
 ERA_END_VARIABLES = {"tp", "total_precipitation", "pev", "potential_evaporation",
                      "ssrd", "strd", "surface_solar_radiation_downwards",
                      "surface_thermal_radiation_downwards"}
@@ -28,7 +35,8 @@ def normalize_unit(unit):
                "w/m2": "W m-2", "wm-2": "W m-2", "j/m2": "J m-2", "jm-2": "J m-2",
                "m/s": "m s-1", "ms-1": "m s-1", "kg/m2": "kg m-2",
                "kgm-2": "kg m-2", "kgm-2s-1": "kg m-2 s-1", "mmday-1": "mm/day",
-               "pa": "Pa", "hpa": "hPa", "kpa": "kPa"}
+               "pa": "Pa", "hpa": "hPa", "kpa": "kPa",
+               "m3s-1": "m3 s-1", "m3m-3": "m3 m-3", "counts": "counts"}
     return aliases.get(compact, compact)
 
 
@@ -36,6 +44,17 @@ def validate_spec(spec):
     """Reject unsupported units, cadence and cumulative combinations."""
     if spec.temporal_resolution not in CADENCES:
         raise ValueError(f"{spec.kind}: select the input temporal resolution.")
+    output = spec.output_temporal_resolution or spec.temporal_resolution
+    if output not in CADENCES:
+        raise ValueError(f"{spec.kind}: select the output temporal resolution.")
+    input_index = list(CADENCES).index(spec.temporal_resolution)
+    output_index = list(CADENCES).index(output)
+    if output_index < input_index:
+        raise ValueError("Output temporal resolution cannot be finer than input.")
+    if output_index == input_index and spec.aggregation:
+        raise ValueError("Aggregation must be <None> when input and output resolutions match.")
+    if output_index > input_index and spec.aggregation not in AGGREGATIONS:
+        raise ValueError("Select an aggregation type for the coarser output resolution.")
     unit = normalize_unit(spec.unit)
     if unit not in VARIABLES[spec.kind][2]:
         raise ValueError(f"{spec.kind}: select a supported unit: {', '.join(VARIABLES[spec.kind][2])}.")
@@ -46,6 +65,27 @@ def validate_spec(spec):
             raise ValueError("Accumulation cannot reset more often than the input sampling.")
         if unit not in ("m", "mm", "kg m-2", "J m-2"):
             raise ValueError("Cumulative data must be an amount, not a rate or temperature.")
+
+
+def output_period(bounds, cadence):
+    """Return the calendar interval containing one input interval."""
+    import numpy as np
+    import pandas as pd
+
+    start = pd.Timestamp(bounds[0])
+    if cadence == "Hourly":
+        period_start = start.floor("h")
+        period_end = period_start + pd.DateOffset(hours=1)
+    elif cadence == "Daily":
+        period_start = start.normalize()
+        period_end = period_start + pd.DateOffset(days=1)
+    elif cadence == "Monthly":
+        period_start = start.to_period("M").start_time
+        period_end = period_start + pd.DateOffset(months=1)
+    else:
+        period_start = start.to_period("Y").start_time
+        period_end = period_start + pd.DateOffset(years=1)
+    return np.datetime64(period_start, "ns"), np.datetime64(period_end, "ns")
 
 
 def time_index(values, cadence):
@@ -74,7 +114,12 @@ def interval_bounds(ds, time_name, spec, source_name):
     bounds_name = ds[time_name].attrs.get("bounds")
     if bounds_name and bounds_name in ds:
         bounds = np.asarray(ds[bounds_name].values).astype("datetime64[ns]")
-    elif spec.cumulative and source_name in ERA_END_VARIABLES:
+    elif source_name in ERA_END_VARIABLES and (
+            spec.cumulative or (
+                spec.aggregation in {"Minimum", "Maximum"}
+                and spec.temporal_resolution == "Hourly"
+                and spec.output_temporal_resolution == "Daily"
+            )):
         bounds = np.column_stack(((index - offset).values, index.values))
     elif spec.cumulative:
         raise ValueError("Cumulative input requires CF time bounds or a recognized ERA interval-end variable.")
@@ -91,11 +136,10 @@ def interval_bounds(ds, time_name, spec, source_name):
     return bounds
 
 
-def convert_values(values, bounds, spec, source_name, previous=None):
-    """Convert a time block to model units, retaining the last raw cumulative plane."""
+def deaccumulate_values(values, bounds, spec, previous=None):
+    """Return interval values while retaining the last cumulative plane."""
     import numpy as np
     import pandas as pd
-    unit = normalize_unit(spec.unit)
     result = np.asarray(values, dtype="float64").copy()
     if spec.cumulative:
         frequency = {"Hourly": "h", "Daily": "D", "Monthly": "M", "Yearly": "Y"}[spec.cumulative_resolution]
@@ -109,18 +153,28 @@ def convert_values(values, bounds, spec, source_name, previous=None):
                     raise ValueError("Cumulative data starts mid-cycle without its preceding sample.")
                 result[number] -= previous[1]
             previous = (group, raw, bounds[number, 1])
+    return result, previous
+
+
+def convert_units(values, bounds, spec, source_name, *, input_seconds=None):
+    """Convert already aggregated values to the model unit."""
+    import numpy as np
+
+    unit = normalize_unit(spec.unit)
+    result = np.asarray(values, dtype="float64").copy()
     seconds = (bounds[:, 1] - bounds[:, 0]) / np.timedelta64(1, "s")
     seconds = seconds.reshape((-1,) + (1,) * (result.ndim - 1))
+    source_seconds = float(input_seconds or seconds.reshape(-1)[0])
     if unit == "K":
         result -= 273.15
     elif unit == "m":
         result *= 1000.0
     elif unit == "kg m-2 s-1":
-        result *= seconds
+        result *= source_seconds if spec.aggregation == "Sum" else seconds
     elif unit == "mm/day":
-        result *= seconds / 86400.0
+        result *= (source_seconds if spec.aggregation == "Sum" else seconds) / 86400.0
     elif unit == "J m-2":
-        result /= seconds
+        result /= seconds if spec.aggregation == "Sum" else source_seconds
     elif unit == "hPa":
         result *= 100.0
     elif unit == "kPa":
@@ -133,4 +187,10 @@ def convert_values(values, bounds, spec, source_name, previous=None):
         raise ValueError(f"{spec.kind}: negative interval amounts; check cumulative settings or source sign.")
     if spec.kind in {"pre", "pet"}:
         np.maximum(result, 0, out=result)
-    return result, previous
+    return result
+
+
+def convert_values(values, bounds, spec, source_name, previous=None):
+    """Backward-compatible native-cadence conversion."""
+    result, previous = deaccumulate_values(values, bounds, spec, previous)
+    return convert_units(result, bounds, spec, source_name), previous

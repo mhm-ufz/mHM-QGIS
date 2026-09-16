@@ -64,7 +64,8 @@ decision.
     variables and native-cadence streaming. `forcing/temporal.py` validates units,
     time axes and cumulative reset intervals. Existing NetCDF writers are reused.
   - `executions/`: canonical workflow plans and commands. `executions/morphology/`
-    is the sole definition of Execute All and its publication ordering.
+    is the sole definition of Execute All and its publication ordering;
+    `executions/observations/` reuses the forcing pipeline for L2 gridded observations.
 - `applications/`: one handler per external package. Processing calls into `mhm_tools`,
   `nml_tools` and `pyflwdir` go through `mhm_tools_handler.py`,
   `nml_tools_handler.py` and `pyflwdir_handler.py`; their heavy imports stay inside
@@ -215,6 +216,10 @@ Four JSON files are used by the plugin.
   Legacy root-level `mhm-qgis` and `mhm-plugin` layouts stay untouched; do not call
   `migrate_workspace()` automatically. Unsafe names, files and symlinks are rejected.
   Do not switch setups while background work is running.
+- A new domain may clone another domain's mutable state and namelists. Prepared files
+  under `data/`, `data_raw/` and `Z Temp/` are relative symlinks; writers must replace
+  the link itself before writing so the source domain remains unchanged. `output/` and
+  `restart/` are never cloned.
 - Configuration lives in `tabWidget_steps` and `stackedWidget_configuration`.
   Only `page_singleDomain` (first work-type option) is implemented; other modes are
   disabled. Do not restore the removed steps stacked widget.
@@ -229,9 +234,11 @@ Four JSON files are used by the plugin.
 - Each variable declares folder/glob, unit, input cadence, cumulative flag and reset
   cadence. Metadata must agree. The reset combo is enabled only for cumulative input.
   No temperature triplet or dedicated PET workflow remains.
-- Output cadence and timestamps equal input cadence (hourly/daily/monthly/yearly).
-  Unit conversion, deaccumulation, nearest-grid alignment and padding happen only
-  during Execute All Meteo. Cumulative sequences must be continuous across files;
+- Output cadence is the input cadence or a coarser hourly/daily/monthly/yearly cadence.
+  Coarser output requires Average, Sum, Minimum or Maximum aggregation; partial
+  boundary intervals warn and use available values. Deaccumulation, temporal
+  aggregation, unit conversion, nearest-grid alignment and padding happen only
+  during execution, in that order. Cumulative sequences must be continuous across files;
   missing prefixes or ambiguous interval conventions fail rather than guessing.
   CF bounds describe intervals; recognized ERA cumulative variables use interval ends.
   Fingerprints include all options and files. Display selects actual timestamps,
@@ -263,6 +270,8 @@ Four JSON files are used by the plugin.
   full coverage with fill value 0. They are never watershed-masked.
 - v5 writes the final master `dem.asc`, slope, aspect, facc, fdir and optional
   `idgauges.asc`; v6 writes master `input.nc` and a single-variable `dem.nc`.
+  v6 also writes `data/morph/morph_mask.nc` with `mask`, `lat` and `lon`, and registers
+  prepared paths/variable names in `nml-settings.json` for nml-tools.
   There is no per-outlet output tree or domain-link step. Existing old folders are
   left untouched. Writers atomically replace any old destination symlink.
 
@@ -330,8 +339,7 @@ Four JSON files are used by the plugin.
   reprojected forcing is resampled (nearest-neighbour). Check every output against
   the saved L2 header before publication.
 - Generic forcing streams one selected variable in bounded time blocks, retaining
-  only one preceding cumulative plane across files. It does not aggregate hourly
-  inputs into daily means, minima or maxima; configure each desired variable.
+  only one preceding cumulative plane and one output-interval accumulator across files.
 - Meteorology reuse checks both the input-file/selection fingerprint and target L2
   grid, as well as output existence. PET is required only when selected.
 - Model inputs live under each named domain’s `data/`. Legacy path helpers retain

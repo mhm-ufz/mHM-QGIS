@@ -359,6 +359,8 @@ def prepare_lai_file(
     from mhm_tools.pre.format_lai import format_lai_netcdf_file
 
     output = Path(output_file)
+    if output.is_symlink():
+        output.unlink()
     with capture_messages(log):
         result = format_lai_netcdf_file(
             input_file,
@@ -388,10 +390,13 @@ def copy_lai_file_to_grid(
     """Window-copy aligned LAI through mHM-tools."""
     from mhm_tools.pre.format_lai import copy_lai_netcdf_to_grid
 
+    output = Path(output_file)
+    if output.is_symlink():
+        output.unlink()
     with capture_messages(log):
         result = copy_lai_netcdf_to_grid(
             input_file,
-            output_file,
+            output,
             target_header,
             crs,
             description,
@@ -496,6 +501,8 @@ def create_latlon_file(
 
     output = Path(out_file)
     output.parent.mkdir(parents=True, exist_ok=True)
+    if output.is_symlink():
+        output.unlink()
     with capture_messages(log):
         create_latlon(
             out_file=output,

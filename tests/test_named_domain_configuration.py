@@ -6,7 +6,11 @@ from types import SimpleNamespace
 import pytest
 
 from mhm_qgis.core.handlers.state import nml_settings, processing
+from mhm_qgis.core.handlers.state.nml_outputs import (
+    register_meteo, register_morphology, register_observations,
+)
 from mhm_qgis.core.handlers.store import layout, paths
+from mhm_qgis.core.handlers.store.clone import clone_domain_inputs
 from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
 from mhm_qgis.vSpecific import build_initial_values
 
@@ -43,6 +47,62 @@ def test_domain_paths_states_and_namelists_are_isolated(tmp_path, version):
 def test_domain_names_cannot_escape_or_replace_legacy_folders(tmp_path, name):
     with pytest.raises(ValueError):
         paths.domain_folder(tmp_path, name)
+
+
+def test_clone_domain_copies_state_and_links_inputs(tmp_path):
+    source = paths.domain_folder(tmp_path, "Alpine")
+    target = paths.domain_folder(tmp_path, "Valley")
+    for relative in ("data/morph/input.nc", "data_raw/raw.nc", "Z Temp/work.nc",
+                     "output/result.nc", "restart/state.nc"):
+        path = source / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(relative)
+    nml_settings.save_settings(source, {"source": str(source / "data/morph/input.nc")})
+    (source / "settings.yaml").write_text("grid_alignment_gap_limit: 0.1\n")
+
+    clone_domain_inputs(source, target)
+
+    assert nml_settings.load_settings(target)["source"] == str(target / "data/morph/input.nc")
+    assert not (target / "nml-settings.json").is_symlink()
+    for relative in ("data/morph/input.nc", "data_raw/raw.nc", "Z Temp/work.nc"):
+        linked = target / relative
+        assert linked.is_symlink()
+        assert linked.read_text() == relative
+    assert not (target / "output").exists()
+    assert not (target / "restart").exists()
+    (target / "data/morph/input.nc").unlink()
+    (target / "data/morph/input.nc").write_text("replacement")
+    assert (source / "data/morph/input.nc").read_text() == "data/morph/input.nc"
+
+
+def test_v6_prepared_outputs_are_registered_for_namelists(tmp_path):
+    root = paths.domain_folder(tmp_path, "Alpine")
+    root.mkdir(parents=True)
+    Path(layout.input_state_path(root)).write_text('{"mhm_version": "6"}')
+    register_morphology(
+        root, bundle=root / "data/morph/input.nc", dem=root / "data/morph/dem.nc",
+        mask=root / "data/morph/morph_mask.nc", latlon=root / "data/latlon.nc")
+    register_meteo(root, {"pet": root / "data/meteo/pet.nc"})
+    register_meteo(root, {"pre": root / "data/meteo/pre.nc"},
+                   root / "data/meteo/mask.nc")
+    observation = MeteoFolderSpec(
+        "sm", tmp_path, temporal_resolution="Hourly",
+        output_temporal_resolution="Daily", aggregation="Average", unit="m3 m-3",
+    ).normalized()
+    register_observations(root, {"sm": root / "data/observation/sm.nc"},
+                          (observation,))
+
+    values = build_initial_values("6", SimpleNamespace(project_folder=root))["main"]
+    inputs = values["config_input"]
+    assert inputs["morph_mask_path"] == ["data/morph/morph_mask.nc"]
+    assert inputs["morph_mask_var"] == ["mask"]
+    assert inputs["pre_path"] == ["data/meteo/pre.nc"]
+    assert inputs["pre_var"] == ["pre"]
+    registered = nml_settings.load_settings(root)["namelist_values"]["main"]["config_input"]
+    assert "pet_path" not in registered
+    observations = values["config_observations"]
+    assert observations["sm_path"] == ["data/observation/sm.nc"]
+    assert observations["sm_time_step"] == -1
 
 
 def test_switching_domains_restores_only_the_selected_setup(tmp_path, monkeypatch):
@@ -101,7 +161,7 @@ def test_meteo_dialog_cancel_and_edit_do_not_prepare_data(tmp_path, monkeypatch)
     monkeypatch.setattr(MeteoVarDetailsDialog, "exec", cancel)
     monkeypatch.setattr(dialog.task_coordinator, "submit", lambda *a, **k: pytest.fail("Cancel started scanning"))
     main.populate_meteo_table(dialog)
-    dialog.tableWidget_meteoInputs.cellWidget(0, 5).click()
+    dialog.tableWidget_meteoInputs.cellWidget(0, 7).click()
     assert dialog._meteo_inputs["tavg"] == asdict(spec)
     assert not list(Path(dialog.project_folder).rglob("*.nc"))
     dialog.close()

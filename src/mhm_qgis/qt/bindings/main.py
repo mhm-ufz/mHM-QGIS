@@ -76,6 +76,10 @@ def bind(dialog):
     dialog.comboBox_mhmWorkType.currentIndexChanged.connect(lambda: main.work_type_changed(dialog))
     dialog.pushButton_scanPrecipitationFiles.clicked.connect(lambda: main.scan_precipitation(dialog))
     dialog.pushButton_addMeteoInput.clicked.connect(lambda: main.edit_meteo_input(dialog))
+    dialog.pushButton_addObservationVar.clicked.connect(
+        lambda: main.edit_observation_input(dialog))
+    dialog.pushButton_executeAllObservation.clicked.connect(
+        dialog.start_execute_all_observation_processing)
     dialog.lineEdit_precipitationGlobDefinition.textChanged.connect(
         lambda: main.handle_meteo_input_changed(dialog, "precipitation"))
     for name in ("simulationStart", "evaluationStart", "simulationEnd"):
@@ -259,6 +263,19 @@ def bind(dialog):
         "Edit Namelists",
         dialog.edit_namelists,
     )
+    for button, label, profiles, update in (
+        (dialog.pushButton_editNmlsFinal, "Edit Final Namelists", None, True),
+        (dialog.pushButton_editOptimizationOptions, "Edit Optimization Options",
+         {"main": ["config_optimize"]}, False),
+        (dialog.pushButton_editParameterOptions, "Edit Parameter Options",
+         {"parameter": []}, False),
+    ):
+        dialog.connect_processor_button(
+            button, label,
+            lambda p=profiles, u=update: main.edit_namelists(
+                dialog, p, update_inputs=u))
+    dialog.groupBox_editCalibrationNamelists.setEnabled(
+        main.selected_version(dialog).startswith("6"))
     run_mhm_button = dialog.pushButton_execute_mHM
     if run_mhm_button is not None:
         run_mhm_button.setToolTip("Run mHM")

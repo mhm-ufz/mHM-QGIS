@@ -16,6 +16,8 @@ _KINDS = {
     "temperature": "tavg",
     **{name: name for name in ("tavg", "tmin", "tmax", "tann", "ssrd", "strd", "eabs", "windspeed")},
     "pet": "pet",
+    "q_bkfl": "Q_bkfl",
+    **{name: name for name in ("et", "sm", "neutrons", "twsa")},
 }
 
 
@@ -50,6 +52,8 @@ class MeteoFolderSpec:
     crs: str | None = None
     pattern: str = "*.nc"
     temporal_resolution: str = "Daily"
+    output_temporal_resolution: str = ""
+    aggregation: str = ""
     unit: str = ""
     cumulative: bool = False
     cumulative_resolution: str = ""
@@ -62,6 +66,15 @@ class MeteoFolderSpec:
             crs=self.crs,
             pattern=self.pattern,
             temporal_resolution=self.temporal_resolution,
+            output_temporal_resolution=(
+                self.output_temporal_resolution or self.temporal_resolution
+            ),
+            aggregation=(
+                self.aggregation
+                if (self.output_temporal_resolution or self.temporal_resolution)
+                != self.temporal_resolution
+                else ""
+            ),
             unit=self.unit,
             cumulative=self.cumulative,
             cumulative_resolution=self.cumulative_resolution if self.cumulative else "",
