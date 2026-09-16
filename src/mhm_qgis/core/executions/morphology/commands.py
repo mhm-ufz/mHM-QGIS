@@ -19,6 +19,7 @@ from ...handlers.state.cache import (
     fingerprint,
     outputs_newer_than_inputs,
     outputs_present,
+    load_state,
     store_payload,
 )
 from ...handlers.store.paths import geometry_folder
@@ -97,6 +98,8 @@ def reusable_stage(project_folder, stage, digest, *, inputs=(), outputs=()):
     payload = cached_payload(project_folder, "stages", stage, digest)
     if outputs_present(payload):
         return payload
+    if stage in load_state(project_folder).get("stages", {}):
+        return None  # A changed configuration cannot adopt its own stale outputs.
     candidates = [str(path) for path in outputs if path]
     if (
         not candidates

@@ -115,17 +115,18 @@ def assign_domain_ids(state: Dict[str, Any]) -> Dict[str, Any]:
         state["outlets"] = {}
         outlets = state["outlets"]
     state["outlet_order"] = ordered_outlet_ids(state)
-    domain_id = 1
+    selected = False
     for outlet_id in state["outlet_order"]:
         record = outlets.get(outlet_id)
         if not isinstance(record, dict):
             continue
         if _enabled(record, "is_domain", "domain"):
-            record["domain_id"] = domain_id
-            domain_id += 1
+            record["domain_id"] = 1
+            selected = True
         else:
             record.pop("domain_id", None)
-    state["dem_domain_id"] = domain_id if state.get("dem_domain") is True else None
+    state["dem_domain"] = not selected
+    state["dem_domain_id"] = 1 if not selected else None
     return state
 
 
@@ -326,8 +327,8 @@ def active_domain_records(state: Mapping[str, Any]) -> List[Dict[str, Any]]:
 
 
 def domain_count(state: Mapping[str, Any]) -> int:
-    """Return the number of active outlet and DEM domains."""
-    return len(active_domain_records(state))
+    """Catchment selections always describe one model domain."""
+    return 1
 
 
 def gauge_records(state: Mapping[str, Any]) -> List[Dict[str, Any]]:
@@ -361,7 +362,7 @@ def gauge_records(state: Mapping[str, Any]) -> List[Dict[str, Any]]:
                     record.get("gauge_filename") or f"{outlet_id}.txt"
                 ),
                 "gauge_path": str(record.get("gauge_path", "") or ""),
-                "domain_ids": domain_ids,
+                "domain_ids": [1] if domain_ids else [],
             }
         )
     return records

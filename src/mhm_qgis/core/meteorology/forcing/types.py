@@ -7,12 +7,14 @@ from pathlib import Path
 
 
 MHM_READY = "mHM ready"
+AUTO = "auto"
 ERA5LAND = "ERA5Land"
 _KINDS = {
-    "pre": "precipitation",
-    "precipitation": "precipitation",
-    "temp": "temperature",
-    "temperature": "temperature",
+    "pre": "pre",
+    "precipitation": "pre",
+    "temp": "tavg",
+    "temperature": "tavg",
+    **{name: name for name in ("tavg", "tmin", "tmax", "tann", "ssrd", "strd", "eabs", "windspeed")},
     "pet": "pet",
 }
 
@@ -29,6 +31,8 @@ def normalize_source(source: str) -> str:
     """Normalize UI and legacy spellings of a meteorology data source."""
     compact = str(source).strip().lower().replace("_", "").replace("-", "")
     compact = compact.replace(" ", "")
+    if compact == AUTO:
+        return AUTO
     if compact == "mhmready":
         return MHM_READY
     if compact == "era5land":
@@ -42,8 +46,13 @@ class MeteoFolderSpec:
 
     kind: str
     folder: Path | str
-    source: str
+    source: str = AUTO
     crs: str | None = None
+    pattern: str = "*.nc"
+    temporal_resolution: str = "Daily"
+    unit: str = ""
+    cumulative: bool = False
+    cumulative_resolution: str = ""
 
     def normalized(self) -> "MeteoFolderSpec":
         return MeteoFolderSpec(
@@ -51,6 +60,11 @@ class MeteoFolderSpec:
             folder=Path(self.folder),
             source=normalize_source(self.source),
             crs=self.crs,
+            pattern=self.pattern,
+            temporal_resolution=self.temporal_resolution,
+            unit=self.unit,
+            cumulative=self.cumulative,
+            cumulative_resolution=self.cumulative_resolution if self.cumulative else "",
         )
 
 
@@ -70,6 +84,8 @@ class SpatialMetadata:
     bounds: tuple[float, float, float, float]
     crs: str | None
     unit: str
+    start_time: str = ""
+    end_time: str = ""
 
 
 __all__ = [

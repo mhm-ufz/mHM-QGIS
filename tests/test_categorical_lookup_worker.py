@@ -46,7 +46,7 @@ def _run_worker(work, payload):
         [sys.executable, "-m", "mhm_qgis.core.native_worker",
          str(job_file), str(result_file)],
         capture_output=True, text=True,
-        env=dict(os.environ, PYTHONPATH=str(REPO)),
+        env=dict(os.environ, PYTHONPATH=str(REPO / "src")),
     )
     return process, result_file
 
@@ -57,7 +57,7 @@ def test_the_lookup_module_imports_without_qgis():
         [sys.executable, "-c",
          "import mhm_qgis.core.handlers.lookup.job as m; print(m.run_lookup_job.__name__)"],
         capture_output=True, text=True,
-        env=dict(os.environ, PYTHONPATH=str(REPO)),
+        env=dict(os.environ, PYTHONPATH=str(REPO / "src")),
     )
     assert process.returncode == 0, process.stderr
     assert "run_lookup_job" in process.stdout
@@ -111,7 +111,7 @@ def test_the_worker_asks_the_kernel_to_kill_it_before_qgis():
          "from mhm_qgis.core.native_worker import _prefer_worker_termination as f; f();"
          "print(open('/proc/self/oom_score_adj').read().strip())"],
         capture_output=True, text=True,
-        env=dict(os.environ, PYTHONPATH=str(REPO)),
+        env=dict(os.environ, PYTHONPATH=str(REPO / "src")),
     )
     assert process.returncode == 0, process.stderr
     assert int(process.stdout.strip()) == 500

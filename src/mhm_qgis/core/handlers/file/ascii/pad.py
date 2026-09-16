@@ -7,6 +7,7 @@ text, so padding is a line-by-line rewrite with constant memory instead.
 from __future__ import annotations
 
 import os
+import math
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -73,7 +74,7 @@ def _format_header(target: Mapping[str, Any], nodata) -> str:
     )
 
 
-def pad_ascii_grid(path, target: Mapping[str, Any], nodata=-9999, pad=None) -> Path:
+def pad_ascii_grid(path, target: Mapping[str, Any], nodata=-9999, pad=None, *, fill_nodata=False) -> Path:
     """Crop/pad an ASCII grid onto ``target`` in place, streaming row by row.
 
     Returns the path unchanged when the grid already matches the target. Cells
@@ -83,7 +84,7 @@ def pad_ascii_grid(path, target: Mapping[str, Any], nodata=-9999, pad=None) -> P
     """
     path = Path(path)
     source = read_ascii_header(path)
-    if headers_match(source, target):
+    if headers_match(source, target) and not fill_nodata:
         return path
 
     window = aligned_window(source, target, label="The source grid")
@@ -116,7 +117,11 @@ def pad_ascii_grid(path, target: Mapping[str, Any], nodata=-9999, pad=None) -> P
                 if len(values) != source_columns:
                     raise ValueError(f"{path.name} has a row with {len(values)} cells; expected {source_columns}.")
                 if window["source_y"] <= written < window["source_y"] + copy_rows:
-                    cells = " ".join(values[window["source_x"]:window["source_x"] + copy_columns])
+                    cells = values[window["source_x"]:window["source_x"] + copy_columns]
+                    if fill_nodata:
+                        cells = [text if not math.isfinite(float(value)) or float(value) == source.get("nodata_value", -9999)
+                                 else value for value in cells]
+                    cells = " ".join(cells)
                     output_stream.write(f"{left}{cells}{right}\n")
                 written += 1
             if written != source_rows:

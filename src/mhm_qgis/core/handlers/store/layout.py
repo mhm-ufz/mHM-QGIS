@@ -20,7 +20,7 @@ from .paths import (data_folder, geometry_folder, master_data_folder,
                     morphology_staging_folder, output_folder, plugin_root,
                     raw_meteo_folder, restart_folder, static_folder,
                     version_key, workspace_folder, z_temp_folder,
-                    data_raw_folder, domain_data_folder)
+                    data_raw_folder, domain_folder)
 
 INPUT_STATE_FILENAME = "mhm_qgis_input_state.json"
 
@@ -32,7 +32,23 @@ MERGED_MASK_NAME = "4_watershed_merged_mask.tif"
 #: project folder -> version key, with the state file's mtime as the guard.
 _VERSION_CACHE: dict[str, tuple[float, str]] = {}
 
-METEO_VARIABLES = ("pre", "tavg", "tmin", "tmax", "pet")
+METEO_VARIABLES = ("pre", "tavg", "tmin", "tmax", "tann", "pet", "ssrd", "strd", "eabs", "windspeed")
+
+
+def domain_folders(project_folder) -> tuple[Path, ...]:
+    """List named setups only; legacy data/output trees are not domains."""
+    container = Path(project_folder) / "mhm-qgis"
+    if not container.is_dir():
+        return ()
+    found = []
+    for candidate in container.iterdir():
+        try:
+            path = domain_folder(project_folder, candidate.name)
+        except ValueError:
+            continue
+        if path.is_dir() and ((path / INPUT_STATE_FILENAME).is_file() or (path / "data").is_dir()):
+            found.append(path)
+    return tuple(sorted(found, key=lambda path: path.name.casefold()))
 
 
 def input_state_path(project_folder) -> str:
@@ -116,7 +132,6 @@ def project_template_root() -> str:
     scripted = os.path.join(repository, ".scripts", "project-template")
     if os.path.isdir(scripted):
         return scripted
-    repository = os.path.dirname(os.path.dirname(plugin_root()))
     return os.path.join(repository, "project-template")
 
 
@@ -136,7 +151,7 @@ def project_template_dir(version_text: str | None) -> str | None:
 def domain_dem_path(project_folder, outlet_id) -> str:
     """Return the per-domain DEM: NetCDF for v6, Arc/Info ASCII for v5.13."""
     name = "dem.nc" if is_v6(project_folder) else "dem.asc"
-    return os.path.join(domain_data_folder(project_folder, outlet_id), name)
+    return os.path.join(morph_folder(project_folder), name)
 
 
 def morph_folder(project_folder, version: str | None = None) -> str:
@@ -168,6 +183,26 @@ def streamflow_observation_folder(project_folder, version: str | None = None) ->
     )
 
 
+def migrate_workspace(project_folder) -> None:
+    """Rename an old workspace without breaking saved absolute paths or links."""
+    old = Path(project_folder) / "mhm-plugin"
+    new = Path(workspace_folder(project_folder))
+    if not old.exists():
+        return
+    if new.exists():
+        if old.samefile(new):
+            return
+        raise ValueError("Both mhm-plugin and mhm-qgis exist; select which workspace to keep before continuing.")
+    if old.is_symlink() or not old.is_dir():
+        raise ValueError("The legacy mhm-plugin workspace must be a real directory to migrate.")
+    old.rename(new)
+    try:
+        old.symlink_to(new.name, target_is_directory=True)
+    except OSError:
+        new.rename(old)
+        raise OSError("Workspace migration needs permission to create a compatibility symlink; no files were moved.")
+
+
 def ensure_project_structure(project_folder, version_text=None) -> list[str]:
     """
     Create the plugin workspace structure from project-template.
@@ -195,7 +230,11 @@ def ensure_project_structure(project_folder, version_text=None) -> list[str]:
     version = version_key(version_text) if version_text else project_version(
         project_folder)
 
-    template = project_template_dir(version_text)
+    template = project_template_dir(version)
+    if template:
+        template = os.path.join(template, "mhm-qgis", "<domain-folder>")
+        if not os.path.isdir(template):
+            template = None
     if template:
         for root, dirs, _ in os.walk(template):
             dirs[:] = [

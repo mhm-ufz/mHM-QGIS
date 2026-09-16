@@ -8,57 +8,25 @@ import traceback
 from pathlib import Path
 
 # QGIS and PyQt imports
-from qgis.core import (QgsApplication, QgsMapLayer, QgsProject,
-                       QgsRasterLayer, QgsVectorLayer)
+from qgis.core import QgsApplication, QgsMapLayer, QgsProject, QgsRasterLayer
 from qgis.PyQt import QtCore
-from qgis.PyQt.QtWidgets import QComboBox, QDialog, QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
 
 
 from ..threads.meteo_workflow import MeteorologyWorkflowWorker
 from ..reporting import error_detail
-from ...core.grid import (
-    Extent,
-    Grid,
-    ceil_cellsize,
-    display_precision_for_unit,
-    format_resolution,
-    header_bounds,
-    header_for_existing_bounds,
-    is_geographic_unit,
-    l0_header_from_l2,
-    possible_resolutions,
-    read_header_file,
-    resolution_in_crs,
-    target_grid_from_header,
-)
-from .input_selection import (
-    INPUT_EXTENSIONS,
-    InputComboAdapter,
-    LaiNetcdfInputDialog,
-    MhmReadyInputDialog,
-    SingleLayerInputDialog,
-    loaded_qgis_items,
-    scan_project_folders,
-    scan_project_inputs,
-)
+from ...core.grid import Extent, Grid, ceil_cellsize, format_resolution, header_bounds, header_for_existing_bounds, is_geographic_unit, l0_header_from_l2, resolution_in_crs, target_grid_from_header
+from .input_selection import InputComboAdapter
 from ...core.executions import meteo as meteo_execution
 from ...core.executions.morphology import reset as morphology_reset
 from ...core.executions.morphology import setup as morphology_setup
 from ...core.handlers.state import processing as processing_state
 from ...core.handlers.state import settings as project_settings
 from ...core.handlers.state.meteo_outputs import MeteorologyOutputState
-from ...core.meteorology.forcing import MeteoFolderSpec
-from ...core.meteorology.forcing import (
-    inspect_meteo_folder_cached,
-    inspect_meteo_inputs_cached,
-)
 from ...core.executions.meteo import MeteorologyRun
-from ...core.morphology.hydrology.outlets import (
-    StationIdError,
-    outlet_ids_from_layer,
-)
+from ...core.morphology.hydrology.outlets import StationIdError
+from ...core.handlers.store.layout import morph_folder
 from ...core.handlers.store.paths import data_folder, data_raw_folder, geometry_folder, output_folder, restart_folder, workspace_folder, z_temp_folder
-from ...core.handlers.store.layout import ensure_project_structure
 from ...qt.bindings.main import bind as bind_main_form
 from ...qt.controllers import main as main_controller
 from ...qgis_bridge import layers as qgis_layers
@@ -109,7 +77,9 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.configure_input_layer_combo_boxes()
 
         # --- Instance attributes for managing file paths ---
-        self.project_folder = None
+        self.project_folder = None  # Active domain root, passed to core APIs.
+        self.project_directory = None  # Outer folder shown in the project selector.
+        self._meteo_inputs = {}
         self.geometry_folder = None  # Subfolder for geometry outputs
         self.input_state_filename = "mhm_qgis_input_state.json"
         self._loading_input_state = False
@@ -134,10 +104,15 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.spinBox_L2ResolutionMultiplier.setMaximum(1_000_000)
         if self.spinBox_L2ResolutionMultiplier.value() < 1:
             self.spinBox_L2ResolutionMultiplier.setValue(1)
-        self.pushButton_executeMeteoMorphSetup.setToolTip(
-            "Prepare meteorology, crop and mask morphology, create latlon.nc, "
-            "then write morphology ASCII files"
+        self.pushButton_executeAllMeteo.setToolTip(
+            "Prepare meteorology forcing on the saved common L2 grid"
         )
+        self.lineEdit_precipitationGlobDefinition.setText("*.nc")
+        self.comboBox_mhmWorkType.setCurrentIndex(0)
+        for index in (1, 2):
+            self.comboBox_mhmWorkType.model().item(index).setEnabled(False)
+        self.stackedWidget_configuration.setCurrentWidget(self.page_singleDomain)
+        self.tabWidget_steps.setCurrentIndex(0)
         self._capture_workflow_button_default_styles()
 
         self.morphology_tasks = MorphologyTaskBridge(self)
@@ -219,6 +194,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def configure_input_layer_combo_boxes(self, *args, **kwargs):
         return main_controller.configure_input_layer_combo_boxes(self, *args, **kwargs)
 
+    @QtCore.pyqtSlot()
     def refresh_input_sources(self, *args, **kwargs):
         return main_controller.refresh_input_sources(self, *args, **kwargs)
 
@@ -286,9 +262,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def clear_precipitation_resolution_labels(self, *args, **kwargs):
         return main_controller.clear_precipitation_resolution_labels(self, *args, **kwargs)
 
-    def inspect_meteo_selection(self, *args, **kwargs):
-        return main_controller.inspect_meteo_selection(self, *args, **kwargs)
-
     @staticmethod
     def _matching_input_index(*args, **kwargs):
         return main_controller._matching_input_index(*args, **kwargs)
@@ -312,26 +285,14 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         return main_controller.update_l0_resolution_from_dem(self, *args, **kwargs)
 
     def filled_dem_resolution_info(self):
-        """Return L0 resolution from the prepared filled DEM raster."""
-        if not self.project_folder:
+        """Read the effective DEM header; never start terrain processing here."""
+        from ...core.grid.raster import dem_grid
+        layer = self.input_combo("dem").currentLayer()
+        crs = self.get_crs()
+        if not layer or not crs or not crs.isValid():
             return None
-        if not self.input_combo("dem").currentLayer():
-            return None
-
-        try:
-            filled_path = self.morphology_tasks.prepare_filled_dem()
-        except Exception as e:
-            self.log_message(f"WARNING: Could not prepare filled DEM for L0 resolution: {e}")
-            return None
-
-        if not filled_path or not os.path.exists(filled_path):
-            return None
-
-        filled_layer = QgsRasterLayer(filled_path, "Filled_DEM")
-        if not filled_layer.isValid():
-            self.log_message("WARNING: Filled DEM exists but could not be read for L0 resolution.")
-            return None
-        return qgis_layers.raster_resolution_info(filled_layer)
+        return dem_grid(layer.source(), qgis_layers.crs_string(layer.crs()),
+                        qgis_layers.crs_string(crs), qgis_layers.crs_unit(crs))
 
     def update_l2_resolution_from_metadata(self, *args, **kwargs):
         return main_controller.update_l2_resolution_from_metadata(self, *args, **kwargs)
@@ -354,11 +315,9 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         target_crs = self.get_crs()
         if target_crs is None or not target_crs.isValid():
             raise ValueError("Please set a valid processing CRS before preparing meteorology data.")
-        domain_bounds, extent_source = qgis_layers.merged_domain_bounds(
-            self.project_folder, target_crs
-        )
-        if domain_bounds is None:
-            raise ValueError("The merged watershed is required before preparing meteorology data.")
+        from ...core.grid import header_bounds
+        domain_bounds = header_bounds(self._grid_l0_info["header"])
+        extent_source = self.input_combo("dem").currentLayer().source()
 
         crs_text = qgis_layers.crs_string(target_crs)
         unit = qgis_layers.crs_unit(target_crs)
@@ -749,7 +708,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             workflow.apply_dem_extent(dialog.selected_assignments())
             sync_domain_settings(self.project_folder)
             self.update_gauged_outlet_count()
-            self.invalidate_meteo_morph_setup()
+            self.invalidate_execute_all_meteo()
             return True
         except Exception as error:
             self.log_message(f"ERROR: Domain assignment failed: {error}")
@@ -853,16 +812,16 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                     "Execute All Processing failed. Check the log for details."
                 ),
             },
-            "meteo_morph_setup": {
-                "button": "pushButton_executeMeteoMorphSetup",
-                "label": "Meteorology and Morphology Setup",
-                "action_name": "Meteorology and Morphology Setup",
-                "thread_name": "mHM QGISMeteoMorphSetupThread",
+            "execute_all_meteo": {
+                "button": "pushButton_executeAllMeteo",
+                "label": "Meteorology Preparation",
+                "action_name": "Meteorology Preparation",
+                "thread_name": "mHM QGISMeteoThread",
                 "completed_message": (
-                    "Meteorology and morphology setup completed successfully."
+                    "Meteorology preparation completed successfully."
                 ),
                 "failed_message": (
-                    "Meteorology and morphology setup failed. "
+                    "Meteorology preparation failed. "
                     "Check the log for details."
                 ),
             },
@@ -894,37 +853,25 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Return a meteorology output state bound to the current project."""
         return MeteorologyOutputState(self.project_folder, log=self.log_message)
 
-    def start_meteo_morph_setup_processing(self):
+    def start_execute_all_meteo_processing(self):
         """Validate inputs and run meteo then morphology setup."""
         if self.running_morphology_workflow_key() is not None:
-            self.start_morphology_workflow("meteo_morph_setup")
+            self.start_morphology_workflow("execute_all_meteo")
             return
         if not self.check_prerequisites():
             return
 
         try:
-            precipitation, temperature, pet = self.selected_meteo_specs()
-            inspections = inspect_meteo_inputs_cached(
-                self.project_folder,
-                precipitation,
-                temperature,
-                pet,
-                log=self.log_message,
-            )
-            self._meteo_inspections = inspections
-            grid, target_grid, metadata = self.prepare_meteo_l2_grid(
-                inspections["precipitation"]
-            )
-            self.set_meteo_l2_grid_metadata(metadata)
+            inputs = self.selected_meteo_specs()
+            metadata = main_controller.require_common_grid(self)
+            target_grid = target_grid_from_header(metadata["l2_header"], self.selected_meteo_crs())
             target_grid.validate()
             self._pending_meteo_run = MeteorologyRun(
                 project_folder=Path(self.project_folder),
-                precipitation=precipitation,
-                temperature=temperature,
-                pet=pet,
+                inputs=inputs,
                 target_grid=target_grid,
                 grid_metadata=dict(metadata),
-                inspections=inspections,
+                times=main_controller.simulation_times(self),
             )
         except Exception as error:
             self.log_message(f"ERROR: Cannot start meteo setup: {error}")
@@ -935,7 +882,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             )
             return
 
-        self.start_morphology_workflow("meteo_morph_setup")
+        self.start_morphology_workflow("execute_all_meteo")
 
     def start_morphology_workflow(self, workflow_key):
         """Start a named morphology workflow in a background worker thread."""
@@ -981,7 +928,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.save_input_state()
         processing_state.mark_workflow(self.project_folder, workflow_key, "running")
         self.set_morphology_workflow_button_state(workflow_key, "running")
-        if workflow_key == "meteo_morph_setup":
+        if workflow_key == "execute_all_meteo":
             self.set_meteo_setup_controls_enabled(False)
 
         thread = QtCore.QThread(self)
@@ -1021,42 +968,15 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         thread.start()
 
     def finish_meteo_workflow_stage(self, workflow_key, ok, message):
-        """Run QGIS-dependent morphology on the GUI thread after meteorology."""
-        if not ok:
-            self.finish_morphology_workflow(workflow_key, False, message)
-            return
-
-        try:
-            lai_config = self.lai_netcdf_config()
-            lai_source = str(lai_config.get("input_path", "") or "")
-            request = morphology_setup.SetupRequest(
-                project_folder=self.project_folder,
-                headers=self.grid_level_headers(),
-                crs=self.selected_meteo_crs() or "",
-                lai_source=lai_source,
-                lai_timestep=lai_config.get("target_timestep")
-                or morphology_setup.lai.DEFAULT_TIMESTEP,
-                workflow=workflow_key,
-            )
-            ok = morphology_setup.run(request, log=self.log_message)
-            self.finish_morphology_workflow(workflow_key, ok, "")
-        except Exception as error:
-            self.log_message(
-                f"ERROR: Morphology setup failed with exception: {error}\n"
-                f"{traceback.format_exc()}"
-            )
-            self.finish_morphology_workflow(
-                workflow_key,
-                False,
-                str(error),
-            )
+        """Meteorology completion never executes morphology commands."""
+        self.finish_morphology_workflow(workflow_key, ok, message)
 
     def finish_morphology_workflow(self, workflow_key, ok, message):
         """Update UI and persisted workflow status after a workflow finishes."""
         spec = self.morphology_workflow_specs().get(workflow_key)
         if spec is None:
             return
-        if workflow_key == "meteo_morph_setup":
+        if workflow_key == "execute_all_meteo":
             self.set_meteo_setup_controls_enabled(True)
 
         if ok:
@@ -1102,12 +1022,12 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Drop worker references after a morphology workflow thread stops."""
         self._morphology_workflow_threads.pop(workflow_key, None)
         self._morphology_workflow_workers.pop(workflow_key, None)
-        if workflow_key == "meteo_morph_setup":
+        if workflow_key == "execute_all_meteo":
             self._pending_meteo_run = None
 
-    def invalidate_meteo_morph_setup(self):
+    def invalidate_execute_all_meteo(self):
         """Clear saved completion when any meteo setup input changes."""
-        workflow_key = "meteo_morph_setup"
+        workflow_key = "execute_all_meteo"
         if (
                 self._loading_input_state
                 or not self.project_folder
@@ -1226,6 +1146,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                 "class_field": value.class_field,
                 "scenes": [
                     {
+                        "start_time": item.start_time.isoformat(),
+                        "end_time": item.end_time.isoformat(),
                         "start_year": item.start_year,
                         "end_year": item.end_year,
                         "source_path": str(item.file_path),
@@ -1263,12 +1185,12 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         output = (
             relative_workspace_path(self.project_folder, output_path)
             if output_path
-            else "data/master/static/morph/soil_class.asc"
+            else relative_workspace_path(self.project_folder, os.path.join(morph_folder(self.project_folder), "soil_class.asc"))
         )
         definition = (
             relative_workspace_path(self.project_folder, classdefinition_path)
             if classdefinition_path
-            else "data/master/static/morph/soil_classdefinition.txt"
+            else relative_workspace_path(self.project_folder, os.path.join(morph_folder(self.project_folder), "soil_classdefinition.txt"))
         )
         update_section(
             self.project_folder,
@@ -1302,7 +1224,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             self._save_land_cover_nml_input(
                 self._land_use_input_value(land_cover)
             )
-        self.invalidate_meteo_morph_setup()
+        self.invalidate_execute_all_meteo()
 
     @staticmethod
     def _land_use_input_value(value):
@@ -1314,11 +1236,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             raise ValueError("Configure the land-use layers first.")
         return LandUseInput(
             tuple(
-                LandUsePeriod(
-                    int(item["start_year"]),
-                    int(item["end_year"]),
-                    Path(item["file_path"]),
-                )
+                LandUsePeriod.from_dict(item)
                 for item in value.get("periods", [])
             ),
             Path(value.get("lookup_table", "")),
@@ -1440,6 +1358,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         state = {
             "version": 4,
             "mhm_version": self.comboBox_mHMversion.currentText().strip(),
+            "work_type": self.comboBox_mhmWorkType.currentText(),
             "layers": layers,
             "text_inputs": text_inputs,
             "grid_resolutions": grid_resolutions,
@@ -1477,9 +1396,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         }
 
         try:
-            os.makedirs(os.path.dirname(state_path), exist_ok=True)
-            with open(state_path, "w", encoding="utf-8") as state_file:
-                json.dump(state, state_file, indent=2, sort_keys=True)
+            from ...core.handlers.file import json as jsonio
+            jsonio.write(state_path, state)
         except Exception as e:
             self.log_message(f"WARNING: Could not save input state: {e}")
 
@@ -1538,8 +1456,10 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                     pass
             state[kind] = {
                 "folder": path,
-                "source": source_combo.currentText().strip(),
+                "source": source_combo.currentText().strip() if source_combo is not None else "auto",
+                "pattern": self.lineEdit_precipitationGlobDefinition.text() if kind == "precipitation" else "*.nc",
             }
+        state["variables"] = self._meteo_inputs
         return state
 
     def read_existing_input_state(self, state_path):
@@ -1587,6 +1507,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             self.restore_input_layers(state.get("layers", {}))
             self.restore_domain_inputs(state)
             self.restore_meteo_inputs(state.get("meteo_inputs", {}))
+            main_controller.restore_simulation_times(self)
             self.refresh_grid_resolution_controls()
         finally:
             self._loading_input_state = False
@@ -1594,8 +1515,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             if getattr(self, "_discharge_plot", None) is not None:
                 self._discharge_plot.close()
 
-        for kind, _, _ in self.meteo_input_widgets():
-            self.inspect_meteo_selection(kind, show_errors=False)
         self.log_message(f"Input state loaded: {state_path}")
 
     def _clear_input_state_selections(self):
@@ -1623,14 +1542,22 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             folder_combo.blockSignals(True)
             folder_combo.setCurrentIndex(-1)
             folder_combo.blockSignals(False)
-            source_combo.blockSignals(True)
-            source_combo.setCurrentIndex(-1)
-            source_combo.blockSignals(False)
+            if source_combo is not None:
+                source_combo.blockSignals(True)
+                source_combo.setCurrentIndex(-1)
+                source_combo.blockSignals(False)
+        self.lineEdit_precipitationGlobDefinition.setText("*.nc")
+        self._grid_l2_metadata = None
+        self._grid_l2_header = None
+        main_controller.restore_simulation_times(self)
         self.spinBox_L2ResolutionMultiplier.blockSignals(True)
         self.spinBox_L2ResolutionMultiplier.setValue(1)
         self.spinBox_L2ResolutionMultiplier.blockSignals(False)
         self._l2_multiplier_user_selected = False
         self._meteo_inspections = {}
+        self._meteo_inputs = {}
+        self._grid_l0_info = None
+        main_controller.populate_meteo_table(self)
         self.clear_precipitation_resolution_labels()
         self.checkBox_enableFolderSearch.blockSignals(True)
         self.checkBox_enableFolderSearch.setChecked(False)
@@ -1663,7 +1590,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             self._domain_definition_mode = text
 
     def restore_meteo_inputs(self, state):
-        """Restore the three meteo folders, source modes, and L2 multiplier."""
+        """Restore configured variables and grid preferences without scanning."""
         if not isinstance(state, dict):
             return
         try:
@@ -1680,6 +1607,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             )
         )
 
+        self._meteo_inputs = dict(state.get("variables", {}))
+        main_controller.populate_meteo_table(self)
         for kind, folder_combo, source_combo in self.meteo_input_widgets():
             saved = state.get(kind, {})
             if not isinstance(saved, dict):
@@ -1692,7 +1621,9 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                 self._add_folder_combo_item(folder_combo, folder)
                 index = folder_combo.count() - 1
             folder_combo.setCurrentIndex(index if index >= 0 else 0)
-
+            if source_combo is None:
+                self.lineEdit_precipitationGlobDefinition.setText(saved.get("pattern", "*.nc"))
+                continue
             source = str(saved.get("source", "") or "")
             source_index = source_combo.findText(source)
             if source_index < 0:
@@ -1949,43 +1880,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     # --- Project Management Methods ---
 
     def select_project_folder(self):
-        """Opens a dialog to select the project working directory."""
-        folder = QFileDialog.getExistingDirectory(self, "Select Project Folder")
-        if folder:
-            self.project_folder = folder
-            self.lineEdit_ProjectFolder.setText(self.project_folder)
-            self.log_message(f"Project folder set to: {self.project_folder}")
-
-            try:
-                created = ensure_project_structure(
-                    self.project_folder, self.selected_version()
-                )
-                self.project_settings = project_settings.read(self.project_folder)
-            except (OSError, ValueError) as error:
-                QMessageBox.warning(self, "Project settings", str(error))
-                return
-            self.geometry_folder = geometry_folder(self.project_folder)
-            if created:
-                self.log_message(
-                    f"Project structure prepared with {len(created)} folder(s)."
-                )
-
-            self.refresh_input_sources()
-            self.refresh_meteo_folder_sources()
-            self.refresh_meteo_display()
-            self.refresh_output_display()
-            self.load_input_state()
-            self.update_gauged_outlet_count()
-
-            self.refresh_morphology_workflow_button_states()
-            meteo_execution.existing_outputs(
-                self.project_folder,
-                self._current_meteorology_state(),
-                log=self.log_message,
-            )
-            self.update_l2_resolution_from_metadata()
-            self.refresh_meteo_display()
-            self.refresh_grid_resolution_controls()
+        return main_controller.select_project_folder(self)
 
     def on_tab_changed(self, *args, **kwargs):
         return main_controller.on_tab_changed(self, *args, **kwargs)

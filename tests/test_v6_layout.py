@@ -44,7 +44,7 @@ def test_v6_places_every_input_where_the_template_expects_it(tmp_path):
     assert _relative(project, lai_folder(project)) == "data/master/morph"
     assert _relative(project, streamflow_observation_folder(project)) == (
         "data/master/gauge/streamflow")
-    assert _relative(project, domain_dem_path(project, "280")) == "data/280/dem.nc"
+    assert _relative(project, domain_dem_path(project, "280")) == "data/master/morph/dem.nc"
 
 
 def test_v5_13_layout_is_unchanged(tmp_path):
@@ -55,7 +55,7 @@ def test_v5_13_layout_is_unchanged(tmp_path):
     assert _relative(project, lai_folder(project)) == "data/master/lai"
     assert _relative(project, streamflow_observation_folder(project)) == (
         "data/master/observation/streamflow")
-    assert _relative(project, domain_dem_path(project, "280")) == "data/280/dem.asc"
+    assert _relative(project, domain_dem_path(project, "280")) == "data/master/static/morph/dem.asc"
 
 
 def test_an_unknown_or_missing_version_falls_back_to_v5_13(tmp_path):
@@ -148,8 +148,9 @@ def test_the_v6_namelist_points_at_the_new_locations(tmp_path):
     config_input = values["config_input"]
     bundle = "data/master/morph/input.nc"
     for key in ("dem_path", "slope_path", "aspect_path", "fdir_path",
-                "geo_class_path", "soil_class_path", "latlon_path"):
-        assert config_input[key][0] == bundle, key
+                "geo_class_path", "soil_class_path"):
+        assert config_input[key][0] == ("data/master/morph/dem.nc" if key == "dem_path" else bundle), key
+    assert config_input["latlon_path"][0] == "data/master/latlon.nc"
     assert config_input["pre_path"][0] == "data/master/meteo/pre.nc"
     assert config_input["meteo_mask_path"][0] == "data/master/meteo/mask.nc"
     # LAI classes are not produced yet, so the key names nothing.

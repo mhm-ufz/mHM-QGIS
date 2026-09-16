@@ -29,7 +29,7 @@
          <item>
           <widget class="QLabel" name="label_nLandUseLayers">
            <property name="text">
-            <string>Number of Historical Land Use Layers:</string>
+            <string>Number of Historical Land Use Periods:</string>
            </property>
           </widget>
          </item>
@@ -91,19 +91,28 @@
        </item>
        <item>
         <widget class="QTableWidget" name="tableWidget_landUseTimeInputs">
+         <property name="sizeAdjustPolicy">
+          <enum>QAbstractScrollArea::AdjustToContents</enum>
+         </property>
+         <attribute name="horizontalHeaderMinimumSectionSize">
+          <number>25</number>
+         </attribute>
+         <attribute name="horizontalHeaderDefaultSectionSize">
+          <number>120</number>
+         </attribute>
          <row>
           <property name="text">
-           <string>Layer 1</string>
+           <string>Period 1</string>
           </property>
          </row>
          <column>
           <property name="text">
-           <string>Start Year (yyyy)</string>
+           <string>Start DateTime</string>
           </property>
          </column>
          <column>
           <property name="text">
-           <string>End Year (yyyy)</string>
+           <string>End DateTime</string>
           </property>
          </column>
         </widget>
@@ -112,7 +121,7 @@
      </widget>
      <widget class="QWidget" name="tab_historicalLandUseInput">
       <attribute name="title">
-       <string>Land Use Layers</string>
+       <string>Land Use Periods</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_3">
        <item>
@@ -133,7 +142,7 @@
             <x>0</x>
             <y>0</y>
             <width>600</width>
-            <height>337</height>
+            <height>343</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_4">

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import numpy as np
 import pytest
@@ -14,7 +14,7 @@ def _write_forcing(project, variable, first, days):
     """Write a minimal prepared forcing file in the v5.13 layout."""
     from netCDF4 import Dataset
 
-    folder = project / "mhm-plugin" / "data" / "master" / "meteo" / variable
+    folder = project / "mhm-qgis" / "data" / "master" / "meteo" / variable
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{variable}.nc"
     offset = (first - display.TIME_EPOCH).days
@@ -50,7 +50,7 @@ def test_a_project_without_forcing_offers_nothing(tmp_path):
 
 
 def test_time_range_spans_the_written_period(project):
-    assert display.project_time_range(project) == (date(2016, 1, 1), date(2016, 12, 31))
+    assert display.project_time_range(project) == (datetime(2016, 1, 1), datetime(2016, 12, 31))
 
 
 def test_bands_count_from_one_at_the_first_step(project):
@@ -75,16 +75,13 @@ def test_an_unprepared_variable_resolves_to_nothing(project):
     assert display.resolve_meteo_output(project, "tmin", date(2016, 1, 1)) is None
 
 
-def test_steps_and_dates_round_trip(project):
-    span = display.project_time_range(project)
-    assert display.step_count(span) == 366
-    for when in (date(2016, 1, 1), date(2016, 7, 4), date(2016, 12, 31)):
-        assert display.date_for_step(span, display.step_for_date(span, when)) == when
 
-
-def test_steps_clamp_to_the_period(project):
-    span = display.project_time_range(project)
-    assert display.step_for_date(span, date(2010, 1, 1)) == 0
-    assert display.step_for_date(span, date(2030, 1, 1)) == 365
-    assert display.date_for_step(span, -5) == date(2016, 1, 1)
-    assert display.date_for_step(span, 9999) == date(2016, 12, 31)
+def test_native_hourly_bands_and_calendar_units(tmp_path):
+    from netCDF4 import Dataset
+    path = _write_forcing(tmp_path, "pre", date(2016, 1, 1), 3)
+    with Dataset(path, "a") as ds:
+        ds["time"].units = "hours since 2016-01-01"
+        ds["time"][:] = [0, 1, 2]
+    assert len(display.meteo_steps(path)) == 3
+    assert display.resolve_meteo_output(tmp_path, "pre", datetime(2016, 1, 1, 1)).band == 2
+    assert display.resolve_meteo_output(tmp_path, "pre", datetime(2016, 1, 1, 3)) is None

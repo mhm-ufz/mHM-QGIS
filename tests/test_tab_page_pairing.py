@@ -11,7 +11,7 @@ def test_each_step_owns_its_controls():
     dialog = MhmQgisDialog()
     for tab, button in (
         (dialog.tab_geometry, dialog.pushButton_executeAllMorphology),
-        (dialog.tab_meteo, dialog.pushButton_executeMeteoMorphSetup),
+        (dialog.tab_meteo, dialog.pushButton_executeAllMeteo),
         (dialog.tab_hydro, dialog.pushButton_observationDisplay_discharge),
         (dialog.tab_execution, dialog.pushButton_execute_mHM),
         (dialog.tab_outputs, dialog.pushButton_outputVarDisplay),

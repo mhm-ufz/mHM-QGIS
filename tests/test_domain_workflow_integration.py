@@ -118,7 +118,7 @@ def test_saved_state_controls_gauge_and_domain_counts(tmp_path: Path) -> None:
 
     assert update_gauged_outlet_count(dialog) == "1"
     assert label.value == "1"
-    assert domain_count(dialog) == 3
+    assert domain_count(dialog) == 1
 
 
 def test_configured_project_keeps_one_domain_minimum(tmp_path: Path) -> None:

@@ -24,7 +24,7 @@ class _Dialog:
 
 @pytest.fixture
 def project(tmp_path):
-    (tmp_path / "mhm-plugin").mkdir()
+    (tmp_path / "mhm-qgis").mkdir()
     # mark_prepared only records outputs that exist on disk.
     for name in ("pre.nc", "tavg.nc"):
         (tmp_path / name).write_bytes(b"")

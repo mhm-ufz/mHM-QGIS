@@ -7,14 +7,11 @@ import os
 import re
 from pathlib import Path
 
-from nml_tools import json_to_namelist
+import pytest
 from nml_tools.gui.arrays import axis_labels
 from nml_tools.gui.model import (
-    empty_document,
     load_project,
-    merge_initial_values,
-    profile_values,
-    render_profile,
+    render_profile as _render_profile,
 )
 
 from mhm_qgis.core.handlers.store.paths import geometry_folder
@@ -22,6 +19,14 @@ from mhm_qgis.vSpecific import build_dimensions, build_initial_values
 
 
 SCHEMAS = Path(__file__).resolve().parents[1] / "src" / "mhm_qgis" / "nml-schemas"
+
+
+def render_profile(*args):
+    return "\n".join(_render_profile(*args).values())
+
+
+def profile_values(document, profile):
+    return document.get(profile.key, {})
 V5_MAIN_GROUPS = [
     "project_description",
     "mainconfig",
@@ -145,13 +150,7 @@ def _document(version: str, dialog: Dialog):
     key = "v5.13" if version.startswith("5") else "v6"
     project = load_project(SCHEMAS / key, dialog.project_folder)
     dimensions = build_dimensions(version, dialog)
-    document = empty_document(project)
-    document["dimensions"] = dimensions
-    document = merge_initial_values(
-        document,
-        build_initial_values(version, dialog),
-        project,
-    )
+    document = build_initial_values(version, dialog)
     return project, dimensions, document
 
 
@@ -171,8 +170,8 @@ def test_version_projects_have_model_filenames_and_dimensions(tmp_path: Path) ->
     }
     assert {profile.name: profile.default_file for profile in v6.profiles} == {
         "main": "mhm.nml",
-        "output": "mhm_outputs.nml",
-        "parameter": "mhm_parameters.nml",
+        "output": "outputs.nml",
+        "parameter": "parameters.nml",
     }
 
 
@@ -295,7 +294,7 @@ def test_initial_values_render_version_specific_main_groups(tmp_path: Path) -> N
     assert "&config_resolution\n" in rendered_v6
     assert "hydro(1) = 1000.0" in rendered_v6
     # v6 reads its morphology from the bundled input.nc, not separate ASCII.
-    assert 'dem_path(1) = "data/master/morph/input.nc"' in rendered_v6
+    assert 'dem_path(1) = "data/master/morph/dem.nc"' in rendered_v6
     assert 'slope_path(1) = "data/master/morph/input.nc"' in rendered_v6
     assert 'pre_path(1) = "data/master/meteo/pre.nc"' in rendered_v6
 
@@ -304,12 +303,12 @@ def test_domain_dimensions_and_paths_follow_plugin_domains(tmp_path: Path) -> No
     dialog = Dialog(tmp_path)
     dialog._input_adapters["pour_points"] = LayerWidget()
 
-    assert build_dimensions("5.13", dialog)["max_domains"] == 2
-    assert build_dimensions("6.0", dialog)["n_domains"] == 2
+    assert build_dimensions("5.13", dialog)["max_domains"] == 1
+    assert build_dimensions("6.0", dialog)["n_domains"] == 1
     v5_values = build_initial_values("5.13", dialog)
     v6_values = build_initial_values("6.0", dialog)
-    assert len(v5_values["main"]["directories_general"]["dir_Morpho"]) == 2
-    assert len(v6_values["main"]["config_input"]["dem_path"]) == 2
+    assert len(v5_values["main"]["directories_general"]["dir_Morpho"]) == 1
+    assert len(v6_values["main"]["config_input"]["dem_path"]) == 1
 
 
 def test_geoparameter_orientation_is_version_specific(tmp_path: Path) -> None:
@@ -328,39 +327,30 @@ def test_geoparameter_orientation_is_version_specific(tmp_path: Path) -> None:
     )
     dialog = Dialog(tmp_path)
 
-    _, _, v5_document = _document("5.13", dialog)
-    v5_geo = v5_document["file_profiles"]["parameter"]["values"][
-        "geoparameter"
-    ]["GeoParam"]
-    assert v5_geo == [
-        [1.0, 1000.0, 42.0, 1.0, 1.0],
-        [1.0, 1000.0, 84.0, 1.0, 1.0],
-    ]
-    rendered_v5 = json_to_namelist(
-        {"values": {"geoparameter": {"GeoParam": v5_geo}}}
-    )
-    assert "GeoParam(1,3) = 42.0" in rendered_v5
-    assert "GeoParam(2,3) = 84.0" in rendered_v5
-
-    _, _, v6_document = _document("6.0", dialog)
-    v6_geo = v6_document["file_profiles"]["parameter"]["values"][
-        "geoparameter"
-    ]["GeoParam"]
-    assert v6_geo[2] == [42.0, 84.0]
-    rendered_v6 = json_to_namelist(
-        {"values": {"geoparameter": {"GeoParam": v6_geo}}}
-    )
-    assert "GeoParam(3,1) = 42.0" in rendered_v6
-    assert "GeoParam(3,2) = 84.0" in rendered_v6
+    v5, dims, values = _document("5.13", dialog)
+    geo = values["parameter"]["geoparameter"]["GeoParam"]
+    assert [row[2] for row in geo] == [42.0, 84.0]
+    assert "42" in render_profile(v5, v5.profile("parameter"), values["parameter"], dims)
+    v6, dims, values = _document("6.0", dialog)
+    geo = values["parameter"]["baseflow_1"]["baseflow_recession"]
+    assert [row["value"] for row in geo] == [42.0, 84.0]
+    rendered = render_profile(v6, v6.profile("parameter"), values["parameter"], dims)
+    assert "&baseflow_1" in rendered and "%value" in rendered
 
 
 def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
+    pytest.importorskip("qgis.PyQt")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from nml_tools.gui.app import ProfileTab
     from qtpy.QtWidgets import QApplication
 
     application = QApplication.instance() or QApplication([])
     dialog = Dialog(tmp_path)
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+    # Supply real soil configuration rather than depending on the external
+    # editor's zero padding of an incomplete schema example.
+    update_section(tmp_path, "soil", {"horizons": [
+        {"lower_depth": 200}, {"lower_depth": 500}, {"lower_depth": 1000}]})
     for version in ("5.13", "6.0"):
         project, dimensions, document = _document(version, dialog)
         for profile in project.profiles:

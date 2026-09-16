@@ -27,15 +27,7 @@ def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
     built from the listing plus each file's size and modification time.
     """
     files = _files_for_spec(spec)
-    digest = fingerprint(
-        files,
-        {
-            "kind": spec.kind,
-            "source": spec.source,
-            "crs": spec.crs,
-            "folder": str(spec.folder),
-        },
-    )
+    digest = fingerprint(files, {**asdict(spec), "folder": str(spec.folder), "inspection_version": 3})
     return digest, files
 
 
@@ -60,65 +52,21 @@ def _from_payload(payload) -> SpatialMetadata | None:
         return None
 
 
-def inspect_meteo_folder_cached(
-        project_folder,
-        folder,
-        kind: str,
-        source: str,
-        crs_fallback: str | None = None,
-        log=None) -> SpatialMetadata:
-    """Inspect a meteorology folder, reusing an unchanged previous inspection."""
-    spec = MeteoFolderSpec(kind, folder, source, crs_fallback).normalized()
+def inspect_meteo_folder_cached(project_folder, spec, log=None):
+    """Inspect one configured variable, reusing identical metadata options."""
+    spec = spec.normalized()
+    if not project_folder:
+        return inspect_meteo_folder(spec)
     digest, files = inspection_fingerprint(spec)
-
-    if project_folder:
-        metadata = _from_payload(
-            cached_payload(project_folder, SECTION, kind, digest))
-        if metadata is not None and len(metadata.files) == len(files):
-            if log:
-                log(
-                    f"{kind.title()} metadata reused for {len(files)} unchanged "
-                    "NetCDF file(s)."
-                )
-            return metadata
-
-    metadata = inspect_meteo_folder(folder, kind, source, crs_fallback)
-    if project_folder:
-        store_payload(
-            project_folder, SECTION, kind, digest, _as_payload(metadata))
+    metadata = _from_payload(cached_payload(project_folder, SECTION, spec.kind, digest))
+    if metadata is not None:
+        return metadata
+    metadata = inspect_meteo_folder(spec)
+    store_payload(project_folder, SECTION, spec.kind, digest, _as_payload(metadata))
     return metadata
 
 
-def inspect_meteo_inputs_cached(
-        project_folder,
-        precipitation: MeteoFolderSpec,
-        temperature: MeteoFolderSpec,
-        pet: MeteoFolderSpec | None = None,
-        log=None) -> dict[str, SpatialMetadata]:
-    """Validate selected inputs, reusing unchanged folder inspections."""
-    specs = [precipitation.normalized(), temperature.normalized()]
-    expected = ["precipitation", "temperature"]
-    if pet is not None:
-        specs.append(pet.normalized())
-        expected.append("pet")
-    for spec, kind in zip(specs, expected):
-        if spec.kind != kind:
-            raise ValueError(f"The {kind} input must have kind='{kind}'.")
-    return {
-        spec.kind: inspect_meteo_folder_cached(
-            project_folder,
-            spec.folder,
-            spec.kind,
-            spec.source,
-            spec.crs,
-            log=log,
-        )
-        for spec in specs
-    }
-
-
-__all__ = [
-    "inspect_meteo_folder_cached",
-    "inspect_meteo_inputs_cached",
-    "inspection_fingerprint",
-]
+def inspect_meteo_inputs_cached(project_folder, inputs, log=None):
+    """Inspect selected variables without preparing forcing."""
+    return {spec.normalized().kind: inspect_meteo_folder_cached(project_folder, spec, log=log)
+            for spec in inputs}

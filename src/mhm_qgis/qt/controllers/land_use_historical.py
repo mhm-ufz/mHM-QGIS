@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
+from qgis.PyQt.QtCore import QDateTime, QSignalBlocker
 
 from qgis.PyQt import QtWidgets
 
@@ -26,16 +26,32 @@ def set_layer_count(dialog, count: int) -> None:
         dialog._delete_row(dialog._rows.pop())
     for index in range(count):
         dialog.tableWidget_landUseTimeInputs.setVerticalHeaderItem(
-            index, QtWidgets.QTableWidgetItem(f"Layer {index + 1}")
+            index, QtWidgets.QTableWidgetItem(f"Period {index + 1}")
         )
+        for column in (0, 1):
+            if dialog.tableWidget_landUseTimeInputs.cellWidget(index, column) is not None:
+                continue
+            editor = QtWidgets.QDateTimeEdit(dialog)
+            editor.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+            editor.setCalendarPopup(True)
+            lower = QDateTime.fromString(dialog.simulation_start[:19], "yyyy-MM-ddTHH:mm:ss")
+            upper = QDateTime.fromString(dialog.simulation_end[:19], "yyyy-MM-ddTHH:mm:ss")
+            if not lower.isValid():
+                lower = QDateTime.fromString(dialog.simulation_start[:16], "yyyy-MM-ddTHH:mm")
+            if not upper.isValid():
+                upper = QDateTime.fromString(dialog.simulation_end[:16], "yyyy-MM-ddTHH:mm")
+            editor.setDateTimeRange(lower, upper)
+            previous = dialog.tableWidget_landUseTimeInputs.cellWidget(index - 1, 1)
+            editor.setDateTime((previous.dateTime() if previous else lower) if column == 0 else upper)
+            dialog.tableWidget_landUseTimeInputs.setCellWidget(index, column, editor)
+            editor.dateTimeChanged.connect(
+                lambda value, row=index, col=column: boundary_changed(dialog, row, col, value))
     dialog._update_bounds()
 
 
 def set_all_time(dialog) -> None:
     """Configure the same form for one all-time land-use layer."""
     dialog.set_layer_count(1)
-    dialog._set_cell(dialog.tableWidget_landUseTimeInputs, 0, 0, 1900)
-    dialog._set_cell(dialog.tableWidget_landUseTimeInputs, 0, 1, 2100)
     dialog.spinBox_nLandUseLayers.setEnabled(False)
     dialog.pushButton_addLandUseInputWidgets.setEnabled(False)
     dialog.tableWidget_landUseTimeInputs.setEnabled(False)
@@ -50,20 +66,17 @@ def set_input(dialog, value) -> None:
             f"Land use supports at most {MAX_LAND_USE_PERIODS} periods."
         )
     dialog.set_layer_count(len(periods) or 1)
+    from ...core.handlers.lookup import LandUsePeriod
+    from ...core.handlers.lookup.manifests import period_datetime
     for index, period in enumerate(periods):
-        dialog._set_cell(
-            dialog.tableWidget_landUseTimeInputs,
-            index,
-            0,
-            period.get("start_year"),
-        )
-        dialog._set_cell(
-            dialog.tableWidget_landUseTimeInputs,
-            index,
-            1,
-            period.get("end_year"),
-        )
-        dialog._select_path(dialog._rows[index].adapter, period.get("file_path"))
+        period = LandUsePeriod.from_dict(period)
+        if period.start_time < period_datetime(dialog.simulation_start) or period.end_time > period_datetime(dialog.simulation_end):
+            raise ValueError("Saved land-use periods exceed the simulation range; update the periods first.")
+        for column, value in enumerate((period.start_time, period.end_time)):
+            editor = dialog.tableWidget_landUseTimeInputs.cellWidget(index, column)
+            with QSignalBlocker(editor):
+                editor.setDateTime(QDateTime.fromString(value.isoformat(), "yyyy-MM-ddTHH:mm:ss"))
+        dialog._select_path(dialog._rows[index].adapter, period.file_path)
     lookup = str(data.get("lookup_table", "") or "")
     if lookup:
         dialog._select_combo_path(dialog.comboBox_lookupTableInput, lookup)
@@ -77,14 +90,21 @@ def set_input(dialog, value) -> None:
     dialog._update_bounds()
 
 
+def boundary_changed(dialog, row, column, value):
+    """Keep the shared boundary identical in both adjoining periods."""
+    other_row, other_column = (row + 1, 0) if column == 1 else (row - 1, 1)
+    other = dialog.tableWidget_landUseTimeInputs.cellWidget(other_row, other_column)
+    if other is not None:
+        with QSignalBlocker(other):
+            other.setDateTime(value)
+    dialog._update_bounds()
+
+
 def _update_bounds(dialog, *_args) -> None:
     for index, row in enumerate(dialog._rows):
-        row.start_label.setText(
-            dialog._cell_text(dialog.tableWidget_landUseTimeInputs, index, 0)
-        )
-        row.end_label.setText(
-            dialog._cell_text(dialog.tableWidget_landUseTimeInputs, index, 1)
-        )
+        for column, label in enumerate((row.start_label, row.end_label)):
+            editor = dialog.tableWidget_landUseTimeInputs.cellWidget(index, column)
+            label.setText(editor.dateTime().toString("yyyy-MM-dd HH:mm") if editor else "")
 
 
 def _populate_lookup(dialog) -> None:

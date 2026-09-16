@@ -351,6 +351,7 @@ def write_domain_dem_ascii(
         *,
         reference_path=None,
         nodata=-9999,
+        fill_value=None,
         task=None):
     """Write one domain DEM as Arc/Info ASCII on the common L0 grid.
 
@@ -376,7 +377,7 @@ def write_domain_dem_ascii(
     temporary = output.with_name(f".{output.name}.tmp")
     temporary.unlink(missing_ok=True)
 
-    blank = np.full(columns, float(nodata), dtype="float64")
+    blank = np.full(columns, float(nodata if fill_value is None else fill_value), dtype="float64")
     source_nodata = band.GetNoDataValue()
     try:
         with open(temporary, "w", encoding="utf-8") as stream:
@@ -409,6 +410,10 @@ def write_domain_dem_ascii(
                     if source_nodata is not None:
                         values = np.where(
                             values == source_nodata, float(nodata), values)
+                if fill_value is not None:
+                    values = np.where(np.isfinite(values) & (values != nodata), values, fill_value)
+                else:
+                    values = np.where(np.isfinite(values), values, float(nodata))
                 if keep is not None:
                     values = np.where(keep[row], values, float(nodata))
                 stream.write(" ".join(_ascii_value(value) for value in values))
@@ -474,7 +479,7 @@ DEM_DERIVATIVE_VARIABLES = {
 
 def dem_derivative_files(
     source, output_folder, *, source_crs="", target_crs="",
-    reprojected_path="", compute=None, log=None, task=None,
+    reprojected_path="", compute=None, log=None, task=None, header=None,
 ):
     """Prepare one derivative dataset and a single-variable filled DEM."""
     from netCDF4 import Dataset
@@ -492,7 +497,7 @@ def dem_derivative_files(
     }
     digest = fingerprint((file_path(source),), {
         "source": str(source), "source_crs": source_crs, "target_crs": target_crs,
-        "format": "dem-netcdf-1",
+        "format": "dem-netcdf-2", "header": header,
     })
     try:
         with Dataset(bundle) as dataset:
@@ -524,7 +529,15 @@ def dem_derivative_files(
                 if not {"dem", "dem_filled", *DEM_DERIVATIVE_VARIABLES.values()} <= set(dataset.variables):
                     raise ValueError("DEM derivative NetCDF is missing required variables.")
                 dataset.input_fingerprint = digest
-            os.replace(written, bundle)
+            if header:
+                # Derive only on real terrain, then pad all variables once.
+                # Padding cannot create sinks or flow paths outside the DEM.
+                names = ("dem", "dem_filled", *DEM_DERIVATIVE_VARIABLES.values())
+                copy_rasters(bundle, {name: raster_source(written, name) for name in names}, header, task=task)
+                with Dataset(bundle, "r+") as dataset:
+                    dataset.input_fingerprint = digest
+            else:
+                os.replace(written, bundle)
     copy_rasters(filled, {"dem": raster_source(bundle, "dem_filled")}, task=task)
     with Dataset(filled, "r+") as dataset:
         dataset.input_fingerprint = digest

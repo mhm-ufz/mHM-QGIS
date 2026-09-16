@@ -47,7 +47,7 @@ def test_path_serialization_uses_project_and_workspace_roots(
     project = tmp_path / "project"
     discharge = project / "inputs" / "gauge.csv"
     external = tmp_path / "external" / "gauge.csv"
-    mask = project / "mhm-plugin" / "Z Temp" / "Geometry" / "mask.tif"
+    mask = project / "mhm-qgis" / "Z Temp" / "Geometry" / "mask.tif"
 
     assert serialize_input_path(project, discharge) == "inputs/gauge.csv"
     assert resolve_input_path(project, "inputs/gauge.csv") == discharge.resolve()
@@ -73,9 +73,9 @@ def test_save_is_atomic_normalized_and_does_not_mutate_input(
 ) -> None:
     project = tmp_path / "project"
     discharge = project / "inputs" / "gauge.csv"
-    mask = project / "mhm-plugin" / "Z Temp" / "Geometry" / "mask.tif"
+    mask = project / "mhm-qgis" / "Z Temp" / "Geometry" / "mask.tif"
     vector = mask.with_suffix(".gpkg")
-    domain_directory = project / "mhm-plugin" / "data" / "7"
+    domain_directory = project / "mhm-qgis" / "data" / "7"
     domain_dem = domain_directory / "dem.asc"
     state = {
         "version": 99,
@@ -97,12 +97,12 @@ def test_save_is_atomic_normalized_and_does_not_mutate_input(
 
     path = save_state(project, state)
 
-    assert path == project / "mhm-plugin" / path.name
+    assert path == project / "mhm-qgis" / path.name
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert saved["version"] == 2
     assert saved["outlet_order"] == ["7"]
     assert saved["outlets"]["7"]["domain_id"] == 1
-    assert saved["dem_domain_id"] == 2
+    assert saved["dem_domain_id"] is None
     assert saved["outlets"]["7"]["discharge_file"] == "inputs/gauge.csv"
     assert saved["outlets"]["7"]["mask_path"] == "Z Temp/Geometry/mask.tif"
     assert saved["outlets"]["7"]["vector_path"] == "Z Temp/Geometry/mask.gpkg"
@@ -128,13 +128,11 @@ def test_active_domains_include_optional_dem_domain_and_gauges() -> None:
     assert [record["outlet_id"] for record in records] == [
         "A",
         "C",
-        DEM_DOMAIN_ID,
     ]
-    assert records[-1]["gauged_outlet_ids"] == ["A", "B"]
     assert records[0]["is_dem_domain"] is False
-    assert records[-1]["is_dem_domain"] is True
-    assert [record["domain_id"] for record in records] == [1, 2, 3]
-    assert domain_count(state) == 3
+    assert records[-1]["is_dem_domain"] is False
+    assert [record["domain_id"] for record in records] == [1, 1]
+    assert domain_count(state) == 1
 
 
 def test_dem_domain_can_be_the_only_active_domain(tmp_path: Path) -> None:
@@ -171,7 +169,7 @@ def test_saved_order_and_gauge_metadata_survive_sorted_json(tmp_path: Path) -> N
     output = (
         tmp_path
         / "project"
-        / "mhm-plugin"
+        / "mhm-qgis"
         / "data"
         / "observation"
         / "streamflow"
@@ -188,7 +186,7 @@ def test_saved_order_and_gauge_metadata_survive_sorted_json(tmp_path: Path) -> N
                 "gauge_id": 1,
                 "gauge_filename": "001.txt",
                 "gauge_path": str(output),
-                "domain_ids": [1, 2],
+                "domain_ids": [1],
                 "gauge_point": {
                     "x": 12.5,
                     "y": 47.25,
@@ -208,7 +206,7 @@ def test_saved_order_and_gauge_metadata_survive_sorted_json(tmp_path: Path) -> N
     assert loaded["definition_mode"] == "domain_delineator"
     assert loaded["outlet_order"] == ["20", "001", "3"]
     assert loaded["outlets"]["20"]["domain_id"] == 1
-    assert loaded["outlets"]["001"]["domain_id"] == 2
+    assert loaded["outlets"]["001"]["domain_id"] == 1
     assert loaded["outlets"]["001"]["gauge_path"] == (
         "data/observation/streamflow/001.txt"
     )
@@ -219,7 +217,7 @@ def test_saved_order_and_gauge_metadata_survive_sorted_json(tmp_path: Path) -> N
             "gauge_id": 1,
             "gauge_filename": "001.txt",
             "gauge_path": "data/observation/streamflow/001.txt",
-            "domain_ids": [1, 2],
+            "domain_ids": [1],
         }
     ]
     assert json.loads(path.read_text(encoding="utf-8"))["outlet_order"] == [

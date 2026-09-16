@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from datetime import datetime
+from ..lookup.manifests import period_datetime
 
 from ..state.nml_settings import load_settings
 from ..file.netcdf.raster import variables
 from .paths import geometry_folder, workspace_folder
-from .layout import MERGED_MASK_NAME, morph_folder
+from .layout import MERGED_MASK_NAME, morph_folder, lai_folder
 from .registry import first_existing, variants
 
 
@@ -32,6 +34,7 @@ def resolve_display_output(
     key: str,
     *,
     year: int | None = None,
+    when: datetime | None = None,
 ) -> DisplayOutput | None:
     project_folder = str(project_folder)
     geometry = Path(geometry_folder(project_folder))
@@ -40,7 +43,7 @@ def resolve_display_output(
     settings = load_settings(project_folder)
 
     if key == "land_cover":
-        return _land_cover_output(settings, workspace, geometry, morph, year)
+        return _land_cover_output(settings, workspace, geometry, morph, when or (datetime(year, 1, 1) if year else None))
     if key == "soil":
         configured = _configured_path(settings.get("soil"), workspace)
         candidates = [morph / configured.name] if configured else []
@@ -85,8 +88,7 @@ def resolve_display_output(
             *variants(geometry / "3_geology_processed.tif"),
         ],
         "lai": [
-            workspace / "data" / "master" / "lai" / "lai_masked.nc",
-            workspace / "data" / "master" / "lai" / "lai.nc",
+            Path(lai_folder(project_folder)) / "lai.nc",
         ],
     }.get(key, [])
     return _first(
@@ -96,16 +98,18 @@ def resolve_display_output(
     )
 
 
-def _land_cover_output(settings, workspace, geometry, morph, year):
+def _land_cover_output(settings, workspace, geometry, morph, when):
     land_cover = settings.get("land_cover", {})
     if not isinstance(land_cover, dict):
         land_cover = {}
     scenes = [scene for scene in land_cover.get("scenes", []) if isinstance(scene, dict)]
     selected_index = 0
-    if scenes and year is not None:
+    if scenes and when is not None:
         for index, scene in enumerate(scenes):
             try:
-                if int(scene["start_year"]) <= year <= int(scene["end_year"]):
+                start = period_datetime(scene.get("start_time") or str(scene["start_year"]))
+                end = period_datetime(scene["end_time"]) if scene.get("end_time") else datetime(int(scene["end_year"]) + 1, 1, 1)
+                if start <= when < end or (index == len(scenes) - 1 and when == end):
                     selected_index = index
                     break
             except (KeyError, TypeError, ValueError):

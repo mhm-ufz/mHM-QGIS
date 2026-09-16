@@ -36,7 +36,8 @@ from ...core.handlers.state.domain_state import (
 )
 from ...core.handlers.store import registry
 from ...core.handlers.store.layout import MERGED_MASK_NAME, domain_dem_path
-from ...core.handlers.store.paths import domain_data_folder, geometry_folder
+from ...core.handlers.store.paths import geometry_folder
+from ...core.handlers.store.layout import morph_folder
 from ...core.morphology.hydrology.observation_paths import (
     streamflow_observation_folder,
 )
@@ -371,9 +372,7 @@ class DomainWorkflow:
             ),
             merged_path=self.merged_mask_path(self.project_folder),
         )
-        state["dem_domain_directory"] = domain_data_folder(
-            self.project_folder, "dem_extent"
-        )
+        state["dem_domain_directory"] = morph_folder(self.project_folder)
         state["dem_domain_path"] = dem_path
         registry.register(
             self.project_folder,
@@ -473,7 +472,7 @@ class DomainWorkflow:
                 transform = transform_between(source_crs, mask.crs)
                 if transform is not None:
                     candidate.transform(transform)
-                if mask.contains(candidate.asPoint()):
+                if mask.contains(candidate.asPoint()) and domain_id not in memberships:
                     memberships.append(domain_id)
             if not memberships:
                 raise ValueError(

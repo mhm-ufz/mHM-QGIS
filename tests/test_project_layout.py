@@ -9,7 +9,7 @@ from mhm_qgis.core.handlers.store.layout import domain_dem_path, ensure_project_
 
 def test_all_generated_paths_are_inside_plugin_workspace(tmp_path: Path) -> None:
     project = tmp_path / "project"
-    workspace = project / "mhm-plugin"
+    workspace = project / "mhm-qgis"
 
     assert Path(workspace_folder(project)) == workspace
     assert Path(z_temp_folder(project)) == workspace / "Z Temp"
@@ -29,7 +29,7 @@ def test_all_generated_paths_are_inside_plugin_workspace(tmp_path: Path) -> None
     assert Path(output_folder(project)) == workspace / "output"
     assert Path(restart_folder(project)) == workspace / "restart"
     assert Path(domain_data_folder(project, "001")) == workspace / "data" / "001"
-    assert Path(domain_dem_path(project, "001")) == workspace / "data" / "001" / "dem.asc"
+    assert Path(domain_dem_path(project, "001")) == workspace / "data" / "master" / "static" / "morph" / "dem.asc"
 
 
 def test_domain_folder_rejects_path_traversal(tmp_path: Path) -> None:
@@ -47,7 +47,7 @@ def test_ensure_project_structure_does_not_create_outputs_at_outer_root(
 
     ensure_project_structure(project, "5.13")
 
-    workspace = project / "mhm-plugin"
+    workspace = project / "mhm-qgis"
     assert (workspace / "Z Temp" / "Geometry").is_dir()
     assert (workspace / "data" / "master" / "static" / "morph").is_dir()
     assert (workspace / "data" / "master" / "meteo").is_dir()
@@ -70,7 +70,7 @@ def test_ensure_project_structure_honours_the_requested_version(
 
     ensure_project_structure(project, "6.0")
 
-    master = project / "mhm-plugin" / "data" / "master"
+    master = project / "mhm-qgis" / "data" / "master"
     assert (master / "morph").is_dir()
     assert (master / "gauge" / "streamflow").is_dir()
     # v6 keeps morphology in one input.nc, so these v5.13 folders are not made.
@@ -84,5 +84,5 @@ def test_generated_path_is_relative_to_outer_project(tmp_path: Path) -> None:
 
     assert (
         relative_project_path(project, output)
-        == "mhm-plugin/data/master/static/morph/dem.asc"
+        == "mhm-qgis/data/master/static/morph/dem.asc"
     )

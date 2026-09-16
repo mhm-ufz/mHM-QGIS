@@ -1,28 +1,11 @@
-# -*- coding: utf-8 -*-
-"""QGIS-free inspection and preparation of mHM meteorology forcing."""
+"""Independent forcing variables, prepared at their native input cadence."""
 from __future__ import annotations
-
-from dataclasses import dataclass
-import os
+from dataclasses import dataclass, replace
 from pathlib import Path
-import shutil
+import os
 import tempfile
-from typing import Callable, Mapping
-
-from ..ERA5Land.mhm.build import (
-    iter_daily_datasets,
-)
-from ..ERA5Land.mhm.io import (
-    write_header,
-    write_netcdf,
-)
-from ..ERA5Land.mhm.specs import (
-    FORCING_SPECS,
-)
-from ..ERA5Land.mhm.types import (
-    ForcingSpec,
-    MeteoForcingResult,
-)
+from ..ERA5Land.mhm.types import MeteoForcingResult
+from ..ERA5Land.mhm.io import write_header, write_netcdf
 from ...grid import (
     TargetGrid,
     assert_header_file_matches,
@@ -37,36 +20,14 @@ from ...grid import (
     slice_and_pad,
 )
 from .types import (
-    ERA5LAND,
-    MHM_READY,
+    AUTO,
     MeteoFolderSpec,
     SpatialMetadata,
-    normalize_kind,
-    normalize_source,
 )
 
 
-_ERA_ALIASES = {
-    "precipitation": ("tp", "total_precipitation",
-                      "Total_precipitation_surface_1_Hour_Accumulation"),
-    "temperature": ("t2m", "2m_temperature",
-                    "Temperature_height_above_ground"),
-    "pet": ("pev", "potential_evaporation"),
-}
-_READY_FILES = {
-    "temperature": ("tavg.nc", "tmin.nc", "tmax.nc"),
-    "pet": ("pet.nc",),
-}
-_PET_SPEC = ForcingSpec(
-    output_variable="pet",
-    output_folder="pet",
-    source_key="potential_evaporation",
-    file_variable="potential_evaporation",
-    aggregation="era5land_daily_total_negative",
-    units="mm",
-    long_name="daily potential evapotranspiration",
-    scale=-1000.0,
-)
+from .temporal import (VARIABLES, validate_spec, normalize_unit, time_index,
+                       interval_bounds, convert_values)
 
 
 @dataclass(frozen=True)
@@ -76,183 +37,134 @@ class _SpatialSignature:
     y_values: object
 
 
-def inspect_meteo_folder(
-        folder: Path | str,
-        kind: str,
-        source: str,
-        crs_fallback: str | None = None) -> SpatialMetadata:
-    """Validate one input folder and return its common spatial metadata."""
-    spec = MeteoFolderSpec(kind, folder, source, crs_fallback).normalized()
-    files = _files_for_spec(spec)
-    signatures = [
-        _inspect_file(path, spec, _ready_variable(path, spec))
-        for path in files
-    ]
+def inspect_meteo_folder(folder, kind=None, source=AUTO, crs_fallback=None, **options):
+    """Inspect metadata only; no forcing arrays are read or prepared."""
+    import numpy as np
+    spec = (folder if isinstance(folder, MeteoFolderSpec) else
+            MeteoFolderSpec(kind, folder, source, crs_fallback, **options)).normalized()
+    validate_spec(spec)
+    signatures, records = [], []
+    for path in _files_for_spec(spec):
+        signatures.append(_inspect_file(path, spec))
+        with _open_dataset(path) as ds:
+            variable = _find_variable(ds, spec.kind)
+            units = ds[variable].attrs.get("units")
+            if units and normalize_unit(units) != normalize_unit(spec.unit):
+                raise ValueError(f"{path.name}: metadata unit {units!r} differs from selected {spec.unit!r}.")
+            time_name = "time" if "time" in ds[variable].dims else "valid_time"
+            bounds = interval_bounds(ds, time_name, spec, variable)
+            records.append((path, ds[time_name].values.copy(), bounds))
     _validate_spatial_signatures(signatures)
-    _validate_times(files, spec)
-    return SpatialMetadata(
-        **{
-            **signatures[0].metadata.__dict__,
-            "files": tuple(files),
-        }
-    )
+    records.sort(key=lambda item: item[1][0])
+    times = np.concatenate([item[1] for item in records])
+    bounds = np.concatenate([item[2] for item in records])
+    time_index(times, spec.temporal_resolution)
+    if (bounds[:-1, 1] != bounds[1:, 0]).any():
+        raise ValueError("Meteorology files contain overlapping or missing intervals.")
+    return replace(signatures[0].metadata, files=tuple(item[0] for item in records),
+                   start_time=str(times[0]), end_time=str(times[-1]))
 
 
-def inspect_meteo_inputs(
-        precipitation: MeteoFolderSpec,
-        temperature: MeteoFolderSpec,
-        pet: MeteoFolderSpec | None = None) -> dict[str, SpatialMetadata]:
-    """Validate all selected meteorology inputs."""
-    specs = [precipitation.normalized(), temperature.normalized()]
-    if specs[0].kind != "precipitation":
-        raise ValueError("The precipitation input must have kind='precipitation'.")
-    if specs[1].kind != "temperature":
-        raise ValueError("The temperature input must have kind='temperature'.")
-    if pet is not None:
-        pet = pet.normalized()
-        if pet.kind != "pet":
-            raise ValueError("The PET input must have kind='pet'.")
-        specs.append(pet)
-
-    return {
-        spec.kind: inspect_meteo_folder(
-            spec.folder, spec.kind, spec.source, spec.crs)
-        for spec in specs
-    }
+def inspect_meteo_inputs(inputs):
+    """Inspect one input per output variable."""
+    specs = [spec.normalized() for spec in inputs]
+    if len({spec.kind for spec in specs}) != len(specs):
+        raise ValueError("Configure each meteorology variable only once.")
+    return {spec.kind: inspect_meteo_folder(spec) for spec in specs}
 
 
-def process_meteo_inputs(
-        precipitation: MeteoFolderSpec,
-        temperature: MeteoFolderSpec,
-        output_root: Path | str,
-        target_grid: TargetGrid,
-        pet: MeteoFolderSpec | None = None,
-        flat_layout: bool = False,
-        log: Callable[[str], None] | None = None,
-        *,
-        inspections: Mapping[str, SpatialMetadata] | None = None
-        ) -> MeteoForcingResult:
-    """Compile, resample, crop, and write all selected meteorology inputs."""
+def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
+                         log=None, inspections=None):
+    """Stream inputs onto L2 without aggregating or disaggregating time."""
     target_grid.validate()
-    specs = {
-        "precipitation": precipitation.normalized(),
-        "temperature": temperature.normalized(),
-    }
-    if pet is not None:
-        specs["pet"] = pet.normalized()
-    inspected = (
-        dict(inspections)
-        if inspections is not None
-        else inspect_meteo_inputs(precipitation, temperature, pet)
-    )
-    for kind, spec in specs.items():
-        metadata = inspected.get(kind)
-        if metadata is None:
-            raise ValueError(f"Missing inspection for {kind} input.")
-        if metadata.kind != kind or metadata.source != spec.source:
-            raise ValueError(f"Inspection does not match the {kind} input.")
-
-    final_output_root = Path(output_root)
-    final_output_root.mkdir(parents=True, exist_ok=True)
-    output_root = Path(tempfile.mkdtemp(
-        prefix=".mhm_qgis-meteo-",
-        dir=final_output_root,
-    ))
-    outputs: dict[str, Path] = {}
-    headers: dict[str, Path] = {}
-    files_used: dict[str, int] = {}
-    forcing_specs = {spec.output_variable: spec for spec in FORCING_SPECS}
-    forcing_specs["pet"] = _PET_SPEC
-
-    variables = {
-        "precipitation": ("pre",),
-        "temperature": ("tavg", "tmin", "tmax"),
-        "pet": ("pet",),
-    }
-    try:
-        for kind, folder_spec in specs.items():
-            metadata = inspected[kind]
+    specs = [spec.normalized() for spec in inputs]
+    if not specs or len({spec.kind for spec in specs}) != len(specs):
+        raise ValueError("Configure one input per meteorology variable.")
+    inspected = inspections if inspections is not None else inspect_meteo_inputs(specs)
+    root = Path(output_root)
+    root.mkdir(parents=True, exist_ok=True)
+    outputs, headers, files_used = {}, {}, {}
+    with tempfile.TemporaryDirectory(prefix=".mhm_qgis-meteo-", dir=root) as temporary:
+        stage = Path(temporary)
+        for spec in specs:
+            validate_spec(spec)
+            metadata = inspected[spec.kind]
             _validate_target_coverage(metadata, target_grid)
-            kind_variables = variables[kind]
-            if folder_spec.source == ERA5LAND:
-                if log:
-                    log(
-                        f"{kind}: processing {len(metadata.files)} file(s) for "
-                        f"{', '.join(kind_variables)}"
-                    )
-                prepared = iter_daily_datasets(
-                    metadata.files,
-                    [forcing_specs[variable] for variable in kind_variables],
-                    bounds=None,
-                    target_lat=target_grid.lat,
-                    target_lon=target_grid.lon,
-                    target_sample_lat=target_grid.sample_lat,
-                    target_sample_lon=target_grid.sample_lon,
-                    log=log,
-                )
-            else:
-                prepared = (
-                    (
-                        variable,
-                        _prepare_ready_dataset(
-                            _ready_path(metadata.files, variable),
-                            variable,
-                            folder_spec.crs,
-                            target_grid,
-                        ),
-                    )
-                    for variable in kind_variables
-                )
+            output = stage / (f"{spec.kind}.nc" if flat_layout else f"{spec.kind}/{spec.kind}.nc")
+            count = 0
+            for block in _prepared_blocks(spec, metadata, target_grid):
+                assert_matches_header(block, spec.kind, target_grid.header)
+                _write_time_block(block, spec.kind, output, count)
+                count += block.sizes["time"]
+                block.close()
+            if not count:
+                raise ValueError(f"{spec.kind}: no time steps to write.")
+            outputs[spec.kind] = output
+            files_used[spec.kind] = len(metadata.files)
+            if not flat_layout:
+                header = output.with_name("header.txt")
+                write_header(None, spec.kind, header, header=dict(target_grid.header))
+                assert_header_file_matches(header, target_grid.header)
+                headers[spec.kind] = header
+            if log:
+                log(f"{spec.kind}: prepared {count} {spec.temporal_resolution.lower()} intervals.")
+        return _publish_meteo_result(MeteoForcingResult(outputs, headers, files_used),
+                                     root, flat_layout=flat_layout)
 
-            # Each dataset is written and released before the next is built, so
-            # the peak holds one variable rather than every variable at once.
-            for variable, ds_out in prepared:
-                if variable == "pre":
-                    ds_out = _normalize_precipitation(ds_out)
-                ds_out = _attach_target_coordinates(
-                    ds_out,
-                    variable,
-                    target_grid,
-                )
-                assert_matches_header(ds_out, variable, target_grid.header)
 
-                # v6 keeps one flat file per variable and no header; v5.13
-                # keeps a per-variable folder with header.txt beside it.
-                if flat_layout:
-                    output_file = output_root / f"{variable}.nc"
-                    header_file = None
-                else:
-                    output_file = output_root / variable / f"{variable}.nc"
-                    header_file = output_root / variable / "header.txt"
-                write_netcdf(ds_out, variable, output_file)
-                if header_file is not None:
-                    write_header(
-                        ds_out,
-                        variable,
-                        header_file,
-                        header=dict(target_grid.header),
-                    )
-                    assert_header_file_matches(header_file, target_grid.header)
-                outputs[variable] = output_file
-                if header_file is not None:
-                    headers[variable] = header_file
-                files_used[variable] = (
-                    len(metadata.files)
-                    if folder_spec.source == ERA5LAND else 1
-                )
-                del ds_out
+def _prepared_blocks(spec, metadata, target):
+    """Keep memory bounded to a time block and one previous accumulation plane."""
+    import numpy as np
+    import xarray as xr
+    previous = None
+    for path in metadata.files:
+        with _open_dataset(path) as ds:
+            variable = _find_variable(ds, spec.kind)
+            raw = ds[variable]
+            time_name = "time" if "time" in raw.dims else "valid_time"
+            bounds = interval_bounds(ds, time_name, spec, variable)
+            y_dim, x_dim = _spatial_dims(raw)
+            for dim in tuple(raw.dims):
+                if dim not in {time_name, y_dim, x_dim}:
+                    raw = raw.isel({dim: 0}, drop=True)
+            raw = raw.rename({time_name: "time"}) if time_name != "time" else raw
+            raw = raw.transpose("time", y_dim, x_dim)
+            cells = max(raw.sizes[y_dim] * raw.sizes[x_dim],
+                        int(target.header["nrows"]) * int(target.header["ncols"]))
+            block_size = min(32, max(1, 64 * 1024 * 1024 // (8 * cells)))
+            for start in range(0, raw.sizes["time"], block_size):
+                chunk = raw.isel(time=slice(start, start + block_size)).load()
+                chunk_bounds = bounds[start:start + block_size]
+                values, previous = convert_values(chunk.values, chunk_bounds, spec, variable, previous)
+                chunk = _resample_ready(chunk.copy(data=values), ds, spec.crs, target, np, xr).load()
+                chunk.name = spec.kind
+                chunk.attrs = {"units": VARIABLES[spec.kind][1],
+                               "long_name": spec.kind, "input_cadence": spec.temporal_resolution}
+                output = chunk.to_dataset()
+                output["time_bnds"] = (("time", "bnds"), chunk_bounds)
+                output["time"].attrs = {"standard_name": "time", "axis": "T", "bounds": "time_bnds"}
+                output["lat"].attrs = {"standard_name": "latitude", "units": "degrees_north"}
+                output["lon"].attrs = {"standard_name": "longitude", "units": "degrees_east"}
+                output.attrs = {"Conventions": "CF-1.8", "history": "Prepared by mhm_qgis; input cadence preserved"}
+                yield _attach_target_coordinates(output, spec.kind, target)
 
-        result = _publish_meteo_result(
-            MeteoForcingResult(outputs, headers, files_used),
-            final_output_root,
-            flat_layout=flat_layout,
-        )
-        if log:
-            for variable, output in result.outputs.items():
-                log(f"{variable}: written {output}")
-        return result
-    finally:
-        shutil.rmtree(output_root, ignore_errors=True)
+
+def _write_time_block(ds, variable, path, offset):
+    """Create once, then append data and exact CF time coordinates."""
+    if not offset:
+        write_netcdf(ds, variable, path, unlimited_dims=("time",))
+        return
+    import numpy as np
+    import pandas as pd
+    from netCDF4 import Dataset, date2num
+    with Dataset(path, "a") as handle:
+        stop = offset + ds.sizes["time"]
+        handle[variable][offset:stop] = np.ma.masked_invalid(ds[variable].values)
+        for name in ("time", "time_bnds"):
+            target = handle[name]
+            values = ds[name].values
+            dates = pd.DatetimeIndex(values.reshape(-1)).to_pydatetime()
+            target[offset:stop] = np.asarray(date2num(dates, getattr(target, "units", handle["time"].units), getattr(target, "calendar", handle["time"].calendar))).reshape(values.shape)
 
 
 def _publish_meteo_result(
@@ -264,7 +176,7 @@ def _publish_meteo_result(
     first_output = next(iter(staged.outputs.values()))
     staging_root = first_output.parent if flat_layout else first_output.parents[1]
     backup_root = staging_root / "backups"
-    managed_variables = ("pre", "tavg", "tmin", "tmax", "pet")
+    managed_variables = tuple(staged.outputs)
     backups: list[tuple[Path, Path]] = []
     published: list[Path] = []
 
@@ -321,45 +233,18 @@ def _publish_meteo_result(
         raise
 
 
-def _direct_netcdf_files(folder: Path) -> list[Path]:
-    if not folder.exists() or not folder.is_dir():
-        raise FileNotFoundError(f"Meteorology folder does not exist: {folder}")
-    return sorted(
-        path for path in folder.iterdir()
-        if path.is_file() and path.suffix.lower() == ".nc")
-
-
 def _files_for_spec(spec: MeteoFolderSpec) -> list[Path]:
     folder = Path(spec.folder)
-    files = _direct_netcdf_files(folder)
-    if spec.source == ERA5LAND:
-        if not files:
-            raise ValueError(
-                f"{spec.kind}: ERA5Land folder must contain at least one .nc file.")
-        return files
-
-    if spec.kind == "precipitation":
-        if len(files) != 1:
-            raise ValueError(
-                "mHM-ready precipitation requires exactly one direct .nc file; "
-                f"found {len(files)}.")
-        return files
-
-    expected = set(_READY_FILES[spec.kind])
-    actual = {path.name for path in files}
-    if actual != expected:
-        raise ValueError(
-            f"mHM-ready {spec.kind} folder must contain exactly "
-            f"{', '.join(_READY_FILES[spec.kind])}.")
-    return [folder / name for name in _READY_FILES[spec.kind]]
-
-
-def _ready_variable(path: Path, spec: MeteoFolderSpec) -> str | None:
-    if spec.source == ERA5LAND:
-        return None
-    if spec.kind == "precipitation":
-        return "pre"
-    return path.stem
+    if not folder.is_dir():
+        raise FileNotFoundError(f"Meteorology folder does not exist: {folder}")
+    pattern = spec.pattern.strip()
+    if not pattern or Path(pattern).is_absolute() or ".." in Path(pattern).parts:
+        raise ValueError("Enter a relative NetCDF glob within the selected folder.")
+    files = sorted(path for path in folder.glob(pattern)
+                   if path.is_file() and path.suffix.lower() == ".nc")
+    if not files:
+        raise ValueError(f"{spec.kind}: no NetCDF files match {pattern!r} in {folder}.")
+    return files
 
 
 def _open_dataset(path: Path):
@@ -378,12 +263,11 @@ def _open_dataset(path: Path):
 
 def _inspect_file(
         path: Path,
-        spec: MeteoFolderSpec,
-        expected_variable: str | None) -> _SpatialSignature:
+        spec: MeteoFolderSpec) -> _SpatialSignature:
     import numpy as np
 
     with _open_dataset(path) as ds:
-        variable = _find_variable(ds, spec.kind, expected_variable)
+        variable = _find_variable(ds, spec.kind)
         da = ds[variable]
         y_dim, x_dim = _spatial_dims(da)
         x_name, x_values = _axis_values(ds, x_dim, "x")
@@ -441,26 +325,15 @@ def _inspect_file(
         return _SpatialSignature(metadata, x_values, y_values)
 
 
-def _find_variable(ds, kind: str, expected: str | None = None) -> str:
-    if expected:
-        if expected in ds.data_vars:
-            return expected
-        candidates = [
-            name for name, variable in ds.data_vars.items()
-            if "time" in variable.dims or "valid_time" in variable.dims
-        ]
-        if kind == "precipitation" and len(candidates) == 1:
-            return candidates[0]
-        raise ValueError(
-            f"Expected variable '{expected}'; available variables: "
-            f"{', '.join(ds.data_vars)}.")
-
-    for alias in _ERA_ALIASES[kind]:
-        if alias in ds.data_vars:
-            return alias
-    raise ValueError(
-        f"No ERA5Land {kind} variable found; available variables: "
-        f"{', '.join(ds.data_vars)}.")
+def _find_variable(ds, kind):
+    """Resolve an exact output name or one unambiguous known source alias."""
+    candidates = [name for name in VARIABLES[kind][0] if name in ds.data_vars
+                  and ("time" in ds[name].dims or "valid_time" in ds[name].dims)]
+    if kind in candidates:
+        return kind
+    if len(candidates) != 1:
+        raise ValueError(f"{kind}: expected one source variable; found {candidates or list(ds.data_vars)}.")
+    return candidates[0]
 
 
 def _spatial_dims(da) -> tuple[str, str]:
@@ -572,49 +445,10 @@ def _validate_spatial_signatures(signatures: list[_SpatialSignature]) -> None:
                 f"{current.metadata.files[0].name}.")
 
 
-def _validate_times(files: list[Path], spec: MeteoFolderSpec) -> None:
-    import numpy as np
-
-    groups = [files]
-    if spec.source == MHM_READY and spec.kind == "temperature":
-        groups = [[path] for path in files]
-        reference = _time_values(files[0])
-        for path in files[1:]:
-            if not np.array_equal(reference, _time_values(path)):
-                raise ValueError(
-                    "mHM-ready tavg, tmin, and tmax files must share time values.")
-
-    for group in groups:
-        values = [
-            value
-            for path in group
-            for value in _time_values(path)
-        ]
-        if len(np.unique(values)) != len(values):
-            raise ValueError(
-                f"{spec.kind}: NetCDF files contain duplicate time values.")
-
-
-def _time_values(path: Path):
-    import numpy as np
-
-    with _open_dataset(path) as ds:
-        name = "time" if "time" in ds.coords else "valid_time"
-        if name not in ds.coords:
-            raise ValueError(f"{path.name}: missing time coordinate.")
-        return np.asarray(ds[name].values)
-
-
-def _ready_path(files: tuple[Path, ...], variable: str) -> Path:
-    if len(files) == 1:
-        return files[0]
-    return next(path for path in files if path.name == f"{variable}.nc")
-
-
 def _validate_target_coverage(
         metadata: SpatialMetadata,
         target: TargetGrid) -> None:
-    """Reject a target whose cell centres fall outside the source grid."""
+    """Reject disjoint grids; allow padding around overlapping input."""
     import numpy as np
 
     target_x = np.asarray(
@@ -648,76 +482,12 @@ def _validate_target_coverage(
     x_tolerance = metadata.x_resolution / 2.0 + 1e-9
     y_tolerance = metadata.y_resolution / 2.0 + 1e-9
     if (
-            float(target_x.min()) < west - x_tolerance
-            or float(target_x.max()) > east + x_tolerance
-            or float(target_y.min()) < south - y_tolerance
-            or float(target_y.max()) > north + y_tolerance):
+            float(target_x.max()) < west - x_tolerance
+            or float(target_x.min()) > east + x_tolerance
+            or float(target_y.max()) < south - y_tolerance
+            or float(target_y.min()) > north + y_tolerance):
         raise ValueError(
             f"The target grid is outside the {metadata.kind} source extent.")
-
-
-def _prepare_ready_dataset(
-        path: Path,
-        variable: str,
-        crs_fallback: str | None,
-        target: TargetGrid):
-    import numpy as np
-    import pandas as pd
-    import xarray as xr
-
-    spec = MeteoFolderSpec(
-        "precipitation" if variable == "pre" else
-        "temperature" if variable.startswith("t") else "pet",
-        path.parent,
-        MHM_READY,
-        crs_fallback,
-    ).normalized()
-    with _open_dataset(path) as ds:
-        source_name = _find_variable(ds, spec.kind, variable)
-        da = ds[source_name]
-        time_name = "time" if "time" in da.dims else "valid_time"
-        if time_name not in da.dims:
-            raise ValueError(f"{path.name}: variable {source_name} has no time axis.")
-        if time_name != "time":
-            da = da.rename({time_name: "time"})
-        spatial_dims = set(_spatial_dims(da))
-        for dim in tuple(da.dims):
-            if dim != "time" and dim not in spatial_dims and da.sizes[dim] == 1:
-                da = da.isel({dim: 0}, drop=True)
-        da = _resample_ready(da, ds, spec.crs, target, np, xr)
-        da = da.astype("float64").load().sortby("time")
-
-    da.name = variable
-    attrs = {
-        "pre": ("mm", "daily total precipitation"),
-        "tavg": ("Celsius", "daily mean air temperature"),
-        "tmin": ("Celsius", "daily minimum air temperature"),
-        "tmax": ("Celsius", "daily maximum air temperature"),
-        "pet": ("mm", "daily potential evapotranspiration"),
-    }
-    da.attrs = {"units": attrs[variable][0], "long_name": attrs[variable][1]}
-    ds_out = da.to_dataset()
-    starts = pd.DatetimeIndex(ds_out["time"].values)
-    ds_out["time_bnds"] = xr.DataArray(
-        np.stack([
-            starts.values.astype("datetime64[ns]"),
-            (starts + pd.Timedelta(days=1)).values.astype("datetime64[ns]"),
-        ], axis=1),
-        dims=("time", "bnds"),
-        coords={"time": ds_out["time"], "bnds": [0, 1]},
-    )
-    ds_out["time"].attrs.update(
-        {"standard_name": "time", "axis": "T", "bounds": "time_bnds"})
-    ds_out["lat"].attrs.update(
-        {"standard_name": "latitude", "units": "degrees_north", "axis": "Y"})
-    ds_out["lon"].attrs.update(
-        {"standard_name": "longitude", "units": "degrees_east", "axis": "X"})
-    ds_out.attrs.update({
-        "Conventions": "CF-1.6",
-        "source": "mHM ready",
-        "history": "Prepared for mHM by mhm_qgis",
-    })
-    return ds_out
 
 
 def _resample_ready(da, ds, source_crs, target, np, xr):
@@ -845,12 +615,16 @@ def _attach_target_coordinates(ds, variable: str, target: TargetGrid):
             },
         ),
     })
+    ds["lon"].attrs = {"standard_name": "projection_x_coordinate", "axis": "X"}
+    ds["lat"].attrs = {"standard_name": "projection_y_coordinate", "axis": "Y"}
     ds[variable].attrs["coordinates"] = "lat2d lon2d"
     if target.crs:
         try:
             from pyproj import CRS
 
             crs = CRS.from_user_input(target.crs)
+            unit = crs.axis_info[0].unit_name if crs.axis_info else "metre"
+            ds["lon"].attrs["units"] = ds["lat"].attrs["units"] = unit
             crs_attrs = crs.to_cf()
             crs_attrs["spatial_ref"] = crs.to_wkt()
             ds["crs"] = 0
@@ -859,29 +633,3 @@ def _attach_target_coordinates(ds, variable: str, target: TargetGrid):
         except Exception:
             pass
     return ds
-
-
-def _normalize_precipitation(ds):
-    """Constrain precipitation to its physical lower bound."""
-    attrs = dict(ds["pre"].attrs)
-    ds = ds.copy()
-    ds["pre"] = ds["pre"].clip(min=0.0)
-    ds["pre"].attrs = {**attrs, "valid_min": 0.0}
-    history = ds.attrs.get("history", "")
-    note = "Precipitation values below 0 mm clipped to 0."
-    ds.attrs["history"] = f"{history}; {note}" if history else note
-    return ds
-
-
-__all__ = [
-    "ERA5LAND",
-    "MHM_READY",
-    "MeteoFolderSpec",
-    "MeteoForcingResult",
-    "SpatialMetadata",
-    "inspect_meteo_folder",
-    "inspect_meteo_inputs",
-    "normalize_kind",
-    "normalize_source",
-    "process_meteo_inputs",
-]

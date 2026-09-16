@@ -24,10 +24,22 @@ Install Python dependencies into the environment used by QGIS.
 
 ## Workflow
 
-Select a project folder and mHM version, configure inputs, prepare morphology
-and domains, then run **Meteorology/Morphology Setup**. Review the prepared
-layers, edit namelists, and run mHM. Project settings and processing state are
-saved for reuse.
+In **0. Configuration**, select a project folder, then open a saved domain or
+choose **<new>** and press **Create Project Structure**. Each setup has its own
+settings, state and outputs under `<project>/mhm-qgis/<domain-name>/`; legacy
+workspaces are left untouched.
+
+Choose a DEM, configure precipitation's folder, glob, units and cadence, then
+confirm its metadata dialog to scan and establish the common grid. Add other
+meteorology variables through the same dialog. Choose simulation dates and
+catchments; no selected catchments means valid DEM cells.
+
+Run **Execute All Morphology**, then **Execute All Meteorology**. Review inputs,
+edit namelists, and run mHM. Each setup is one model domain and may contain
+disconnected catchments. Meteorology preparation preserves input cadence,
+converts units and optionally deaccumulates running totals. Historical land-use
+periods share exact datetime boundaries (v5 changes must fall on year boundaries).
+Both model versions can generate L0/L1/L11/L2 coordinates in `data/latlon.nc`.
 
 To open the GUI without QGIS Desktop, run `mhm-qgis` (or
 `python -m mhm_qgis.qt`) from a Python environment with the real QGIS runtime

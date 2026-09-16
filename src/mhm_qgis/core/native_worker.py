@@ -27,11 +27,7 @@ def _prefer_worker_termination():
 def _land_use(value):
     return LandUseInput(
         periods=tuple(
-            LandUsePeriod(
-                int(item["start_year"]),
-                int(item["end_year"]),
-                Path(item["file_path"]),
-            )
+            LandUsePeriod.from_dict(item)
             for item in value["periods"]
         ),
         lookup_table=Path(value["lookup_table"]),

@@ -14,7 +14,7 @@ def _project_with_output(root, *, offsets, time_units="days since 1990-01-01"):
     """Build a project whose mHM run left one output file behind."""
     from netCDF4 import Dataset
 
-    folder = root / "mhm-plugin" / "output"
+    folder = root / "mhm-qgis" / "output"
     folder.mkdir(parents=True, exist_ok=True)
     with Dataset(folder / "mHM_Fluxes_States.nc", "w") as ds:
         ds.createDimension("time", len(offsets))

@@ -8,6 +8,7 @@ import pytest
 from mhm_qgis.core.handlers.state.nml_settings import load_settings, update_section
 from mhm_qgis.core.handlers.store.layout import ensure_project_structure, morph_folder
 from mhm_qgis.core.morphology.layers import categorical
+from mhm_qgis.core.handlers.store.paths import morph_staging_folder
 
 
 def _touch(path: Path, content: bytes = b"") -> Path:
@@ -53,13 +54,13 @@ def test_ready_land_cover_is_published_and_recorded(tmp_path):
 
     outputs = categorical.copy_ready(tmp_path, "lc", source)
 
-    target = Path(morph_folder(tmp_path)) / "lc.asc"
+    target = Path(morph_staging_folder(tmp_path)) / "lc.asc"
     assert target.read_bytes() == b"new raster"
     assert target.with_suffix(".prj").read_bytes() == b"projection"
     assert set(outputs) == {target, target.with_suffix(".prj")}
-    assert all(not path.exists() for path in stale)
+    assert all(path.exists() for path in stale)
     assert load_settings(tmp_path)["land_cover"]["output_path"] == (
-        "data/master/static/morph/lc.asc"
+        "Z Temp/Morphology/morph/lc.asc"
     )
 
 
@@ -75,7 +76,7 @@ def test_ready_soil_requires_and_publishes_its_class_definition(tmp_path):
         tmp_path, "soil", source, definition_source=definition
     )
 
-    target = Path(morph_folder(tmp_path)) / "soil_class.tif"
+    target = Path(morph_staging_folder(tmp_path)) / "soil_class.tif"
     target_definition = target.parent / "soil_classdefinition.txt"
     assert set(outputs) == {target, target_definition}
     assert target.read_bytes() == b"soil"
@@ -93,7 +94,7 @@ def test_failed_publish_restores_the_previous_output_set(tmp_path, monkeypatch):
     ensure_project_structure(tmp_path, "5.13")
     source = _touch(tmp_path / "input" / "geology.tif", b"new raster")
     definition_source = _touch(tmp_path / "input" / "new.txt", b"new definition")
-    folder = Path(morph_folder(tmp_path))
+    folder = Path(morph_staging_folder(tmp_path))
     output = _touch(folder / "geology_class.tif", b"old raster")
     definition = _touch(folder / "geology_classdefinition.txt", b"old definition")
 

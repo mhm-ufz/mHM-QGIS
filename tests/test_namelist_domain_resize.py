@@ -1,49 +1,32 @@
-"""Domain identity, not list position, controls saved editor values."""
-import json
+"""Legacy domain arrays are adapted without writing on editor cancel."""
 from pathlib import Path
-
 import pytest
-
 model = pytest.importorskip("nml_tools.gui.model")
-from mhm_qgis.applications.nml_tools_handler import reconcile_domain_values
+from mhm_qgis.applications.nml_tools_handler import _editor_folder
+
+SCHEMAS = Path(__file__).parents[1] / "src/mhm_qgis/nml-schemas/v6"
 
 
-@pytest.mark.parametrize("order", [(1,), (1, 0), (1, 0, 2)])
-@pytest.mark.parametrize("version", ["v5.13", "v6"])
-def test_resize_preserves_surviving_domains_and_does_not_save(tmp_path, order, version):
-    schemas = Path(__file__).parents[1] / "src/mhm_qgis/nml-schemas" / version
-    project = model.load_project(schemas, tmp_path)
-    dimension = "max_domains" if version == "v5.13" else "n_domains"
-    document = model.empty_document(project)
-    document["dimensions"][dimension] = 2
-    if version == "v5.13":
-        block, field = "directories_general", "dir_Morpho"
-        custom_block, custom_field = "time_periods", "warming_Days"
-        paths = ["data/350/", "data/550/"]
-        custom = [7, 19]
+@pytest.mark.parametrize("save", [False, True])
+def test_legacy_domain_migration_preserves_original_until_editor_save(tmp_path, save):
+    project = model.load_project(SCHEMAS, tmp_path)
+    model.save_profiles(project, [(project.profile("main"), {
+        "config_project": {"n_domains": 2},
+        "config_input": {"dem_path": ["data/a/dem.nc", "data/b/dem.nc"]},
+    }, {"n_domains": 2})])
+    target = tmp_path / "mhm.nml"
+    before = target.read_bytes()
+    values = {"main": {"config_project": {"n_domains": 1},
+                       "config_input": {"dem_path": ["data/master/morph/dem.nc"]}}}
+    with _editor_folder(SCHEMAS, tmp_path, {"main": []}, values, {"n_domains": 1}) as folder:
+        assert target.read_bytes() == before
+        assert folder != tmp_path
+        staged = model.load_project(SCHEMAS, folder, {"main": []})
+        assert model.recover_dimensions(staged)["n_domains"] == 1
+        if save:
+            model.save_profiles(staged, [(staged.profile("main"), values["main"], {"n_domains": 1})])
+    if save:
+        assert model.recover_dimensions(project)["n_domains"] == 1
+        assert target.with_suffix(".nml.before-single-domain").read_bytes() == before
     else:
-        block, field = "config_input", "dem_path"
-        custom_block, custom_field = "config_meteo", "frac_night_pre"
-        paths = ["data/350/dem.nc", "data/550/dem.nc"]
-        custom = [[0.2, 0.7] for _ in range(12)]
-    saved = {block: {field: paths}, custom_block: {custom_field: custom}}
-    document = model.merge_initial_values(document, {"main": saved}, project)
-    path = tmp_path / "nml.json"
-    path.write_text(json.dumps(document))
-    before = path.read_bytes()
-    new_paths = [*paths, "data/new/dem.nc"]
-    initial = {"main": {block: {field: [new_paths[index] for index in order]}}}
-    dims = {dimension: len(order)}
-    values = reconcile_domain_values(schemas, tmp_path, initial, dims)
-    merged = model.merge_initial_values(
-        model.merge_initial_dimensions(document, dims, project), values, project,
-    )
-    actual = merged["file_profiles"]["main"]["values"][custom_block][custom_field]
-    if version == "v5.13":
-        assert actual[:2] == [custom[i] for i in order if i < 2]
-    else:
-        assert len(actual) == 12
-        assert actual[0][:2] == [custom[0][i] for i in order if i < 2]
-        assert all(len(row) == len(order) for row in actual)
-    assert path.read_bytes() == before
-    assert initial == {"main": {block: {field: [new_paths[index] for index in order]}}}
+        assert target.read_bytes() == before

@@ -6,7 +6,7 @@ from pathlib import Path
 from ....grid import header_from_coordinate_axes, write_header_file
 
 
-def write_netcdf(ds, variable: str, output_file: Path) -> None:
+def write_netcdf(ds, variable: str, output_file: Path, *, unlimited_dims=None) -> None:
     """Write one mHM forcing NetCDF with conservative CF/xarray encoding."""
     output_file.parent.mkdir(parents=True, exist_ok=True)
     encoding = {
@@ -18,13 +18,13 @@ def write_netcdf(ds, variable: str, output_file: Path) -> None:
             "complevel": 4,
         },
         "time": {
-            "dtype": "int32",
-            "units": "days since 1900-01-01 00:00:00",
+            "dtype": "float64",
+            "units": "seconds since 1900-01-01 00:00:00",
             "calendar": "proleptic_gregorian",
         },
         "time_bnds": {
-            "dtype": "int32",
-            "units": "days since 1900-01-01 00:00:00",
+            "dtype": "float64",
+            "units": "seconds since 1900-01-01 00:00:00",
             "calendar": "proleptic_gregorian",
         },
         "lat": {
@@ -47,7 +47,7 @@ def write_netcdf(ds, variable: str, output_file: Path) -> None:
             ds_to_write = _strip_attrs_managed_by_encoding(
                 ds, engine_encoding)
             ds_to_write.to_netcdf(
-                output_file, encoding=engine_encoding, **kwargs)
+                output_file, encoding=engine_encoding, unlimited_dims=unlimited_dims, **kwargs)
             return
         except Exception as e:
             last_error = e

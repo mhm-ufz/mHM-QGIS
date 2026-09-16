@@ -45,6 +45,10 @@ class Dialog:
     def __init__(self, project_folder: Path, version: str = "6.0") -> None:
         self.project_folder = str(project_folder)
         self.comboBox_mHMversion = ComboBox(version)
+        from types import SimpleNamespace
+        stamp = SimpleNamespace(toString=lambda _format: "2001-01-01T00:00")
+        for name in controller_module.TIME_WIDGETS.values():
+            setattr(self, name, SimpleNamespace(dateTime=lambda: stamp))
         self.messages = []
         self.saved = 0
         self.terminal = Terminal()
@@ -78,7 +82,7 @@ def test_edit_namelists_forwards_project_values_and_dimensions(
     monkeypatch.setattr(
         nml_tools.gui,
         "launch_gui",
-        lambda **kwargs: calls.append(kwargs) or 0,
+        lambda schemas, folder, profiles, **kwargs: calls.append(dict(schemas_dir=schemas, output_dir=str(folder), file_profiles=profiles, **kwargs)) or 0,
     )
 
     assert controller_module.edit_namelists(dialog) is True
@@ -90,6 +94,7 @@ def test_edit_namelists_forwards_project_values_and_dimensions(
             "main": {"config_project": {"project_details": "5.13"}}
         },
         "initial_dimensions": {"n_domains": 2},
+        "file_profiles": {"main": [], "parameter": [], "output": []},
     }]
 
 
@@ -114,6 +119,7 @@ def test_version_change_prepares_project_and_saves_state(
     prepared = []
     refreshed = []
     dialog.refresh_advanced_nml_settings = lambda: refreshed.append(True)
+    monkeypatch.setattr(controller_module, "restore_simulation_times", lambda _dialog: None)
     monkeypatch.setattr(
         controller_module,
         "ensure_project_structure",

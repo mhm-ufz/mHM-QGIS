@@ -1,22 +1,26 @@
 # -*- coding: utf-8 -*-
 """Resolve prepared meteorology forcing for the display selector.
 
-Kept free of QGIS so the band arithmetic stays testable; the canvas half lives
+Kept free of QGIS so time-coordinate selection stays testable; the canvas half lives
 in :mod:`mhm_qgis.qgis_bridge.display.meteo`.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
+from functools import lru_cache
+
+from ..handlers.file.netcdf import time_axis
+from ..post import step_for_when
 from pathlib import Path
 
 from ..handlers.store.layout import METEO_VARIABLES, expected_meteo_outputs
 
-#: The forcing time axis is stored as days since this epoch.
+#: Historical forcing files used days since this epoch.
 TIME_EPOCH = date(1900, 1, 1)
 
-#: `pet` is optional, so the display order lists it last.
-DISPLAY_VARIABLES = ("pre", "tavg", "tmin", "tmax", "pet")
+#: Only variables present on disk are offered.
+DISPLAY_VARIABLES = METEO_VARIABLES
 
 VARIABLE_LABELS = {
     "pre": "Precipitation",
@@ -34,7 +38,7 @@ class MeteoOutput:
     path: Path
     variable: str
     band: int
-    when: date
+    when: datetime
     name: str
 
 
@@ -61,84 +65,48 @@ def available_meteo_variables(project_folder) -> list[str]:
     ]
 
 
-def _time_axis_bounds(path) -> tuple[int, int] | None:
-    """Return the first and last raw day offsets, without reading the axis."""
-    try:
-        from netCDF4 import Dataset
-    except ImportError:
-        return None
-    try:
-        with Dataset(str(path)) as dataset:
-            axis = dataset.variables.get("time")
-            if axis is None or axis.size == 0:
-                return None
-            return int(axis[0]), int(axis[-1])
-    except OSError:
-        return None
+
+@lru_cache(maxsize=16)
+def _cached_steps(path, modified, size):
+    """Decode each unchanged file's actual time coordinate once."""
+    return tuple(time_axis(path))
 
 
-def meteo_time_range(path) -> tuple[date, date] | None:
-    """Return the first and last date covered by a prepared forcing file."""
-    bounds = _time_axis_bounds(path)
-    if bounds is None:
-        return None
-    first, last = bounds
-    return TIME_EPOCH + timedelta(days=first), TIME_EPOCH + timedelta(days=last)
+def meteo_steps(path):
+    """Return native timestamps, including subdaily and calendar intervals."""
+    if not path:
+        return ()
+    path = Path(path)
+    stat = path.stat()
+    return _cached_steps(str(path), stat.st_mtime_ns, stat.st_size)
 
 
-def project_time_range(project_folder) -> tuple[date, date] | None:
-    """Return the forcing period, measured on the first prepared variable."""
+def meteo_time_range(path):
+    """Return the first and last prepared timestamps."""
+    steps = meteo_steps(path)
+    return (steps[0], steps[-1]) if steps else None
+
+
+def project_time_range(project_folder):
+    """Return the first available variable's time span."""
     for variable in available_meteo_variables(project_folder):
         span = meteo_time_range(meteo_output_path(project_folder, variable))
-        if span is not None:
+        if span:
             return span
     return None
 
 
-def step_count(span: tuple[date, date]) -> int:
-    """Return the number of daily steps a forcing period covers."""
-    first, last = span
-    return (last - first).days + 1
-
-
-def date_for_step(span: tuple[date, date], step: int) -> date:
-    """Return the date at one zero-based step, clamped to the period."""
-    first, last = span
-    return min(max(first + timedelta(days=int(step)), first), last)
-
-
-def step_for_date(span: tuple[date, date], when) -> int:
-    """Return the zero-based step for one date, clamped to the period."""
-    first, last = span
-    when = when.date() if isinstance(when, datetime) else when
-    return max(0, min((when - first).days, (last - first).days))
-
-
-def resolve_meteo_output(project_folder, variable: str, when) -> MeteoOutput | None:
-    """Return the raster band for one variable at one date, if it is covered.
-
-    The axis is daily and sorted, so the band follows from arithmetic rather
-    than a decode of the whole series.
-    """
+def resolve_meteo_output(project_folder, variable: str, when):
+    """Resolve a band using the file's actual time coordinate."""
     path = meteo_output_path(project_folder, variable)
-    if path is None:
+    steps = meteo_steps(path)
+    if isinstance(when, date) and not isinstance(when, datetime):
+        when = datetime.combine(when, datetime.min.time())
+    if not steps or not steps[0] <= when <= steps[-1]:
         return None
-    bounds = _time_axis_bounds(path)
-    if bounds is None:
-        return None
-    first, last = bounds
-    when = when.date() if isinstance(when, datetime) else when
-    offset = (when - TIME_EPOCH).days
-    if not first <= offset <= last:
-        return None
+    index = step_for_when(steps, when)
     label = VARIABLE_LABELS.get(variable, variable)
-    return MeteoOutput(
-        path=path,
-        variable=variable,
-        band=offset - first + 1,
-        when=when,
-        name=f"{label} ({variable})",
-    )
+    return MeteoOutput(path, variable, index + 1, steps[index], f"{label} ({variable})")
 
 
 __all__ = [
@@ -146,11 +114,9 @@ __all__ = [
     "MeteoOutput",
     "VARIABLE_LABELS",
     "available_meteo_variables",
-    "date_for_step",
     "meteo_output_path",
     "meteo_time_range",
     "project_time_range",
     "resolve_meteo_output",
-    "step_count",
-    "step_for_date",
+    "meteo_steps",
 ]

@@ -5,11 +5,12 @@ import csv
 import os
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
 
-LAND_USE_HEADER = ("StartYear", "EndYear", "FilePath")
+LAND_USE_HEADER = ("StartDateTime", "EndDateTime", "FilePath")
 SOIL_HEADER = (
     "Horizon",
     "Upper Depth",
@@ -25,16 +26,51 @@ MAX_LAND_USE_PERIODS = 50
 MAX_SOIL_HORIZONS = 10
 
 
+def period_datetime(value) -> datetime:
+    """Parse a year or ISO datetime; use timezone-free UTC throughout."""
+    if isinstance(value, datetime):
+        result = value
+    else:
+        text = str(value).strip()
+        result = datetime.fromisoformat(text + "-01-01" if len(text) == 4 else text)
+    if result.tzinfo is not None:
+        raise ValueError("Land-use dates must use timezone-free UTC.")
+    return result
+
+
 @dataclass(frozen=True)
 class LandUsePeriod:
-    start_year: int
-    end_year: int
+    start_time: datetime | str | int
+    end_time: datetime | str | int
     file_path: Path
+
+    def __post_init__(self):
+        """Normalize dates; integer pairs retain old inclusive-year semantics."""
+        start, end = period_datetime(self.start_time), period_datetime(self.end_time)
+        if isinstance(self.start_time, int) and isinstance(self.end_time, int):
+            end = datetime(end.year + 1, 1, 1)
+        object.__setattr__(self, "start_time", start)
+        object.__setattr__(self, "end_time", end)
+
+    @classmethod
+    def from_dict(cls, value):
+        """Read datetime state or an older inclusive-year record."""
+        if "start_time" in value:
+            return cls(value["start_time"], value["end_time"], Path(value["file_path"]))
+        return cls(int(value["start_year"]), int(value["end_year"]), Path(value["file_path"]))
+
+    @property
+    def start_year(self):
+        return self.start_time.year
+
+    @property
+    def end_year(self):
+        return (self.end_time - timedelta(microseconds=1)).year
 
     def as_dict(self) -> dict:
         return {
-            "start_year": self.start_year,
-            "end_year": self.end_year,
+            "start_time": self.start_time.isoformat(),
+            "end_time": self.end_time.isoformat(),
             "file_path": str(self.file_path),
         }
 
@@ -94,7 +130,7 @@ class SoilInput:
         }
 
 
-def validate_land_use_input(value: LandUseInput) -> None:
+def validate_land_use_input(value: LandUseInput, *, simulation_start=None, simulation_end=None, version=None) -> None:
     """Validate paths and continuous, non-overlapping calendar periods."""
     if not value.periods:
         raise ValueError("Add at least one land-use layer.")
@@ -102,12 +138,20 @@ def validate_land_use_input(value: LandUseInput) -> None:
         raise ValueError(f"Land use supports at most {MAX_LAND_USE_PERIODS} periods.")
     previous_end = None
     for number, period in enumerate(value.periods, 1):
-        if period.end_year < period.start_year:
+        if period.end_time <= period.start_time:
             raise ValueError(f"Land-use layer {number} ends before it starts.")
-        if previous_end is not None and period.start_year != previous_end + 1:
+        if previous_end is not None and period.start_time != previous_end:
             raise ValueError("Land-use periods must be ordered and gap-free.")
         _require_file(period.file_path, f"land-use layer {number}")
-        previous_end = period.end_year
+        previous_end = period.end_time
+    if simulation_start is not None and value.periods[0].start_time < period_datetime(simulation_start):
+        raise ValueError("Land-use periods start before the simulation.")
+    if simulation_end is not None and value.periods[-1].end_time > period_datetime(simulation_end):
+        raise ValueError("Land-use periods end after the simulation.")
+    if str(version).startswith("5"):
+        for period in value.periods[1:]:
+            if period.start_time != datetime(period.start_time.year, 1, 1):
+                raise ValueError("mHM v5 supports land-use changes at year boundaries only; use v6 for datetime changes.")
     _require_file(value.lookup_table, "land-use lookup table")
     if not value.mapping_field.strip() or not value.class_field.strip():
         raise ValueError("Select both the land-use mapping and class fields.")
@@ -149,7 +193,7 @@ def write_land_use_manifest(value: LandUseInput, output_file) -> Path:
     validate_land_use_input(value)
     output = Path(output_file)
     rows = (
-        (period.start_year, period.end_year, _manifest_path(period.file_path, output))
+        (period.start_time.isoformat(), period.end_time.isoformat(), _manifest_path(period.file_path, output))
         for period in value.periods
     )
     return _write_csv(output, LAND_USE_HEADER, rows)

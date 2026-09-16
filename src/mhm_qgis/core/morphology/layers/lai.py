@@ -59,31 +59,6 @@ def task_options(
     }
 
 
-def crop_to_l0(project_folder, l0_header: dict, crs: str = "", *, log=None) -> Path:
-    """Window-copy staged DEM-grid LAI onto the common L0 grid."""
-    staged = Path(lai_dem_staging_path(project_folder))
-    if not staged.is_file():
-        raise FileNotFoundError(
-            "LAI has not been resampled to the filled DEM grid. "
-            "Run Execute All before Morphology Setup."
-        )
-    folder = Path(lai_folder(project_folder))
-    folder.mkdir(parents=True, exist_ok=True)
-    output = folder / "lai_crop.nc"
-    copy_lai_file_to_grid(
-        staged,
-        output,
-        l0_header,
-        crs or "",
-        "Monthly LAI cropped to the common L0 model extent",
-        log=log,
-    )
-    for stale in (folder / "lai_masked.nc", folder / "lai.nc"):
-        stale.unlink(missing_ok=True)
-    _write_header(folder, l0_header)
-    return output
-
-
 def publish_to_l0(
     project_folder,
     l0_header: dict,
@@ -95,19 +70,19 @@ def publish_to_l0(
 ) -> Path:
     """Publish unmasked LAI over the complete common L0 extent."""
     folder = Path(lai_folder(project_folder))
-    crop = folder / "lai_crop.nc"
-    if not crop.is_file():
-        crop = crop_to_l0(project_folder, l0_header, crs, log=log)
+    staged = Path(lai_dem_staging_path(project_folder))
+    if not staged.is_file():
+        raise FileNotFoundError("Prepare LAI on the common DEM grid first.")
+    folder.mkdir(parents=True, exist_ok=True)
     output = folder / "lai.nc"
     copy_lai_file_to_grid(
-        crop,
+        staged,
         output,
         l0_header,
         crs or "",
         "Monthly LAI on the common L0 model extent",
         log=log,
     )
-    (folder / "lai_masked.nc").unlink(missing_ok=True)
     _write_header(folder, l0_header)
     if source:
         source_path, source_variable = parse_source(source)
@@ -137,7 +112,6 @@ def _write_header(folder: Path, l0_header: dict) -> Path:
 
 __all__ = [
     "DEFAULT_TIMESTEP",
-    "crop_to_l0",
     "parse_source",
     "publish_to_l0",
     "task_options",

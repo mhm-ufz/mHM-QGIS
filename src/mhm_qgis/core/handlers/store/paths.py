@@ -9,9 +9,10 @@ here would have to read the input state, and the state modules need
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 #: The plugin owns exactly one directory inside a user's project.
-WORKSPACE_FOLDER_NAME = "mhm-plugin"
+WORKSPACE_FOLDER_NAME = "mhm-qgis"
 
 
 def plugin_root() -> str:
@@ -25,18 +26,39 @@ def plugin_root() -> str:
 
 
 def settings_path(project_folder) -> str:
-    """Return editable settings in the outer project folder."""
+    """Return editable settings in the selected setup root."""
     return os.path.join(str(project_folder), "settings.yaml")
 
 
 def workspace_folder(project_folder) -> str:
     """Return the plugin-owned workspace inside the selected project folder."""
+    if is_domain_folder(project_folder):
+        return str(project_folder)
     return os.path.join(str(project_folder), WORKSPACE_FOLDER_NAME)
+
+
+def is_domain_folder(folder) -> bool:
+    """Whether a path names a setup directly under the workspace container."""
+    return Path(str(folder)).parent.name == WORKSPACE_FOLDER_NAME
+
+
+def domain_folder(project_folder, name) -> Path:
+    """Resolve a safe, non-symlink domain name without creating anything."""
+    name = str(name).strip()
+    reserved = {"data", "data_raw", "output", "restart", "z temp", "<new>"}
+    if (not name or name in {".", ".."} or name.casefold() in reserved
+            or name.startswith(".") or any(c in name for c in '/\\\0<>:"|?*')
+            or name.endswith((".", " "))):
+        raise ValueError("Enter a domain folder name without path separators or reserved characters.")
+    path = Path(project_folder) / WORKSPACE_FOLDER_NAME / name
+    if path.is_symlink() or (path.exists() and not path.is_dir()):
+        raise ValueError("The domain must be a real directory, not a file or symlink.")
+    return path
 
 
 def version_key(version_text: str | None) -> str:
     """Return the normalized version folder name used by templates."""
-    text = (version_text or "").strip().lower()
+    text = (version_text or "").strip().lower().removeprefix("v")
     if text.startswith("5"):
         return "v5.13"
     return "v6"
@@ -60,14 +82,13 @@ def morphology_staging_folder(project_folder) -> str:
 def morph_staging_folder(project_folder) -> str:
     """Return the staging folder for land cover, soil, and geology outputs.
 
-    Execute All writes here. Morphology Setup publishes into
-    `data/master/static/morph` only after crop, mask, and write succeed.
+    Execute All stages here before its final publication to master.
     """
     return os.path.join(morphology_staging_folder(project_folder), "morph")
 
 
 def lai_staging_folder(project_folder) -> str:
-    """Return the staging folder for LAI crop and mask outputs."""
+    """Return the staging folder for common-grid LAI."""
     return os.path.join(morphology_staging_folder(project_folder), "lai")
 
 
@@ -82,7 +103,9 @@ def data_folder(project_folder) -> str:
 
 
 def master_data_folder(project_folder) -> str:
-    """Return the shared model-input folder used by every domain."""
+    """Return this setup’s model inputs, retaining legacy path compatibility."""
+    if is_domain_folder(project_folder):
+        return data_folder(project_folder)
     return os.path.join(data_folder(project_folder), "master")
 
 

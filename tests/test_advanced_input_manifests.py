@@ -39,9 +39,9 @@ def test_writes_land_use_period_manifest(tmp_path):
 
     with output.open(newline="", encoding="utf-8") as handle:
         assert list(csv.reader(handle)) == [
-            ["StartYear", "EndYear", "FilePath"],
-            ["1990", "1999", "lc_1990.tif"],
-            ["2000", "2010", "lc_2000.tif"],
+            ["StartDateTime", "EndDateTime", "FilePath"],
+            ["1990-01-01T00:00:00", "2000-01-01T00:00:00", "lc_1990.tif"],
+            ["2000-01-01T00:00:00", "2011-01-01T00:00:00", "lc_2000.tif"],
         ]
 
 
@@ -58,6 +58,24 @@ def test_land_use_periods_must_be_continuous(tmp_path):
 
     with pytest.raises(ValueError, match="gap-free"):
         write_land_use_manifest(value, tmp_path / "format-data.csv")
+
+
+def test_datetime_and_year_boundaries_are_continuous_and_simulation_bounded(tmp_path):
+    from mhm_qgis.core.handlers.lookup import validate_land_use_input
+    raster, lookup = _touch(tmp_path / "a.tif"), _touch(tmp_path / "lookup.csv")
+    value = LandUseInput((LandUsePeriod("2000", "2000-06-01T12:00", raster),
+                          LandUsePeriod("2000-06-01T12:00", "2001", raster)),
+                         lookup, "source", "class")
+    validate_land_use_input(value, simulation_start="2000", simulation_end="2001", version="6")
+    assert value.periods[0].end_time == value.periods[1].start_time
+    manifest = write_land_use_manifest(value, tmp_path / "dates.csv").read_text()
+    assert "2000-06-01T12:00:00" in manifest
+    with pytest.raises(ValueError, match="year boundaries"):
+        validate_land_use_input(value, version="5.13")
+    with pytest.raises(ValueError, match="before the simulation"):
+        validate_land_use_input(value, simulation_start="2000-02-01")
+    with pytest.raises(ValueError, match="after the simulation"):
+        validate_land_use_input(value, simulation_end="2000-12-31")
 
 
 def test_writes_soil_unit_column_and_horizons(tmp_path):

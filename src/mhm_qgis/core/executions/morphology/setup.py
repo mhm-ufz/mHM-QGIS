@@ -1,4 +1,4 @@
-"""Morphology Setup commands with explicit, path-only inputs."""
+"""Morphology publication commands with explicit, path-only inputs."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,73 +6,29 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from ....applications.mhm_tools_handler import create_latlon_file
-from ...handlers.file.ascii.morphology import (
-    MorphologyAsciiLayer,
-    prepare_morphology_ascii_files,
-)
 from ...handlers.file.netcdf.raster import copy_rasters, source, variables
-from ...handlers.raster.tasks import crop_aligned_l0_raster, _target_mask, write_domain_dem_ascii
+from ...handlers.raster.tasks import _cancelled, _target_mask, write_domain_dem_ascii
 from ...handlers.state import processing
 from ...handlers.store import registry
-from ...handlers.store.layout import MERGED_MASK_NAME, is_v6, morph_folder
-from ...handlers.store.paths import geometry_folder, master_data_folder
-from ...morphology.layers import CATEGORICAL_PAD_VALUE, lai
+from ...handlers.store.layout import is_v6, morph_folder
+from ...handlers.store.paths import geometry_folder, master_data_folder, workspace_folder
+from ...morphology.layers import lai
 from ...morphology.layers.advanced_l0 import missing_model_inputs, publish_model_inputs
-from ...morphology.layers.domain_dem import domain_dem_plan, link_master_inputs, write_domain_dems
 from ...morphology.layers.morph_input_nc import available_layers, write_morph_input_nc
-from . import MORPH_SETUP_STAGES
+from . import PUBLICATION_STAGES
+from .delineation import domain_mask
 
 
 @dataclass(frozen=True)
 class SetupRequest:
-    """Everything needed by Morphology Setup, detached from the dialog."""
+    """Everything needed by Morphology publication, detached from the dialog."""
 
     project_folder: str
     headers: Mapping[str, Mapping]
     crs: str = ""
     lai_source: str = ""
     lai_timestep: str = lai.DEFAULT_TIMESTEP
-    workflow: str = "morph_setup"
-
-
-_RASTERS = (
-    ("3_land_use.tif", "3_Land_Use", CATEGORICAL_PAD_VALUE, False),
-    ("3_soil.tif", "3_Soil", CATEGORICAL_PAD_VALUE, False),
-    ("3_geology_processed.tif", "3_Geology", CATEGORICAL_PAD_VALUE, False),
-)
-
-_ASCII_NAMES = {
-    "3_land_use_masked.tif": ("lc.asc", -9999, True),
-    "3_soil_masked.tif": ("soil_class.asc", -9999, True),
-    "3_geology_processed_masked.tif": ("geology_class.asc", -9999, True),
-}
-
-
-def variant(path, suffix: str) -> Path:
-    """Return the sibling crop/mask name for a raster."""
-    path = Path(path)
-    stem = path.stem
-    for existing in ("_crop", "_masked"):
-        if stem.endswith(existing):
-            stem = stem[: -len(existing)]
-    return path.with_name(f"{stem}{suffix}{path.suffix or '.tif'}")
-
-
-def raster_plan(project_folder) -> tuple[dict, ...]:
-    """Return present geometry rasters and their crop/mask policy."""
-    folder = Path(geometry_folder(project_folder))
-    return tuple(
-        {
-            "input": folder / filename,
-            "crop": variant(folder / filename, "_crop"),
-            "masked": variant(folder / filename, "_masked"),
-            "name": name,
-            "pad": pad,
-            "watershed_masked": watershed_masked,
-        }
-        for filename, name, pad, watershed_masked in _RASTERS
-        if (folder / filename).is_file()
-    )
+    workflow: str = "execute_all"
 
 
 def _derivative_sources(folder, suffix=""):
@@ -88,82 +44,21 @@ def _derivative_sources(folder, suffix=""):
     return layers
 
 
-def crop(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
-    """Place every prepared morphology raster on the common L0 grid."""
-    l0 = dict(request.headers["L0"])
-    folder = Path(geometry_folder(request.project_folder))
-    filled = folder / "filled_dem.nc"
-    outputs = []
-    derivatives = _derivative_sources(folder)
-    if "dem" not in derivatives:
-        raise FileNotFoundError("Run Execute All to prepare dem_derivatives.nc before Morphology Setup.")
-    output = copy_rasters(folder / "dem_derivatives_crop.nc", derivatives, l0, reference_path=filled)
-    (folder / "dem_derivatives_masked.nc").unlink(missing_ok=True)
-    outputs.append(output)
-    _record(request.project_folder, output, "aligned L0 NetCDF window copy")
-    for item in raster_plan(request.project_folder):
-        item["crop"].unlink(missing_ok=True)
-        item["masked"].unlink(missing_ok=True)
-        output = Path(
-            crop_aligned_l0_raster(
-                item["input"],
-                item["crop"],
-                l0,
-                reference_path=filled,
-                pad_value=item["pad"],
-            )
-        )
-        outputs.append(output)
-        _record(request.project_folder, output, "aligned L0 window copy")
-        _say(log, f"{item['name']} cropped successfully.")
-    if request.lai_source:
-        output = lai.crop_to_l0(
-            request.project_folder, l0, request.crs, log=log
-        )
-        outputs.append(output)
-        _record(request.project_folder, output)
-    if not outputs:
-        raise ValueError("No prepared morphology rasters were found to crop.")
-    return tuple(outputs)
-
-
-def mask(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
+def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     """Mask DEM derivatives while retaining categorical coverage everywhere."""
     l0 = dict(request.headers["L0"])
     folder = Path(geometry_folder(request.project_folder))
     filled = folder / "filled_dem.nc"
-    watershed = folder / "Watersheds" / MERGED_MASK_NAME
-    if not watershed.is_file():
-        raise FileNotFoundError(
-            "The merged domain mask is missing. Save a domain before Morphology Setup."
-        )
+    watershed = domain_mask(task, request.project_folder, filled, request.crs)
     outputs = []
-    derivatives = _derivative_sources(folder, "_crop")
+    derivatives = _derivative_sources(folder)
     if "dem" not in derivatives:
-        raise FileNotFoundError("Crop the NetCDF DEM derivatives before masking.")
+        raise FileNotFoundError("Prepare the NetCDF DEM derivatives before masking.")
     keep = _target_mask(watershed, l0, request.crs, filled)
     output = copy_rasters(folder / "dem_derivatives_masked.nc", derivatives, l0,
-                          reference_path=filled, mask=keep)
+                          reference_path=filled, mask=keep, task=task)
     outputs.append(output)
     _record(request.project_folder, output, "aligned L0 NetCDF mask")
-    for item in raster_plan(request.project_folder):
-        if not item["crop"].is_file():
-            continue
-        item["masked"].unlink(missing_ok=True)
-        output = Path(
-            crop_aligned_l0_raster(
-                item["crop"], item["masked"], l0,
-                reference_path=filled,
-                pad_value=item["pad"],
-            )
-        )
-        outputs.append(output)
-        _record(
-            request.project_folder,
-            output,
-            "aligned L0 window copy",
-        )
-        _say(log, f"{item['name']} written successfully.")
     if request.lai_source:
         output = lai.publish_to_l0(
             request.project_folder,
@@ -176,14 +71,12 @@ def mask(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
         outputs.append(output)
         _record(request.project_folder, output)
     if not outputs:
-        raise ValueError("No cropped morphology rasters were found to mask.")
+        raise ValueError("No morphology rasters were found to mask.")
     return tuple(outputs)
 
 
-def latlon(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
-    """Write the v5.13 multilevel coordinate file."""
-    if is_v6(request.project_folder):
-        return ()
+def latlon(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
+    """Write the common multilevel coordinate file for either mHM version."""
     headers = request.headers
     output = Path(master_data_folder(request.project_folder)) / "latlon.nc"
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -200,13 +93,24 @@ def latlon(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
     return (output,)
 
 
-def write(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
+def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     """Write v5 ASCII inputs or the single v6 morphology NetCDF."""
     folder = Path(geometry_folder(request.project_folder))
     destination = Path(morph_folder(request.project_folder))
     destination.mkdir(parents=True, exist_ok=True)
     if is_v6(request.project_folder):
+        from ...handlers.state.nml_settings import load_settings
+        settings = load_settings(request.project_folder)
         layers = available_layers(folder)
+        for name in ("soil_class", "geology_class"):
+            configured = settings.get(name.removesuffix("_class"), {}).get("output_path")
+            candidates = ([Path(workspace_folder(request.project_folder)) / configured] if configured else
+                          [destination / f"{name}{suffix}" for suffix in (".nc", ".asc")])
+            for candidate in candidates:
+                if candidate.is_file():
+                    layers[name] = (source(candidate, name) if candidate.suffix == ".nc" and name in variables(candidate)
+                                    else str(candidate))
+                    break
         if not layers:
             raise ValueError("No masked morphology rasters were found for input.nc.")
         output = write_morph_input_nc(
@@ -219,32 +123,16 @@ def write(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
             log=log,
         )
         _record(request.project_folder, output)
-        return (Path(output),)
+        # The single model's mask/DEM is independent of the shared bundle.
+        dem = copy_rasters(destination / "dem.nc", {"dem": layers["dem"]},
+                           request.headers["L0"], reference_path=folder / "filled_dem.nc", task=task)
+        _record(request.project_folder, dem)
+        return (Path(output), Path(dem))
 
-    layers = []
-    for filename, (name, nodata, integer) in _ASCII_NAMES.items():
-        path = folder / filename
-        if not path.is_file():
-            continue
-        layers.append(
-            MorphologyAsciiLayer(
-                input_path=str(path),
-                output_path=str(destination / name),
-                name=path.stem.replace("_masked", "").replace("_", " ").title(),
-                nodata_value=nodata,
-                integer=integer,
-            )
-        )
-    result = prepare_morphology_ascii_files(
-        layers=layers,
-        headers=request.headers,
-        overwrite=True,
-        log=log,
-    )
-    outputs = [Path(path) for path in result.outputs.values()]
+    outputs = []
     for name, uri in _derivative_sources(folder, "_masked").items():
         output = write_domain_dem_ascii(uri, destination / f"{name}.asc",
-                                        request.headers["L0"], None, reference_path=folder / "filled_dem.nc")
+                                        request.headers["L0"], None, reference_path=folder / "filled_dem.nc", task=task)
         outputs.append(Path(output))
     if not outputs:
         raise ValueError("No masked morphology rasters were found to export.")
@@ -253,7 +141,7 @@ def write(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
     return tuple(outputs)
 
 
-def publish(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
+def publish(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     outputs = tuple(
         Path(path)
         for path in publish_model_inputs(
@@ -271,67 +159,30 @@ def publish(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
     return outputs
 
 
-def link_domains(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
-    """Link only published shared inputs, before replacing each domain DEM."""
-    if is_v6(request.project_folder):
-        return ()
-    outputs = tuple(
-        path for entry in domain_dem_plan(request.project_folder)
-        for path in link_master_inputs(request.project_folder, entry["directory"], log=log, strict=True)
-    )
-    for output in outputs:
-        _record(request.project_folder, output)
-    return outputs
-
-
-def domain_dems(request: SetupRequest, *, log=None) -> tuple[Path, ...]:
-    folder = Path(geometry_folder(request.project_folder))
-    plan = domain_dem_plan(request.project_folder)
-    processing.save_domains(request.project_folder, plan)
-    written = write_domain_dems(
-        request.project_folder,
-        source(folder / "dem_derivatives_crop.nc", "dem"),
-        request.headers["L0"],
-        reference_path=folder / "filled_dem.nc",
-        log=log,
-    )
-    outputs = []
-    for entry in written:
-        outputs.append(Path(entry["dem_path"]))
-    for output in outputs:
-        _record(request.project_folder, output)
-    return tuple(outputs)
-
-
 _COMMANDS: dict[str, Callable] = {
-    "crop": crop,
     "mask": mask,
     "latlon": latlon,
     "write": write,
     "publish": publish,
-    "link_domains": link_domains,
-    "domain_dems": domain_dems,
 }
 
 
-def run(request: SetupRequest, *, log=None) -> bool:
-    """Run the canonical Morphology Setup plan synchronously."""
+def run(request: SetupRequest, *, log=None, task=None) -> bool:
+    """Run the canonical Morphology publication plan synchronously."""
     processing.mark_workflow(request.project_folder, request.workflow, "running")
+    key = request.workflow
     try:
-        active = [
-            stage
-            for stage in MORPH_SETUP_STAGES
-            if not stage.condition
-            or stage.condition != "v5"
-            or not is_v6(request.project_folder)
-        ]
+        active = PUBLICATION_STAGES
         for index, stage in enumerate(active, start=1):
             key = f"{request.workflow}_{stage.command}"
-            _say(log, f"Morphology Setup {index}/{len(active)}: {stage.label}")
+            _cancelled(task)
+            _say(log, f"Morphology publication {index}/{len(active)}: {stage.label}")
             processing.mark_workflow(request.project_folder, key, "running")
-            _COMMANDS[stage.command](request, log=log)
+            _COMMANDS[stage.command](request, log=log, task=task)
+            _cancelled(task)
             processing.mark_workflow(request.project_folder, key, "completed")
     except Exception as error:
+        processing.mark_workflow(request.project_folder, key, "failed", str(error))
         processing.mark_workflow(
             request.project_folder, request.workflow, "failed", str(error)
         )
@@ -340,7 +191,7 @@ def run(request: SetupRequest, *, log=None) -> bool:
         request.project_folder,
         request.workflow,
         "completed",
-        "Morphology Setup completed successfully.",
+        "Morphology publication completed successfully.",
     )
     return True
 
@@ -362,14 +213,9 @@ def _say(log, message) -> None:
 
 __all__ = [
     "SetupRequest",
-    "crop",
-    "domain_dems",
     "latlon",
-    "link_domains",
     "mask",
     "publish",
-    "raster_plan",
     "run",
-    "variant",
     "write",
 ]

@@ -125,7 +125,7 @@ def test_assignment_state_separates_filename_text_from_numeric_gauge_id(tmp_path
             "gauge_filename": "001.txt",
             "gauge_path": str(
                 tmp_path
-                / "mhm-plugin"
+                / "mhm-qgis"
                 / "data"
                 / "master"
                 / "observation"
@@ -175,12 +175,11 @@ def test_assignment_rows_must_still_match_selected_feature_order(tmp_path):
         )
 
 
-def test_delineator_mode_requires_at_least_one_selected_domain(tmp_path):
+def test_delineator_without_selected_catchments_uses_dem_extent(tmp_path):
     workflow = _workflow(tmp_path)
     state = workflow.load_synced_state(DOMAIN_MODE_DELINEATOR, False)
 
-    with pytest.raises(ValueError, match="at least one domain"):
-        workflow.require_active_domain(state)
+    workflow.require_active_domain(state)
 
     state["outlets"]["2"]["is_domain"] = True
     workflow.require_active_domain(state)

@@ -1,13 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Publish staged morphology inputs into `data/master` on the common L0 grid.
-
-Execute All writes land cover, soil, and geology outputs into
-`Z Temp/Morphology/morph`. Nothing is model-ready until the common L0 extent is
-known, which only happens once meteorology has fixed the L2 grid, so publication
-precedes domain linking and domain DEM writing in Morphology Setup: each staged raster is padded onto the L0
-header, copied into `data/master/static/morph`, and the paths recorded in
-`nml-settings.json` are rewritten to point at the published copies.
-"""
+"""Publish staged class inputs on the pre-scanned common L0 grid."""
 from __future__ import annotations
 
 import os
@@ -18,12 +10,12 @@ from typing import Any, Mapping
 from . import CATEGORICAL_PAD_VALUE, LAI_PAD_VALUE
 from ...handlers.state.nml_settings import load_settings, relative_workspace_path, save_settings
 from ...handlers.store.paths import morph_staging_folder, workspace_folder
-from ...handlers.store.layout import morph_folder
+from ...handlers.store.layout import morph_folder, is_v6
 from ...handlers.file.ascii.morphology import file_matches_header, pad_l0_file_to_header
 
 
 # Rasters are padded onto the L0 grid; everything else is carried across as is.
-RASTER_SUFFIXES = {".asc", ".nc"}
+RASTER_SUFFIXES = {".asc", ".nc", ".tif", ".tiff"}
 # Class definitions and projection sidecars travel with their raster untouched.
 CARRIED_SUFFIXES = {".txt", ".prj", ".xml", ".cpg", ".csv"}
 PATH_KEYS = ("output_path", "classdefinition_path")
@@ -81,7 +73,7 @@ def publish_model_inputs(
     staging = Path(morph_staging_folder(project_folder))
     for path in _configured_rasters(project_folder):
         source = staging / path.name
-        if path.is_file() and not source.exists() and not file_matches_header(path, l0_header):
+        if path.is_file() and not source.exists():
             staging.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, source)
 
@@ -89,20 +81,29 @@ def publish_model_inputs(
         suffix = path.suffix.lower()
         target = master / path.name
         if suffix in RASTER_SUFFIXES:
+            convert = suffix in {".tif", ".tiff"} or (suffix == ".nc" and not is_v6(project_folder))
+            if convert:
+                target = target.with_suffix(".asc")
             if (target.is_file() and target.stat().st_mtime_ns >= path.stat().st_mtime_ns
                     and file_matches_header(target, l0_header)):
                 continue
             pad_value, integer = pad_spec_for(path)
-            temporary = target.with_name(f".{target.stem}.publish{suffix}")
+            temporary = target.with_name(f".{target.stem}.publish{target.suffix}")
             try:
-                shutil.copy2(path, temporary)
-                pad_l0_file_to_header(
-                    temporary, l0_header, nodata_value=-9999,
-                    integer=integer, pad_value=pad_value,
-                )
+                if convert:
+                    from ...handlers.raster.tasks import write_domain_dem_ascii
+                    write_domain_dem_ascii(path, temporary, l0_header, None, fill_value=pad_value)
+                else:
+                    shutil.copy2(path, temporary)
+                    pad_l0_file_to_header(
+                        temporary, l0_header, nodata_value=-9999,
+                        integer=integer, pad_value=pad_value, fill_nodata=pad_value is not None,
+                    )
                 if not file_matches_header(temporary, l0_header):
                     raise ValueError(f"{path.name} does not match the common L0 grid.")
                 os.replace(temporary, target)
+                if convert and temporary.with_suffix(".prj").is_file():
+                    os.replace(temporary.with_suffix(".prj"), target.with_suffix(".prj"))
             finally:
                 temporary.unlink(missing_ok=True)
             if log:
@@ -116,7 +117,7 @@ def publish_model_inputs(
                 log(f"Skipping unexpected staged file: {path.name}")
             continue
         else:
-            os.replace(path, target)
+            shutil.copy2(path, target)
         published.append(target)
         if log:
             log(f"Published {target.name} to {master}.")
@@ -164,7 +165,7 @@ def _repoint_settings(project_folder, published, log=None) -> None:
             continue
         for key in PATH_KEYS:
             value = str(record.get(key, "") or "")
-            target = by_name.get(Path(value).name) if value else None
+            target = _published_path(by_name, value, is_v6(project_folder))
             if target is None:
                 continue
             updated = relative_workspace_path(project_folder, target)
@@ -177,7 +178,7 @@ def _repoint_settings(project_folder, published, log=None) -> None:
                 if not isinstance(scene, dict):
                     continue
                 value = str(scene.get("output_path", "") or "")
-                target = by_name.get(Path(value).name) if value else None
+                target = _published_path(by_name, value, is_v6(project_folder))
                 if target is None:
                     continue
                 updated = relative_workspace_path(project_folder, target)
@@ -189,6 +190,15 @@ def _repoint_settings(project_folder, published, log=None) -> None:
         save_settings(project_folder, settings)
         if log:
             log("nml-settings.json now points at the published model inputs.")
+
+
+def _published_path(by_name, value, v6):
+    if not value:
+        return None
+    path = Path(value)
+    if path.suffix.lower() in {".tif", ".tiff"} or (path.suffix.lower() == ".nc" and not v6):
+        return by_name.get(path.with_suffix(".asc").name)
+    return by_name.get(path.name)
 
 
 def missing_model_inputs(project_folder) -> list[str]:

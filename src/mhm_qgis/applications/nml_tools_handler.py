@@ -1,110 +1,78 @@
-# -*- coding: utf-8 -*-
-"""Everything the plugin asks of nml-tools.
-
-One call crosses this boundary: opening the namelist editor. The editor is
-launched in-process and runs modally on the QGIS event loop, so it returns only
-once the user closes it.
-"""
-from __future__ import annotations
-
-from collections.abc import Callable
-from copy import deepcopy
+"""The lazy, Qt-free boundary to nml-tools' profile editor."""
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Mapping
+import os
+import shutil
+from tempfile import TemporaryDirectory
 
-LogCallback = Callable[[str], None]
 
-
-def launch_profile_editor(
-    schemas_dir: str | Path,
-    output_dir: str | Path,
-    initial_values: Mapping[str, Any] | None = None,
-    initial_dimensions: Mapping[str, int] | None = None,
-    *,
-    log: LogCallback | None = None,
-) -> int:
-    """Open the nml-tools namelist editor over one project.
-
-    `configure_qtpy_api()` must already have run: nml-tools loads Qt on the
-    first call, and the API choice has to be settled before that.
-    """
+def launch_profile_editor(schemas_dir, output_dir, initial_values=None,
+                          initial_dimensions=None, *, file_profiles=None, log=None):
+    from nml_tools import gui
     from .mhm_tools_handler import capture_messages
 
-    # Looked up on the module rather than bound at import time, so the editor
-    # stays patchable and nml-tools keeps deferring its Qt import until called.
-    from nml_tools import gui
-
+    profiles = file_profiles or {"main": [], "parameter": [], "output": []}
     with capture_messages(log, logger_names=("nml_tools",)):
-        initial_values = reconcile_domain_values(
-            schemas_dir, output_dir, initial_values, initial_dimensions,
-        )
-        return gui.launch_gui(
-            schemas_dir=schemas_dir,
-            output_dir=output_dir,
-            initial_values=initial_values,
-            initial_dimensions=initial_dimensions,
-        )
+        with _editor_folder(schemas_dir, output_dir, profiles, initial_values or {},
+                            initial_dimensions or {}, log) as folder:
+            return gui.launch_gui(schemas_dir, folder, profiles,
+                                  initial_values=initial_values,
+                                  initial_dimensions=initial_dimensions)
 
 
-def reconcile_domain_values(schemas_dir, output_dir, initial_values, initial_dimensions):
-    """Resize saved domain arrays in memory; the editor alone writes nml.json."""
-    path = Path(output_dir) / "nml.json"
-    if not path.is_file() or not initial_values or not initial_dimensions:
-        return initial_values
-    from nml_tools.gui.model import load_document, load_project, suggestion
+@contextmanager
+def _editor_folder(schemas, output, profiles, initial, dimensions, log=None):
+    """Resize legacy namelists in scratch; commit only files the editor saves."""
+    from nml_tools.gui.model import (
+        load_project, load_profile, overlay_values, recover_dimensions,
+        save_profiles, suggestion,
+    )
 
-    project = load_project(schemas_dir, output_dir)
-    document = load_document(path, project)
-    dimension = "max_domains" if "max_domains" in initial_dimensions else "n_domains"
-    if dimension not in initial_dimensions:
-        return initial_values
-    profiles = document["file_profiles"]
-    saved = profiles.get("main", {}).get("values", {})
-    current = initial_values.get("main", {})
-    block, field = ("directories_general", "dir_Morpho") if dimension == "max_domains" else ("config_input", "dem_path")
-
-    def identities(values):
-        return [str((Path(output_dir) / value).resolve())
-                for value in values.get(block, {}).get(field, [])]
-
-    old_ids, new_ids = identities(saved), identities(current)
-    old_count = document["dimensions"][dimension]
-    count = initial_dimensions[dimension]
-    if old_count == count and old_ids == new_ids:
-        return initial_values
-    if len(old_ids) != old_count or len(new_ids) != count or len(set(old_ids)) != old_count:
-        raise ValueError("Cannot identify saved namelist domains safely; check their DEM paths.")
-    indices = [old_ids.index(value) if value in old_ids else None for value in new_ids]
-    sizes = {**project.constants, **document["dimensions"], **initial_dimensions}
-    overlay = deepcopy(initial_values)
-    for profile in project.profiles:
-        values = profiles.get(profile.key, {}).get("values", {})
-        for page in profile.pages:
-            for name, schema in page.schema.get("properties", {}).items():
-                shape = schema.get("x-fortran-shape", [])
-                shape = shape if isinstance(shape, list) else [shape]
-                if dimension not in shape or name not in values.get(page.name, {}):
-                    continue
-                fields = overlay.setdefault(profile.key, {}).setdefault(page.name, {})
-                if name not in fields:
-                    fields[name] = _remap_domain_array(
-                        values[page.name][name], suggestion(schema, sizes),
-                        shape, dimension, indices,
-                    )
-    return overlay
-
-
-def _remap_domain_array(value, default, shape, dimension, indices):
-    if not shape:
-        return deepcopy(value)
-    result = deepcopy(default)
-    for index in range(len(result)):
-        source = indices[index] if shape[0] == dimension else index
-        if source is not None and source < len(value):
-            result[index] = _remap_domain_array(
-                value[source], result[index], shape[1:], dimension, indices,
-            )
-    return result
+    output = Path(output)
+    project = load_project(schemas, output, profiles)
+    previous = recover_dimensions(project)
+    shrunk = {key for key, size in dimensions.items() if size < previous.get(key, size)}
+    if not shrunk or not any((output / p.default_file).is_file() for p in project.profiles):
+        yield output
+        return
+    sizes = {**project.constants, **previous, **dimensions}
+    with TemporaryDirectory(prefix=".namelist-edit-", dir=output) as temporary:
+        folder = Path(temporary)
+        for entry in output.iterdir():
+            if entry == folder or entry.name.startswith(".namelist-edit-"):
+                continue
+            if entry.is_file() and entry.suffix == ".nml":
+                shutil.copy2(entry, folder / entry.name)
+            elif entry.is_dir():
+                (folder / entry.name).symlink_to(entry.resolve(), target_is_directory=True)
+        staged = load_project(schemas, folder, profiles)
+        updates = []
+        for profile in project.profiles:
+            values = load_profile(project, profile, previous)
+            for page in profile.pages:
+                fields = values.get(page.name, {})
+                for name, schema in page.schema.get("properties", {}).items():
+                    shape = schema.get("x-fortran-shape", [])
+                    shape = shape if isinstance(shape, list) else [shape]
+                    if name in fields and shrunk.intersection(shape):
+                        # A merged domain has no single predecessor: do not pick
+                        # one old catchment's settings arbitrarily.
+                        fields[name] = suggestion(schema, sizes)
+            values = overlay_values(values, initial.get(profile.key, {}))
+            updates.append((staged.profile(profile.name), values, dimensions))
+        save_profiles(staged, updates)
+        before = {p: p.stat().st_mtime_ns for p in folder.glob("*.nml")}
+        if log:
+            log("Legacy domain arrays are reset in the editor preview; originals are preserved until Save.")
+        yield folder
+        for path in folder.glob("*.nml"):
+            if before.get(path) == path.stat().st_mtime_ns:
+                continue
+            target = output / path.name
+            backup = target.with_suffix(".nml.before-single-domain")
+            if target.exists() and not backup.exists():
+                shutil.copy2(target, backup)
+            os.replace(path, target)
 
 
 __all__ = ["launch_profile_editor"]

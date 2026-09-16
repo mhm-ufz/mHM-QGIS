@@ -224,7 +224,8 @@ def pad_l0_file_to_header(
         data_var: str | None = None,
         nodata_value: float | int = -9999,
         integer: bool = False,
-        pad_value: float | int | None = None) -> Path:
+        pad_value: float | int | None = None,
+        fill_nodata: bool = False) -> Path:
     """Rewrite a model-ready raster onto the exact L0 header without resampling.
 
     Cells the source does not cover take ``pad_value``; the declared nodata
@@ -237,9 +238,10 @@ def pad_l0_file_to_header(
         # Loading one costs gigabytes: 3.2 GiB for a 13201 x 6001 soil raster.
         from .pad import pad_ascii_grid
 
-        return pad_ascii_grid(path, header, nodata=nodata_value, pad=pad_value)
+        return pad_ascii_grid(path, header, nodata=nodata_value, pad=pad_value, fill_nodata=fill_nodata)
     dataset = _read_raster(path, data_var)
-    if _grid_matches_header(dataset, header):
+    if _grid_matches_header(dataset, header) and not fill_nodata:
+        dataset.close()
         return path
 
     padded = pad_dataset_to_header(
@@ -250,6 +252,9 @@ def pad_l0_file_to_header(
         integer=integer,
         pad_value=pad_value,
     )
+    if fill_nodata:
+        for name in padded.data_vars:
+            padded[name] = padded[name].where(padded[name] != nodata_value, pad_value).fillna(pad_value)
     temporary = path.with_name(f".{path.name}.tmp{path.suffix or '.nc'}")
     temporary.unlink(missing_ok=True)
     padded.to_netcdf(temporary)
@@ -260,7 +265,6 @@ def pad_l0_file_to_header(
 
 def _grid_matches_header(dataset, header: Mapping[str, Any]) -> bool:
     """Return True when a dataset already sits exactly on the header grid."""
-    import numpy as np
     from .....applications.mhm_tools_handler import xarray_coord_key
 
     x_key = xarray_coord_key(dataset, lon=True)

@@ -8,9 +8,16 @@ from pathlib import Path
 from typing import Any
 
 from ..core.grid import ceil_cellsize, is_geographic_unit
-from ..core.handlers.store.paths import geometry_folder, morph_staging_folder
+from ..core.handlers.store.paths import geometry_folder, morph_staging_folder, master_data_folder, workspace_folder
 from ..core.handlers.store.layout import morph_folder
 from ..core.handlers.state.nml_settings import load_settings
+
+
+def model_data_path(dialog: Any) -> str:
+    """Return the model-input root relative to this setup's namelists."""
+    project = getattr(dialog, "project_folder", None)
+    return (Path(master_data_folder(project)).relative_to(workspace_folder(project)).as_posix()
+            if project else "data/master")
 
 
 def repeat(value: Any, count: int) -> list[Any]:
@@ -24,45 +31,8 @@ def namelist_settings(dialog: Any) -> dict[str, Any]:
 
 
 def domain_count(dialog: Any) -> int:
-    """Count saved active domains, with the legacy layer-field fallback."""
-    project = getattr(dialog, "project_folder", None)
-    if project:
-        try:
-            # Keep version metadata importable without a GUI runtime.
-            from ..core.handlers.state.domain_state import (
-                domain_count as saved_domain_count,
-                load_state as load_domain_state,
-                state_path as domain_state_path,
-            )
-
-            state = load_domain_state(project)
-            configured = domain_state_path(project).is_file() and bool(
-                state.get("outlets")
-                or state.get("pour_points_source")
-                or state.get("outlet_id_field")
-                or state.get("dem_domain")
-            )
-            if configured:
-                return max(1, saved_domain_count(state))
-        except Exception:
-            pass
-
-    try:
-        layer = dialog.input_combo("pour_points").currentLayer()
-        if not layer or not layer.isValid():
-            return 1
-        names = {field.name().lower(): field.name() for field in layer.fields()}
-        domain_field = names.get("is_domain")
-        if not domain_field:
-            return 1
-        count = sum(
-            1
-            for feature in layer.getFeatures()
-            if _truthy(feature.attribute(domain_field))
-        )
-        return max(1, count)
-    except Exception:
-        return 1
+    """Single-domain workspaces may contain several catchments, not domains."""
+    return 1
 
 
 def geology_rows(dialog: Any) -> list[dict[str, Any]]:

@@ -16,10 +16,6 @@ class Stage:
     options: dict = field(default_factory=dict)
     condition: str = ""
 
-    @property
-    def starter(self) -> str:
-        """Temporary spelling retained while Qt callers migrate."""
-        return self.command
 
 
 EXECUTE_ALL_STAGES = (
@@ -55,17 +51,15 @@ EXECUTE_ALL_STAGES = (
     ),
     Stage("snap_points", "Snap pour points", condition="pour_points"),
     Stage("gauge_position", "Gauge positions", condition="gauged_outlets"),
+    Stage("publication", "Publish single-domain morphology"),
 )
 
 
-MORPH_SETUP_STAGES = (
-    Stage("crop", "Crop all layers"),
-    Stage("mask", "Mask all layers"),
-    Stage("latlon", "Create latlon.nc", condition="v5"),
+PUBLICATION_STAGES = (
+    Stage("mask", "Build domain mask and mask DEM derivatives"),
+    Stage("publish", "Publish categorical inputs"),
+    Stage("latlon", "Create latlon.nc"),
     Stage("write", "Write model inputs"),
-    Stage("publish", "Publish model inputs"),
-    Stage("link_domains", "Link domain inputs"),
-    Stage("domain_dems", "Write domain DEMs"),
 )
 
 
@@ -85,13 +79,13 @@ def run_stages(stages, start, *, on_done, on_fail):
 
 
 # Imported after the plans are defined: ``setup`` consumes
-# ``MORPH_SETUP_STAGES`` as its canonical order.
+# ``PUBLICATION_STAGES`` as its canonical order.
 from . import reset, setup
 
 
 __all__ = [
     "EXECUTE_ALL_STAGES",
-    "MORPH_SETUP_STAGES",
+    "PUBLICATION_STAGES",
     "Stage",
     "commands",
     "reset",

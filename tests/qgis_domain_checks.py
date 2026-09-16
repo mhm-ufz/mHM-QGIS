@@ -121,7 +121,7 @@ def navigation(folder):
         result = call.args[2](None)
         call.kwargs["on_success"](result)
         assert dialog._watershed_layer.isValid()
-        assert not domain_state.active_domain_records(domain_state.load_state(folder))
+        assert not any(r.get("is_domain") for r in domain_state.load_state(folder)["outlets"].values())
         main.task_coordinator.submit.reset_mock()
         dialog.listWidget_outlets.setCurrentRow(0)
         dialog.listWidget_outlets.setCurrentRow(1)
@@ -158,4 +158,9 @@ if __name__ == "__main__":
     with TemporaryDirectory() as temporary:
         snapping(Path(temporary))
         navigation(Path(temporary))
+        from qgis.PyQt.QtCore import QCoreApplication, QEvent
+        for widget in application.topLevelWidgets():
+            widget.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    application.exitQgis()
     print("Real QGIS snapping and deferred navigation passed")

@@ -12,7 +12,7 @@ from ...handlers.state.nml_settings import (
     update_section,
 )
 from ...handlers.store.layout import morph_folder
-from ...handlers.store.paths import geometry_folder, workspace_folder
+from ...handlers.store.paths import geometry_folder, workspace_folder, morph_staging_folder
 
 
 SPECS = {
@@ -133,20 +133,22 @@ def copy_ready(
     definition_source="",
     mode="mhm_ready",
 ) -> tuple[Path, ...]:
-    """Atomically publish a directly usable categorical raster."""
+    """Stage a ready raster for common-grid validation and publication."""
     spec = SPECS[kind]
     source = Path(str(source).split("|", 1)[0])
     if source.suffix.lower() not in {".asc", ".nc", ".tif"} or not source.is_file():
         raise ValueError(
             f"mHM-ready {spec['label']} input must be a local ASC, NetCDF, or TIFF raster."
         )
-    target = Path(morph_folder(project_folder)) / (
+    target = Path(morph_staging_folder(project_folder)) / (
         spec["ready_name"] + source.suffix.lower()
     )
     target.parent.mkdir(parents=True, exist_ok=True)
     definition_name = spec.get("definition")
     definition_source = Path(definition_source) if definition_source else None
     existing_definition = target.parent / definition_name if definition_name else None
+    if definition_name and not definition_source and not existing_definition.is_file():
+        definition_source = Path(morph_folder(project_folder)) / definition_name
     if (
         definition_name
         and not (definition_source and definition_source.is_file())
@@ -173,7 +175,7 @@ def copy_ready(
                     shutil.copy2(sidecar, staged_sidecar)
                     replacements.append((staged_sidecar, target.with_suffix(suffix)))
                     break
-        _publish(replacements, (*ready_paths(project_folder, kind), *intermediate_paths(project_folder, kind)), temporary)
+        _publish(replacements, (), temporary)
 
     definition = target.parent / definition_name if definition_name else None
     record_namelist(

@@ -20,4 +20,8 @@ def pytest_sessionstart(session):
 def pytest_sessionfinish(session):
     app = getattr(session, "_qgis_application", None)
     if app is not None:
+        from qgis.PyQt.QtCore import QCoreApplication, QEvent
+        for widget in app.topLevelWidgets():
+            widget.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         app.exitQgis()

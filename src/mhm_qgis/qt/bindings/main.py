@@ -63,7 +63,7 @@ def _bind_input_sources(dialog):
         signal = getattr(project, signal_name, None)
         if signal is not None:
             try:
-                signal.connect(lambda *_args: dialog.refresh_input_sources())
+                signal.connect(dialog.refresh_input_sources)
             except Exception:
                 pass
 
@@ -72,6 +72,15 @@ def bind(dialog):
 
     # Project management
     dialog.pushButton_BrowseProjectFolder.clicked.connect(dialog.select_project_folder)
+    dialog.pushButton_createProjectStructure.clicked.connect(lambda: main.create_project_structure(dialog))
+    dialog.comboBox_mhmWorkType.currentIndexChanged.connect(lambda: main.work_type_changed(dialog))
+    dialog.pushButton_scanPrecipitationFiles.clicked.connect(lambda: main.scan_precipitation(dialog))
+    dialog.pushButton_addMeteoInput.clicked.connect(lambda: main.edit_meteo_input(dialog))
+    dialog.lineEdit_precipitationGlobDefinition.textChanged.connect(
+        lambda: main.handle_meteo_input_changed(dialog, "precipitation"))
+    for name in ("simulationStart", "evaluationStart", "simulationEnd"):
+        getattr(dialog, f"dateTimeEdit_{name}TimeInput").dateTimeChanged.connect(
+            lambda: main.save_simulation_times(dialog))
     dialog.tabWidget_steps.currentChanged.connect(dialog.on_tab_changed)
     _bind_input_sources(dialog)
     dialog.pushButton_threads.clicked.connect(dialog.open_thread_display)
@@ -180,13 +189,16 @@ def bind(dialog):
     )
 
     # Meteorology display: the slider and the date editor drive one step index.
+    dialog.comboBox_meteoVarDisplay.currentIndexChanged.connect(
+        lambda index: meteo_display.refresh(dialog)
+    )
     dialog.pushButton_meteoVarDisplay.clicked.connect(
         lambda checked=False: meteo_display.display_selected_layer(dialog)
     )
     dialog.horizontalSlider_meteoTimeSelector.valueChanged.connect(
         lambda value: meteo_display.slider_moved(dialog, value)
     )
-    dialog.dateTimeEdit_meteoVarDisplay.dateChanged.connect(
+    dialog.dateTimeEdit_meteoVarDisplay.dateTimeChanged.connect(
         lambda value=None: meteo_display.date_changed(dialog, value)
     )
 
@@ -205,8 +217,8 @@ def bind(dialog):
     execute_all_button = dialog.morphology_workflow_button("execute_all")
     if execute_all_button is not None:
         execute_all_button.clicked.connect(dialog.start_execute_all_processing)
-    dialog.pushButton_executeMeteoMorphSetup.clicked.connect(
-        dialog.start_meteo_morph_setup_processing
+    dialog.pushButton_executeAllMeteo.clicked.connect(
+        dialog.start_execute_all_meteo_processing
     )
 
     # LAI file browser
@@ -217,8 +229,6 @@ def bind(dialog):
 
     for kind, button in (
         ("precipitation", dialog.pushButton_browsePrecipitationFile),
-        ("temperature", dialog.pushButton_browseTemperatureFile),
-        ("pet", dialog.pushButton_browsePetFile),
     ):
         button.clicked.connect(
             lambda checked=False, meteo_kind=kind:
@@ -229,10 +239,11 @@ def bind(dialog):
             lambda index=None, meteo_kind=kind:
             dialog.handle_meteo_input_changed(meteo_kind)
         )
-        source_combo.currentIndexChanged.connect(
-            lambda index=None, meteo_kind=kind:
-            dialog.handle_meteo_input_changed(meteo_kind)
-        )
+        if source_combo is not None:
+            source_combo.currentIndexChanged.connect(
+                lambda index=None, meteo_kind=kind:
+                dialog.handle_meteo_input_changed(meteo_kind)
+            )
 
     # Configuration/execution processing
     dialog.connect_processor_button(
@@ -278,8 +289,7 @@ def _bind_grid_resolution(dialog):
             lambda layer=None: dialog.update_l0_resolution_from_dem(layer)
         )
         dialog.input_combo("dem").layerChanged.connect(
-            lambda layer=None:
-            dialog.inspect_meteo_selection("precipitation", show_errors=False)
+            lambda layer=None: main.invalidate_grid(dialog)
         )
     except Exception:
         pass
@@ -289,8 +299,7 @@ def _bind_grid_resolution(dialog):
     )
     try:
         dialog.mProjectionSelectionWidget_crs.crsChanged.connect(
-            lambda crs=None:
-            dialog.inspect_meteo_selection("precipitation", show_errors=False)
+            lambda crs=None: main.invalidate_grid(dialog)
         )
     except Exception:
         pass

@@ -12,7 +12,7 @@ from mhm_qgis.core.handlers.store import layout, paths, registry
 
 @pytest.fixture
 def project(tmp_path):
-    (tmp_path / "mhm-plugin").mkdir()
+    (tmp_path / "mhm-qgis").mkdir()
     return tmp_path
 
 

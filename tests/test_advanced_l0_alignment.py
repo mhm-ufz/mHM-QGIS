@@ -160,7 +160,7 @@ def test_rasters_are_padded_then_moved_and_definitions_carried(tmp_path):
         "soil_class.asc", "soil_classdefinition.txt",
     ]
     # Keep the uncropped raster for later changes to the common extent.
-    assert [path.name for path in staged_files(tmp_path)] == ["soil_class.asc"]
+    assert [path.name for path in staged_files(tmp_path)] == ["soil_class.asc", "soil_classdefinition.txt"]
     assert (master / "soil_classdefinition.txt").read_text(encoding="utf-8") == "1 sand\n"
     header = (master / "soil_class.asc").read_text(encoding="utf-8").splitlines()
     assert header[0].split()[1] == "4" and header[1].split()[1] == "4"

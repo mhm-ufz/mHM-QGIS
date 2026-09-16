@@ -23,7 +23,7 @@ Ui_LaiNetcdfInputDialog = load_form("lai_netcdf_input_dialog.ui")
 Ui_MhmReadyInputDialog = load_form("mhm_ready_dialog.ui")
 Ui_SingleLayerLookupDialog = load_form("single_layer_input_with_lookup_config_dialog.ui")
 
-EXCLUDED_PROJECT_FOLDERS = {WORKSPACE_FOLDER_NAME}
+EXCLUDED_PROJECT_FOLDERS = {WORKSPACE_FOLDER_NAME, "mhm-plugin"}
 INPUT_EXTENSIONS = {
     "dem": {".asc", ".nc", ".tif"},
     "pour_points": {".shp"},
@@ -273,6 +273,7 @@ class InputComboAdapter(QtCore.QObject):
         self.kind = _kind(kind)
         self.filters = None
         self.allow_empty = True
+        self._layers = {}  # Python owns unregistered layers; QVariant must not.
         self.combo_box.currentIndexChanged.connect(self._emit_layer_changed)
 
     @property
@@ -291,8 +292,9 @@ class InputComboAdapter(QtCore.QObject):
         data = self.combo_box.currentData()
         if isinstance(data, dict):
             if data.get("origin") == "qgis":
-                layer = _project_layer(data.get("layer_id")) or data.get("layer")
-                return layer if layer is not None else None
+                from qgis.PyQt import sip
+                layer = _project_layer(data.get("layer_id")) or self._layers.get(data.get("layer_id"))
+                return layer if layer is not None and not sip.isdeleted(layer) else None
             if data.get("origin") == "file":
                 return _file_layer(data.get("path"), self.kind)
         if data is not None and hasattr(data, "type"):
@@ -324,6 +326,7 @@ class InputComboAdapter(QtCore.QObject):
             return
 
         target_id = _layer_id(layer)
+        self._layers[target_id] = layer
         try:
             target_source = layer.source()
         except Exception:
@@ -344,7 +347,7 @@ class InputComboAdapter(QtCore.QObject):
 
         item = qgis_layer_item(layer, self.kind)
         if item is not None:
-            self.combo_box.addItem(item.label, item.data)
+            self.addItem(item.label, item.data)
             self.combo_box.setCurrentIndex(self.combo_box.count() - 1)
 
     def setFilters(self, filters):
@@ -359,6 +362,9 @@ class InputComboAdapter(QtCore.QObject):
         self.combo_box.clear()
 
     def addItem(self, text, userData=None):
+        if isinstance(userData, dict) and "layer" in userData:
+            userData = dict(userData)
+            self._layers[userData["layer_id"]] = userData.pop("layer")
         self.combo_box.addItem(text, userData)
 
     def addItems(self, texts):

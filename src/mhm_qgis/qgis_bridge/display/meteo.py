@@ -12,27 +12,24 @@ from qgis.PyQt.QtWidgets import QMessageBox
 from ...core.meteorology.display import (
     VARIABLE_LABELS,
     available_meteo_variables,
-    date_for_step,
-    project_time_range,
+    meteo_output_path,
+    meteo_steps,
     resolve_meteo_output,
-    step_count,
-    step_for_date,
 )
+from ...core.post import step_for_when
 from ...core.handlers.file.netcdf import grid_variables, read_slice
 from .canvas import show_dataarray
 
-_DATE_FORMAT = "yyyy-MM-dd"
+def _as_qdatetime(value):
+    return QtCore.QDateTime(value)
 
 
-def _as_qdate(value) -> QtCore.QDate:
-    return QtCore.QDate(value.year, value.month, value.day)
-
-
-def _period(dialog):
-    """Return the forcing period for the open project, if any."""
+def _steps(dialog):
+    """Return the selected variable's timestamps."""
     if not dialog.project_folder:
-        return None
-    return project_time_range(dialog.project_folder)
+        return ()
+    variable = dialog.comboBox_meteoVarDisplay.currentData()
+    return meteo_steps(meteo_output_path(dialog.project_folder, variable))
 
 
 def refresh(dialog) -> None:
@@ -59,8 +56,8 @@ def refresh(dialog) -> None:
         combo.setCurrentIndex(variables.index(previous))
     combo.blockSignals(False)
 
-    period = _period(dialog)
-    enabled = bool(variables) and period is not None
+    steps = _steps(dialog)
+    enabled = bool(variables) and bool(steps)
     for widget in (combo, slider, editor, dialog.pushButton_meteoVarDisplay):
         widget.setEnabled(enabled)
     if not enabled:
@@ -68,44 +65,44 @@ def refresh(dialog) -> None:
         dialog.label_endTime.setText("")
         return
 
-    first, last = period
+    first, last = steps[0], steps[-1]
     dialog.label_startTime.setText(first.isoformat())
     dialog.label_endTime.setText(last.isoformat())
 
     editor.blockSignals(True)
-    editor.setDisplayFormat(_DATE_FORMAT)
-    editor.setMinimumDate(_as_qdate(first))
-    editor.setMaximumDate(_as_qdate(last))
-    editor.setDate(_as_qdate(first))
+    editor.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+    editor.setMinimumDateTime(_as_qdatetime(first))
+    editor.setMaximumDateTime(_as_qdatetime(last))
+    editor.setDateTime(_as_qdatetime(first))
     editor.blockSignals(False)
 
     slider.blockSignals(True)
     slider.setMinimum(0)
-    slider.setMaximum(max(0, step_count(period) - 1))
+    slider.setMaximum(max(0, len(steps) - 1))
     slider.setValue(0)
     slider.blockSignals(False)
 
 
 def slider_moved(dialog, value: int) -> None:
     """Move the date editor to the step the slider selected."""
-    period = _period(dialog)
-    if period is None:
+    steps = _steps(dialog)
+    if not steps:
         return
     editor = dialog.dateTimeEdit_meteoVarDisplay
     editor.blockSignals(True)
-    editor.setDate(_as_qdate(date_for_step(period, value)))
+    editor.setDateTime(_as_qdatetime(steps[max(0, min(int(value), len(steps) - 1))]))
     editor.blockSignals(False)
 
 
 def date_changed(dialog, value=None) -> None:
     """Move the slider to the step the date editor selected."""
-    period = _period(dialog)
-    if period is None:
+    steps = _steps(dialog)
+    if not steps:
         return
-    chosen = dialog.dateTimeEdit_meteoVarDisplay.date().toPyDate()
+    chosen = dialog.dateTimeEdit_meteoVarDisplay.dateTime().toPyDateTime()
     slider = dialog.horizontalSlider_meteoTimeSelector
     slider.blockSignals(True)
-    slider.setValue(step_for_date(period, chosen))
+    slider.setValue(step_for_when(steps, chosen))
     slider.blockSignals(False)
 
 
@@ -122,7 +119,7 @@ def display_selected_layer(dialog, checked=False) -> None:
             "No prepared meteorology forcing was found for this project.",
         )
         return
-    when = dialog.dateTimeEdit_meteoVarDisplay.date().toPyDate()
+    when = dialog.dateTimeEdit_meteoVarDisplay.dateTime().toPyDateTime()
     output = resolve_meteo_output(dialog.project_folder, variable, when)
     if output is None:
         QMessageBox.warning(

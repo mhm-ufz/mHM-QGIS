@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from qgis.PyQt.QtCore import QDate, QSignalBlocker
+from qgis.PyQt.QtCore import QDate, QDateTime, QSignalBlocker
 from qgis.PyQt.QtWidgets import (QComboBox, QDialog, QFileDialog,
                                  QMessageBox)
 
@@ -33,12 +33,291 @@ from ...core.meteorology.forcing import inspect_meteo_folder_cached
 from ...dependency_bootstrap import configure_qtpy_api
 from ...core.morphology.hydrology.outlets import StationIdError, outlet_ids_from_layer
 from ...core.handlers.state import processing
-from ...core.handlers.store.layout import ensure_project_structure
+from ...core.handlers.store.layout import ensure_project_structure, lai_folder
 from ...core.handlers.store.morphology import land_cover_periods, resolve_display_output
 from ...core.handlers.store.paths import (
     data_folder, master_data_folder, plugin_root, version_key, workspace_folder,
 )
 from ..reporting import error_detail
+
+
+TIME_WIDGETS = {
+    "sim_start": "dateTimeEdit_simulationStartTimeInput",
+    "eval_start": "dateTimeEdit_evaluationStartTimeInput",
+    "sim_end": "dateTimeEdit_simulationEndTimeInput",
+}
+
+
+def work_type_changed(dialog):
+    single = dialog.comboBox_mhmWorkType.currentIndex() == 0
+    dialog.stackedWidget_configuration.setCurrentWidget(dialog.page_singleDomain if single else dialog.page_2)
+    for page in (dialog.tab_geometry, dialog.tab_meteo, dialog.tab_hydro, dialog.tab_execution):
+        page.setEnabled(single)
+    dialog.save_input_state()
+
+
+def create_project_structure(dialog):
+    """Open an existing domain or create a new isolated setup."""
+    directory = getattr(dialog, "project_directory", None)
+    if not directory:
+        QMessageBox.warning(dialog, "Project structure", "Select the outer project folder first.")
+        return
+    if domain_switch_busy(dialog):
+        return
+    try:
+        from ...core.handlers.store.paths import domain_folder
+        from ...core.handlers.state import settings
+        name = dialog.comboBox_domainFolderSelector.currentData()
+        if name is None:
+            from ..dialogs.domain_folder_name import DomainFolderNameDialog
+            prompt = DomainFolderNameDialog(directory, dialog)
+            if prompt.exec() != QDialog.DialogCode.Accepted:
+                return
+            path = prompt.path
+            path.mkdir(parents=True)
+        else:
+            path = domain_folder(directory, name)
+        from ...core.handlers.store.layout import input_state_path
+        import json
+        state_path = Path(input_state_path(path))
+        if state_path.exists():
+            saved = json.loads(state_path.read_text(encoding="utf-8"))
+            if not isinstance(saved, dict):
+                raise ValueError("The domain input state must be a JSON object.")
+        project_settings = settings.read(path)
+        dialog.save_input_state()
+        if dialog._domain_delineator_dialog is not None:
+            dialog._domain_delineator_dialog.close()
+            dialog._domain_delineator_dialog = None
+        dialog.project_folder = str(path)
+        dialog.geometry_folder = None
+        dialog.project_settings = project_settings
+        dialog.load_input_state()
+        ensure_project_structure(path, selected_version(dialog))
+        from ...core.handlers.store.paths import geometry_folder
+        dialog.geometry_folder = geometry_folder(path)
+        dialog.update_l2_resolution_from_metadata()
+        dialog.refresh_meteo_display()
+        dialog.refresh_output_display()
+        dialog.refresh_morphology_workflow_button_states()
+        dialog.save_input_state()
+        populate_domain_folders(dialog, path.name)
+        from ..dialogs.project_folder_tree import ProjectFolderTreeDialog
+        ProjectFolderTreeDialog(dialog.project_folder, dialog).exec()
+    except (OSError, ValueError) as error:
+        QMessageBox.warning(dialog, "Project structure", str(error))
+
+
+def domain_switch_busy(dialog):
+    """Keep asynchronous results attached to the domain that started them."""
+    if dialog.task_coordinator.is_busy() or dialog.running_morphology_workflow_key():
+        QMessageBox.warning(dialog, "Domain selection", "Finish or cancel running tasks before switching domains.")
+        return True
+    return False
+
+
+def populate_domain_folders(dialog, selected=None):
+    """List saved setups, keeping the creation sentinel last."""
+    from ...core.handlers.store.layout import domain_folders
+    combo = dialog.comboBox_domainFolderSelector
+    with QSignalBlocker(combo):
+        combo.clear()
+        for path in domain_folders(dialog.project_directory):
+            combo.addItem(path.name, path.name)
+        combo.addItem("<new>", None)
+        index = combo.findData(selected) if selected else 0
+        combo.setCurrentIndex(max(0, index))
+
+
+def select_project_folder(dialog):
+    """Choose an outer project without touching its legacy workspace or states."""
+    if domain_switch_busy(dialog):
+        return
+    directory = QFileDialog.getExistingDirectory(dialog, "Select Project Folder")
+    if not directory:
+        return
+    dialog.save_input_state()
+    if dialog._domain_delineator_dialog is not None:
+        dialog._domain_delineator_dialog.close()
+        dialog._domain_delineator_dialog = None
+    dialog.project_directory = directory
+    dialog.project_folder = None
+    dialog.lineEdit_ProjectFolder.setText(directory)
+    dialog._loading_input_state = True
+    try:
+        dialog._clear_input_state_selections()
+    finally:
+        dialog._loading_input_state = False
+    populate_domain_folders(dialog)
+    dialog.refresh_meteo_display()
+    dialog.refresh_output_display()
+    dialog.log_message("Select a domain and press Create Project Structure to open it.")
+
+
+def simulation_times(dialog):
+    from ...core.handlers.state.nml_settings import validate_times
+    values = {key: getattr(dialog, name).dateTime().toString("yyyy-MM-ddTHH:mm")
+              for key, name in TIME_WIDGETS.items()}
+    return validate_times(values, selected_version(dialog))
+
+
+def save_simulation_times(dialog):
+    if dialog._loading_input_state or not dialog.project_folder:
+        return
+    from ...core.handlers.state.nml_settings import update_section
+    # Preserve edits, even while the user is adjusting an temporarily invalid range.
+    values = {key: getattr(dialog, name).dateTime().toString("yyyy-MM-ddTHH:mm")
+              for key, name in TIME_WIDGETS.items()}
+    update_section(dialog.project_folder, "time", values)
+    dialog.invalidate_execute_all_meteo()
+
+
+def restore_simulation_times(dialog):
+    from qgis.PyQt.QtCore import QDateTime
+    from ...core.handlers.state.nml_settings import load_settings
+    values = load_settings(dialog.project_folder).get("time", {}) if dialog.project_folder else {}
+    for key, name in TIME_WIDGETS.items():
+        widget = getattr(dialog, name)
+        widget.setDisplayFormat("yyyy-MM-dd HH:00" if selected_version(dialog).startswith("6") else "yyyy-MM-dd")
+        value = QDateTime.fromString(values.get(key, "2000-01-01T00:00"), "yyyy-MM-ddTHH:mm")
+        if value.isValid():
+            with QSignalBlocker(widget):
+                widget.setDateTime(value)
+
+
+def invalidate_grid(dialog):
+    if dialog._loading_input_state:
+        return
+    dialog._grid_l2_metadata = None
+    dialog._grid_l2_header = None
+    if dialog.project_folder:
+        processing.overlay(dialog.project_folder, {"grid": {}})
+        processing.mark_workflow(dialog.project_folder, "execute_all", "pending")
+        processing.mark_workflow(dialog.project_folder, "execute_all_meteo", "pending")
+    dialog.update_extent_labels()
+
+
+def grid_fingerprint(dialog):
+    from ...core.handlers.state.cache import fingerprint
+    from ...core.handlers.state.settings import read
+    from ...core.handlers.file.netcdf.raster import file_path
+    from ...core.meteorology.forcing import inspection_fingerprint
+    layer = dialog.input_combo("dem").currentLayer()
+    spec = meteo_folder_spec(dialog, "precipitation")
+    return fingerprint([file_path(layer.source())] if layer else [], {
+        "crs": dialog.selected_meteo_crs(),
+        "precipitation": inspection_fingerprint(spec.normalized())[0],
+        "gap_limit": read(dialog.project_folder)["grid_alignment_gap_limit"],
+        "multiplier": dialog.spinBox_L2ResolutionMultiplier.value(), "grid_version": 2})
+
+
+def require_common_grid(dialog):
+    grid = dialog._grid_l2_metadata or {}
+    if not grid or grid.get("configuration_fingerprint") != grid_fingerprint(dialog):
+        raise ValueError("Scan precipitation to establish the common DEM/L2 grid first.")
+    dialog.grid_level_headers()  # Validate all model resolution levels.
+    return grid
+
+
+def scan_precipitation(dialog):
+    """Precipitation establishes the grid after its metadata dialog accepts."""
+    if dialog.check_prerequisites():
+        edit_meteo_input(dialog, "pre")
+
+
+def edit_meteo_input(dialog, variable=None):
+    """Accept metadata, then schedule only inspection; failed scans keep old input."""
+    from dataclasses import asdict, replace
+    from functools import partial
+    from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
+    if not _ensure_project_folder(dialog) or domain_switch_busy(dialog):
+        return
+    variable = variable or dialog.comboBox_meteoVar.currentText()
+    if not variable:
+        QMessageBox.warning(dialog, "Meteorology input", "Select a variable first.")
+        return
+    initial = dict(dialog._meteo_inputs.get(variable, {}))
+    if variable == "pre":
+        initial.update(folder=dialog.selected_meteo_folder("precipitation"),
+                       pattern=dialog.lineEdit_precipitationGlobDefinition.text())
+    prompt = MeteoVarDetailsDialog(variable, dialog.project_directory, initial, dialog)
+    if prompt.exec() != QDialog.DialogCode.Accepted:
+        return
+    spec = replace(prompt.spec, crs=dialog.selected_meteo_crs() or None)
+    def scanned(metadata):
+        data = asdict(spec)
+        data["folder"] = str(spec.folder)
+        dialog._meteo_inputs[variable] = data
+        dialog._meteo_inspections[variable] = metadata
+        if variable == "pre":
+            with QSignalBlocker(dialog.comboBox_precipitationFile):
+                dialog._add_folder_combo_item(dialog.comboBox_precipitationFile, str(spec.folder))
+                dialog.comboBox_precipitationFile.setCurrentIndex(dialog._folder_combo_index(dialog.comboBox_precipitationFile, str(spec.folder)))
+            with QSignalBlocker(dialog.lineEdit_precipitationGlobDefinition):
+                dialog.lineEdit_precipitationGlobDefinition.setText(spec.pattern)
+            precipitation_scanned(dialog, metadata)
+        dialog.invalidate_execute_all_meteo()
+        populate_meteo_table(dialog)
+        dialog.save_input_state()
+    dialog.task_coordinator.submit(
+        f"meteo-scan-{variable}", f"Scan {variable}",
+        partial(inspect_meteo_folder_cached, dialog.project_folder, spec),
+        controls=(dialog.tabWidget_steps, dialog.pushButton_BrowseProjectFolder,
+                  dialog.comboBox_domainFolderSelector, dialog.pushButton_createProjectStructure),
+        on_success=scanned,
+        on_error=lambda error: QMessageBox.warning(dialog, "Meteorology scan", str(error)),
+        resource="morphology-files")
+
+
+def populate_meteo_table(dialog):
+    """Render one editable row per saved variable without rescanning."""
+    from qgis.PyQt.QtWidgets import QPushButton, QTableWidgetItem
+    table = dialog.tableWidget_meteoInputs
+    table.setRowCount(len(dialog._meteo_inputs))
+    for row, (variable, spec) in enumerate(dialog._meteo_inputs.items()):
+        for column, text in enumerate((variable, spec["folder"], spec["pattern"],
+                                       spec["temporal_resolution"], spec["unit"])):
+            item = QTableWidgetItem(str(text))
+            from qgis.PyQt.QtCore import Qt
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(row, column, item)
+        button = QPushButton("Edit", table)
+        button.clicked.connect(lambda _checked=False, key=variable: edit_meteo_input(dialog, key))
+        table.setCellWidget(row, 5, button)
+
+
+def precipitation_scanned(dialog, metadata):
+    from qgis.PyQt.QtCore import QDateTime
+    from ...core.handlers.state.nml_settings import load_settings
+    try:
+        dialog._meteo_inspections["pre"] = metadata
+        dialog.update_l0_resolution_from_dem()
+        converted = resolution_in_crs(metadata, dialog.selected_meteo_crs())
+        _set_default_l2_multiplier(dialog, metadata, converted, dialog.current_l0_resolution())
+        _, _, grid = dialog.prepare_meteo_l2_grid(metadata)
+        grid["configuration_fingerprint"] = grid_fingerprint(dialog)
+        previous = dialog._grid_l2_metadata or {}
+        if previous.get("configuration_fingerprint") != grid["configuration_fingerprint"]:
+            processing.mark_workflow(dialog.project_folder, "execute_all", "pending")
+            processing.mark_workflow(dialog.project_folder, "execute_all_meteo", "pending")
+        processing.save_grid_metadata(dialog.project_folder, grid)
+        dialog.set_meteo_l2_grid_metadata(grid)
+        dialog.label_precipitationResolutionValue.setText(format_resolution(converted.resolution, converted.unit))
+        dialog.label_precipitationResolutionUnit.setText(converted.unit)
+        dialog.label_precipitationResolutionMultiplier.setText(str(converted.resolution / dialog.current_l0_resolution()))
+        dialog.label_precipitationStartTimeValue.setText(metadata.start_time[:16])
+        dialog.label_precipitationEndTimeValue.setText(metadata.end_time[:16])
+        if not load_settings(dialog.project_folder).get("time"):
+            for key, name in TIME_WIDGETS.items():
+                text = metadata.end_time if key == "sim_end" else metadata.start_time
+                value = QDateTime.fromString(text[:16] if selected_version(dialog).startswith("6") else text[:10] + "T00:00", "yyyy-MM-ddTHH:mm")
+                with QSignalBlocker(getattr(dialog, name)):
+                    getattr(dialog, name).setDateTime(value)
+            save_simulation_times(dialog)
+        dialog.log_message(f"Scanned {len(metadata.files)} precipitation files ({metadata.source}); common grid saved.")
+    except (OSError, ValueError) as error:
+        invalidate_grid(dialog)
+        QMessageBox.warning(dialog, "Common grid", str(error))
 
 
 DISPLAY_KEYS = (
@@ -113,6 +392,7 @@ def handle_version_changed(dialog) -> None:
         if refresh is not None:
             refresh()
     dialog.save_input_state()
+    restore_simulation_times(dialog)
 
 
 def edit_namelists(dialog) -> bool:
@@ -123,6 +403,9 @@ def edit_namelists(dialog) -> bool:
         from ...vSpecific import build_dimensions, build_initial_values
 
         version = selected_version(dialog)
+        from ...core.handlers.state import nml_settings
+        nml_settings.update_section(dialog.project_folder, "time", simulation_times(dialog))
+        nml_settings.sync_domain_settings(dialog.project_folder)
         workspace = workspace_folder(dialog.project_folder)
         schemas_dir = Path(plugin_root()) / "nml-schemas" / version_key(version)
         ensure_project_structure(dialog.project_folder, version)
@@ -219,15 +502,16 @@ def refresh_morphology_date_control(dialog) -> None:
     editor.setEnabled(enabled)
     if not enabled:
         return
+    from ...core.handlers.lookup.manifests import period_datetime
     try:
-        first = min(int(period["start_year"]) for period in periods)
-        last = max(int(period["end_year"]) for period in periods)
+        first = min(period_datetime(p.get("start_time") or str(p["start_year"])) for p in periods)
+        last = max(period_datetime(p.get("end_time") or f'{p["end_year"]}-12-31T23:59:59') for p in periods)
     except (KeyError, TypeError, ValueError):
         editor.setEnabled(False)
         return
-    editor.setMinimumDate(QDate(first, 1, 1))
-    editor.setMaximumDate(QDate(last, 12, 31))
-    editor.setDate(QDate(first, 1, 1))
+    editor.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+    editor.setDateTimeRange(QDateTime(first), QDateTime(last))
+    editor.setDateTime(QDateTime(first))
 
 
 def display_selected_morphology_layer(dialog) -> None:
@@ -239,10 +523,10 @@ def display_selected_morphology_layer(dialog) -> None:
     if not key:
         QMessageBox.warning(dialog, "Display Layer", "Select a morphology layer.")
         return
-    year = None
+    when = None
     if dialog.dateTimeEdit_forHistoricalInputs.isEnabled():
-        year = dialog.dateTimeEdit_forHistoricalInputs.date().year()
-    output = resolve_display_output(dialog.project_folder, key, year=year)
+        when = dialog.dateTimeEdit_forHistoricalInputs.dateTime().toPyDateTime()
+    output = resolve_display_output(dialog.project_folder, key, when=when)
     if output is None:
         QMessageBox.warning(
             dialog,
@@ -274,9 +558,9 @@ def refresh_input_sources(dialog):
         combo.blockSignals(True)
         combo.clear()
         for item in loaded_qgis_items(kind):
-            combo.addItem(item.label, item.data)
+            adapter.addItem(item.label, item.data)
         if include_files:
-            for item in scan_project_inputs(dialog.project_folder, kind):
+            for item in scan_project_inputs(getattr(dialog, 'project_directory', None) or dialog.project_folder, kind):
                 combo.addItem(item.label, item.data)
         index = dialog._matching_input_index(combo, previous)
         if (
@@ -372,27 +656,15 @@ def selected_input_file_paths(dialog):
 
 
 def meteo_input_widgets(dialog):
-    """Return folder/source widgets for the three meteorology inputs."""
-    return (
-        (
-            "precipitation",
-            dialog.comboBox_precipitationFile,
-            dialog.comboBox_precipitationDataSource,
-        ),
-        (
-            "temperature",
-            dialog.comboBox_temperatureFile,
-            dialog.comboBox_temperatureDataSource,
-        ),
-        ("pet", dialog.comboBox_petFile, dialog.comboBox_petDataSource),
-    )
+    """Only the precipitation reference folder remains on the main form."""
+    return (("precipitation", dialog.comboBox_precipitationFile, None),)
 
 
 def refresh_meteo_folder_sources(dialog):
     """Populate meteo folder boxes from the outer project directory."""
     available = (
-        scan_project_folders(dialog.project_folder)
-        if dialog.project_folder else ()
+        scan_project_folders(dialog.project_directory or dialog.project_folder)
+        if dialog.project_directory or dialog.project_folder else ()
     )
     for _, combo, _ in dialog.meteo_input_widgets():
         previous = dialog.selected_folder_path(combo)
@@ -418,16 +690,8 @@ def selected_meteo_folder(dialog, kind):
 
 
 def selected_meteo_source(dialog, kind):
-    """Return a stable internal source token for one meteo input."""
-    for input_kind, _, combo in dialog.meteo_input_widgets():
-        if input_kind != kind:
-            continue
-        text = combo.currentText().strip().lower()
-        if text.replace("_", " ") == "mhm ready":
-            return "mhm_ready"
-        if text.replace("-", "").replace("_", "") == "era5land":
-            return "era5land"
-    return ""
+    """All variable inputs are described explicitly, not by dataset brand."""
+    return "auto"
 
 
 def selected_folder_path(combo):
@@ -492,8 +756,12 @@ def handle_meteo_input_changed(dialog, kind):
     if dialog._loading_input_state:
         return
     dialog.save_input_state()
-    dialog.invalidate_meteo_morph_setup()
-    dialog.inspect_meteo_selection(kind, show_errors=True)
+    dialog.invalidate_execute_all_meteo()
+    if kind == "precipitation":
+        dialog._meteo_inspections.pop("pre", None)
+        invalidate_grid(dialog)
+        dialog.clear_precipitation_resolution_labels()
+        return
 
 
 def selected_meteo_crs(dialog):
@@ -509,34 +777,25 @@ def selected_meteo_crs(dialog):
 
 
 def meteo_folder_spec(dialog, kind, required=True):
-    """Return one validated folder/source selection."""
-    folder = dialog.selected_meteo_folder(kind)
-    source = dialog.selected_meteo_source(kind)
-    if not folder and not required:
-        return None
-    if not folder:
-        raise ValueError(f"Select the {kind} data folder.")
-    if not source:
-        raise ValueError(f"Select the {kind} data source.")
-    if not os.path.isdir(folder):
-        raise ValueError(f"The {kind} data folder does not exist:\n{folder}")
-    return MeteoFolderSpec(
-        kind=kind,
-        folder=Path(folder),
-        source=source,
-        crs=(
-            dialog.selected_meteo_crs()
-            if source == "mhm_ready" else None
-        ),
-    )
+    """Snapshot the accepted metadata, checking unscanned precipitation edits."""
+    key = "pre" if kind == "precipitation" else kind
+    data = dict(dialog._meteo_inputs.get(key, {}))
+    if not data:
+        if not required:
+            return None
+        raise ValueError(f"Configure and scan {key} first.")
+    if key == "pre":
+        data.update(folder=dialog.selected_meteo_folder("precipitation"),
+                    pattern=dialog.lineEdit_precipitationGlobDefinition.text().strip())
+    data["crs"] = dialog.selected_meteo_crs() or None
+    return MeteoFolderSpec(**data).normalized()
 
 
 def selected_meteo_specs(dialog):
-    """Return required precipitation/temperature and optional PET inputs."""
-    precipitation = dialog.meteo_folder_spec("precipitation")
-    temperature = dialog.meteo_folder_spec("temperature")
-    pet = dialog.meteo_folder_spec("pet", required=False)
-    return precipitation, temperature, pet
+    """Run the configured variable collection, with precipitation as the reference."""
+    if "pre" not in dialog._meteo_inputs:
+        raise ValueError("Configure and scan precipitation first.")
+    return tuple(meteo_folder_spec(dialog, key) for key in dialog._meteo_inputs)
 
 
 def clear_precipitation_resolution_labels(dialog):
@@ -548,64 +807,6 @@ def clear_precipitation_resolution_labels(dialog):
         label = getattr(dialog, name, None)
         if label is not None:
             label.setText("")
-
-
-def inspect_meteo_selection(dialog, kind, show_errors=False):
-    """Validate one selected meteo folder and refresh its metadata."""
-    folder = dialog.selected_meteo_folder(kind)
-    source = dialog.selected_meteo_source(kind)
-    if not folder or not source:
-        dialog._meteo_inspections.pop(kind, None)
-        if kind == "precipitation":
-            dialog.clear_precipitation_resolution_labels()
-        return None
-
-    try:
-        metadata = inspect_meteo_folder_cached(
-            dialog.project_folder,
-            folder,
-            kind,
-            source,
-            crs_fallback=(
-                dialog.selected_meteo_crs()
-                if source == "mhm_ready" else None
-            ),
-            log=dialog.log_message,
-        )
-        dialog._meteo_inspections[kind] = metadata
-        if kind == "precipitation":
-            converted = resolution_in_crs(
-                metadata,
-                dialog.selected_meteo_crs() or None,
-            )
-            dialog.label_precipitationResolutionValue.setText(
-                format_resolution(converted.resolution, converted.unit)
-            )
-            dialog.label_precipitationResolutionUnit.setText(converted.unit)
-            l0_resolution = dialog.current_l0_resolution()
-            multiplier = (
-                f"{converted.resolution / l0_resolution:.1f}"
-                if l0_resolution else ""
-            )
-            dialog.label_precipitationResolutionMultiplier.setText(multiplier)
-            _set_default_l2_multiplier(dialog, metadata, converted, l0_resolution)
-        dialog.log_message(
-            f"{kind.title()} metadata: {len(metadata.files)} NetCDF file(s), "
-            f"{metadata.shape[1]} x {metadata.shape[0]} cells."
-        )
-        return metadata
-    except Exception as error:
-        dialog._meteo_inspections.pop(kind, None)
-        if kind == "precipitation":
-            dialog.clear_precipitation_resolution_labels()
-        dialog.log_message(f"ERROR: Invalid {kind} meteorology input: {error}")
-        if show_errors:
-            QMessageBox.warning(
-                dialog,
-                f"Invalid {kind.title()} Data",
-                str(error),
-            )
-        return None
 
 
 def _matching_input_index(combo, previous):
@@ -626,7 +827,8 @@ def _matching_input_index(combo, previous):
             if origin == "file"
             else data.get("layer_id") or data.get("source")
         )
-        if candidate == identity:
+        if candidate == identity or (origin == "qgis" and previous.get("source")
+                                     and data.get("source") == previous["source"]):
             return index
     return -1
 
@@ -696,7 +898,11 @@ def handle_l2_multiplier_changed(dialog, value=None):
         return
     dialog._l2_multiplier_user_selected = True
     dialog.save_input_state()
-    dialog.invalidate_meteo_morph_setup()
+    dialog.invalidate_execute_all_meteo()
+    metadata = dialog._meteo_inspections.get("pre")
+    invalidate_grid(dialog)
+    if metadata:
+        precipitation_scanned(dialog, metadata)
 
 
 def _set_default_l2_multiplier(dialog, metadata, converted, l0_resolution):
@@ -722,7 +928,9 @@ def handle_model_input_changed(dialog, value=None):
     if dialog._loading_input_state:
         return
     dialog.save_input_state()
-    dialog.invalidate_meteo_morph_setup()
+    dialog.invalidate_execute_all_meteo()
+    if dialog.project_folder:
+        processing.mark_workflow(dialog.project_folder, "execute_all", "pending")
 
 
 def refresh_grid_resolution_controls(dialog):
@@ -733,7 +941,7 @@ def refresh_grid_resolution_controls(dialog):
 
 
 def update_l0_resolution_from_dem(dialog, layer=None):
-    """Prepare/read the filled DEM and show its resolution as L0."""
+    """Read the source DEM header and show its resolution as L0."""
     info = dialog.filled_dem_resolution_info()
     dialog._grid_l0_info = info
     if not info:
@@ -1135,7 +1343,9 @@ def set_meteo_setup_controls_enabled(dialog, enabled):
     for name in ("groupBox_mHMConfiguration", "groupBox_ProjectFolder",
                  "groupBox_morphReferenceL0", "groupBox_meteoReferenceL2",
                  "groupBox_4", "tabWidget_steps"):
-        getattr(dialog, name).setEnabled(enabled)
+        widget = getattr(dialog, name, None)
+        if widget is not None:
+            widget.setEnabled(enabled)
 
 
 def set_execute_all_button_state(dialog, status):
@@ -1204,17 +1414,6 @@ def refresh_morphology_workflow_button_state(dialog, workflow_key):
 
     workflow = processing.workflow(dialog.project_folder, workflow_key)
     if workflow.get("status") == "completed":
-        if (
-                workflow_key == "meteo_morph_setup"
-                and dialog.project_folder
-                and not os.path.isfile(
-                    os.path.join(
-                        master_data_folder(dialog.project_folder),
-                        "latlon.nc",
-                    )
-                )):
-            dialog.invalidate_meteo_morph_setup()
-            return
         dialog.set_morphology_workflow_button_state(workflow_key, "completed")
     elif workflow.get("status") == "failed":
         dialog.set_morphology_workflow_button_state(workflow_key, "failed")
@@ -1309,7 +1508,7 @@ def handle_categorical_type(dialog, kind, text):
     else:
         dialog._categorical_modes[kind] = text
         dialog.save_input_state()
-        dialog.invalidate_meteo_morph_setup()
+        dialog.invalidate_execute_all_meteo()
         return
     if _exec_dialog(input_dialog) != QDialog.DialogCode.Accepted or (
         input_dialog.selected_config() is None
@@ -1339,7 +1538,7 @@ def handle_categorical_type(dialog, kind, text):
             "mhm_ready" if normalized == "mhm ready" else "single_categorical"
         )
     dialog.save_input_state()
-    dialog.invalidate_meteo_morph_setup()
+    dialog.invalidate_execute_all_meteo()
 
 
 def handle_lai_input_type(dialog, text, previous=""):
@@ -1388,7 +1587,7 @@ def handle_lai_input_type(dialog, text, previous=""):
                 "source_variable": "",
                 "target_timestep": config.target_timestep,
                 "time_step": lai_time_step(config.target_timestep),
-                "output_path": "data/master/lai/lai.nc",
+                "output_path": os.path.relpath(os.path.join(lai_folder(dialog.project_folder), "lai.nc"), workspace_folder(dialog.project_folder)).replace("\\", "/"),
                 "variable": "lai",
             },
         )
@@ -1413,7 +1612,7 @@ def handle_lai_input_type(dialog, text, previous=""):
         )
     dialog._categorical_modes["lai"] = str(text)
     dialog.save_input_state()
-    dialog.invalidate_meteo_morph_setup()
+    dialog.invalidate_execute_all_meteo()
 
 
 def handle_land_use_input_type(dialog, text, previous=""):
@@ -1488,7 +1687,7 @@ def handle_land_use_input_type(dialog, text, previous=""):
         dialog._save_land_cover_nml_input(value)
     dialog._categorical_modes["lc"] = str(text)
     dialog.save_input_state()
-    dialog.invalidate_meteo_morph_setup()
+    dialog.invalidate_execute_all_meteo()
     dialog.refresh_morphology_date_control()
 
 
@@ -1517,7 +1716,7 @@ def handle_multi_horizon_soil_input(dialog, text, previous=""):
     dialog._categorical_modes["soil"] = str(text)
     dialog._save_soil_nml_input(value)
     dialog.save_input_state()
-    dialog.invalidate_meteo_morph_setup()
+    dialog.invalidate_execute_all_meteo()
 
 
 def uses_advanced_categorical_input(dialog, kind):
@@ -1593,7 +1792,7 @@ def browse_lai_file(dialog):
         dialog.lineEdit_lai_file.setText(file_path)
         dialog.log_message(f"LAI file selected: {file_path}")
         dialog.save_input_state()
-        dialog.invalidate_meteo_morph_setup()
+        dialog.invalidate_execute_all_meteo()
 
 
 def get_lai_time_range(dialog):

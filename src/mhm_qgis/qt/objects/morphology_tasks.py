@@ -43,9 +43,12 @@ _run_advanced = commands.advanced
 class MorphologyTaskBridge(QtCore.QObject):
     """Schedule heavy work without passing Qt or QGIS objects to workers."""
 
+    message = QtCore.pyqtSignal(str)
+
     def __init__(self, dialog):
         super().__init__(dialog)
         self.dialog = dialog
+        self.message.connect(dialog.log_message)
         self.coordinator = dialog.task_coordinator
         self.execute_all_active = False
 
@@ -144,6 +147,7 @@ class MorphologyTaskBridge(QtCore.QObject):
                 else ""
             ),
             "reprojected_path": str(folder / "dem_reprojected.nc"),
+            "header": (self.dialog._grid_l2_metadata or {}).get("l0_header"),
         }
 
     def prepare_filled_dem(self) -> str:
@@ -558,21 +562,6 @@ class MorphologyTaskBridge(QtCore.QObject):
                 ),
                 failed=failed,
             )
-        if reuse_existing:
-            outputs = _saved_categorical_outputs(self.dialog.project_folder, kind)
-            if outputs:
-                self.dialog.log_message(
-                    f"Reusing prepared {SPECS[kind]['label']} output."
-                )
-                self._categorical_complete(kind, outputs, reused=True)
-                if done is not None:
-                    QtCore.QTimer.singleShot(
-                        0,
-                        lambda: done(
-                            {"kind": kind, "outputs": tuple(map(str, outputs))}
-                        ),
-                    )
-                return True
         try:
             mode = categorical.normalized_mode(
                 self.dialog.categorical_input_mode(kind)
@@ -626,8 +615,21 @@ class MorphologyTaskBridge(QtCore.QObject):
                     "value": value,
                     "filled_dem": self.filled_dem_path,
                 }
+                if kind == "lc":
+                    from ...core.handlers.lookup import validate_land_use_input
+                    from ...core.handlers.state.nml_settings import load_settings
+                    times = load_settings(self.dialog.project_folder).get("time", {})
+                    validate_land_use_input(value, simulation_start=times.get("sim_start"),
+                                            simulation_end=times.get("sim_end"), version=job["version"])
+                from ...core.morphology.layers.advanced_inputs import input_fingerprint
+                digest = input_fingerprint(value, self.filled_dem_path, job["version"])
+                reusable = self._reusable_stage(kind, digest) if reuse_existing else None
+                if reusable:
+                    result = dict(kind=kind, outputs=reusable["outputs"])
+                    QtCore.QTimer.singleShot(0, lambda: self._advanced_ready(result, done))
+                    return True
                 runner = partial(_run_advanced, job=job)
-                finish = lambda result: self._advanced_ready(result, done)
+                finish = lambda result: self._advanced_ready(result, done, digest)
             else:
                 if mode != "lookup_table":
                     raise ValueError(
@@ -643,6 +645,7 @@ class MorphologyTaskBridge(QtCore.QObject):
                         "is_vector": job["is_vector"],
                         "input_crs": job["input_crs"],
                         "dem_crs": job["dem_crs"],
+                        "format": "common-l0-ascii-1",
                     },
                 )
                 reusable = self._reusable_stage(
@@ -731,7 +734,7 @@ class MorphologyTaskBridge(QtCore.QObject):
         geometry = Path(geometry_folder(self.dialog.project_folder))
         staging = Path(morph_staging_folder(self.dialog.project_folder))
         staging.mkdir(parents=True, exist_ok=True)
-        output = geometry / spec["geometry"]
+        output = staging / f"{spec['ready_name']}.asc"
         definition = staging / spec["definition"] if spec.get("definition") else None
         metadata = geometry / "geology_class_metadata.json" if kind == "geology" else None
         removals = [
@@ -793,7 +796,9 @@ class MorphologyTaskBridge(QtCore.QObject):
         if done is not None:
             done(result)
 
-    def _advanced_ready(self, result, done):
+    def _advanced_ready(self, result, done, digest=None):
+        if digest:
+            self._record_stage(result["kind"], digest, result["outputs"])
         for output in result["outputs"]:
             self._register(output, name=Path(output).name, loaded=False)
         self.dialog.log_message(
@@ -841,6 +846,21 @@ class MorphologyTaskBridge(QtCore.QObject):
             failed=failed,
         )
 
+    def start_publication(self, *, done, failed):
+        config = self.dialog.lai_netcdf_config()
+        request = morphology.setup.SetupRequest(
+            project_folder=self.dialog.project_folder,
+            headers=self.dialog.grid_level_headers(),
+            crs=self.dialog.selected_meteo_crs(),
+            lai_source=str(config.get("input_path") or ""),
+            lai_timestep=config.get("target_timestep") or lai.DEFAULT_TIMESTEP,
+        )
+        return self.coordinator.submit(
+            "morphology-publication", "Publish morphology",
+            lambda task: morphology.setup.run(request, task=task, log=self.message.emit),
+            task_aware=True,
+            on_success=done, on_error=failed, resource="morphology-files")
+
     def start_execute_all(self):
         if self.execute_all_active:
             return False
@@ -855,6 +875,12 @@ class MorphologyTaskBridge(QtCore.QObject):
             return False
         if not self.dialog.check_prerequisites():
             return False
+        try:
+            from ..controllers.main import require_common_grid
+            require_common_grid(self.dialog)
+        except ValueError as error:
+            QMessageBox.warning(self.dialog, "Configuration", str(error))
+            return False
         self.execute_all_active = True
         self.dialog.set_meteo_setup_controls_enabled(False)
         processing.mark_workflow(
@@ -866,7 +892,7 @@ class MorphologyTaskBridge(QtCore.QObject):
             if not self._condition(stage.condition):
                 QtCore.QTimer.singleShot(0, advance)
                 return True
-            starter = getattr(self, f"start_{stage.starter}")
+            starter = getattr(self, f"start_{stage.command}")
             return starter(
                 *stage.args,
                 done=lambda _result: advance(),

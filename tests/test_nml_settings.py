@@ -47,7 +47,7 @@ def test_domain_gauges_project_to_v5_namelist_values(tmp_path):
                     "gauge_filename": "001.txt",
                     "gauge_path": "data/master/observation/streamflow/001.txt",
                     "domain_directory": "data/001",
-                    "dem_path": "data/001/dem.asc",
+                    "dem_path": "data/master/static/morph/dem.asc",
                     "domain_ids": [1],
                 }
             },
@@ -59,13 +59,13 @@ def test_domain_gauges_project_to_v5_namelist_values(tmp_path):
     assert state["domains"] == [
         {
             "data_path": "data/master/",
-            "dem_path": "data/001/dem.asc",
-            "directory": "data/001",
+            "dem_path": "data/master/static/morph/dem.asc",
+            "directory": "data/master/static/morph",
             "domain_id": 1,
             "gauge_ids": [1],
             "is_dem_domain": False,
-            "name": "001",
-            "outlet_id": "001",
+            "name": "master",
+            "outlet_id": "",
         }
     ]
     assert state["gauges"][0]["gauge_filename"] == "001.txt"
@@ -80,7 +80,7 @@ def test_domain_gauges_project_to_v5_namelist_values(tmp_path):
     directories = build_initial_values("5.13", Dialog(tmp_path))["main"][
         "directories_general"
     ]
-    assert directories["dir_Morpho"] == ["data/001/"]
+    assert directories["dir_Morpho"] == ["data/master/static/morph/"]
     assert directories["dirCommonFiles"] == "data/master/static/morph/"
 
 
@@ -118,20 +118,20 @@ def test_sole_dem_domain_projects_with_its_gauges(tmp_path):
     assert state["domains"] == [
         {
             "data_path": "data/master/",
-            "dem_path": "data/dem_extent/dem.asc",
-            "directory": "data/dem_extent",
+            "dem_path": "data/master/static/morph/dem.asc",
+            "directory": "data/master/static/morph",
             "domain_id": 1,
             "gauge_ids": [1],
             "is_dem_domain": True,
-            "name": "dem_extent",
-            "outlet_id": "__dem__",
+            "name": "master",
+            "outlet_id": "",
         }
     ]
 
     directories = build_initial_values("5.13", Dialog(tmp_path))["main"][
         "directories_general"
     ]
-    assert directories["dir_Morpho"] == ["data/dem_extent/"]
+    assert directories["dir_Morpho"] == ["data/master/static/morph/"]
     assert directories["dirCommonFiles"] == "data/master/static/morph/"
 
 
@@ -192,10 +192,10 @@ def test_shared_gauges_are_counted_once_per_domain(tmp_path):
     ]
     # Guard the fixture itself: three gauges spread over three domains, the DEM
     # domain repeating all of them.
-    assert gauges["NoGauges_domain"] == [2, 1, 3]
+    assert gauges["NoGauges_domain"] == [3]
     assert len({gid for row in gauges["Gauge_id"] for gid in row if gid}) == 3
 
-    assert gauges["nGaugesTotal"] == 6
+    assert gauges["nGaugesTotal"] == 3
     assert gauges["nGaugesTotal"] == sum(gauges["NoGauges_domain"])
 
 

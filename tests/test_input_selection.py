@@ -107,7 +107,7 @@ def test_scanner_uses_input_specific_extensions(tmp_path):
 def test_folder_scanner_lists_nested_inputs_but_not_plugin_workspace(tmp_path):
     (tmp_path / "forcing" / "precipitation").mkdir(parents=True)
     (tmp_path / "forcing" / "temperature").mkdir()
-    (tmp_path / "mhm-plugin" / "data" / "meteo").mkdir(parents=True)
+    (tmp_path / "mhm-qgis" / "data" / "meteo").mkdir(parents=True)
 
     items = scan_project_folders(tmp_path)
 
@@ -125,7 +125,7 @@ def test_folder_scanner_lists_nested_inputs_but_not_plugin_workspace(tmp_path):
 
 def test_adapter_returns_file_layer_without_adding_it_to_project(tmp_path):
     _app()
-    raster = _touch(tmp_path / "dem.tif")
+    raster = _raster(tmp_path / "dem.tif")
     combo = QtWidgets.QComboBox()
     adapter = InputComboAdapter(combo, "dem")
     item = scan_project_inputs(tmp_path, "dem")[0]
@@ -142,7 +142,7 @@ def test_adapter_returns_file_layer_without_adding_it_to_project(tmp_path):
 
 def test_adapter_selects_loaded_layer_and_emits_layer(tmp_path):
     _app()
-    vector_path = _touch(tmp_path / "points.shp")
+    vector_path = _points(tmp_path / "points.geojson")
     layer = QgsVectorLayer(str(vector_path), "Outlets", "ogr")
     layer.setCrs(QgsCoordinateReferenceSystem("EPSG:32645"))
     combo = QtWidgets.QComboBox()
@@ -159,8 +159,8 @@ def test_adapter_selects_loaded_layer_and_emits_layer(tmp_path):
 
 
 def test_loaded_qgis_items_filter_type_and_include_crs(tmp_path):
-    raster_path = _touch(tmp_path / "dem.tif")
-    vector_path = _touch(tmp_path / "points.shp")
+    raster_path = _raster(tmp_path / "dem.tif")
+    vector_path = _points(tmp_path / "points.geojson")
     raster = QgsRasterLayer(str(raster_path), "DEM")
     vector = QgsVectorLayer(str(vector_path), "Outlets", "ogr")
     raster.setCrs(QgsCoordinateReferenceSystem("EPSG:3035"))
@@ -183,7 +183,7 @@ def test_lookup_dialog_lists_tables_and_requires_both_fields(tmp_path):
         "WR\t1\tRegosol\t10\nCM\t2\tCambisol\t20\n",
         encoding="utf-8",
     )
-    _touch(tmp_path / "mhm-plugin" / "ignored.csv")
+    _touch(tmp_path / "mhm-qgis" / "ignored.csv")
 
     dialog = LookupConfigDialog(tmp_path)
 
@@ -250,3 +250,18 @@ def test_lai_netcdf_dialog_returns_temporal_choices(tmp_path):
     )
 
     assert dialog.selected_config().target_timestep == "Monthly Gridded Data"
+
+
+def _raster(path):
+    from osgeo import gdal
+    dataset = gdal.GetDriverByName("GTiff").Create(str(path), 2, 2, 1)
+    dataset.GetRasterBand(1).Fill(1)
+    dataset = None
+    return path
+
+
+def _points(path):
+    import json
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {}, "geometry": {"type": "Point", "coordinates": [0, 0]}}]}))
+    return path

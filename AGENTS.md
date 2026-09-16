@@ -60,10 +60,11 @@ decision.
     elevation-band operations. `layers/advanced_inputs.py` prepares historical land
     cover and layered soil in staging; `layers/advanced_l0.py` handles final common-L0
     alignment and publication.
-  - `meteorology/`: QGIS-free forcing preparation; `forcing/` is the public API and
-    `ERA5Land/mhm/` contains its internal ERA5 implementation.
+  - `meteorology/`: QGIS-free forcing preparation; `forcing/` owns independent
+    variables and native-cadence streaming. `forcing/temporal.py` validates units,
+    time axes and cumulative reset intervals. Existing NetCDF writers are reused.
   - `executions/`: canonical workflow plans and commands. `executions/morphology/`
-    is the sole definition of Execute All and Morphology Setup ordering.
+    is the sole definition of Execute All and its publication ordering.
 - `applications/`: one handler per external package. Processing calls into `mhm_tools`,
   `nml_tools` and `pyflwdir` go through `mhm_tools_handler.py`,
   `nml_tools_handler.py` and `pyflwdir_handler.py`; their heavy imports stay inside
@@ -171,7 +172,8 @@ Rules that follow from it:
 ## Current Conventions
 
 - The selected mHM version comes from `comboBox_mHMversion`.
-- v5.13 uses `mhm_parameter.nml`; v6 uses `mhm_parameters.nml`.
+- File-profile filenames come from the versioned schema configuration. v5.13 uses
+  `mhm_parameter.nml`; the current v6 profiles use `parameters.nml` and `outputs.nml`.
 - v5.13 schemas live under `nml-schemas/v5.13`, v6 under `nml-schemas/v6`. There is no
   `nml-templates/` directory; nml-tools owns rendering.
 - v5.13 multi-domain template values should render as one-shot arrays where possible,
@@ -190,7 +192,7 @@ Four JSON files are used by the plugin.
 - `mhm_qgis_domain_delineation_state.json`: canonical detailed delineation state
   (`state/domain_state.py`).
 - `nml-settings.json`: the normalized handoff to nml-tools -- domain directories, DEM
-  paths, contained gauge IDs, shared `data/master/` paths (`state/nml_settings.py`).
+  paths, contained gauge IDs, shared `data/` paths (`state/nml_settings.py`).
   Despite the name it has nothing to do with the external `nml_tools` package.
 - `mhm_qgis_processing_state.json`: output registry, workflows, grid contract, domains
   and reuse fingerprints. Every update goes through
@@ -200,42 +202,75 @@ Four JSON files are used by the plugin.
   in-memory state copy. `tests/test_shared_processing_state.py` covers parallel and
   cross-feature updates.
 
-## Morphology Rules
+## Configuration And Morphology
 
-- Filled DEM is an internal prerequisite for many workflows. File-only work goes through
-  `core/executions/morphology/commands.py`; `qt/objects/morphology_tasks.py` schedules it
-  and only loads a layer for an explicit user action.
-- Temporary/intermediate geometry outputs belong in `Z Temp/Geometry`.
-- Final mHM static morphology ASCII/classdefinition outputs belong in
-  `data/master/static/morph`.
-- Crop/mask outputs in `Z Temp/Geometry` use `_crop` and `_masked` suffixes. Do not
-  auto-add them to QGIS; groupBox processing buttons show them.
-- `core/executions/morphology/setup.py` owns crop, mask, lat/lon, write, publish,
-  domain-link and domain-DEM steps. There is no separate `pushButton_writeAll` path.
-- Check raster dimensions across levels: L0 must be an integer multiple of L1, and
-  L1/L11 must be compatible with L2 as mHM requires.
-
-- Execute All and individual DEM/terrain/flow buttons use the same
-  `commands.dem_derivatives` native subprocess. mHM-tools is not modified: its
-  NetCDF output becomes `Z Temp/Geometry/dem_derivatives.nc` (original DEM,
-  filled DEM, slope, aspect, facc, fdir). The plugin extracts `dem_filled` into
-  `filled_dem.nc` with one raster variable, `dem`, plus x/y/CRS metadata.
-  Existing mHM-tools formatters can therefore open that file without variable selection.
-- DEM derivatives are no longer temporary TIFFs. Setup window-copies their variables
-  into `dem_derivatives_crop.nc`, then watershed-masks them into
-  `dem_derivatives_masked.nc`. The original bundle is retained for extent expansion.
-  Channel, gauge and watershed jobs reuse the saved D8 `fdir` instead of deriving
-  it again. Gauge positions and accumulation area use `idgauges.nc` and `facc_area.nc`;
-  categorical rasters and delineation masks retain their existing formats.
-- Reuse fingerprints the selected DEM and CRS configuration; a missing filled DEM is
-  extracted again without recomputing an unchanged bundle. Legacy derivative TIFFs
-  are not reused or automatically deleted; rerun Execute All to prepare the new files.
+- Setups live at `<project>/mhm-qgis/<domain-name>`. The main dialog keeps the
+  outer folder in `project_directory`; `project_folder` is the active domain
+  root passed to core APIs. Never pass the outer folder to a new setup's state API.
+- Browse Project populates `comboBox_domainFolderSelector` with named setups and
+  `<new>` last; it does not restore inputs or scan forcing. Create Project Structure
+  opens the selected setup, or asks for an unused name with `domain_folder_name.ui`,
+  then opens the read-only lazy `project_folder_tree.py` dialog.
+- Each domain owns its four JSON state files, settings, namelists and outputs.
+  Legacy root-level `mhm-qgis` and `mhm-plugin` layouts stay untouched; do not call
+  `migrate_workspace()` automatically. Unsafe names, files and symlinks are rejected.
+  Do not switch setups while background work is running.
+- Configuration lives in `tabWidget_steps` and `stackedWidget_configuration`.
+  Only `page_singleDomain` (first work-type option) is implemented; other modes are
+  disabled. Do not restore the removed steps stacked widget.
+- `pushButton_scanPrecipitationFiles` is the explicit metadata scan boundary.
+  The selected folder and relative `lineEdit_precipitationGlobDefinition` determine
+  the file set, never a recursive search of every NetCDF in the project. No scan
+  runs during project restoration. The worker returns metadata; the controller
+  updates coverage, the multiplier default, and the persisted common grid.
+- Precipitation Scan and Add/Edit Meteorology open `meteo_var_details_input.ui`.
+  Only OK starts metadata inspection; Cancel leaves saved inputs unchanged. The
+  variable table is populated after successful inspection and restores without scanning.
+- Each variable declares folder/glob, unit, input cadence, cumulative flag and reset
+  cadence. Metadata must agree. The reset combo is enabled only for cumulative input.
+  No temperature triplet or dedicated PET workflow remains.
+- Output cadence and timestamps equal input cadence (hourly/daily/monthly/yearly).
+  Unit conversion, deaccumulation, nearest-grid alignment and padding happen only
+  during Execute All Meteo. Cumulative sequences must be continuous across files;
+  missing prefixes or ambiguous interval conventions fail rather than guessing.
+  CF bounds describe intervals; recognized ERA cumulative variables use interval ends.
+  Fingerprints include all options and files. Display selects actual timestamps,
+  not arithmetic day offsets.
+- `dateTimeEdit_simulationStartTimeInput`, `dateTimeEdit_evaluationStartTimeInput`
+  and `dateTimeEdit_simulationEndTimeInput` persist under `nml-settings.json:time`.
+  Core validates start <= evaluation <= end, whole dates for v5 and whole hours
+  for v6, then hands periods to nml-tools. Meteorology validates input coverage.
+- Scan establishes the common grid before either execution. `core/grid/raster.py`
+  reads DEM metadata only (a warped VRT when CRS conversion is necessary).
+- `pushButton_executeAllMorphology` schedules `EXECUTE_ALL_STAGES`: NetCDF DEM
+  derivatives, categorical inputs, LAI, hydrology, optional snapping and gauges,
+  then publication. `setup.PUBLICATION_STAGES` is mask → publish → latlon (both versions)
+  → write. There are no late crop, per-outlet link or per-outlet DEM stages.
+- `pushButton_executeAllMeteo` runs only `core/executions/meteo`, never morphology.
+- DEM processing does not modify mHM-tools. Derive terrain on the real DEM first, then place all
+  variables once on the common L0 extent in `Z Temp/Geometry/dem_derivatives.nc`.
+  Extract `dem_filled` as the single raster variable `dem` in `filled_dem.nc` with
+  x/y/CRS metadata. Common-grid padding cannot invent sinks or flow paths.
+- Derivative reuse fingerprints the DEM, CRS and exact target header. Channel,
+  gauge and catchment jobs reuse saved D8 `fdir`. Missing filled DEMs are extracted
+  from an unchanged bundle. Legacy derivative TIFFs are neither reused nor deleted.
+- One model domain is the union of selected catchments; no selection means valid
+  filled-DEM cells, not the padded rectangle. Cached per-outlet masks and gauge
+  metadata are retained, but all active catchments and gauge memberships map to
+  model domain 1. The namelist handoff contains one `master` domain.
+- Publication masks only DEM derivatives into `dem_derivatives_masked.nc`.
+  Soil, geology and land cover keep full class coverage (fill value 1); LAI keeps
+  full coverage with fill value 0. They are never watershed-masked.
+- v5 writes the final master `dem.asc`, slope, aspect, facc, fdir and optional
+  `idgauges.asc`; v6 writes master `input.nc` and a single-variable `dem.nc`.
+  There is no per-outlet output tree or domain-link step. Existing old folders are
+  left untouched. Writers atomically replace any old destination symlink.
 
 ## Domain Delineator And Project Settings
 
-- `core/handlers/state/settings.py` copies packaged defaults to the outer project's
-  `settings.yaml` once, without overwriting it. Browse Project Folder reloads and
-  validates it; snapping and grid preparation read the current project values.
+- `core/handlers/state/settings.py` copies packaged defaults to the active domain's
+  `settings.yaml` once, without overwriting it. Opening a named domain reloads and
+  validates it; snapping and grid preparation read that domain’s values.
 - `max_snap_buffer_distance` is the single snapping radius, in metres (default 1000).
   `core/grid/distance.py` supplies local distance CRS/units, including latitude-aware
   geographic conversion and projected feet. QGIS geometry/index work stays in
@@ -251,142 +286,58 @@ Four JSON files are used by the plugin.
   file invalidate reuse. `domain_state` persists nested `delineation` cache metadata
   without committing draft domain/gauge choices.
 - Save uses `delineation.save` to prepare **every listed outlet**, reusing valid masks,
-  and merges **only active domains**, plus the optional DEM extent. Cache `mask_value`
+  and merges selected catchments into one domain, or valid DEM cells when none are selected. Cache `mask_value`
   is independent of reassigned `domain_id`. Save commits mask paths, choices, gauges,
-  and the namelist handoff; domain DEMs are still written during Morphology Setup.
+  and the namelist handoff; the final master DEM is written by Execute All.
 
 ## Common L0/L2 Extent
 
-- `core/grid/` owns exact grid values, cell-edge extents, headers, integer factors,
-  alignment gaps, common-extent construction, coordinate axes and array-to-grid
-  matching. Its local `Resolution` never opens a file or rounds a value; `Grid` adds an
-  extent per grid level and one common extent.
-- The core grid API accepts plain values, paths and CRS strings only. Reading a live
-  `QgsRasterLayer`, transforming a QGIS extent and finding the merged domain layer stay
-  in `qgis_bridge/layers/`; widget display precision and spin-box access stay in `qt/`.
-  Task scheduling remains in `qt/objects/`.
-- Compare cell-edge origins when measuring alignment. If raw L2 is an integer multiple
-  of L0, report the smallest signed x/y translation needed to put its origin on the L0
-  lattice. Numerical noise may be normalized, but a material shift must never be
-  silently applied. Prepared L0 data is never resampled.
-- The exact raw L2/L0 factor supplies the spin-box default only. The user's selected
-  multiplier always defines the target L2 cell size. Build the common extent from the
-  union of all active domains, snap it outward to that L2 lattice, and derive L0 from the
-  same outer bounds so the dimension multiplier is exact. Meteorology is resampled when
-  its CRS, resolution or phase differs from that target.
-- `settings.yaml:grid_alignment_gap_limit` is the maximum phase gap treated as numeric
-  noise, expressed as a fraction of the exact L0 cell size. A larger gap resamples L2;
-  L0 is never resampled.
-- The common extent is built once from the merged active-domain polygons in
-  `core.grid.Grid.for_meteorology()`. L2 is snapped outward to an L0-aligned anchor with
-  floor/ceil; L0 is then derived from L2 (`ncols*n`, `nrows*n`, same corners), so `n x n`
-  L0 cells per L2 cell holds by construction. `validate_l0_l2_alignment()` guards every
-  header pair.
-- **Never round a grid-defining cell size.** `floor_cellsize()` / `ceil_cellsize()` are
-  for display and for the resolution text saved in UI state, nothing else. Two separate
-  failures came from rounding them:
-  - Flooring a repeating L0 cell size such as 1/1200 degrees to 8 places drifts a
-    fraction of a cell per row; over a few thousand rows the L0 window copy rejects
-    every raster as misaligned.
-  - `120 x` a 1/1200-degree cell size is `0.09999999999999999`, one ulp under `0.1`.
-    Flooring *that* to 8 places gives `0.09999999`, a 1e-8 error that fails
-    `validate_l0_l2_alignment` and makes `possible_resolutions()` return nothing.
-
-  Grid construction uses `exact_resolution` from
-  `qgis_bridge.layers.raster_resolution_info()` and `current_l0_resolution()`. The L2
-  cell size is carried verbatim from `Grid.for_meteorology()` through
-  `update_l2_resolution_from_metadata()`, `grid_level_headers()`,
-  `core.grid.standardize_header()` and the `header_for_*` builders. The validated exact
-  L0/L2 headers are persisted together in the processing state's `grid` section; never
-  rebuild either from a rounded display value.
-- Never shift or shrink a misaligned boundary; expand it outward only.
-- Prepared L0 rasters are never resampled. `core/handlers/raster/tasks.py` functions
-  `crop_aligned_l0_raster()` and
-  `mask_aligned_l0_raster()` copy integer windows, pad outside the source, and raise on
-  a misaligned or wrong-CRS input. Do not reintroduce `gdal:warpreproject` or
-  `gdal:cliprasterbymasklayer` here.
-- **A class layer must never carry nodata.** Two rules follow, both declared per layer in
-  `core/executions/morphology/setup.raster_plan()`:
-  - The geometric pad is separate from the declared nodata. `pad_value` fills cells the
-    source does not reach; the band nodata stays `-9999`. Land cover, soil and geology
-    pad with `core.morphology.layers.CATEGORICAL_PAD_VALUE` (`1`), LAI with `LAI_PAD_VALUE`
-    (`0.0`). The DEM derivatives (dem, slope, aspect, facc, fdir, idgauges) still pad
-    with nodata. The publish path takes the same values from `advanced_l0.pad_spec_for`.
-  - **Only the DEM derivatives are watershed-masked.** Land cover, soil, geology and LAI
-    keep the full model extent: `mask_all_layers` writes their `_masked.tif` as a
-    straight `crop_aligned_l0_raster` copy of the crop, and `mask_lai_netcdf_to_l0`
-    copies `lai_crop.nc` to `lai.nc` with no mask. The `_masked` name is kept because
-    `write_all_layers` keys on it. Masking them would carve nodata into cells mHM reads,
-    which is a hole, not a boundary.
-- Advanced historical land cover and multi-horizon soil are formatted on the filled-DEM
-  grid and then placed on the common L0 header by
-  `core/morphology/layers/advanced_l0.py`, which uses
-  `core/handlers/file/ascii/morphology.pad_l0_file_to_header()` (cell lookup plus
-  padding, never interpolation). This is Morphology Setup's publish step.
-- **ASCII grids are cropped/padded by streaming text**, in
-  `core/handlers/file/ascii/pad.py`.
-  Loading one to pad it costs gigabytes: measured at 3238 MiB for a 13201 x 6001 soil
-  class raster, which is why soil failed inside QGIS once crop and mask had already
-  claimed memory. The streaming version is 39 MiB and 1 s for the same file. Only the
-  soil *class* raster is padded; the horizon inputs (clay, sand, silt, bulk density) are
-  never touched.
-- Each Morphology Setup step records its own status in `workflows` as `<workflow>_crop`,
-  `_mask`, `_latlon`, `_write`, `_publish`, `_link_domains`, `_domain_dems`, so a failure points at the failing step.
-- L2 meteorology inputs already on the target grid are sliced and padded by
-  `core/grid/arrays.py`. Only misaligned or reprojected inputs are resampled, and
-  then nearest-neighbour only. Every written file and header is checked against the saved
-  L2 header before publication.
-- ERA5-Land temperature files are read once for `tavg`, `tmin` and `tmax` through
-  `iter_daily_datasets()`, but only when the estimated hold fits
-  `MHM_QGIS_METEO_MAX_BYTES` (2 GiB default). A long record needs all three series in
-  memory at once, tripling the peak, so it falls back to one variable at a time. Consume
-  the iterator and release each dataset after writing; `build_daily_datasets()` collects
-  them all and is for tests and short records.
-- `core/meteorology/reuse.py` skips meteorology preparation when every required variable
-  is recorded in `mhm_qgis_processing_state.json`, still on disk, and its `header.txt`
-  matches the current L2 header. A changed L2 grid always rebuilds. `pet` is only
-  required when a PET folder is selected.
-- The validated L0 header, L2 header and multiplier are mirrored into the `grid` section
-  of `mhm_qgis_processing_state.json` for resumes.
-- Model-ready shared inputs live below `data/master`: static morphology in
-  `data/master/static/morph`, forcing in `data/master/meteo`, LAI in `data/master/lai`,
-  lat/lon at `data/master/latlon.nc`, observations in
-  `data/master/observation/streamflow`. Static morphology, meteorology, LAI, lat/lon and
-  streamflow observations must not be written back to the former direct `data/*` folders.
-- **Domain DEMs are written during Morphology Setup, not at delineation.** Delineation
-  records each domain's polygon and its target `data/<name>/dem.asc` in
-  `mhm_qgis_processing_state.json` under `domains`; the final `domain_dems` step
-  (`layers/domain_dem.py`) then masks the *cropped* L0 DEM with each polygon and
-  writes the ASCII. Every domain therefore shares the common L0 extent and matches the
-  other inputs cell for cell, which is what mHM needs. Cropping each domain to its own
-  bounding box produced mismatched matrices -- measured on one project: 3748x2824,
-  974x895 and 13202x6002 against a common grid of 13320x6120.
-- Each outlet owns exactly one physical DEM at `data/<outlet-id>/dem.asc`. Outlet IDs
-  used as directory names must reject path separators and traversal components, and
-  directories are created from saved outlet IDs, not literal template placeholders.
-- Each domain folder also receives the shared morphology inputs listed in
-  `DOMAIN_INPUT_NAMES` (slope, aspect, facc, fdir, gauge positions, soil class, geology class and their
-  class-definition files, plus `.prj` sidecars), because mHM reads morphology per domain
-  from `dir_Morpho`. Unchanged destinations are skipped so a rerun does not recopy. The
-  list is explicit rather than a glob so nothing unrelated leaks out of `data/master`;
-  `dem.asc` is excluded because each domain writes its own; land cover and LAI remain
-  shared-only. For v5, `write` publishes `idgauges.asc` in master before
-  `link_domains` links it and its `.prj` into every domain. Gauge positions are optional
-  when no gauge raster was prepared. The v6 layout is unchanged.
-- **The final Setup order is `publish → link_domains → domain_dems`.** An advanced or mHM-ready soil,
-  geology or land-cover raster stays in `Z Temp/Morphology/morph` until
-  `publish_model_inputs` publishes it into `data/master`, so copying first found nothing and
-  left every domain with a bare `dem.asc` -- silently. `link_domains` links published shared inputs and fails on missing required
-  groups. Domain DEM writers do not link anything: they atomically replace each
-  domain's DEM last, never writing through a symlink into master. Execute All never
-  links domain inputs. The v6 link stage is a no-op because shared inputs live in
-  master’s `input.nc`.
-- `core/handlers/raster/tasks.write_domain_dem_ascii()` streams rows straight to text,
-  so a domain DEM costs flat memory whatever the grid size. Do not reintroduce
-  `materialize_domain_dem_file` into the delineation path; it crops to the cutline and is
-  kept only for callers that genuinely want a tight extent.
-- Keep the Domain Outlet label and checkbox enabled regardless of their current value.
-  An unchanged outlet location is a valid domain/gauge location; a map pick overrides it.
+- `core/grid/` owns exact resolutions, cell-edge extents, headers, integer factors,
+  alignment gaps, coordinate axes and array matching. Its local `Resolution` does
+  no file I/O or rounding; `Grid` adds per-level extents and one common extent.
+  Core accepts plain values/paths/CRS strings, never widgets or QGIS objects.
+- The common extent covers the selected DEM extent, not selected catchment bounds.
+  Snap it outward to an L0-aligned L2 lattice. Derive L0 from L2 (same corners,
+  `ncols*n`, `nrows*n`) so n x n cells per L2 cell holds by construction.
+  `validate_l0_l2_alignment()` checks every header pair.
+- The exact raw L2/L0 integer factor is a spin-box default only. Once the user
+  chooses a multiplier it wins, including after rescans or project restoration.
+- Compare cell-edge origins when measuring alignment. `settings.yaml`'s
+  `grid_alignment_gap_limit` is a fraction of exact L0 cell size; gaps larger than
+  numerical noise resample L2, never shift prepared L0. Expand boundaries outward
+  only; never shrink a misaligned boundary.
+- Never round a grid-defining cell size. 1/1200 degree and 120 times that value
+  must be carried verbatim: display rounding can introduce cumulative drift or
+  make an exact 0.1-degree ratio fail validation. `floor_cellsize`/`ceil_cellsize`
+  are display-only. Persist both exact headers and the multiplier in processing
+  state's `grid` section; restore those, not rounded widget text.
+- Grid validity includes DEM file fingerprint, CRS, precipitation selection/files,
+  multiplier and gap setting. Changing any requires a new scan. Changing catchment
+  selection invalidates morphology, not the DEM-wide common extent.
+- Prepared L0 rasters use integer window copies and padding, never resampling.
+  `crop_aligned_l0_raster()`/`mask_aligned_l0_raster()` remain low-level APIs and
+  reject a misaligned or wrong-CRS source; they are not a late crop workflow.
+- Class inputs must never carry nodata. `advanced_l0.pad_spec_for` declares class
+  pad/fill 1 and LAI pad/fill 0, while band nodata stays -9999. Publication fills
+  invalid class cells even when the grid already matches. Only derivative masks
+  may carve nodata outside catchments.
+- ASCII padding/filling streams rows (`handlers/file/ascii/pad.py`). Do not load
+  huge class rasters into memory to pad them. Only class products are published;
+  original soil horizon inputs are never rewritten.
+- Publication records each substep under `execute_all_mask`, `_publish`, `_latlon`
+  and `_write`. Failures must identify the failed stage.
+- Aligned L2 forcing is sliced/padded by `core/grid/arrays.py`; only misaligned or
+  reprojected forcing is resampled (nearest-neighbour). Check every output against
+  the saved L2 header before publication.
+- Generic forcing streams one selected variable in bounded time blocks, retaining
+  only one preceding cumulative plane across files. It does not aggregate hourly
+  inputs into daily means, minima or maxima; configure each desired variable.
+- Meteorology reuse checks both the input-file/selection fingerprint and target L2
+  grid, as well as output existence. PET is required only when selected.
+- Model inputs live under each named domain’s `data/`. Legacy path helpers retain
+  their old `data/master/` mapping only for legacy callers. v5 morphology is `data/static/morph`, forcing `data/meteo`,
+  LAI `data/lai`, lat/lon `data/latlon.nc`, observations
+  `data/observation/streamflow`. See version differences below.
 
 ## v6 Input Layout
 
@@ -395,20 +346,19 @@ Four JSON files are used by the plugin.
   ~24 callers of `morph_folder` / `lai_folder` never thread it through. The result is
   cached per project folder against the state file's mtime -- it used to re-parse the
   JSON on every call, inside loops. Unknown or missing version falls back to v5.13, which
-  every existing project already uses. **v5.13 output is unchanged**; tests assert that.
+  every existing project already uses. The shared v5.13 layout stays the same; domain DEMs now live in master.
 - `ensure_project_structure()` honours its own `version_text` argument. It used to read
   the version from state instead, so on a *new* project the state file did not exist, the
-  v5.13 default won, and asking for v6 still built `data/master/static/morph`.
+  v5.13 default won, and asking for v6 still built `data/static/morph`.
 - v6 differences, all matching `.scripts/project-template/v6` and the mHM examples:
-  - `data/master/morph/` instead of `data/master/static/morph/`
+  - `data/morph/` instead of `data/static/morph/`
   - one `input.nc` instead of separate `.asc` -- `core/morphology/layers/morph_input_nc.py`
     bundles the masked L0 rasters with `x`/`y`/`x_bnds`/`y_bnds` and 2-D `lon`/`lat`, so
-    v6 needs no separate `latlon.nc`
-  - `data/master/meteo/<var>.nc`, flat, no `header.txt`, plus `mask.nc` from
+    separate `data/latlon.nc` supplies all four model levels for v6 too
+  - `data/meteo/<var>.nc`, flat, no `header.txt`, plus `mask.nc` from
     `core/meteorology/mask.py`
-  - `data/<domain>/dem.nc` from `layers/domain_dem_nc.py`, and no shared-file copying
-    into domain folders because everything else lives in `input.nc`
-  - `data/master/gauge/streamflow/` instead of `observation/streamflow/`
+  - `data/morph/dem.nc` as the single model DEM; other static inputs live in `input.nc`
+  - `data/gauge/streamflow/` instead of `observation/streamflow/`
 - `input.nc` carries seven variables: `dem, fdir, slope, aspect, geology_class,
   soil_class, facc`. **`LAI_class` is deliberately absent** -- mhm_qgis has no LAI class
   product, so `lai_class_path` is rendered empty rather than naming a file that is never
@@ -418,27 +368,19 @@ Four JSON files are used by the plugin.
 
 ## Staging And Publication
 
-- Execute All writes land cover, soil and geology outputs into `Z Temp/Morphology/morph`
-  (`morph_staging_folder`), never straight into `data/master`. Nothing is model-ready
-  until the common L0 extent is known, and that only happens once meteorology has fixed
-  the L2 grid.
-- Morphology Setup's publish step (`setup.publish` ->
-  `advanced_l0.publish_model_inputs`) crops/pads raster copies onto the L0 header in
-  `data/master/static/morph`, retaining untouched staged rasters for later extent
-  expansion. Class definitions and `.prj` sidecars are moved unchanged. Reused legacy
-  master rasters are preserved in staging before realignment. Publication validates
-  the grids and rewrites the `output_path` / `classdefinition_path` /
-  `scenes[].output_path` entries in `nml-settings.json` to the published locations. Those
-  values feed `vSpecific/v5_13` and `vSpecific/v6`, so they must name files that exist.
-- Repointing also fixes paths left pointing at staging when the file is already in
-  master, so a reused stage still ends up resolvable.
-- The step finishes by calling `missing_model_inputs()` and fails when anything the
-  handoff names is absent. That is the guarantee that a completed Morphology Setup leaves
-  `nml-settings.json` usable by nml-tools.
-- `mHM_ready` is the exception: it bypasses crop/mask/write, so its raster and class
-  definition are already final and go directly to `data/master`.
-- Execute All verifies its categorical outputs in **staging**; only mHM-ready is verified
-  in `data/master`.
+- Execute All formats inputs on the already established common filled-DEM grid.
+  Lookup, advanced and mHM-ready categorical modes all stage under
+  `Z Temp/Morphology/morph`, then publish during Execute All's final stage.
+- `advanced_l0.publish_model_inputs()` validates exact alignment, fills class
+  nodata, and copies into master. It retains staged rasters and definitions for
+  reuse. Ready TIFFs and v5 NetCDF class rasters are exported to ASCII by streaming
+  rows, without interpolation. Advanced v6 NetCDF products remain NetCDF.
+- Publication rewrites `output_path`, `classdefinition_path` and historical scene
+  paths in `nml-settings.json` to the final files, including converted extensions.
+  It fails if the handoff names missing products. No namelist may point at staging
+  after successful publication.
+- The final derivative write follows category publication; v6 can therefore bundle
+  the published soil/geology classes into `input.nc`.
 
 ## Fingerprinted Reuse
 
@@ -453,12 +395,11 @@ Four JSON files are used by the plugin.
   entries additive; `store_payload` merges into the existing state rather than replacing.
 - The categorical lookup stages and the LAI stage are gated on it. Geology used to rerun
   every time because only land cover and soil passed `reuse_existing`, and that check was
-  existence-only rather than input-based. Land cover and soil keep `reuse_existing=True`
-  because their advanced mode has no lookup job to fingerprint; removing it would make
-  advanced runs rebuild every time.
+  existence-only rather than input-based. Advanced land cover and soil fingerprint all selected source files, the
+  filled DEM and formatting options through their core API.
 - Outputs already on disk with no recorded fingerprint are **adopted** when they postdate
-  every input (`outputs_newer_than_inputs`), so a project prepared before the cache
-  existed avoids one pointless rebuild. An output older than an input is certainly stale
+  every input (`outputs_newer_than_inputs`), only when that stage has no recorded fingerprint, so changed configuration
+  cannot adopt its own stale outputs. An output older than an input is certainly stale
   and is rebuilt instead.
 - `core/meteorology/forcing/cache.py` wraps `inspect_meteo_folder`, which opens every
   NetCDF in a folder **twice**. On a 552-file ERA5-Land record that froze project load for
@@ -490,7 +431,7 @@ Four JSON files are used by the plugin.
 - Lookup mode retains `3_land_use.tif`, `3_soil.tif` and `3_geology_processed.tif` for
   the existing crop/mask/write workflow.
 - Soil and geology classdefinitions are produced once by their formatter and moved to
-  `data/master/static/morph`. Only geology `PARAMETER_VALUE` metadata remains
+  `data/static/morph`. Only geology `PARAMETER_VALUE` metadata remains
   plugin-specific, written by `core/handlers/lookup/geology.py` to
   `Z Temp/Geometry/geology_class_metadata.json`.
 - `mHM_ready` accepts local `.asc`, `.nc` or `.tif` rasters, copies them to
@@ -502,9 +443,13 @@ Four JSON files are used by the plugin.
 - Do not add Shapely validity checks or `make_valid` calls before rasterizing.
 - The `format-data.csv` manifests for historical land cover and layered soil are built by
   `core/handlers/lookup/manifests.py`, which validates before writing: land-use periods
-  must be ordered and gap-free, soil horizons consecutive and contiguous starting at
-  depth 0. **Their bytes are a contract mHM-tools parses** -- the soil preamble
-  (`Bulk Density Unit = ...`) and the relative-path rewriting are part of it. Diff the
+  use continuous `StartDateTime,EndDateTime,FilePath` records (ISO timestamps or
+  year boundaries), bounded by the simulation interval. UI QDateTimeEdit cells share
+  adjacent endpoints; v5 transitions must be January 1. Soil horizons are contiguous
+  starting at depth 0. The approved small mhm-tools `format_lc_data.py` extension
+  reads these dates and preserves fractional-day NetCDF time bounds; legacy
+  `StartYear/EndYear` files retain inclusive-year meaning. **Their bytes are a contract mHM-tools parses** -- the soil unit field
+  (the repeated `Bulk Density Unit` column) and relative-path rewriting are part of it. Diff the
   output bytes before and after any change here.
 
 ## LAI
@@ -525,17 +470,10 @@ Four JSON files are used by the plugin.
   missing leaf area is none, not a gap. The later aligned window copy pads beyond the
   staged extent with the same **0**. LAI is not watershed-masked, so `-9999` should not
   appear in a published LAI cube.
-- LAI follows the same two-stage path as every other layer:
-  - **Execute All** (`commands.lai`, Qt starter `start_lai`)
-    resamples the source onto the filled DEM grid with **bilinear** interpolation and
-    stages it at `Z Temp/Morphology/lai/lai_dem.nc`. The result has exactly the DEM's
-    size and extent.
-  - **Morphology Setup** then reaches the common L0 extent by integer **window copy**
-    padded with `0` (`crop_lai_netcdf_to_l0`); the mask hook (`mask_lai_netcdf_to_l0`)
-    publishes that crop as `lai.nc` unmasked. Neither stage resamples.
-
-  Keep the resampling in Execute All: changing the L2 multiplier must not force a
-  re-resample, only a re-crop.
+- Execute All resamples LAI onto the common filled-DEM grid and stages
+  `Z Temp/Morphology/lai/lai_dem.nc`. Its publication step window-copies this to
+  `lai.nc` with zero filling and no watershed mask. There is no `lai_crop.nc`.
+  A changed common grid invalidates staged LAI through the filled-DEM fingerprint.
 - Reusable temporal conversion, Rasterio warping, streaming NetCDF writing and aligned
   window copying live in `mhm_tools.pre.format_lai`. Call that public API only through
   `applications/mhm_tools_handler.py`. `core/morphology/layers/lai.py` builds path-only
@@ -554,7 +492,7 @@ Four JSON files are used by the plugin.
   the DEM grid and 1.85:1 on the L0 grid because every cell differs. That is why mhm-tools'
   `LAI_ASSUMED_COMPRESSION` is 1.8, and why a long record at L0 resolution is expensive
   on disk: 468 monthly steps on a 13320 x 6120 grid is ~158 GiB per file, and the
-  pipeline writes three (`lai_dem.nc`, `lai_crop.nc`, `lai.nc`). Check the numbers before
+  pipeline retains two (`lai_dem.nc`, `lai.nc`). Check the numbers before
   assuming a long record is feasible; the 12-step long-term-mean option is ~4 GiB per file.
 - `lai.nc` is the published file; `lai_masked.nc` is not written, because a second
   full-size copy costs disk for no benefit.
@@ -565,7 +503,7 @@ Four JSON files are used by the plugin.
   `MHM_TOOLS_LAI_MAX_BYTES`, which does not exist.
 - LAI is a 3D monthly array: 12 months plus spatial dimensions. Crop operations must
   apply to all months. Output NetCDF must be double precision (`float64`). Write the L0
-  header for LAI to `data/master/lai/header.txt`.
+  header for LAI to `data/lai/header.txt`.
 
 ## Displaying Results
 
@@ -601,14 +539,20 @@ Four JSON files are used by the plugin.
   `state/nml_settings.load_settings`.
 - The handoff goes through `applications/nml_tools_handler.launch_profile_editor`.
   `configure_qtpy_api()` must run before it, because nml-tools loads Qt on first call.
-- Before handoff, saved domain-indexed arrays are reconciled in memory against schema
-  dimensions and stable domain paths. Surviving-domain values are preserved; added
-  domains receive schema defaults. Only the editor's Save writes `nml.json`.
+- Use the installed nml-tools API (development checkout now `/home/bashyal/Codes/nml-tools`),
+  not a hard-coded source path. `launch_gui(schemas_dir, output_dir, file_profiles, ...)`
+  receives the main/parameter/output file-profile dictionary as its third argument.
+- nml-tools reads/writes namelist files directly; do not restore its removed nml.json
+  document APIs. Shrinking legacy domain arrays is previewed in a scratch workspace
+  using schema defaults plus explicit plugin values. Only files actually saved by
+  the editor replace originals; keep `.nml.before-single-domain` backups.
+- v6 geological-unit parameters map to `parameter_baseflow_1.yml`'s structured
+  `baseflow_recession` array; v5 keeps `geoparameter.GeoParam`.
 - `qt/controllers/main.py` owns version changes, Edit Namelists and Run mHM; the
   main dialog exposes thin methods wired by `qt/bindings/main.py`. There is no
   configuration processor object.
-- The editor runs modally on the QGIS event loop and its return code is not meaningful
-  under QGIS, so the plugin cannot tell save from cancel.
+- The editor runs modally on the QGIS event loop; its return code does not indicate Save.
+  Scratch-file modification stamps distinguish saved files from Cancel.
 - nml-tools' modal dialogs became tabs (`ProfileDialog` -> `ProfileTab`); check the
   installed API before assuming a class name.
 - Preserve full v5.13 parameter templates so blocks like `&PET0` remain present.
@@ -665,12 +609,12 @@ Four JSON files are used by the plugin.
 
 - Temporary geometry: `Z Temp/Geometry`
 - Morphology staging: `Z Temp/Morphology/morph`
-- Shared static morphology: `data/master/static/morph` (v6: `data/master/morph`)
-- Domain DEM: `data/<outlet-id>/dem.asc` (v6: `dem.nc`)
-- LAI: `data/master/lai`
-- Meteorology: `data/master/meteo`
-- Streamflow: `data/master/observation/streamflow` (v6: `data/master/gauge/streamflow`)
-- Root namelists: project root (`mhm.nml`, parameter namelist, `mhm_outputs.nml`)
+- Shared static morphology: `data/static/morph` (v6: `data/morph`)
+- Single-domain DEM: `data/static/morph/dem.asc` (v6: `data/morph/dem.nc`)
+- LAI: `data/lai` (v6: `data/morph`)
+- Meteorology: `data/meteo`
+- Streamflow: `data/observation/streamflow` (v6: `data/gauge/streamflow`)
+- Root namelists: active domain root (`mhm.nml`, parameter namelist, `mhm_outputs.nml`)
 - mHM outputs: `output`
 - Restarts: `restart`
 
@@ -704,7 +648,7 @@ Four JSON files are used by the plugin.
   `/usr/share/qgis/python/plugins` to `sys.path`, call `QgsApplication.setPrefixPath` and
   `initQgis()`. Set `locale/userLocale` in `QSettings` **after** `initQgis()` or
   `classFactory` fails on a headless machine. Useful assertions: the main dialog
-  constructs with 6 input adapters and 5 tabs.
+  constructs with 6 input adapters and 6 tabs.
 - A shell Python may not have `PyYAML`; QGIS Python may. If schema loading
   fails only because `yaml` is missing in shell Python, note it rather than treating it as
   a plugin failure.

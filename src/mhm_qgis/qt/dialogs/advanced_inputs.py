@@ -160,6 +160,12 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
         self.setWindowTitle("Historical Land Use")
         self.project_folder = Path(project_folder).expanduser().resolve()
         self.spinBox_nLandUseLayers.setMaximum(MAX_LAND_USE_PERIODS)
+        from ...core.handlers.state.nml_settings import load_settings
+        from ...core.handlers.store.layout import project_version
+        times = load_settings(project_folder).get("time", {})
+        self.simulation_start = times.get("sim_start", "1900-01-01T00:00:00")
+        self.simulation_end = times.get("sim_end", "2101-01-01T00:00:00")
+        self.version = project_version(project_folder)
         self._rows: list[_LandUseRow] = []
         self._lookup_path = ""
         self._lookup_error = ""
@@ -218,12 +224,8 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
             raise ValueError(self._lookup_error)
         periods = []
         for index, row in enumerate(self._rows):
-            start = self._integer_cell(
-                self.tableWidget_landUseTimeInputs, index, 0, "start year"
-            )
-            end = self._integer_cell(
-                self.tableWidget_landUseTimeInputs, index, 1, "end year"
-            )
+            start, end = (self.tableWidget_landUseTimeInputs.cellWidget(index, column)
+                          .dateTime().toString("yyyy-MM-ddTHH:mm:ss") for column in (0, 1))
             periods.append(LandUsePeriod(start, end, self._selected_file(row.adapter)))
         value = LandUseInput(
             tuple(periods),
@@ -231,7 +233,8 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
             self.comboBox_mappingFieldInput.currentText().strip(),
             self.comboBox_classFieldInput.currentText().strip(),
         )
-        validate_land_use_input(value)
+        validate_land_use_input(value, simulation_start=self.simulation_start,
+                                simulation_end=self.simulation_end, version=self.version)
         return value
 
     def set_input(self, *args, **kwargs):
@@ -256,16 +259,6 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
             QtWidgets.QMessageBox.warning(self, "Invalid Land-use Input", str(error))
             return
         self.accept()
-
-    @classmethod
-    def _integer_cell(cls, table, row: int, column: int, label: str) -> int:
-        text = cls._cell_text(table, row, column)
-        try:
-            return int(text)
-        except ValueError as error:
-            raise ValueError(
-                f"Enter an integer {label} for layer {row + 1}."
-            ) from error
 
 class MultiHorizonSoilDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_Soil):
     """Collect clay, sand, silt and bulk-density layers by horizon."""

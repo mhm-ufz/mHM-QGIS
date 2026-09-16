@@ -67,7 +67,7 @@ def test_dialog_maps_new_combos_and_discovers_relative_project_files(tmp_path):
     raster = tmp_path / "0 GIS" / "dem.tif"
     raster.parent.mkdir()
     raster.touch()
-    excluded = tmp_path / "mhm-plugin" / "ignored.tif"
+    excluded = tmp_path / "mhm-qgis" / "ignored.tif"
     excluded.parent.mkdir()
     excluded.touch()
 
@@ -83,7 +83,7 @@ def test_dialog_maps_new_combos_and_discovers_relative_project_files(tmp_path):
         for index in range(dialog.comboBox_demInput.count())
     ]
     assert "0 GIS/dem.tif" in labels
-    assert all("mhm-plugin" not in label for label in labels)
+    assert all("mhm-qgis" not in label for label in labels)
     dialog.close()
 
 
@@ -201,12 +201,12 @@ def test_project_without_saved_state_clears_previous_project_inputs(tmp_path):
 
 def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     _app()
-    pour_points = tmp_path / "pour_points.csv"
-    pour_points.write_text(
-        "station_id,outlet_name\n1,upper\n2,lower\n",
-        encoding="utf-8",
-    )
-    layer = QgsVectorLayer(str(pour_points), "pour points", "delimitedtext")
+    pour_points = tmp_path / "pour_points.geojson"
+    pour_points.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"station_id": i, "outlet_name": name},
+         "geometry": {"type": "Point", "coordinates": [i, 0]}}
+        for i, name in ((1, "upper"), (2, "lower"))]}))
+    layer = QgsVectorLayer(str(pour_points), "pour points", "ogr")
 
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
@@ -240,115 +240,43 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     restored.close()
 
 
-def test_meteo_folder_source_and_multiplier_state_round_trip(tmp_path):
-    _app()
-    precipitation = tmp_path / "forcing" / "pre"
-    temperature = tmp_path / "forcing" / "temp"
-    precipitation.mkdir(parents=True)
-    temperature.mkdir()
 
+def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
+    from dataclasses import asdict
+    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+    from mhm_qgis.qt.controllers import main
+    folder = tmp_path / "forcing"
+    folder.mkdir()
     dialog = MhmQgisDialog()
-    assert dialog.comboBox_precipitationFile.count() == 1
-    assert dialog.comboBox_precipitationFile.itemText(0) == ""
     dialog.project_folder = str(tmp_path)
-    dialog.refresh_meteo_folder_sources()
-    for combo in (
-        dialog.comboBox_precipitationFile,
-        dialog.comboBox_temperatureFile,
-        dialog.comboBox_petFile,
-    ):
-        assert combo.itemText(0) == ""
-        assert combo.itemData(0) is None
     dialog._loading_input_state = True
-    try:
-        dialog.comboBox_precipitationFile.setCurrentIndex(
-            dialog._folder_combo_index(
-                dialog.comboBox_precipitationFile,
-                str(precipitation),
-            )
-        )
-        dialog.comboBox_temperatureFile.setCurrentIndex(
-            dialog._folder_combo_index(
-                dialog.comboBox_temperatureFile,
-                str(temperature),
-            )
-        )
-        dialog.comboBox_precipitationDataSource.setCurrentIndex(0)
-        dialog.comboBox_temperatureDataSource.setCurrentIndex(1)
-        dialog.spinBox_L2ResolutionMultiplier.setValue(4)
-    finally:
-        dialog._loading_input_state = False
+    dialog.refresh_meteo_folder_sources()
+    dialog.comboBox_precipitationFile.setCurrentIndex(dialog._folder_combo_index(dialog.comboBox_precipitationFile, str(folder)))
+    dialog._meteo_inputs = {v: asdict(MeteoFolderSpec(v, str(folder), unit=unit))
+                            for v, unit in (("pre", "mm"), ("tavg", "K"))}
+    dialog.spinBox_L2ResolutionMultiplier.setValue(4)
+    dialog._loading_input_state = False
     dialog.save_input_state()
     dialog.close()
-
-    state_path = Path(workspace_folder(tmp_path)) / "mhm_qgis_input_state.json"
-    state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert state["meteo_inputs"]["precipitation"] == {
-        "folder": "forcing/pre",
-        "source": "mHM ready",
-    }
-    assert state["meteo_inputs"]["l2_multiplier"] == 4
-
     restored = MhmQgisDialog()
     restored.project_folder = str(tmp_path)
     restored.load_input_state()
-
-    assert restored.selected_meteo_folder("precipitation") == str(
-        precipitation.resolve()
-    )
-    assert restored.selected_meteo_source("precipitation") == "mhm_ready"
-    assert restored.selected_meteo_source("temperature") == "era5land"
-    assert restored.comboBox_petFile.currentIndex() == 0
-    assert restored.selected_meteo_folder("pet") == ""
     assert restored.spinBox_L2ResolutionMultiplier.value() == 4
+    assert restored.tableWidget_meteoInputs.rowCount() == 2
+    assert [s.kind for s in restored.selected_meteo_specs()] == ["pre", "tavg"]
+    assert restored._meteo_inspections == {}
     restored.close()
 
 
-def test_meteo_required_folders_and_optional_blank_pet(tmp_path):
-    _app()
-    precipitation = tmp_path / "pre"
-    temperature = tmp_path / "temp"
-    precipitation.mkdir()
-    temperature.mkdir()
-
+def test_meteo_requires_pre_but_not_unconfigured_variables(tmp_path):
+    from dataclasses import asdict
+    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
-    dialog.refresh_meteo_folder_sources()
-
-    with pytest.raises(ValueError, match="precipitation data folder"):
+    with pytest.raises(ValueError, match="precipitation"):
         dialog.selected_meteo_specs()
-
-    dialog._loading_input_state = True
-    try:
-        dialog.comboBox_precipitationFile.setCurrentIndex(
-            dialog._folder_combo_index(
-                dialog.comboBox_precipitationFile,
-                str(precipitation),
-            )
-        )
-        dialog.comboBox_precipitationDataSource.setCurrentIndex(0)
-    finally:
-        dialog._loading_input_state = False
-
-    with pytest.raises(ValueError, match="temperature data folder"):
-        dialog.selected_meteo_specs()
-
-    dialog._loading_input_state = True
-    try:
-        dialog.comboBox_temperatureFile.setCurrentIndex(
-            dialog._folder_combo_index(
-                dialog.comboBox_temperatureFile,
-                str(temperature),
-            )
-        )
-        dialog.comboBox_temperatureDataSource.setCurrentIndex(0)
-        dialog.comboBox_petFile.setCurrentIndex(0)
-        dialog.comboBox_petDataSource.setCurrentIndex(1)
-    finally:
-        dialog._loading_input_state = False
-
-    _, _, pet = dialog.selected_meteo_specs()
-    assert pet is None
+    dialog._meteo_inputs = {"pre": asdict(MeteoFolderSpec("pre", str(tmp_path), unit="mm"))}
+    assert tuple(s.kind for s in dialog.selected_meteo_specs()) == ("pre",)
     dialog.close()
 
 
@@ -361,7 +289,7 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     dialog.project_folder = str(tmp_path)
     processing.mark_workflow(
         tmp_path,
-        "meteo_morph_setup",
+        "execute_all_meteo",
         "completed",
     )
     dialog.close()
@@ -370,17 +298,17 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     restored.project_folder = str(tmp_path)
     restored.refresh_morphology_workflow_button_states()
 
-    assert "#2e7d32" in restored.pushButton_executeMeteoMorphSetup.styleSheet()
+    assert "#2e7d32" in restored.pushButton_executeAllMeteo.styleSheet()
     restored.close()
 
 
-def test_combined_workflow_green_state_requires_latlon(tmp_path):
+def test_meteorology_completion_is_independent_of_latlon(tmp_path):
     _app()
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
     processing.mark_workflow(
         tmp_path,
-        "meteo_morph_setup",
+        "execute_all_meteo",
         "completed",
     )
     dialog.close()
@@ -389,53 +317,8 @@ def test_combined_workflow_green_state_requires_latlon(tmp_path):
     restored.project_folder = str(tmp_path)
     restored.refresh_morphology_workflow_button_states()
 
-    assert "#2e7d32" not in (
-        restored.pushButton_executeMeteoMorphSetup.styleSheet()
+    assert "#2e7d32" in (
+        restored.pushButton_executeAllMeteo.styleSheet()
     )
-    assert not processing.workflow(tmp_path, "meteo_morph_setup")
+    assert processing.workflow(tmp_path, "execute_all_meteo")["status"] == "completed"
     restored.close()
-
-
-def test_precipitation_selection_displays_resolution_and_l0_multiplier(tmp_path):
-    _app()
-    folder = tmp_path / "forcing" / "pre"
-    folder.mkdir(parents=True)
-    dataset = xr.Dataset(
-        {
-            "pre": (
-                ("time", "lat", "lon"),
-                np.ones((1, 2, 2), dtype="float64"),
-            )
-        },
-        coords={
-            "time": np.asarray(["2001-01-01"], dtype="datetime64[ns]"),
-            "lat": [51.0, 50.0],
-            "lon": [10.0, 11.0],
-        },
-    )
-    dataset.to_netcdf(folder / "pre.nc", engine="scipy")
-
-    dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
-    dialog.mProjectionSelectionWidget_crs.setCrs(
-        QgsCoordinateReferenceSystem("EPSG:4326")
-    )
-    dialog._grid_l0_info = {"resolution": 0.5, "unit": "deg"}
-    dialog.refresh_meteo_folder_sources()
-    dialog.comboBox_precipitationFile.setCurrentIndex(
-        dialog._folder_combo_index(
-            dialog.comboBox_precipitationFile,
-            str(folder),
-        )
-    )
-    dialog.comboBox_precipitationDataSource.setCurrentIndex(0)
-
-    assert dialog.label_precipitationResolutionValue.text() == "1"
-    assert dialog.label_precipitationResolutionUnit.text() == "deg"
-    assert dialog.label_precipitationResolutionMultiplier.text() == "2.0"
-    assert dialog.spinBox_L2ResolutionMultiplier.value() == 2
-
-    dialog.spinBox_L2ResolutionMultiplier.setValue(3)
-    dialog.inspect_meteo_selection("precipitation")
-    assert dialog.spinBox_L2ResolutionMultiplier.value() == 3
-    dialog.close()

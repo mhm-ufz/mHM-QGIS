@@ -10,11 +10,22 @@ from ...handlers.lookup import (
     LandUseInput,
     SoilInput,
     write_land_use_manifest,
+    validate_land_use_input,
     write_soil_manifest,
 )
 from ....applications.mhm_tools_handler import prepare_land_cover_periods, prepare_soil_horizons
-from ...handlers.state.nml_settings import relative_workspace_path, update_section
+from ...handlers.state.nml_settings import relative_workspace_path, update_section, load_settings
 from ...handlers.store.paths import geometry_folder, morph_staging_folder
+
+
+def input_fingerprint(value, dem_file, version):
+    """Fingerprint all selected source files and their formatting options."""
+    from ...handlers.state.cache import fingerprint
+    paths = ([value.lookup_table, *(period.file_path for period in value.periods)]
+             if isinstance(value, LandUseInput) else
+             [getattr(horizon, name) for horizon in value.horizons
+              for name in ("clay_layer", "sand_layer", "silt_layer", "bulk_density_layer")])
+    return fingerprint([dem_file, *paths], {"inputs": value.as_dict(), "version": version})
 
 
 def process_land_cover_input(
@@ -26,6 +37,9 @@ def process_land_cover_input(
     log=None,
 ) -> tuple[Path, ...]:
     """Write a period manifest and stage outputs for common-L0 publication."""
+    times = load_settings(project_folder).get("time", {})
+    validate_land_use_input(value, simulation_start=times.get("sim_start"),
+                            simulation_end=times.get("sim_end"), version=version)
     manifest = _manifest_path(project_folder, "land_cover")
     write_land_use_manifest(value, manifest)
     output_type = "asc" if str(version).startswith("5") else "nc"
@@ -53,6 +67,8 @@ def process_land_cover_input(
     asc_outputs = [path for path in data_outputs if path.suffix.lower() == ".asc"]
     for index, period in enumerate(value.periods):
         scene = {
+            "start_time": period.start_time.isoformat(),
+            "end_time": period.end_time.isoformat(),
             "start_year": period.start_year,
             "end_year": period.end_year,
             "source_path": str(period.file_path),

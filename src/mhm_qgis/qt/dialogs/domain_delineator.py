@@ -42,7 +42,7 @@ from ...core.handlers.state.domain_state import (
 from ...qgis_bridge.layers.domain import DomainWorkflow
 from ...core.executions.morphology import delineation
 from ...core.handlers.store import registry
-from ...core.handlers.store.paths import domain_data_folder
+from ...core.handlers.store.layout import morph_folder
 from ...core.handlers.store.layout import domain_dem_path
 from ...qt.controllers import domain_delineator as domain_delineator_controller
 from ...qt.bindings.domain_delineator import bind as bind_domain_delineator
@@ -603,9 +603,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                     "mask_value": delineation["mask_value"],
                     "catchment_area_m2": delineation["catchment_area_m2"],
                     "mask_path": delineation["raster_path"],
-                    "domain_directory": domain_data_folder(
-                        self.project_folder, outlet_id
-                    ),
+                    "domain_directory": morph_folder(self.project_folder),
                     "dem_path": domain_dem_path(self.project_folder, outlet_id),
                 }
             )
@@ -616,9 +614,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         proposed_state["merged_mask_path"] = result["merged_path"]
         proposed_state["dem_mask_path"] = result.get("dem_mask_path") or ""
         if result.get("dem_domain_path"):
-            proposed_state["dem_domain_directory"] = domain_data_folder(
-                self.project_folder, "dem_extent"
-            )
+            proposed_state["dem_domain_directory"] = morph_folder(self.project_folder)
             proposed_state["dem_domain_path"] = result["dem_domain_path"]
         registry.register(
             self.project_folder,

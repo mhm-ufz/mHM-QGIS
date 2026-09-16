@@ -73,7 +73,7 @@ def test_derivative_buttons_share_the_netcdf_command(action, variable):
 
 def test_saved_land_cover_and_soil_outputs_are_reusable(tmp_path):
     ensure_project_structure(tmp_path, "5.13")
-    morph = tmp_path / "mhm-plugin/data/master/static/morph"
+    morph = tmp_path / "mhm-qgis/data/master/static/morph"
     land_cover = morph / "lc_2000_2010.asc"
     soil = morph / "soil_class.asc"
     definition = morph / "soil_classdefinition.txt"
@@ -109,14 +109,14 @@ def test_execute_all_stage_order_includes_lai_before_hydrology():
     """
     from mhm_qgis.core.executions.morphology import EXECUTE_ALL_STAGES
 
-    order = [stage.starter for stage in EXECUTE_ALL_STAGES]
+    order = [stage.command for stage in EXECUTE_ALL_STAGES]
     assert order == [
         "dem_derivatives", "categorical", "categorical", "categorical",
-        "lai", "hydrology", "snap_points", "gauge_position",
+        "lai", "hydrology", "snap_points", "gauge_position", "publication",
     ]
     assert order.index("lai") < order.index("hydrology")
     # The three categorical stages are lc, soil, geology -- in that order.
-    assert [s.args[0] for s in EXECUTE_ALL_STAGES if s.starter == "categorical"] == [
+    assert [s.args[0] for s in EXECUTE_ALL_STAGES if s.command == "categorical"] == [
         "lc", "soil", "geology",
     ]
 
@@ -335,5 +335,5 @@ def test_geology_outputs_already_on_disk_are_adopted_not_rebuilt(tmp_path):
     messages.clear()
     assert bridge.start_categorical("geology", reuse_existing=True) is True
     assert submitted == []
-    assert any("Reusing prepared Geology output" in m for m in messages)
+    assert any("Reusing the prepared output" in m for m in messages)
     dialog.close()

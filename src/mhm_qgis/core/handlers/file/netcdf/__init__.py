@@ -131,7 +131,7 @@ def time_axis(path, time_dim: str = "time") -> list[datetime]:
             only_use_cftime_datetimes=False,
             only_use_python_datetimes=True,
         )
-    return [datetime(v.year, v.month, v.day, v.hour, v.minute) for v in values]
+    return [datetime(v.year, v.month, v.day, v.hour, v.minute, v.second) for v in values]
 
 
 def read_slice(path, variable: GridVariable, step: int, crs=None):

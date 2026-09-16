@@ -17,7 +17,6 @@ from mhm_qgis.core.handlers.store.layout import (
     MERGED_MASK_NAME, domain_dem_path, ensure_project_structure, input_state_path, morph_folder,
 )
 from mhm_qgis.core.handlers.store.paths import geometry_folder, morph_staging_folder
-from mhm_qgis.core.morphology.layers.domain_dem import DOMAIN_INPUT_GROUPS
 
 
 def _raster(path, values=None, *, epsg=32632, cell=100, origin=(0, 1000)):
@@ -116,82 +115,90 @@ def test_hydrology_reuses_saved_direction_without_recomputing_dem(tmp_path, monk
     np.testing.assert_array_equal(context["flwdir"].to_array(), gdal.Open(result["flow_direction"]).ReadAsArray())
 
 
-@pytest.mark.parametrize("version", ["5.13", "6"])
-def test_setup_publishes_then_links_then_replaces_domain_dem(tmp_path, version):
+
+@pytest.mark.parametrize("version,category_format", [("5.13", "tif"), ("6", "tif"), ("6", "nc")])
+@pytest.mark.parametrize("catchments", [False, True])
+def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, category_format, catchments):
+    from mhm_qgis.core.handlers.state import nml_settings
+
     ensure_project_structure(tmp_path, version)
     write_json(input_state_path(tmp_path), {"mhm_version": version})
     folder = Path(geometry_folder(tmp_path))
+    header = {"ncols": 12, "nrows": 12, "xllcorner": -100, "yllcorner": -100,
+              "cellsize": 100, "nodata_value": -9999}
     original = _raster(tmp_path / "source.tif")
-    result = dem_derivative_files(original, folder)
+    result = dem_derivative_files(original, folder, header=header)
     bundle_bytes = Path(result["dem_derivatives"]).read_bytes()
-    gauges = np.full((10, 10), -9999.0)
-    gauges[4, 4] = 280
-    copy_rasters(folder / "idgauges.nc", {"idgauges": _raster(tmp_path / "gauges.tif", gauges)})
-    keep = np.zeros((10, 10))
-    keep[:, 2:8] = 1
-    mask = _raster(folder / "Watersheds" / MERGED_MASK_NAME, keep)
-    domain_state.save_state(tmp_path, {
-        "definition_mode": "domain_delineator", "outlet_order": ["001", "002"],
-        "outlets": {name: {"is_domain": True, "mask_path": str(mask)} for name in ("001", "002")},
-    })
-    for name in ("3_land_use.tif", "3_soil.tif", "3_geology_processed.tif"):
-        _raster(folder / name, np.full((10, 10), 2.0))
+    native = gdal.Open(str(original)).ReadAsArray()
+    filled = gdal.Open(result["filled_dem"]).ReadAsArray()
+    assert filled.shape == (12, 12)
+    np.testing.assert_array_equal(filled[1:11, 1:11], native)
+    assert np.all(filled[0] == -9999)
+    keep = filled != -9999
+    if catchments:
+        keep = np.zeros((12, 12), dtype=bool)
+        state = {"outlets": {}}
+        for index, columns in enumerate(((2, 4), (7, 9)), 1):
+            cells = np.zeros((12, 12))
+            cells[2:10, columns[0]:columns[1]] = index
+            keep |= cells != 0
+            path = _raster(folder / f"catchment{index}.tif", cells, origin=(-100, 1100))
+            picked = dict(x=50, y=50, crs="EPSG:32632")
+            state["outlets"][str(index)] = dict(is_domain=True, picked=picked, confidence=2,
+                delineation=dict(raster_path=str(path), mask_value=index, cell_center=[50, 50],
+                    catchment_area_m2=160000, picked=picked,
+                    fingerprint=domain_state.delineation_fingerprint(result["filled_dem"], 50, 50)))
+        domain_state.save_state(tmp_path, state)
+
+    gauges = np.full((12, 12), -9999.0)
+    gauges[5, 3] = 280
+    copy_rasters(folder / "idgauges.nc", {"idgauges": _raster(tmp_path / "gauges.tif", gauges, origin=(-100, 1100))})
     staging = Path(morph_staging_folder(tmp_path))
-    staging.mkdir(parents=True, exist_ok=True)
-    for name in ("soil_classdefinition.txt", "geology_classdefinition.txt"):
-        (staging / name).write_text("class definition", encoding="utf-8")
-    header = {"ncols": 12, "nrows": 12, "xllcorner": -100, "yllcorner": -100, "cellsize": 100, "nodata_value": -9999}
-    request = setup.SetupRequest(str(tmp_path), {level: header for level in ("L0", "L1", "L11", "L2")}, crs="EPSG:32632")
-    master = Path(morph_folder(tmp_path))
-    target = Path(domain_dem_path(tmp_path, "001"))
+    for name in ("lc", "soil_class", "geology_class"):
+        # Early common-grid formatting can leave nodata outside the original DEM.
+        values = np.where(filled != -9999, 2, -9999)
+        path = _raster(staging / f"{name}.tif", values, origin=(-100, 1100))
+        if category_format == "nc":
+            tif = path
+            path = copy_rasters(path.with_suffix(".nc"), {"category": path})
+            tif.unlink()
+            # A previous format must not override the newly configured NetCDF.
+            old = Path(morph_folder(tmp_path)) / f"{name}.asc"
+            from mhm_qgis.core.handlers.raster.tasks import write_domain_dem_ascii
+            write_domain_dem_ascii(result["filled_dem"], old, header, None)
+        if name != "lc":
+            (staging / f"{name}definition.txt").write_text("class definition")
+        section = {"lc": "land_cover", "soil_class": "soil", "geology_class": "geology"}[name]
+        nml_settings.update_section(tmp_path, section, {
+            "output_path": nml_settings.relative_workspace_path(tmp_path, path)})
+    request = setup.SetupRequest(str(tmp_path), {level: header for level in ("L0", "L1", "L11", "L2")},
+                                 crs="EPSG:32632")
+    target = Path(domain_dem_path(tmp_path, "ignored"))
     target.parent.mkdir(parents=True, exist_ok=True)
-    # An existing shared DEM link must be replaced, not followed, by either writer.
-    shared_dem = tmp_path / "shared-dem"
-    shared_dem.write_bytes(b"master must not change")
-    target.symlink_to(shared_dem)
-    messages = []
-
-    def log(message):
-        messages.append(message)
-        if version == "5.13" and message.endswith("Link domain inputs"):
-            assert (master / "idgauges.asc").is_file()
-            assert not (target.parent / "idgauges.asc").exists()
-
-    assert setup.run(request, log=log)
-    assert shared_dem.read_bytes() == b"master must not change"
-    assert target.is_file() and not target.is_symlink()
+    old = tmp_path / "old-dem"
+    old.write_bytes(b"preserve old symlink target")
+    target.symlink_to(old)
+    assert setup.run(request)
+    assert old.read_bytes() == b"preserve old symlink target"
+    assert not target.is_symlink()
     assert Path(result["dem_derivatives"]).read_bytes() == bundle_bytes
-    assert processing.workflow(tmp_path, "morph_setup_link_domains")["status"] == "completed"
-    assert messages.index(next(m for m in messages if m.endswith("Publish model inputs"))) < messages.index(next(m for m in messages if m.endswith("Link domain inputs"))) < messages.index(next(m for m in messages if m.endswith("Write domain DEMs")))
-    raster = gdal.Open(str(target))
-    assert header_from_geotransform(raster.GetGeoTransform(), raster.RasterXSize, raster.RasterYSize)["ncols"] == 12
-    values = raster.ReadAsArray()
-    assert np.all(values[0] == -9999)
-    assert np.all(values[:, :3] == -9999)
-    np.testing.assert_array_equal(values[1:11, 3:9], gdal.Open(result["filled_dem"]).ReadAsArray()[:, 2:8])
-    raster = None
+    assert not (folder / "dem_derivatives_crop.nc").exists()
+    values = gdal.Open(str(target)).ReadAsArray()
+    np.testing.assert_array_equal(values[keep], filled[keep])
+    assert np.all(values[~keep] == -9999)
+    master = Path(morph_folder(tmp_path))
     if version == "5.13":
-        for _label, names in DOMAIN_INPUT_GROUPS:
-            assert (target.parent / names[0]).is_file()
-        assert (target.parent / "slope.prj").is_file()
-        assert target.with_suffix(".prj").is_file()
-        assert (target.parent / "soil_class.asc").resolve() == master / "soil_class.asc"
-        for name in ("001", "002"):
-            directory = Path(domain_dem_path(tmp_path, name)).parent
-            for filename in ("idgauges.asc", "idgauges.prj"):
-                assert (directory / filename).is_symlink()
-                assert (directory / filename).resolve() == master / filename
-            assert gdal.Open(str(directory / "idgauges.asc")).ReadAsArray()[5, 5] == 280
+        assert gdal.Open(str(master / "idgauges.asc")).ReadAsArray()[5, 3] == 280
         classes = gdal.Open(str(master / "soil_class.asc")).ReadAsArray()
     else:
         assert "dem" in variables(master / "input.nc")
-        assert not (target.parent / "slope.asc").exists()
         classes = gdal.Open(source(master / "input.nc", "soil_class")).ReadAsArray()
     assert classes[0, 0] == 1
-    assert classes[5, 2] == 2  # Outside the watershed: classes must stay valid.
-
-
-def test_link_stage_fails_for_missing_published_inputs(tmp_path):
-    domain_state.save_state(tmp_path, {"outlet_order": ["001"], "outlets": {"001": {"is_domain": True}}})
-    with pytest.raises(FileNotFoundError, match="Published domain inputs missing"):
-        setup.link_domains(setup.SetupRequest(str(tmp_path), {}))
+    assert classes[5, 5] == 2  # Full class coverage, even outside selected catchments.
+    if category_format == "nc":
+        assert nml_settings.load_settings(tmp_path)["soil"]["output_path"].endswith("soil_class.nc")
+    domains = nml_settings.load_settings(tmp_path)["domains"]
+    assert len(domains) == 1 and domains[0]["name"] == "master"
+    assert len(processing.section(tmp_path, "domains", [])) == 1
+    assert set(processing.section(tmp_path, "workflows", {})).isdisjoint(
+        {"execute_all_link_domains", "execute_all_crop", "execute_all_domain_dems"})

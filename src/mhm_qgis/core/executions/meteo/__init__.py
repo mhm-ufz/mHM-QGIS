@@ -8,7 +8,7 @@ worker thread and the tests.
 from __future__ import annotations
 
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping
 
@@ -16,6 +16,8 @@ from ...meteorology.forcing import (
     MeteoFolderSpec,
     SpatialMetadata,
     process_meteo_inputs,
+    inspect_meteo_inputs_cached,
+    inspection_fingerprint,
 )
 from ...grid import TargetGrid
 from ...meteorology.mask import write_meteo_mask
@@ -25,7 +27,7 @@ from ...handlers.store.layout import (
     meteo_mask_path,
     meteo_output_root,
 )
-from ...meteorology.reuse import required_meteo_variables, stale_meteo_variables
+from ...meteorology.reuse import stale_meteo_variables
 from ...handlers.state import processing
 from ...utils.report import CRITICAL, INFORMATION
 
@@ -35,12 +37,11 @@ class MeteorologyRun:
     """Immutable inputs prepared on the UI thread for one meteo run."""
 
     project_folder: Path
-    precipitation: MeteoFolderSpec
-    temperature: MeteoFolderSpec
-    pet: MeteoFolderSpec | None
+    inputs: tuple[MeteoFolderSpec, ...]
     target_grid: TargetGrid
     grid_metadata: dict
     inspections: Mapping[str, SpatialMetadata] | None = None
+    times: Mapping[str, str] | None = None
 
 
 def _say(log, message):
@@ -72,7 +73,11 @@ def existing_outputs(project_folder, state, *, log=None) -> list[str]:
 
 def reuse_prepared(run: MeteorologyRun, state, *, log=None) -> bool:
     """Return True when recorded forcing already matches the target L2 grid."""
-    variables = required_meteo_variables(run.pet is not None)
+    variables = tuple(spec.normalized().kind for spec in run.inputs)
+    digest = _input_digest(run)
+    if processing.section(run.project_folder, "meteo_source_fingerprint") != digest:
+        _say(log, "Meteorology input selection or files changed; preparing forcing.")
+        return False
     stale = stale_meteo_variables(
         run.project_folder,
         state.load().get("outputs", {}),
@@ -98,15 +103,21 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None) -> boo
     """Prepare every selected meteorology forcing file. Returns success."""
     _say(log, "\n--- Preparing meteorology forcing files ---")
     _say(log, f"Meteorology output folder: {meteo_output_root(run.project_folder)}")
-    if reuse_prepared(run, state, log=log):
-        return True
-
     try:
+        inspected = inspect_meteo_inputs_cached(
+            run.project_folder, run.inputs, log=log)
+        run = replace(run, inspections=inspected)
+        if run.times:
+            from ...handlers.state.nml_settings import validate_times
+            times = validate_times(run.times, "v6" if is_v6(run.project_folder) else "v5.13")
+            for kind, metadata in inspected.items():
+                if times["sim_start"] < metadata.start_time[:16] or times["sim_end"] > metadata.end_time[:16]:
+                    raise ValueError(f"Simulation period is outside {kind} coverage ({metadata.start_time} to {metadata.end_time}).")
+        if reuse_prepared(run, state, log=log):
+            return True
         flat = is_v6(run.project_folder)
         result = process_meteo_inputs(
-            precipitation=run.precipitation,
-            temperature=run.temperature,
-            pet=run.pet,
+            inputs=run.inputs,
             output_root=meteo_output_root(run.project_folder),
             target_grid=run.target_grid,
             flat_layout=flat,
@@ -133,10 +144,17 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None) -> boo
     _say(log, "Meteorology forcing preparation completed.")
     _say(log, f"Prepared variables: {', '.join(sorted(result.outputs))}")
     processing.save_grid_metadata(run.project_folder, run.grid_metadata)
+    processing.overlay(run.project_folder, {"meteo_source_fingerprint": _input_digest(run)})
     if report is not None:
         report(INFORMATION, "Success",
                "Meteorology forcing files prepared successfully.")
     return True
+
+
+def _input_digest(run):
+    """Grid checks alone cannot detect a changed glob, source or input file."""
+    return [inspection_fingerprint(spec.normalized())[0]
+            for spec in run.inputs]
 
 
 __all__ = [

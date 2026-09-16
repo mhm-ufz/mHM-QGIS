@@ -285,7 +285,7 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
 
     source = tmp_path / "dem.tif"
     _dem(source)
-    folder = tmp_path / "mhm-plugin"
+    folder = tmp_path / "mhm-qgis"
     first = {"outlet_id": "1", "x": 850, "y": 150, "basin_id": 7,
              "picked": {"x": 850, "y": 150, "crs": "EPSG:32632", "source": "manual"},
              "raster_path": str(folder / "first.tif"), "domain_id": 1}
@@ -295,7 +295,7 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
     preview = delineation.show(None, project_folder=tmp_path, filled_dem=source, outlet=first)
     domain_state.save_preview(tmp_path, "points.shp", "id", "1", preview)
     state = domain_state.load_state(tmp_path)
-    assert not domain_state.active_domain_records(state)  # Show does not commit choices.
+    assert not any(r.get("is_domain") for r in state["outlets"].values())  # Show does not commit choices.
     entry = state["outlets"]["1"]["delineation"]
     assert not Path(entry["raster_path"]).is_absolute()
     assert domain_state.cached_delineation(tmp_path, source, 850, 150, entry)

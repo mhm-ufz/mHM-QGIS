@@ -75,313 +75,178 @@ def _write_projected_nc(path: Path, variable: str, value: float):
     ds.to_netcdf(path, engine="scipy")
 
 
-def test_mhm_ready_folder_contracts_and_resolution(tmp_path):
-    pre = tmp_path / "pre"
-    temp = tmp_path / "temp"
-    pet = tmp_path / "pet"
-    _write_nc(pre / "rain.nc", "pre")
-    for variable in ("tavg", "tmin", "tmax"):
-        _write_nc(temp / f"{variable}.nc", variable)
-    _write_nc(pet / "pet.nc", "pet")
 
-    metadata = inspect_meteo_folder(pre, "precipitation", "mHM_ready")
-    assert metadata.source == MHM_READY
+def target():
+    return TargetGrid(lon=LON, lat=LAT, crs="EPSG:4326", header={
+        "ncols": 2, "nrows": 2, "xllcorner": 9.5, "yllcorner": 49.5,
+        "cellsize": 1., "nodata_value": -9999.})
+
+
+def test_scan_reads_metadata_and_glob_only(tmp_path, monkeypatch):
+    _write_nc(tmp_path / "wanted.nc", "pre", units="mm")
+    (tmp_path / "ignored.nc").write_text("not netcdf")
+    spec = MeteoFolderSpec("pre", tmp_path, unit="mm", pattern="wanted*.nc")
+    def no_data(*args, **kwargs):
+        raise AssertionError("scan read a forcing cube")
+    monkeypatch.setattr(xr.DataArray, "load", no_data)
+    metadata = inspect_meteo_folder(spec)
     assert metadata.shape == (2, 2)
-    assert metadata.resolution == pytest.approx(1.0)
-    assert metadata.unit == "deg"
-    assert inspect_meteo_folder(temp, "temperature", MHM_READY).shape == (2, 2)
-    assert inspect_meteo_folder(pet, "pet", MHM_READY).files == (
-        pet / "pet.nc",)
-
-    projected = resolution_in_crs(metadata, "EPSG:3857")
-    assert projected.unit == "m"
-    assert 100_000 < projected.resolution < 200_000
-
-    _write_nc(pre / "extra.nc", "pre")
-    with pytest.raises(ValueError, match="exactly one"):
-        inspect_meteo_folder(pre, "precipitation", MHM_READY)
+    assert metadata.resolution == 1.
+    assert len(metadata.files) == 1
+    assert not (tmp_path / "out").exists()
 
 
-def test_mhm_ready_temperature_requires_exact_files(tmp_path):
-    folder = tmp_path / "temperature"
-    _write_nc(folder / "tavg.nc", "tavg")
-    _write_nc(folder / "tmin.nc", "tmin")
-    _write_nc(folder / "unexpected.nc", "temperature")
-
-    with pytest.raises(ValueError, match="folder must contain exactly") as error:
-        inspect_meteo_folder(folder, "temperature", MHM_READY)
-    assert "unexpected.nc" not in str(error.value)
-
-
-def test_era5land_rejects_incompatible_grids(tmp_path):
-    folder = tmp_path / "pre"
-    _write_nc(folder / "a.nc", "tp")
-    _write_nc(folder / "b.nc", "tp", times=("2001-01-02T12:00:00",),
-              lon=np.array([10.0, 12.0]))
-
-    with pytest.raises(ValueError, match="identical spatial coordinates"):
-        inspect_meteo_folder(folder, "precipitation", ERA5LAND)
-
-
-def test_processes_separate_era5land_folders_and_optional_pet(
-    tmp_path,
-    monkeypatch,
-):
-    pre = tmp_path / "raw" / "pre"
-    temp = tmp_path / "raw" / "temp"
-    pet = tmp_path / "raw" / "pet"
-    for index, day in enumerate((1, 2), start=1):
-        times = tuple(
-            f"2001-01-{day:02d}T{hour:02d}:00:00"
-            for hour in (6, 12, 18))
-        pre_values = np.asarray([
-            [[0.001, -2e-6], [-0.0, 1e-12]],
-            [[0.002, -1e-6], [-0.0, 1e-12]],
-            [[0.0015, -1.5e-6], [-0.0, 1e-12]],
-        ])
-        temp_values = np.stack([
-            np.full((2, 2), value)
-            for value in (273.15, 275.15, 277.15)])
-        pet_values = np.stack([
-            np.full((2, 2), value)
-            for value in (-0.001, -0.002, -0.003)])
-        _write_nc(
-            pre / f"{index}.nc", "tp", times=times,
-            values=pre_values, units="m")
-        _write_nc(
-            temp / f"{index}.nc", "t2m", times=times,
-            values=temp_values, units="K")
-        _write_nc(
-            pet / f"{index}.nc", "pev", times=times,
-            values=pet_values, units="m")
-
-    header = {
-        "ncols": 2,
-        "nrows": 2,
-        "xllcorner": 9.5,
-        "yllcorner": 49.5,
-        "cellsize": 1.0,
-        "nodata_value": -9999.0,
-    }
-    result = process_meteo_inputs(
-        MeteoFolderSpec("precipitation", pre, ERA5LAND),
-        MeteoFolderSpec("temperature", temp, ERA5LAND),
-        tmp_path / "out",
-        TargetGrid(lon=LON, lat=LAT, header=header),
-        pet=MeteoFolderSpec("pet", pet, ERA5LAND),
-    )
-
-    assert set(result.outputs) == {"pre", "tavg", "tmin", "tmax", "pet"}
-    for variable, output in result.outputs.items():
-        assert output == tmp_path / "out" / variable / f"{variable}.nc"
-        assert output.exists()
-        assert result.headers[variable].read_text().startswith("ncols")
-        with xr.open_dataset(output) as ds:
-            assert ds[variable].dims == ("time", "lat", "lon")
-            assert ds[variable].shape == (2, 2, 2)
-
+@pytest.mark.parametrize("cadence,times", [
+    ("Hourly", ("2001-01-01T00", "2001-01-01T01", "2001-01-01T02")),
+    ("Daily", ("2001-01-01", "2001-01-02", "2001-01-03")),
+    ("Monthly", ("2000-01-01", "2000-02-01", "2000-03-01")),
+    ("Yearly", ("2000-01-01", "2001-01-01", "2002-01-01")),
+])
+def test_native_cadence_is_preserved(tmp_path, cadence, times):
+    _write_nc(tmp_path / "raw/pre.nc", "pre", times=times, units="mm")
+    spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="mm", temporal_resolution=cadence)
+    result = process_meteo_inputs([spec], tmp_path / "out", target())
     with xr.open_dataset(result.outputs["pre"]) as ds:
-        assert float(ds["pre"].isel(time=0, lat=0, lon=0)) == pytest.approx(2.0)
-        assert float(ds["pre"].isel(time=0, lat=0, lon=1)) == 0.0
-        assert float(ds["pre"].isel(time=0, lat=1, lon=0)) == 0.0
-        assert not np.signbit(ds["pre"].values[ds["pre"].values == 0]).any()
-        assert float(ds["pre"].isel(time=0, lat=1, lon=1)) == pytest.approx(
-            1e-9)
-        assert ds["pre"].attrs["valid_min"] == 0.0
-        assert "below 0 mm clipped to 0" in ds.attrs["history"]
-    with xr.open_dataset(result.outputs["tavg"]) as ds:
-        assert float(ds["tavg"].isel(time=0, lat=0, lon=0)) == pytest.approx(2.0)
-    with xr.open_dataset(result.outputs["tmin"]) as ds:
-        assert float(ds["tmin"].isel(time=0, lat=0, lon=0)) == pytest.approx(0.0)
-    with xr.open_dataset(result.outputs["tmax"]) as ds:
-        assert float(ds["tmax"].isel(time=0, lat=0, lon=0)) == pytest.approx(4.0)
-    with xr.open_dataset(result.outputs["pet"]) as ds:
-        assert float(ds["pet"].isel(time=0, lat=0, lon=0)) == pytest.approx(3.0)
-
-    without_pet = process_meteo_inputs(
-        MeteoFolderSpec("precipitation", pre, ERA5LAND),
-        MeteoFolderSpec("temperature", temp, ERA5LAND),
-        tmp_path / "out",
-        TargetGrid(lon=LON, lat=LAT, header=header),
-    )
-    assert set(without_pet.outputs) == {"pre", "tavg", "tmin", "tmax"}
-    assert not (tmp_path / "out" / "pet" / "pet.nc").exists()
-    assert not (tmp_path / "out" / "pet" / "header.txt").exists()
-
-    from mhm_qgis.core.meteorology.forcing import api as forcing_api
-
-    previous_pre = without_pet.outputs["pre"].read_bytes()
-    original_writer = forcing_api.write_netcdf
-
-    def fail_after_staging_some_outputs(ds, variable, output):
-        if variable == "tmin":
-            raise RuntimeError("synthetic staging failure")
-        return original_writer(ds, variable, output)
-
-    monkeypatch.setattr(
-        forcing_api,
-        "write_netcdf",
-        fail_after_staging_some_outputs,
-    )
-    with pytest.raises(RuntimeError, match="synthetic staging failure"):
-        process_meteo_inputs(
-            MeteoFolderSpec("precipitation", pre, ERA5LAND),
-            MeteoFolderSpec("temperature", temp, ERA5LAND),
-            tmp_path / "out",
-            TargetGrid(lon=LON, lat=LAT, header=header),
-        )
-    assert without_pet.outputs["pre"].read_bytes() == previous_pre
-    assert not list((tmp_path / "out").glob(".mhm_qgis-meteo-*"))
+        np.testing.assert_array_equal(ds.time, np.array(times, dtype="datetime64[ns]"))
+        np.testing.assert_allclose(ds.pre, 1.)
+        assert ds.pre.dtype == "float64"
+        assert ds.time.attrs["bounds"] == "time_bnds"
 
 
-def test_mhm_ready_only_clips_precipitation(tmp_path):
-    pre = tmp_path / "ready" / "pre"
-    temp = tmp_path / "ready" / "temp"
-    pet = tmp_path / "ready" / "pet"
-    _write_nc(
-        pre / "pre.nc",
-        "pre",
-        values=np.asarray([[[-1e-9, -0.0], [np.nan, 1e-12]]]),
-        units="mm",
-    )
-    for variable, value in (("tavg", -5.0), ("tmin", -10.0), ("tmax", -1.0)):
-        _write_nc(
-            temp / f"{variable}.nc",
-            variable,
-            values=np.full((1, 2, 2), value),
-            units="Celsius",
-        )
-    _write_nc(
-        pet / "pet.nc",
-        "pet",
-        values=np.full((1, 2, 2), -2.0),
-        units="mm",
-    )
-    header = {
-        "ncols": 2,
-        "nrows": 2,
-        "xllcorner": 9.5,
-        "yllcorner": 49.5,
-        "cellsize": 1.0,
-        "nodata_value": -9999.0,
-    }
-
-    result = process_meteo_inputs(
-        MeteoFolderSpec("precipitation", pre, MHM_READY),
-        MeteoFolderSpec("temperature", temp, MHM_READY),
-        tmp_path / "out",
-        TargetGrid(lon=LON, lat=LAT, header=header),
-        pet=MeteoFolderSpec("pet", pet, MHM_READY),
-    )
-
-    with xr.open_dataset(result.outputs["pre"]) as ds:
-        values = ds["pre"].values
-        assert values[0, 0, 0] == 0.0
-        assert values[0, 0, 1] == 0.0
-        assert not np.signbit(values[values == 0]).any()
-        assert np.isnan(values[0, 1, 0])
-        assert values[0, 1, 1] == pytest.approx(1e-12)
-        assert ds["pre"].attrs["valid_min"] == 0.0
-    with xr.open_dataset(result.outputs["tmin"]) as ds:
-        assert np.all(ds["tmin"].values == -10.0)
-        assert "valid_min" not in ds["tmin"].attrs
-    with xr.open_dataset(result.outputs["pet"]) as ds:
-        assert np.all(ds["pet"].values == -2.0)
-        assert "valid_min" not in ds["pet"].attrs
-
-
-def test_processes_projected_mhm_ready_files_on_exact_header_grid(tmp_path):
-    from pyproj import Transformer
-
-    pre = tmp_path / "ready" / "pre"
-    temp = tmp_path / "ready" / "temp"
-    _write_projected_nc(pre / "pre.nc", "pre", 4.0)
-    for index, variable in enumerate(("tavg", "tmin", "tmax")):
-        _write_projected_nc(temp / f"{variable}.nc", variable, float(index))
-
-    header = {
-        "ncols": 2,
-        "nrows": 2,
-        "xllcorner": 0.0,
-        "yllcorner": 0.0,
-        "cellsize": 1000.0,
-        "nodata_value": -9999.0,
-    }
-    transform = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
-    x_mesh, y_mesh = np.meshgrid(
-        np.asarray([500.0, 1500.0]),
-        np.asarray([1500.0, 500.0]),
-    )
-    sample_lon, sample_lat = transform.transform(x_mesh, y_mesh)
-    lon = sample_lon[0, :]
-    lat = sample_lat[:, 0]
-    result = process_meteo_inputs(
-        MeteoFolderSpec("precipitation", pre, MHM_READY),
-        MeteoFolderSpec("temperature", temp, MHM_READY),
-        tmp_path / "out",
-        TargetGrid(
-            lon=lon,
-            lat=lat,
-            header=header,
-            crs="EPSG:3857",
-            sample_lon=sample_lon,
-            sample_lat=sample_lat,
-        ),
-    )
-
-    with xr.open_dataset(result.outputs["pre"]) as ds:
-        assert ds["pre"].shape == (1, 2, 2)
-        assert np.all(ds["pre"].values == 4.0)
-        assert ds["lon2d"].shape == (2, 2)
-        assert ds["lat2d"].shape == (2, 2)
-        assert "crs" in ds
-        assert ds["pre"].attrs["grid_mapping"] == "crs"
-
-
-def test_supplied_inspections_publish_a_flat_layout_without_headers(
-        tmp_path, monkeypatch):
-    pre = tmp_path / "ready" / "pre"
-    temp = tmp_path / "ready" / "temp"
-    _write_nc(pre / "pre.nc", "pre")
-    for variable in ("tavg", "tmin", "tmax"):
-        _write_nc(temp / f"{variable}.nc", variable)
-
-    precipitation = MeteoFolderSpec("precipitation", pre, MHM_READY)
-    temperature = MeteoFolderSpec("temperature", temp, MHM_READY)
-    inspections = inspect_meteo_inputs(precipitation, temperature)
-
-    from mhm_qgis.core.meteorology.forcing import api as forcing_api
-
-    def fail_if_reinspected(*_args, **_kwargs):
-        raise AssertionError("already-inspected input was opened again")
-
-    monkeypatch.setattr(
-        forcing_api, "inspect_meteo_inputs", fail_if_reinspected)
-    output_root = tmp_path / "out"
-    output_root.mkdir()
-    (output_root / "pet.nc").write_bytes(b"stale")
-    header = {
-        "ncols": 2,
-        "nrows": 2,
-        "xllcorner": 9.5,
-        "yllcorner": 49.5,
-        "cellsize": 1.0,
-        "nodata_value": -9999.0,
-    }
-
-    result = process_meteo_inputs(
-        precipitation,
-        temperature,
-        output_root,
-        TargetGrid(lon=LON, lat=LAT, header=header),
-        flat_layout=True,
-        inspections=inspections,
-    )
-
+def test_cumulative_hourly_cross_file_and_chunk_boundaries(tmp_path):
+    times = np.datetime64("2001-01-01T01") + np.arange(72) * np.timedelta64(1, "h")
+    values = np.broadcast_to(((np.arange(72) % 24 + 1) / 1000.)[:, None, None], (72, 2, 2))
+    for name, selection in (("a", slice(0, 37)), ("b", slice(37, None))):
+        _write_nc(tmp_path / f"raw/{name}.nc", "tp", times=times[selection],
+                  values=values[selection], units="m")
+    spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="m", temporal_resolution="Hourly",
+                          cumulative=True, cumulative_resolution="Daily")
+    result = process_meteo_inputs([spec], tmp_path / "out", target(), flat_layout=True)
     assert result.headers == {}
-    assert set(result.outputs) == {"pre", "tavg", "tmin", "tmax"}
-    assert all(path == output_root / f"{variable}.nc"
-               for variable, path in result.outputs.items())
-    assert all(path.is_file() for path in result.outputs.values())
-    assert not (output_root / "pet.nc").exists()
-    assert not list(output_root.glob("*/header.txt"))
+    with xr.open_dataset(result.outputs["pre"]) as ds:
+        assert ds.sizes["time"] == 72
+        np.testing.assert_allclose(ds.pre, 1., atol=1e-12)
+        np.testing.assert_array_equal(ds.time, times.astype("datetime64[ns]"))
+        np.testing.assert_array_equal(ds.time_bnds[:, 1], ds.time)
+        assert ds.time_bnds[0, 0] == np.datetime64("2001-01-01T00")
+
+
+@pytest.mark.parametrize("variable,source,unit,value,expected", [
+    ("tavg", "t2m", "K", 274.15, 1.),
+    ("tmin", "tmin", "Celsius", -5., -5.),
+    ("tmax", "tmax", "K", 283.15, 10.),
+    ("tann", "tann", "Celsius", 10., 10.),
+    ("pet", "pev", "m", -.002, 2.),
+    ("eabs", "eabs", "hPa", 12., 1200.),
+    ("windspeed", "windspeed", "km/h", 36., 10.),
+    ("ssrd", "ssrd", "J m-2", 3600., 1.),
+    ("strd", "strd", "W m-2", 10., 10.),
+    ("pre", "pre", "kg m-2 s-1", .001, 3.6),
+])
+def test_units_for_independent_variables(tmp_path, variable, source, unit, value, expected):
+    _write_nc(tmp_path / "raw/values.nc", source, units=unit, values=np.full((1, 2, 2), value))
+    spec = MeteoFolderSpec(variable, tmp_path / "raw", unit=unit, temporal_resolution="Hourly")
+    result = process_meteo_inputs([spec], tmp_path / "out", target())
+    assert tuple(result.outputs) == (variable,)
+    with xr.open_dataset(result.outputs[variable]) as ds:
+        np.testing.assert_allclose(ds[variable], expected, atol=1e-12)
+
+
+def test_discontinuous_times_units_and_grids_are_rejected(tmp_path):
+    folder = tmp_path / "raw"
+    _write_nc(folder / "a.nc", "pre", times=("2001-01-01",), units="mm")
+    spec = MeteoFolderSpec("pre", folder, unit="m")
+    with pytest.raises(ValueError, match="metadata unit"):
+        inspect_meteo_folder(spec)
+    spec = MeteoFolderSpec("pre", folder, unit="mm")
+    _write_nc(folder / "b.nc", "pre", times=("2001-01-03",), units="mm")
+    with pytest.raises(ValueError, match="continuous"):
+        inspect_meteo_folder(spec)
+    _write_nc(folder / "b.nc", "pre", times=("2001-01-02",), lon=np.array([10., 12.]), units="mm")
+    with pytest.raises(ValueError, match="spatial"):
+        inspect_meteo_folder(spec)
+
+
+def test_incomplete_cumulative_cycle_does_not_replace_outputs(tmp_path):
+    _write_nc(tmp_path / "raw/a.nc", "tp", times=("2001-01-01T12",), units="m")
+    output = tmp_path / "out/pre.nc"
+    output.parent.mkdir()
+    output.write_bytes(b"original")
+    spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="m", temporal_resolution="Hourly",
+                          cumulative=True, cumulative_resolution="Daily")
+    with pytest.raises(ValueError, match="mid-cycle"):
+        process_meteo_inputs([spec], output.parent, target(), flat_layout=True)
+    assert output.read_bytes() == b"original"
+
+
+def test_supplied_inspection_and_padded_grid(tmp_path, monkeypatch):
+    from mhm_qgis.core.meteorology.forcing import api
+    from mhm_qgis.core.grid import target_grid_from_header
+    _write_nc(tmp_path / "raw/pre.nc", "pre", units="mm")
+    spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="mm")
+    inspected = inspect_meteo_inputs([spec])
+    def repeated(*args, **kwargs):
+        raise AssertionError("repeated inspection")
+    monkeypatch.setattr(api, "inspect_meteo_inputs", repeated)
+    header = dict(target().header, ncols=4, nrows=4, xllcorner=8.5, yllcorner=48.5)
+    grid = target_grid_from_header(header, "EPSG:4326")
+    result = process_meteo_inputs([spec], tmp_path / "out", grid, inspections=inspected)
+    with xr.open_dataset(result.outputs["pre"]) as ds:
+        assert ds.pre.shape == (1, 4, 4)
+        assert np.isnan(ds.pre[:, 0, :]).all()
+        np.testing.assert_allclose(ds.pre[:, 1:3, 1:3], 1.)
+
+
+def test_projected_input_uses_exact_target_grid(tmp_path):
+    from mhm_qgis.core.grid import target_grid_from_header, assert_matches_header
+    _write_projected_nc(tmp_path / "raw/tavg.nc", "tavg", 273.15)
+    spec = MeteoFolderSpec("tavg", tmp_path / "raw", unit="K")
+    header = dict(target().header, xllcorner=0., yllcorner=0., cellsize=1000.)
+    grid = target_grid_from_header(header, "EPSG:3857")
+    result = process_meteo_inputs([spec], tmp_path / "out", grid)
+    with xr.open_dataset(result.outputs["tavg"]) as ds:
+        assert_matches_header(ds, "tavg", header)
+        np.testing.assert_allclose(ds.tavg, 0.)
+        assert ds.tavg.attrs["grid_mapping"] == "crs"
+
+
+def test_publication_failure_restores_previous_files(tmp_path, monkeypatch):
+    from mhm_qgis.core.meteorology.forcing import api
+    _write_nc(tmp_path / "raw/pre.nc", "pre", units="mm")
+    spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="mm")
+    output = tmp_path / "out/pre.nc"
+    output.parent.mkdir()
+    output.write_bytes(b"old")
+    replace = api.os.replace
+    def fail(source, destination):
+        if Path(destination) == output and "backups" not in Path(source).parts:
+            raise OSError("publish failed")
+        return replace(source, destination)
+    monkeypatch.setattr(api.os, "replace", fail)
+    with pytest.raises(OSError, match="publish failed"):
+        process_meteo_inputs([spec], output.parent, target(), flat_layout=True)
+    assert output.read_bytes() == b"old"
+
+
+def test_execute_meteo_prepares_and_reuses_the_configured_collection(tmp_path, monkeypatch):
+    from mhm_qgis.core.executions import meteo
+    from mhm_qgis.core.handlers.state.meteo_outputs import MeteorologyOutputState
+    from mhm_qgis.core.handlers.store.layout import ensure_project_structure, input_state_path
+    root = tmp_path / "mhm-qgis/Alpine"
+    ensure_project_structure(root, "6")
+    Path(input_state_path(root)).write_text('{"mhm_version": "6"}')
+    times = ("2001-01-01T00", "2001-01-01T01", "2001-01-01T02")
+    inputs = []
+    for variable, unit in (("pre", "mm"), ("tavg", "Celsius")):
+        _write_nc(tmp_path / f"raw/{variable}.nc", variable, times=times, units=unit)
+        inputs.append(MeteoFolderSpec(variable, tmp_path / "raw", unit=unit,
+                                     pattern=f"{variable}.nc", temporal_resolution="Hourly"))
+    run = meteo.MeteorologyRun(root, tuple(inputs), target(), {"l2_header": target().header})
+    state = MeteorologyOutputState(root)
+    assert meteo.prepare_forcing(run, state)
+    assert (root / "data/meteo/pre.nc").is_file()
+    assert (root / "data/meteo/tavg.nc").is_file()
+    assert (root / "data/meteo/mask.nc").is_file()
+    assert not (root / "data/meteo/tmin.nc").exists()
+    monkeypatch.setattr(meteo, "process_meteo_inputs", lambda **kwargs: pytest.fail("reused forcing was rebuilt"))
+    assert meteo.prepare_forcing(run, state)

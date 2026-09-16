@@ -271,15 +271,6 @@ def nearest_curvilinear(
     if len(spatial_dims) != 2:
         raise ValueError(f"Variable {da.name!r} must have exactly two spatial dimensions.")
     y_dim, x_dim = spatial_dims
-    check_x = sample_x if sample_x is not None else output_x
-    check_y = sample_y if sample_y is not None else output_y
-    if (
-        np.min(check_x) < np.nanmin(source_x)
-        or np.max(check_x) > np.nanmax(source_x)
-        or np.min(check_y) < np.nanmin(source_y)
-        or np.max(check_y) > np.nanmax(source_y)
-    ):
-        raise ValueError("The target grid is outside the source extent.")
     source_points = np.column_stack(
         [np.asarray(source_x).reshape(-1), np.asarray(source_y).reshape(-1)]
     )
@@ -289,10 +280,19 @@ def nearest_curvilinear(
         x_mesh = np.asarray(sample_x, dtype="float64")
         y_mesh = np.asarray(sample_y, dtype="float64")
     target_points = np.column_stack([x_mesh.reshape(-1), y_mesh.reshape(-1)])
-    _, indices = cKDTree(source_points).query(target_points)
+    finite = np.isfinite(source_points).all(axis=1)
+    if not finite.any():
+        raise ValueError("Source grid has no finite coordinates.")
+    _, indices = cKDTree(source_points[finite]).query(target_points)
+    indices = np.flatnonzero(finite)[indices]
     values = np.asarray(da.transpose("time", y_dim, x_dim).values)
     sampled = values.reshape(values.shape[0], -1)[:, indices]
-    sampled = sampled.reshape(values.shape[0], len(output_y), len(output_x))
+    sampled = sampled.reshape(values.shape[0], len(output_y), len(output_x)).astype("float64")
+    dx = mesh_resolution(source_x, axis=1) / 2
+    dy = mesh_resolution(source_y, axis=0) / 2
+    inside = ((x_mesh >= np.nanmin(source_x) - dx) & (x_mesh <= np.nanmax(source_x) + dx)
+              & (y_mesh >= np.nanmin(source_y) - dy) & (y_mesh <= np.nanmax(source_y) + dy))
+    sampled[:, ~inside] = np.nan
     return xr.DataArray(
         sampled,
         dims=("time", "lat", "lon"),
