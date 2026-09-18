@@ -6,7 +6,7 @@ import pytest
 from netCDF4 import Dataset
 from osgeo import gdal, osr
 
-from mhm_qgis.applications import mhm_tools_handler
+from mhm_qgis.externals import mhm_tools_handler
 from mhm_qgis.core.executions.morphology import commands, setup
 from mhm_qgis.core.grid import header_from_geotransform
 from mhm_qgis.core.handlers.file.json import write as write_json
@@ -51,6 +51,26 @@ def test_single_variable_filled_dem_is_readable_without_selection(tmp_path, epsg
     # Exercise the actual external reader, not just a plugin mock.
     output = mhm_tools_handler.create_dem_derivative_files(result["filled_dem"], tmp_path / "second")
     assert "dem_filled" in variables(output)
+
+
+def test_selected_netcdf_dem_variable_is_materialized_before_derivation(tmp_path):
+    low = _raster(tmp_path / "low.tif")
+    chosen = _raster(
+        tmp_path / "chosen.tif",
+        np.add.outer(np.arange(10, 0, -1), np.arange(10, 0, -1)) + 100,
+    )
+    multi = copy_rasters(
+        tmp_path / "multi.nc", {"low": low, "chosen": chosen}
+    )
+
+    result = dem_derivative_files(
+        source(multi, "chosen"),
+        tmp_path / "geometry",
+        source_crs="EPSG:32632",
+        target_crs="EPSG:32632",
+    )
+
+    assert gdal.Open(result["filled_dem"]).ReadAsArray().min() > 100
 
 
 def test_missing_filled_file_reuses_bundle_but_changed_pixels_recompute(tmp_path):

@@ -118,7 +118,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
         })
     _apply_land_cover(values["main"], settings, count)
     _apply_soil(values["main"], settings, count)
-    _apply_lai(values["main"], settings, count)
+    _apply_lai(values["main"], settings, count, data)
     _apply_registered(values, settings)
     return values
 
@@ -204,9 +204,21 @@ def _apply_soil(main, settings, count):
     )
 
 
-def _apply_lai(main, settings, count):
+def _apply_lai(main, settings, count, data):
     lai = settings.get("lai", {})
     if not isinstance(lai, dict):
+        return
+    if lai.get("mode") == "mhm_ready":
+        main["config_mpr"]["lai_time_step"] = repeat(0, count)
+        if lai.get("output_path"):
+            main["config_input"]["lai_class_path"] = repeat(
+                f"{data}/morph/input.nc", count
+            )
+            main["config_input"]["lai_class_var"] = repeat("LAI_class", count)
+        if lai.get("classdefinition_path"):
+            main["config_mpr"]["lai_lut_path"] = repeat(
+                str(lai["classdefinition_path"]), count
+            )
         return
     try:
         time_step = int(lai.get("time_step"))

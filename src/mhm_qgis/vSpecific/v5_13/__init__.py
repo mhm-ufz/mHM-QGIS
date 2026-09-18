@@ -226,6 +226,11 @@ def _lai_values(settings: dict[str, Any]) -> dict[str, Any]:
     lai = settings.get("lai", {})
     if not isinstance(lai, dict):
         return {}
+    if lai.get("mode") == "mhm_ready":
+        return {
+            "timeStep_LAI_input": 0,
+            "inputFormat_gridded_LAI": "nc",
+        }
     try:
         time_step = int(lai.get("time_step"))
     except (TypeError, ValueError):

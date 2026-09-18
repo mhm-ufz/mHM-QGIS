@@ -38,6 +38,7 @@ _run_hydrology = commands.hydrology
 _run_lai = commands.lai
 _run_lookup = commands.lookup
 _run_advanced = commands.advanced
+_run_ready = commands.ready
 
 
 class MorphologyTaskBridge(QtCore.QObject):
@@ -93,6 +94,11 @@ class MorphologyTaskBridge(QtCore.QObject):
 
     def _selected_source(self, kind: str) -> str:
         combo = self.dialog.input_combo(kind)
+        source_uri = getattr(combo, "source_uri", None)
+        if callable(source_uri):
+            value = source_uri()
+            if value:
+                return str(value)
         source_path = getattr(combo, "source_path", None)
         if callable(source_path):
             value = source_path()
@@ -126,17 +132,20 @@ class MorphologyTaskBridge(QtCore.QObject):
     def _dem_options(self):
         if not self.dialog.check_prerequisites():
             raise ValueError("Select a project folder and DEM first.")
-        layer = self.dialog.input_combo("dem").currentLayer()
-        source = str(layer.source() or "")
+        combo = self.dialog.input_combo("dem")
+        layer = combo.currentLayer()
+        source = self._selected_source("dem")
         if not source:
             raise ValueError("The selected DEM has no readable source.")
-        source_crs = layer.crs()
+        data = combo.currentData()
+        configured_crs = data.get("source_crs", "") if isinstance(data, dict) else ""
+        source_crs = layer.crs() if layer is not None else None
         target_crs = self.dialog.get_crs()
         folder = Path(geometry_folder(self.dialog.project_folder))
         return {
             "source": source,
             "output_folder": str(folder),
-            "source_crs": (
+            "source_crs": configured_crs or (
                 source_crs.authid() or source_crs.toWkt()
                 if source_crs is not None and source_crs.isValid()
                 else ""
@@ -424,18 +433,44 @@ class MorphologyTaskBridge(QtCore.QObject):
         *,
         key="execute-all-lai",
         controls=(),
+        publish=False,
         done=None,
         failed=None,
     ):
         """Resample the selected LAI NetCDF onto the filled DEM grid."""
-        if "netcdf" not in self.dialog.categorical_input_mode("lai").lower():
+        if not os.path.isfile(self.filled_dem_path):
+            return self.start_dem_derivatives(
+                key=f"{key}-dem",
+                controls=controls,
+                done=lambda _result: self.start_lai(
+                    key=key,
+                    controls=controls,
+                    publish=publish,
+                    done=done,
+                    failed=failed,
+                ),
+                failed=failed,
+            )
+        mode = self.dialog.categorical_input_mode("lai").lower()
+        if mode == "mhm ready" or "lookup" in mode:
+            return self.start_categorical(
+                "lai", key=key, controls=controls, load=False,
+                reuse_existing=True, publish=publish,
+                done=done, failed=failed,
+            )
+        if "netcdf" not in mode:
             self.dialog.log_message(
                 "No LAI NetCDF input is selected. Skipping LAI.")
             if done is not None:
                 done(None)
             return True
-        config = self.dialog.lai_netcdf_config()
-        source = str(config.get("input_path", "") or self._selected_source("lai"))
+        config = self.dialog.lai_netcdf_config() or {}
+        source_path = str(config.get("input_path", "") or self._selected_source("lai"))
+        source = source_path
+        if source_path and config.get("variable"):
+            from ...core.handlers.file.netcdf.raster import source as netcdf_source
+
+            source = netcdf_source(source_path, config["variable"])
         options = lai.task_options(
             self.dialog.project_folder,
             source,
@@ -473,9 +508,13 @@ class MorphologyTaskBridge(QtCore.QObject):
                 name=Path(options["output_path"]).name,
                 loaded=False,
             )
-            if done is not None:
-                QtCore.QTimer.singleShot(
-                    0, lambda: done(options["output_path"]))
+            QtCore.QTimer.singleShot(
+                0,
+                lambda: self._lai_ready(
+                    options["output_path"], [], done,
+                    publish=publish, config=config, source=source,
+                ),
+            )
             return True
         self.dialog.log_message(
             "Resampling LAI to the filled DEM grid with bilinear interpolation."
@@ -489,11 +528,15 @@ class MorphologyTaskBridge(QtCore.QObject):
             resource="morphology-files",
             task_aware=True,
             on_success=lambda result: self._lai_ready(
-                result, messages, done, digest=digest),
+                result, messages, done, digest=digest, publish=publish,
+                config=config, source=source),
             on_error=lambda message: self._error("LAI", message, failed),
         )
 
-    def _lai_ready(self, result, messages, done, digest=None):
+    def _lai_ready(
+        self, result, messages, done, digest=None, *, publish=False,
+        config=None, source="",
+    ):
         for message in messages:
             self.dialog.log_message(message)
         if result:
@@ -503,6 +546,21 @@ class MorphologyTaskBridge(QtCore.QObject):
                 self._record_stage("lai", digest, (result,))
             self.dialog.log_message(
                 f"LAI resampled to the filled DEM grid: {result}")
+            if publish:
+                output = lai.publish_to_l0(
+                    self.dialog.project_folder,
+                    self.dialog.grid_level_headers()["L0"],
+                    self._crs_text(self.dialog.get_crs()),
+                    source=source,
+                    target_timestep=(config or {}).get("target_timestep")
+                    or lai.DEFAULT_TIMESTEP,
+                    classdefinition_source=(config or {}).get(
+                        "classdefinition_path", ""
+                    ),
+                    log=self.dialog.log_message,
+                )
+                self._register(output, loaded=False)
+                result = str(output)
         if done is not None:
             done(result)
 
@@ -543,6 +601,7 @@ class MorphologyTaskBridge(QtCore.QObject):
         controls=(),
         load=False,
         reuse_existing=False,
+        publish=False,
         done=None,
         failed=None,
     ):
@@ -557,6 +616,7 @@ class MorphologyTaskBridge(QtCore.QObject):
                     controls=controls,
                     load=load,
                     reuse_existing=reuse_existing,
+                    publish=publish,
                     done=done,
                     failed=failed,
                 ),
@@ -571,34 +631,24 @@ class MorphologyTaskBridge(QtCore.QObject):
                 source = config.get("input_path") or self._selected_source(
                     SPECS[kind]["kind"]
                 )
-                outputs = categorical.copy_ready(
-                    self.dialog.project_folder,
-                    kind,
-                    source,
-                    definition_source=config.get("classdefinition_path", ""),
-                    mode=mode,
+                if not source:
+                    raise ValueError(f"Select an mHM-ready {SPECS[kind]['label']} input.")
+                job = {
+                    "project_folder": self.dialog.project_folder,
+                    "kind": kind,
+                    "input_path": source,
+                    "classdefinition_path": config.get("classdefinition_path", ""),
+                    "variable": config.get("variable", ""),
+                    "source_crs": config.get("source_crs", ""),
+                    "target_crs": self._crs_text(self.dialog.get_crs()),
+                    "target_header": self.dialog.grid_level_headers()["L0"],
+                    "publish": bool(publish),
+                }
+                runner = partial(_run_ready, job=job)
+                finish = lambda result: self._ready_input_ready(
+                    result, load, done
                 )
-                for output in outputs:
-                    self._register(output, loaded=False)
-                if load:
-                    self._load(outputs[0], SPECS[kind]["layer_name"])
-                if kind == "soil":
-                    definition = next(
-                        (path for path in outputs if path.suffix == ".txt"), None
-                    )
-                    self.dialog.record_standard_soil_output(
-                        str(outputs[0]), str(definition) if definition else None
-                    )
-                self._categorical_complete(kind, outputs)
-                if done is not None:
-                    QtCore.QTimer.singleShot(
-                        0,
-                        lambda: done(
-                            {"kind": kind, "outputs": tuple(map(str, outputs))}
-                        ),
-                    )
-                return True
-            if self.dialog.uses_advanced_categorical_input(kind):
+            elif self.dialog.uses_advanced_categorical_input(kind):
                 value = (
                     self.dialog._land_use_input_value(
                         self.dialog._advanced_inputs.get("land_cover")
@@ -643,6 +693,7 @@ class MorphologyTaskBridge(QtCore.QObject):
                         "mapping_field": job["mapping_field"],
                         "class_field": job["class_field"],
                         "is_vector": job["is_vector"],
+                        "input_variable": job["input_variable"],
                         "input_crs": job["input_crs"],
                         "dem_crs": job["dem_crs"],
                         "format": "common-l0-ascii-1",
@@ -695,6 +746,17 @@ class MorphologyTaskBridge(QtCore.QObject):
             on_error=lambda message: self._error(SPECS[kind]["label"], message, failed),
         )
 
+    def _ready_input_ready(self, result, load, done):
+        outputs = [Path(path) for path in result.get("outputs", ())]
+        published = [Path(path) for path in result.get("published", ())]
+        for output in (*outputs, *published):
+            self._register(output, loaded=False)
+        if load and (published or outputs):
+            self._load(str((published or outputs)[0]), SPECS[result["kind"]]["layer_name"])
+        self._categorical_complete(result["kind"], published or outputs)
+        if done is not None:
+            done(result)
+
     def _lookup_job(self, kind):
         spec = SPECS[kind]
         config = self.dialog.categorical_lookup_config(kind) or {}
@@ -742,7 +804,11 @@ class MorphologyTaskBridge(QtCore.QObject):
             *categorical.intermediate_paths(self.dialog.project_folder, kind)[1:],
         ]
         layer_crs = layer.crs() if layer is not None else None
-        input_crs = self._crs_text(layer_crs) or self._crs_text(self.dialog.get_crs())
+        input_crs = (
+            str(config.get("source_crs", ""))
+            or self._crs_text(layer_crs)
+            or self._crs_text(self.dialog.get_crs())
+        )
         dem_crs = self._crs_text(layers.crs_of(self.filled_dem_path)) or self._crs_text(
             self.dialog.get_crs()
         )
@@ -750,6 +816,7 @@ class MorphologyTaskBridge(QtCore.QObject):
             "kind": kind,
             "geometry": str(geometry),
             "input_file": str(local),
+            "input_variable": str(config.get("variable", "")),
             "filled_dem": self.filled_dem_path,
             "output": str(output),
             "definition": str(definition) if definition else "",
@@ -847,12 +914,20 @@ class MorphologyTaskBridge(QtCore.QObject):
         )
 
     def start_publication(self, *, done, failed):
-        config = self.dialog.lai_netcdf_config()
+        mode = self.dialog.categorical_input_mode("lai").lower()
+        config = (
+            self.dialog.lai_netcdf_config() if "netcdf" in mode else {}
+        ) or {}
+        source = str(config.get("input_path") or "")
+        if source and config.get("variable"):
+            from ...core.handlers.file.netcdf.raster import source as netcdf_source
+
+            source = netcdf_source(source, config["variable"])
         request = morphology.setup.SetupRequest(
             project_folder=self.dialog.project_folder,
             headers=self.dialog.grid_level_headers(),
             crs=self.dialog.selected_meteo_crs(),
-            lai_source=str(config.get("input_path") or ""),
+            lai_source=source,
             lai_timestep=config.get("target_timestep") or lai.DEFAULT_TIMESTEP,
         )
         return self.coordinator.submit(

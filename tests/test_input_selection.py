@@ -220,8 +220,8 @@ def test_new_input_dialogs_set_titles_and_return_complete_paths(tmp_path):
             "classdefinition_path": str(definition),
         },
     )
-    assert ready.groupBox_inputType.title() == "Soil"
-    assert ready.comboBox_classDefinitionInput.isEnabled()
+    assert ready.groupBox_morphFileInput.title() == "Soil"
+    assert ready.groupBox_classDefinitionInput.isChecked()
     assert ready.selected_config().classdefinition_path == str(definition.resolve())
 
     single = SingleLayerInputDialog(

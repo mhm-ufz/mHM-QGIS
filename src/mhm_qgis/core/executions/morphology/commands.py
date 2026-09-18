@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from ....applications.mhm_tools_handler import prepare_lai_file
+from ....externals.mhm_tools_handler import prepare_lai_file
 from ...handlers.raster.tasks import (
     dem_derivative_files,
     gauge_position_file,
@@ -24,6 +24,8 @@ from ...handlers.state.cache import (
 )
 from ...handlers.store.paths import geometry_folder
 from ...morphology.layers.categorical import saved_outputs
+from ...morphology.layers.categorical import copy_ready
+from ...morphology.layers.advanced_l0 import publish_model_inputs
 
 
 def dem_derivatives(task, options):
@@ -85,6 +87,31 @@ def advanced(task, job):
     payload["value"] = job["value"].as_dict()
     result = native_worker(task, payload, geometry_folder(job["project_folder"]))
     return {"kind": result["kind"], "outputs": tuple(result["outputs"])}
+
+
+def ready(task, job):
+    """Place and publish one mHM-ready categorical raster."""
+    staged = copy_ready(
+        job["project_folder"],
+        job["kind"],
+        job["input_path"],
+        definition_source=job.get("classdefinition_path", ""),
+        variable=job.get("variable", ""),
+        source_crs=job.get("source_crs", ""),
+        target_crs=job["target_crs"],
+        target_header=job["target_header"],
+        task=task,
+    )
+    published = (
+        publish_model_inputs(job["project_folder"], job["target_header"])
+        if job.get("publish")
+        else ()
+    )
+    return {
+        "kind": job["kind"],
+        "outputs": tuple(map(str, staged)),
+        "published": tuple(map(str, published)),
+    }
 
 
 def stage_digest(inputs, config):
@@ -201,6 +228,7 @@ __all__ = [
     "lookup",
     "native_worker",
     "record_stage",
+    "ready",
     "reusable_stage",
     "stage_digest",
 ]

@@ -76,6 +76,32 @@ def test_variables_without_a_time_dimension_are_not_offered(tmp_path):
     assert nch.grid_variables(path) == []
 
 
+def test_raster_variables_exclude_coordinate_axes(tmp_path):
+    from netCDF4 import Dataset
+    from mhm_qgis.core.handlers.file.netcdf.raster import raster_variables
+
+    path = tmp_path / "raster.nc"
+    with Dataset(path, "w") as dataset:
+        dataset.createDimension("y", 2)
+        dataset.createDimension("x", 3)
+        dataset.createDimension("bounds", 2)
+        dataset.createVariable("x", "f8", ("x",))[:] = [0, 1, 2]
+        dataset.createVariable("y", "f8", ("y",))[:] = [0, 1]
+        x = dataset.variables["x"]
+        x.bounds = "x_bnds"
+        dataset.createVariable("x_bnds", "f8", ("x", "bounds"))[:] = 0
+        latitude = dataset.createVariable("lat", "f8", ("y", "x"))
+        latitude.standard_name = "latitude"
+        latitude[:] = 0
+        classes = dataset.createVariable("classes", "i4", ("y", "x"))
+        classes.grid_mapping = "crs"
+        classes[:] = 1
+        crs = dataset.createVariable("crs", "i4")
+        crs.grid_mapping_name = "transverse_mercator"
+
+    assert raster_variables(path) == ("classes",)
+
+
 def test_a_missing_file_yields_nothing(tmp_path):
     assert nch.grid_variables(tmp_path / "absent.nc") == []
     assert nch.time_axis(tmp_path / "absent.nc") == []
@@ -109,7 +135,7 @@ def test_a_slice_is_georeferenced_by_the_supplied_crs(tmp_path):
 @pytest.mark.skipif(not DAILY_YX.is_file(), reason="sample output not present")
 def test_real_daily_output_with_yx_dims():
     variables = nch.grid_variables(DAILY_YX)
-    assert len(variables) == 6
+    assert len(variables) >= 6  # enabled mHM outputs vary by run configuration
     assert {v.name for v in variables} >= {"Q", "QD", "QB"}
     assert (variables[0].y_dim, variables[0].x_dim) == ("y", "x")
     steps = nch.time_axis(DAILY_YX)

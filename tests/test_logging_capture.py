@@ -8,7 +8,7 @@ import sys
 
 
 
-from mhm_qgis.applications.mhm_tools_handler import capture_messages  # noqa: E402
+from mhm_qgis.externals.mhm_tools_handler import capture_messages  # noqa: E402
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog  # noqa: E402

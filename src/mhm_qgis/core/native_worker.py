@@ -59,7 +59,7 @@ def run(job):
         return run_lookup_job(job["job"])
     if job["kind"] == "dem-derivatives":
         # Imported here so the worker never pulls in the QGIS-only packages.
-        from ..applications.mhm_tools_handler import create_dem_derivative_files
+        from ..externals.mhm_tools_handler import create_dem_derivative_files
 
         output = create_dem_derivative_files(
             job["input_file"], job["output_folder"]

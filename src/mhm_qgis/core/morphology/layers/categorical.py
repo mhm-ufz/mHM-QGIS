@@ -39,6 +39,14 @@ SPECS = {
         "ready_name": "geology_class",
         "definition": "geology_classdefinition.txt",
     },
+    "lai": {
+        "kind": "lai",
+        "label": "LAI Class",
+        "geometry": "3_lai.tif",
+        "layer_name": "3_LAI_Class",
+        "ready_name": "LAI_class",
+        "definition": "LAI_classdefinition.txt",
+    },
 }
 
 
@@ -113,8 +121,11 @@ def record_namelist(
             "lc": "land_cover",
             "soil": "soil_class",
             "geology": "geology_class",
+            "lai": "LAI_class",
         }[kind],
     }
+    if kind == "lai":
+        value["time_step"] = 0
     if definition is not None and Path(definition).is_file():
         value["classdefinition_path"] = relative_workspace_path(
             project_folder, definition
@@ -132,11 +143,16 @@ def copy_ready(
     *,
     definition_source="",
     mode="mhm_ready",
+    variable="",
+    source_crs="",
+    target_crs="",
+    target_header=None,
+    task=None,
 ) -> tuple[Path, ...]:
     """Stage a ready raster for common-grid validation and publication."""
     spec = SPECS[kind]
     source = Path(str(source).split("|", 1)[0])
-    if source.suffix.lower() not in {".asc", ".nc", ".tif"} or not source.is_file():
+    if source.suffix.lower() not in {".asc", ".nc", ".tif", ".tiff"} or not source.is_file():
         raise ValueError(
             f"mHM-ready {spec['label']} input must be a local ASC, NetCDF, or TIFF raster."
         )
@@ -144,31 +160,42 @@ def copy_ready(
         spec["ready_name"] + source.suffix.lower()
     )
     target.parent.mkdir(parents=True, exist_ok=True)
-    definition_name = spec.get("definition")
     definition_source = Path(definition_source) if definition_source else None
+    definition_name = spec.get("definition") or (
+        definition_source.name if definition_source else None
+    )
     existing_definition = target.parent / definition_name if definition_name else None
-    if definition_name and not definition_source and not existing_definition.is_file():
+    if spec.get("definition") and not definition_source and existing_definition.is_file():
         definition_source = Path(morph_folder(project_folder)) / definition_name
-    if (
-        definition_name
-        and not (definition_source and definition_source.is_file())
-        and not existing_definition.is_file()
-    ):
-        raise FileNotFoundError(
-            f"mHM-ready {spec['label']} requires a class-definition file."
-        )
 
     with TemporaryDirectory(prefix=f"mhm_qgis_{kind}_ready_", dir=target.parent) as name:
         temporary = Path(name)
         prepared = temporary / target.name
-        shutil.copy2(source, prepared)
+        if target_header:
+            from ...handlers.file.netcdf.raster import source as raster_source
+            from ...handlers.raster.tasks import warp_raster_to_header
+
+            uri = raster_source(source, variable) if source.suffix.lower() == ".nc" else source
+            warp_raster_to_header(
+                uri,
+                prepared,
+                target_header,
+                target_crs,
+                source_crs=source_crs,
+                pad_value=1,
+                task=task,
+            )
+        else:
+            shutil.copy2(source, prepared)
         replacements = [(prepared, target)]
+        if prepared.with_suffix(".prj").is_file():
+            replacements.append((prepared.with_suffix(".prj"), target.with_suffix(".prj")))
         if definition_name and definition_source and definition_source.is_file():
             prepared_definition = temporary / definition_name
             shutil.copy2(definition_source, prepared_definition)
             replacements.append((prepared_definition, target.parent / definition_name))
-        if source.suffix.lower() == ".asc":
-            for suffix in (".prj", ".PRJ"):
+        if source.suffix.lower() == ".asc" and not target_header:
+            for suffix in (".proj", ".prj", ".PRJ"):
                 sidecar = source.with_suffix(suffix)
                 if sidecar.is_file():
                     staged_sidecar = prepared.with_suffix(suffix)

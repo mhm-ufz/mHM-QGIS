@@ -108,7 +108,10 @@ def test_run_mhm_uses_project_terminal(tmp_path: Path, monkeypatch) -> None:
 
     assert controller_module.run_mhm(dialog) is True
     assert dialog.terminal.calls == [(
-        "mhm",
+        str(
+            Path(controller_module.plugin_root())
+            / "vSpecific" / "v6" / "mhmv6"
+        ),
         {"cwd": workspace_folder(tmp_path), "show": True},
     )]
 

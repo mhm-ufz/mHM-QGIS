@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from ....applications import pyflwdir_handler
+from ....externals import pyflwdir_handler
 
 LogCallback = Callable[[str], None]
 

@@ -13,7 +13,7 @@ from ...handlers.lookup import (
     validate_land_use_input,
     write_soil_manifest,
 )
-from ....applications.mhm_tools_handler import prepare_land_cover_periods, prepare_soil_horizons
+from ....externals.mhm_tools_handler import prepare_land_cover_periods, prepare_soil_horizons
 from ...handlers.state.nml_settings import relative_workspace_path, update_section, load_settings
 from ...handlers.store.paths import geometry_folder, morph_staging_folder
 

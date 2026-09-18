@@ -10,9 +10,9 @@ CLASS_DEFINITION_FILTER = "Class definition (*.txt *.csv);;All files (*)"
 
 def _browse():
     """Import lazily: `input_selection` imports this module at load time."""
-    from ..dialogs.input_selection import _browse_into_combo
+    from ..dialogs.input_selection import _browse_raster_into_combo
 
-    return _browse_into_combo
+    return _browse_raster_into_combo
 
 
 def bind_lai_netcdf(dialog) -> None:

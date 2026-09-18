@@ -72,14 +72,14 @@ def test_input_nc_has_the_example_structure(tmp_path):
     )
 
     with xr.open_dataset(output, mask_and_scale=False) as result:
-        # Seven morphology variables; LAI_class is deliberately absent for now.
+        # LAI_class joins the common bundle when a class input was prepared.
         morphology = [
             name for name in result.data_vars
             if not name.endswith("_bnds")
         ]
         assert sorted(morphology) == [
-            "aspect", "dem", "facc", "fdir", "geology_class", "slope",
-            "soil_class",
+            "LAI_class", "aspect", "dem", "facc", "fdir",
+            "geology_class", "slope", "soil_class",
         ]
         # The `coordinates` attribute promotes lon/lat, matching the example.
         assert sorted(result.coords) == ["lat", "lon", "x", "y"]

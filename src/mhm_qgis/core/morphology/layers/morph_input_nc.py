@@ -23,9 +23,7 @@ from ...handlers.raster.tasks import _aligned_l0_window, _dependencies
 NODATA = -9999
 BLOCK_ROWS = 256
 
-# Variable name -> (masked raster stem, dtype, attributes). LAI_class is absent
-# on purpose: mhm_qgis has no LAI class product yet, so `lai_class_path` is left
-# unset rather than pointing at a variable that does not exist.
+# Variable name -> (masked raster stem, dtype, attributes).
 MORPH_VARIABLES = (
     ("dem", "dem", "f8", {
         "long_name": "elevation",
@@ -50,6 +48,10 @@ MORPH_VARIABLES = (
     }),
     ("soil_class", "3_soil", "i4", {
         "long_name": "soil class",
+        "units": "1",
+    }),
+    ("LAI_class", "LAI_class", "i4", {
+        "long_name": "leaf area index class",
         "units": "1",
     }),
     ("facc", "facc", "i4", {

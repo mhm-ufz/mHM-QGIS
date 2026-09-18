@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 from types import ModuleType
 
-from mhm_qgis.applications.mhm_tools_handler import (
+from mhm_qgis.externals.mhm_tools_handler import (
     lai_time_step,
     prepare_land_cover_periods,
     prepare_lai_file,

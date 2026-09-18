@@ -48,7 +48,7 @@ def run_lookup_job(job, progress=None):
     QGIS-free so it can run inside `native_worker`: formatting a vector input on
     an L0 grid peaked at 5.5 GiB and was OOM-killing the QGIS process.
     """
-    from ....applications.mhm_tools_handler import prepare_categorical_file
+    from ....externals.mhm_tools_handler import prepare_categorical_file
 
     def report(value):
         if progress is not None:
@@ -77,6 +77,7 @@ def run_lookup_job(job, progress=None):
             job["lookup_table"],
             job["mapping_field"],
             job["class_field"],
+            input_variable=job.get("input_variable") or None,
             is_vector=job["is_vector"],
             classdefinition_file=prepared_definition,
             input_crs=job["input_crs"],

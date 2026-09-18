@@ -1330,6 +1330,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                     "type": "vector" if suffix == ".shp" else "raster",
                     "origin": "file",
                     "manual": bool(item_data.get("manual")),
+                    "variable": str(item_data.get("variable", "")),
+                    "source_crs": str(item_data.get("source_crs", "")),
                 }
                 continue
             layer = combo_box.currentLayer()
@@ -1667,7 +1669,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
         ready = {}
         for kind, config in state.get("categorical_ready", {}).items():
-            if kind not in {"lc", "soil", "geology"} or not isinstance(config, dict):
+            if kind not in {"lc", "soil", "geology", "lai"} or not isinstance(config, dict):
                 continue
             restored = dict(config)
             for key in ("input_path", "classdefinition_path"):
@@ -1794,6 +1796,12 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         for index in range(combo.count()):
             data = combo.itemData(index)
             if isinstance(data, dict) and data.get("path") == source:
+                updated = dict(data)
+                updated.update(
+                    variable=str(layer_info.get("variable", "")),
+                    source_crs=str(layer_info.get("source_crs", "")),
+                )
+                combo.setItemData(index, updated)
                 combo.setCurrentIndex(index)
                 return
         label = source
@@ -1811,6 +1819,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                 "path": source,
                 "label": label,
                 "manual": bool(layer_info.get("manual")),
+                "variable": str(layer_info.get("variable", "")),
+                "source_crs": str(layer_info.get("source_crs", "")),
             },
         )
         combo.setCurrentIndex(combo.count() - 1)

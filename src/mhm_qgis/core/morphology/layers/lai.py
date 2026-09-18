@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
-from ....applications.mhm_tools_handler import copy_lai_file_to_grid, lai_time_step
+from ....externals.mhm_tools_handler import copy_lai_file_to_grid, lai_time_step
 from ...grid import write_header_file
 from ...handlers.state.nml_settings import relative_workspace_path, update_section
 from ...handlers.store.layout import lai_folder
@@ -66,6 +67,7 @@ def publish_to_l0(
     *,
     source: str = "",
     target_timestep: str = DEFAULT_TIMESTEP,
+    classdefinition_source: str = "",
     log=None,
 ) -> Path:
     """Publish unmasked LAI over the complete common L0 extent."""
@@ -86,18 +88,25 @@ def publish_to_l0(
     _write_header(folder, l0_header)
     if source:
         source_path, source_variable = parse_source(source)
+        settings = {
+            "mode": "netcdf",
+            "source_path": str(Path(source_path).resolve()) if source_path else "",
+            "source_variable": str(source_variable or ""),
+            "target_timestep": target_timestep or DEFAULT_TIMESTEP,
+            "time_step": lai_time_step(target_timestep or DEFAULT_TIMESTEP),
+            "output_path": relative_workspace_path(project_folder, output),
+            "variable": "lai",
+        }
+        if classdefinition_source:
+            definition = folder / "LAI_classdefinition.txt"
+            shutil.copy2(classdefinition_source, definition)
+            settings["classdefinition_path"] = relative_workspace_path(
+                project_folder, definition
+            )
         update_section(
             project_folder,
             "lai",
-            {
-                "mode": "netcdf",
-                "source_path": str(Path(source_path).resolve()) if source_path else "",
-                "source_variable": str(source_variable or ""),
-                "target_timestep": target_timestep or DEFAULT_TIMESTEP,
-                "time_step": lai_time_step(target_timestep or DEFAULT_TIMESTEP),
-                "output_path": relative_workspace_path(project_folder, output),
-                "variable": "lai",
-            },
+            settings,
         )
     return output
 

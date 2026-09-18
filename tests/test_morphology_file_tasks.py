@@ -451,7 +451,7 @@ def test_dem_derivatives_delegate_the_expensive_pass_to_the_caller(tmp_path):
 
     def compute(prepared, staging, log):
         calls.append((prepared, Path(staging)))
-        from mhm_qgis.applications.mhm_tools_handler import create_dem_derivative_files
+        from mhm_qgis.externals.mhm_tools_handler import create_dem_derivative_files
 
         return create_dem_derivative_files(prepared, staging, log=log)
 

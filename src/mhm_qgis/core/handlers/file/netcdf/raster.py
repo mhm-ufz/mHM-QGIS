@@ -30,6 +30,34 @@ def variables(path):
         return tuple(handle.variables)
 
 
+def raster_variables(path):
+    """Return numeric NetCDF variables with at least two dimensions."""
+    from netCDF4 import Dataset
+
+    if not Path(path).is_file():
+        return ()
+    with Dataset(path) as handle:
+        support = set(handle.dimensions)
+        for variable in handle.variables.values():
+            support.update(
+                str(getattr(variable, name, "") or "")
+                for name in ("bounds", "grid_mapping")
+            )
+        return tuple(
+            name
+            for name, variable in handle.variables.items()
+            if (
+                variable.ndim >= 2
+                and variable.dtype.kind in "iuf"
+                and name not in support
+                and getattr(variable, "standard_name", "") not in {
+                    "latitude", "longitude", "projection_x_coordinate",
+                    "projection_y_coordinate",
+                }
+            )
+        )
+
+
 @contextmanager
 def _writer(path, header, projection):
     from netCDF4 import Dataset

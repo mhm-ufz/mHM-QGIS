@@ -8,7 +8,7 @@ from types import ModuleType
 import pytest
 import pandas as pd
 
-from mhm_qgis.applications import mhm_tools_handler as categorical
+from mhm_qgis.externals import mhm_tools_handler as categorical
 from mhm_qgis.core.handlers import lookup
 from mhm_qgis.core.handlers.lookup import table as lookup_table
 

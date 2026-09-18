@@ -23,6 +23,7 @@ _OUTPUTS = {
         "geology_classdefinition.txt",
     ),
     "lc": ("format_lc_data", "lc.tif", None),
+    "lai": ("format_lai_data", "lai_class.tif", "LAI_classdefinition.txt"),
 }
 
 
@@ -114,15 +115,16 @@ def prepare_categorical_file(
     mapping_field: str,
     class_field: str,
     *,
+    input_variable: str | None = None,
     is_vector: bool = False,
     classdefinition_file: str | Path | None = None,
     input_crs=None,
     dem_crs=None,
     log: LogCallback | None = None,
 ) -> Path:
-    """Prepare an aligned soil, geology, or land-cover GeoTIFF."""
+    """Prepare one aligned categorical morphology raster."""
     if kind not in _OUTPUTS:
-        raise ValueError("kind must be 'soil', 'geology', or 'lc'.")
+        raise ValueError("kind must be 'soil', 'geology', 'lc', or 'lai'.")
 
     formatter_name, raster_name, definition_name = _OUTPUTS[kind]
     if classdefinition_file is not None and definition_name is None:
@@ -151,6 +153,24 @@ def prepare_categorical_file(
                 formatted_input = input_path
                 formatter_mapping_field = mapping_field
                 formatter_input_crs = input_crs
+
+                if input_path.suffix.lower() == ".nc" and input_variable:
+                    from mhm_tools.common.file_handler import (
+                        get_raster_data,
+                        write_xarray_to_geotiff,
+                    )
+
+                    data = get_raster_data(
+                        input_path, var_name=input_variable, crs=input_crs
+                    )
+                    try:
+                        formatted_input = temporary_path / f"{kind}_selected.tif"
+                        write_xarray_to_geotiff(
+                            data, formatted_input, data_var=input_variable
+                        )
+                    finally:
+                        data.close()
+                    formatter_input_crs = None
 
                 if is_vector:
                     formatted_input = temporary_path / f"{kind}_rasterized.tif"

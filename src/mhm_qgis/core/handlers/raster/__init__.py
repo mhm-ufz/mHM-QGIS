@@ -3,7 +3,7 @@
 
 GDAL and NumPy only -- no QGIS, no Qt -- so these run inside a `QgsTask` or the
 `native_worker` child process without dragging the QGIS runtime along. Flow
-grids come from `applications/pyflwdir_handler`; this module writes the files.
+grids come from `externals/pyflwdir_handler`; this module writes the files.
 
 Every L0 operation is an integer window copy with nodata padding, never a
 resample: `crop_aligned_l0_raster` and `mask_aligned_l0_raster` raise on a

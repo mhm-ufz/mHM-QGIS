@@ -64,19 +64,19 @@ def test_ready_land_cover_is_published_and_recorded(tmp_path):
     )
 
 
-def test_ready_soil_requires_and_publishes_its_class_definition(tmp_path):
+def test_ready_soil_optionally_publishes_its_class_definition(tmp_path):
     ensure_project_structure(tmp_path, "5.13")
     source = _touch(tmp_path / "input" / "soil.tif", b"soil")
 
-    with pytest.raises(FileNotFoundError, match="class-definition"):
-        categorical.copy_ready(tmp_path, "soil", source)
+    first = categorical.copy_ready(tmp_path, "soil", source)
+    target = Path(morph_staging_folder(tmp_path)) / "soil_class.tif"
+    assert first == (target,)
 
     definition = _touch(tmp_path / "input" / "soil_classes.txt", b"classes")
     outputs = categorical.copy_ready(
         tmp_path, "soil", source, definition_source=definition
     )
 
-    target = Path(morph_staging_folder(tmp_path)) / "soil_class.tif"
     target_definition = target.parent / "soil_classdefinition.txt"
     assert set(outputs) == {target, target_definition}
     assert target.read_bytes() == b"soil"
@@ -88,6 +88,61 @@ def test_ready_mode_rejects_non_raster_input(tmp_path):
 
     with pytest.raises(ValueError, match="ASC, NetCDF, or TIFF"):
         categorical.copy_ready(tmp_path, "soil", source)
+
+
+def test_ready_raster_is_placed_on_the_common_grid(tmp_path):
+    from osgeo import gdal, osr
+    import numpy as np
+
+    ensure_project_structure(tmp_path, "6")
+    source = tmp_path / "input" / "soil.tif"
+    source.parent.mkdir()
+    dataset = gdal.GetDriverByName("GTiff").Create(
+        str(source), 2, 2, 1, gdal.GDT_Int16
+    )
+    dataset.SetGeoTransform((0, 100, 0, 200, 0, -100))
+    crs = osr.SpatialReference()
+    crs.ImportFromEPSG(32632)
+    dataset.SetProjection(crs.ExportToWkt())
+    dataset.GetRasterBand(1).WriteArray(np.full((2, 2), 4, dtype="int16"))
+    dataset = None
+
+    output = categorical.copy_ready(
+        tmp_path,
+        "soil",
+        source,
+        source_crs="EPSG:32632",
+        target_crs="EPSG:32632",
+        target_header={
+            "ncols": 4, "nrows": 4, "xllcorner": -100,
+            "yllcorner": -100, "cellsize": 100,
+        },
+    )[0]
+
+    values = gdal.Open(str(output)).ReadAsArray()
+    assert values.shape == (4, 4)
+    np.testing.assert_array_equal(values[1:3, 1:3], 4)
+    assert np.all(values[[0, 3], :] == 1)
+    assert np.all(values[:, [0, 3]] == 1)
+
+
+def test_ready_lai_records_the_class_mode(tmp_path):
+    ensure_project_structure(tmp_path, "6")
+    source = _touch(tmp_path / "input" / "lai_class.asc", b"class raster")
+    definition = _touch(tmp_path / "input" / "lai.txt", b"classes")
+
+    outputs = categorical.copy_ready(
+        tmp_path, "lai", source, definition_source=definition
+    )
+
+    folder = Path(morph_staging_folder(tmp_path))
+    assert set(outputs) == {
+        folder / "LAI_class.asc", folder / "LAI_classdefinition.txt"
+    }
+    settings = load_settings(tmp_path)["lai"]
+    assert settings["mode"] == "mhm_ready"
+    assert settings["time_step"] == 0
+    assert settings["variable"] == "LAI_class"
 
 
 def test_failed_publish_restores_the_previous_output_set(tmp_path, monkeypatch):

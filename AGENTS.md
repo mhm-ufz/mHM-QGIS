@@ -66,10 +66,10 @@ decision.
   - `executions/`: canonical workflow plans and commands. `executions/morphology/`
     is the sole definition of Execute All and its publication ordering;
     `executions/observations/` reuses the forcing pipeline for L2 gridded observations.
-- `applications/`: one handler per external package. Processing calls into `mhm_tools`,
-  `nml_tools` and `pyflwdir` go through `mhm_tools_handler.py`,
-  `nml_tools_handler.py` and `pyflwdir_handler.py`; their heavy imports stay inside
-  functions.
+- `externals/`: one handler per external package or executable. Processing calls into
+  `mhm_tools`, `nml_tools` and `pyflwdir` go through `mhm_tools_handler.py`,
+  `nml_tools_handler.py` and `pyflwdir_handler.py`; `mhm_handler.py` selects the
+  version-specific development executable. Heavy imports stay inside functions.
 - `vSpecific/`: version-specific initial values handed to the namelist editor.
 
 Top-level modules that remain include `mhm_qgis.py` (plugin lifecycle, reload-safe
@@ -118,7 +118,7 @@ Rules that follow from it:
 - **Dependencies point downward.** `qgis_bridge/` must not reach up into `qt/`. It used
   to call `dialog.load_layer(...)`; that mechanic now lives in `qgis_bridge/layers`,
   which both `display/` and the dialog call into.
-- `applications/` imports its external package **inside the functions**. `import
+- `externals/` imports its external package **inside the functions**. `import
   mhm_tools` costs ~850 ms and pulls in ~1480 modules (geopandas, pandas, rasterio,
   scipy, xarray); at module level that lands on every plugin load. Importing `mhm_qgis`
   must never import `mhm_tools`. `core/handlers/lookup` and `core/handlers/file/netcdf`
@@ -152,7 +152,7 @@ Rules that follow from it:
   installed in the development environment (`0.2.2.dev4`)** -- keep that in mind before
   reading an import failure as a code bug.
 - Call `mhm_tools` through Python functions, not the `mhm-tools` CLI, unless explicitly
-  asked, and only through `applications/mhm_tools_handler.py`.
+  asked, and only through `externals/mhm_tools_handler.py`.
 - `rasterize_map_data` burns vector attributes directly or maps them through a lookup
   table, always on the filled DEM's exact grid.
 - `format_soil_data`, `format_geology_data`, `format_lai_data` and `format_lc_data`
@@ -367,10 +367,9 @@ Four JSON files are used by the plugin.
     `core/meteorology/mask.py`
   - `data/morph/dem.nc` as the single model DEM; other static inputs live in `input.nc`
   - `data/gauge/streamflow/` instead of `observation/streamflow/`
-- `input.nc` carries seven variables: `dem, fdir, slope, aspect, geology_class,
-  soil_class, facc`. **`LAI_class` is deliberately absent** -- mhm_qgis has no LAI class
-  product, so `lai_class_path` is rendered empty rather than naming a file that is never
-  written. Add both together if LAI classes are introduced.
+- `input.nc` carries `dem, fdir, slope, aspect, geology_class, soil_class, facc`
+  and optional `LAI_class`. The LAI class is present only when the categorical
+  `mHM ready` or lookup workflow produced it; gridded `lai.nc` remains separate.
 - The meteorology reuse check has no header file to compare under v6, so it validates the
   written NetCDF grid against the saved L2 header instead.
 
@@ -484,7 +483,7 @@ Four JSON files are used by the plugin.
   A changed common grid invalidates staged LAI through the filled-DEM fingerprint.
 - Reusable temporal conversion, Rasterio warping, streaming NetCDF writing and aligned
   window copying live in `mhm_tools.pre.format_lai`. Call that public API only through
-  `applications/mhm_tools_handler.py`. `core/morphology/layers/lai.py` builds path-only
+  `externals/mhm_tools_handler.py`. `core/morphology/layers/lai.py` builds path-only
   task options; the Qt scheduler snapshots widgets before the worker starts. Never touch
   a widget from the worker.
 - mHM-tools streams every stage one block of target rows and one time step at a time.
@@ -545,7 +544,7 @@ Four JSON files are used by the plugin.
 - Version-specific initial values are built by `vSpecific/` (`build_initial_values`,
   `build_dimensions`), which reads `nml-settings.json` through
   `state/nml_settings.load_settings`.
-- The handoff goes through `applications/nml_tools_handler.launch_profile_editor`.
+- The handoff goes through `externals/nml_tools_handler.launch_profile_editor`.
   `configure_qtpy_api()` must run before it, because nml-tools loads Qt on first call.
 - Use the installed nml-tools API (development checkout now `/home/bashyal/Codes/nml-tools`),
   not a hard-coded source path. `launch_gui(schemas_dir, output_dir, file_profiles, ...)`
@@ -672,7 +671,7 @@ Four JSON files are used by the plugin.
 ## Style
 
 - Keep UI code focused on UI state, validation and logging.
-- Keep the `applications/` boundary QGIS-free.
+- Keep the `externals/` boundary QGIS-free.
 - Prefer clear errors over silent fallbacks when the user is expected to provide
   fields/layers.
 - Prefer deleting a duplicate over adding a delegator. Several restructuring passes left
@@ -692,7 +691,7 @@ is not found, this is why.
 | `mhm_qgis_dialog_base.ui` | `qt/ui/forms/mhm_qgis_main.ui` |
 | `ui/`, generated `pyui/` | runtime-loaded `qt/ui/forms/`; generated modules removed |
 | `standalone/` shim and launcher | real-QGIS launcher in `qt/__main__.py`; shim removed |
-| `mhm_tools_adapter.py` | `applications/mhm_tools_handler.py` |
+| `mhm_tools_adapter.py` | `externals/mhm_tools_handler.py` |
 | `project_layout.py` | `core/handlers/store/{paths,layout,registry}.py` |
 | `state_cache.py`, `nml_settings.py` | `core/handlers/state/{cache,nml_settings}.py` |
 | `core/handlers/netcdf/` | `core/handlers/file/netcdf/` |
@@ -715,7 +714,7 @@ is not found, this is why.
 | `grid_resolution.py`, `core/meteorology/l2_grid.py`, `ERA5Land/mhm/grid.py` | `core/grid/{model,arrays}.py` plus `qgis_bridge/layers/grid.py` |
 
 One known boundary exception remains: `core/handlers/lookup/job.py` calls
-`prepare_categorical_file` from `applications/` at call time. Keep the import lazy so
+`prepare_categorical_file` from `externals/` at call time. Keep the import lazy so
 importing the core package does not load mHM-tools.
 
 ## graphify

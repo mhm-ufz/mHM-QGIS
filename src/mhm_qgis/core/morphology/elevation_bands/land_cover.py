@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from ....applications import pyflwdir_handler
+from ....externals import pyflwdir_handler
 from ...grid import geotransform_bounds, raster_grids_match
 from ...handlers import lookup
 from .bands import (

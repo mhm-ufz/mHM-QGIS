@@ -5,10 +5,11 @@ import math
 import os
 from pathlib import Path
 
-from ....applications import pyflwdir_handler
+from ....externals import pyflwdir_handler
 from ...grid import (
     aligned_window,
     geotransform_from_header,
+    header_bounds,
     header_from_geotransform,
 )
 
@@ -230,6 +231,65 @@ def crop_aligned_l0_raster(
     )
 
 
+def warp_raster_to_header(
+    source_path,
+    output_path,
+    target_header,
+    target_crs,
+    *,
+    source_crs="",
+    resampling="near",
+    pad_value=None,
+    task=None,
+):
+    """Reproject one raster directly onto the exact common-L0 grid."""
+    _np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(f".{output.stem}.warp{output.suffix}")
+    temporary.unlink(missing_ok=True)
+    xmin, xmax, ymin, ymax = header_bounds(target_header)
+    driver = {
+        ".asc": "AAIGrid",
+        ".nc": "netCDF",
+        ".tif": "GTiff",
+        ".tiff": "GTiff",
+    }.get(output.suffix.lower())
+    if driver is None:
+        raise ValueError(f"Unsupported ready-raster output: {output}")
+
+    def progress(fraction, _message, _data):
+        if task is not None and task.isCanceled():
+            return 0
+        _progress(task, fraction * 100)
+        return 1
+
+    options = {
+        "format": driver,
+        "outputBounds": (xmin, ymin, xmax, ymax),
+        "width": int(target_header["ncols"]),
+        "height": int(target_header["nrows"]),
+        "dstSRS": str(target_crs),
+        "resampleAlg": resampling,
+        "multithread": True,
+        "callback": progress,
+    }
+    if source_crs:
+        options["srcSRS"] = str(source_crs)
+    if pad_value is not None:
+        options.update(dstNodata=float(pad_value), warpOptions=["INIT_DEST=NO_DATA"])
+    result = gdal.Warp(str(temporary), str(source_path), **options)
+    if result is None:
+        temporary.unlink(missing_ok=True)
+        raise RuntimeError(f"Could not place raster on the common grid: {source_path}")
+    result = None
+    os.replace(temporary, output)
+    temporary_projection = temporary.with_suffix(".prj")
+    if temporary_projection.is_file():
+        os.replace(temporary_projection, output.with_suffix(".prj"))
+    return str(output)
+
+
 def _rasterize_target_mask(vector_path, target_header, projection):
     """Return a boolean mask of the target grid cells covered by a polygon layer."""
     _np, _pfd, _affine, gdal, ogr, _osr = _dependencies()
@@ -448,27 +508,35 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
     source = str(source)
     if "|" in source and os.path.isfile(source.split("|", 1)[0]):
         source = source.split("|", 1)[0]
-    if not target_crs or source_crs == target_crs:
+    selected_netcdf_variable = source.startswith('NETCDF:"')
+    if not selected_netcdf_variable and (
+        not target_crs or source_crs == target_crs
+    ):
         return source
     source_ref = osr.SpatialReference()
     target_ref = osr.SpatialReference()
-    if source_ref.SetFromUserInput(str(source_crs or "")) != 0:
-        return source
-    if target_ref.SetFromUserInput(str(target_crs)) != 0 or source_ref.IsSame(target_ref):
+    source_valid = source_ref.SetFromUserInput(str(source_crs or "")) == 0
+    target_valid = target_ref.SetFromUserInput(str(target_crs or "")) == 0
+    reproject = source_valid and target_valid and not source_ref.IsSame(target_ref)
+    if not selected_netcdf_variable and not reproject:
         return source
     os.makedirs(os.path.dirname(reprojected_path), exist_ok=True)
     if Path(reprojected_path).is_symlink():
         Path(reprojected_path).unlink()
-    result = gdal.Warp(
-        str(reprojected_path),
-        source,
-        dstSRS=str(target_crs),
-        resampleAlg="near",
-        multithread=True,
-        format="netCDF",
-    )
+    if reproject:
+        result = gdal.Warp(
+            str(reprojected_path), source, srcSRS=str(source_crs),
+            dstSRS=str(target_crs), resampleAlg="near",
+            multithread=True, format="netCDF",
+        )
+    else:
+        options = {"format": "netCDF"}
+        output_crs = target_crs or source_crs
+        if output_crs:
+            options["outputSRS"] = str(output_crs)
+        result = gdal.Translate(str(reprojected_path), source, **options)
     if result is None:
-        raise RuntimeError("DEM reprojection failed.")
+        raise RuntimeError("DEM preparation failed.")
     result = None
     return str(reprojected_path)
 
@@ -548,7 +616,7 @@ def dem_derivative_files(
 
 
 def _compute_dem_derivatives(prepared, staging, log):
-    from ....applications.mhm_tools_handler import create_dem_derivative_files
+    from ....externals.mhm_tools_handler import create_dem_derivative_files
 
     return create_dem_derivative_files(prepared, staging, log=log)
 

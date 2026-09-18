@@ -114,7 +114,7 @@ def align_dataset_to_header(
         integer: bool = False):
     """Return a dataset sampled on the exact grid described by ``header``."""
     import xarray as xr
-    from .....applications.mhm_tools_handler import (xarray_coord_key,
+    from .....externals.mhm_tools_handler import (xarray_coord_key,
                                                    xarray_single_data_var)
 
     header = standardize_header(header)
@@ -183,7 +183,7 @@ def pad_dataset_to_header(
     or ``nodata_value`` when no pad value is given. Non-spatial dimensions such
     as time or soil horizon are preserved.
     """
-    from .....applications.mhm_tools_handler import (xarray_coord_key,
+    from .....externals.mhm_tools_handler import (xarray_coord_key,
                                                    xarray_single_data_var)
 
     header = standardize_header(header)
@@ -265,7 +265,7 @@ def pad_l0_file_to_header(
 
 def _grid_matches_header(dataset, header: Mapping[str, Any]) -> bool:
     """Return True when a dataset already sits exactly on the header grid."""
-    from .....applications.mhm_tools_handler import xarray_coord_key
+    from .....externals.mhm_tools_handler import xarray_coord_key
 
     x_key = xarray_coord_key(dataset, lon=True)
     y_key = xarray_coord_key(dataset, lat=True)
@@ -297,7 +297,7 @@ def _assert_cells_align(dataset, x_key, y_key, header) -> None:
 
 
 def _read_raster(path: Path, data_var: str | None):
-    from .....applications.mhm_tools_handler import read_xarray_dataset
+    from .....externals.mhm_tools_handler import read_xarray_dataset
 
     return read_xarray_dataset(
         path,
@@ -308,7 +308,7 @@ def _read_raster(path: Path, data_var: str | None):
 
 def _write_ascii(dataset, output_path: Path, header: Mapping[str, Any],
                  nodata_value: float | int) -> None:
-    from .....applications.mhm_tools_handler import (write_xarray_ascii,
+    from .....externals.mhm_tools_handler import (write_xarray_ascii,
                                                    xarray_single_data_var)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

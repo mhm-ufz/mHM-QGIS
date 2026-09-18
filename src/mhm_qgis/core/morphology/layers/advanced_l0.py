@@ -136,7 +136,10 @@ def _configured_rasters(project_folder):
     workspace = Path(workspace_folder(project_folder))
     settings = load_settings(project_folder)
     paths = set()
-    for section in SECTIONS:
+    sections = list(SECTIONS)
+    if settings.get("lai", {}).get("mode") == "mhm_ready":
+        sections.append("lai")
+    for section in sections:
         record = settings.get(section, {})
         for item in [record, *record.get("scenes", [])]:
             value = item.get("output_path")
@@ -161,7 +164,10 @@ def _repoint_settings(project_folder, published, log=None) -> None:
     settings = load_settings(project_folder)
     changed = False
 
-    for section in SECTIONS:
+    sections = list(SECTIONS)
+    if settings.get("lai", {}).get("mode") == "mhm_ready":
+        sections.append("lai")
+    for section in sections:
         record = settings.get(section)
         if not isinstance(record, dict):
             continue

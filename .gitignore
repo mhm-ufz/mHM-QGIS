@@ -1,3 +1,7 @@
+# mhm executables
+src/mhm_qgis/vSpecific/v5_13/mhmv5
+src/mhm_qgis/vSpecific/v6/mhmv6
+
 # Temporary files
 .codex/
 .scripts/

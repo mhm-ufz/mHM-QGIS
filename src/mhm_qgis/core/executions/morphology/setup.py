@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
-from ....applications.mhm_tools_handler import create_latlon_file
+from ....externals.mhm_tools_handler import create_latlon_file
 from ...handlers.file.netcdf.raster import copy_rasters, source, variables
 from ...handlers.raster.tasks import _cancelled, _target_mask, write_domain_dem_ascii
 from ...handlers.state import processing
@@ -103,8 +103,15 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         from ...handlers.state.nml_settings import load_settings
         settings = load_settings(request.project_folder)
         layers = available_layers(folder)
-        for name in ("soil_class", "geology_class"):
-            configured = settings.get(name.removesuffix("_class"), {}).get("output_path")
+        for name, section in (
+            ("soil_class", "soil"),
+            ("geology_class", "geology"),
+            ("LAI_class", "lai"),
+        ):
+            record = settings.get(section, {})
+            if name == "LAI_class" and record.get("mode") != "mhm_ready":
+                continue
+            configured = record.get("output_path")
             candidates = ([Path(workspace_folder(request.project_folder)) / configured] if configured else
                           [destination / f"{name}{suffix}" for suffix in (".nc", ".asc")])
             for candidate in candidates:

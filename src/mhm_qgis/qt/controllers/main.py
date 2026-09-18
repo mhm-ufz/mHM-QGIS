@@ -27,7 +27,8 @@ from ...core.grid import (
 from ..dialogs.input_selection import (INPUT_EXTENSIONS, InputComboAdapter,
                                 LaiNetcdfInputDialog, MhmReadyInputDialog,
                                 SingleLayerInputDialog, loaded_qgis_items,
-                                scan_project_folders, scan_project_inputs)
+                                raster_details, scan_project_folders,
+                                scan_project_inputs)
 from ...core.meteorology.forcing import MeteoFolderSpec
 from ...core.meteorology.forcing import inspect_meteo_folder_cached
 from ...dependency_bootstrap import configure_qtpy_api
@@ -517,7 +518,7 @@ def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
         ensure_project_structure(dialog.project_folder, version)
         configure_qtpy_api()
 
-        from ...applications.nml_tools_handler import launch_profile_editor
+        from ...externals.nml_tools_handler import launch_profile_editor
 
         dialog.log_message(f"Opening namelist editor for mHM {version}...")
         launch_profile_editor(
@@ -546,7 +547,14 @@ def run_mhm(dialog) -> bool:
     if terminal is None:
         return False
     dialog.log_message(f"Running mHM in project directory: {workspace}")
-    return terminal.run_command("mhm", cwd=workspace, show=True)
+    try:
+        from ...externals.mhm_handler import run
+
+        return run(selected_version(dialog), workspace, terminal.run_command)
+    except (FileNotFoundError, PermissionError) as error:
+        dialog.log_message(f"ERROR: Run mHM failed. Details: {error}")
+        QMessageBox.critical(dialog, "mHM Execution Error", str(error))
+        return False
 
 
 def _ensure_project_folder(dialog) -> bool:
@@ -963,6 +971,9 @@ def browse_input_file(dialog, kind):
             f"extensions: {', '.join(sorted(INPUT_EXTENSIONS[kind]))}.",
         )
         return
+    details = raster_details(dialog, path)
+    if details is None:
+        return
     label = path
     if dialog.project_folder:
         try:
@@ -976,6 +987,9 @@ def browse_input_file(dialog, kind):
     for index in range(combo.count()):
         data = combo.itemData(index)
         if isinstance(data, dict) and data.get("path") == path:
+            updated = dict(data)
+            updated.update(variable=details.variable, source_crs=details.source_crs)
+            combo.setItemData(index, updated)
             combo.setCurrentIndex(index)
             return
     combo.addItem(
@@ -986,6 +1000,8 @@ def browse_input_file(dialog, kind):
             "path": path,
             "label": label,
             "manual": True,
+            "variable": details.variable,
+            "source_crs": details.source_crs,
         },
     )
     combo.setCurrentIndex(combo.count() - 1)
@@ -1573,6 +1589,34 @@ def _exec_dialog(input_dialog):
     return execute()
 
 
+def _ready_grid(dialog, kind, previous):
+    try:
+        require_common_grid(dialog)
+        return True
+    except ValueError as error:
+        QMessageBox.warning(dialog, "Common Grid Required", str(error))
+        dialog._restore_categorical_mode(kind, previous)
+        return False
+
+
+def _source_values(config):
+    return {
+        "input_path": config.input_path,
+        "classdefinition_path": getattr(config, "classdefinition_path", ""),
+        "variable": getattr(config, "variable", ""),
+        "source_crs": getattr(config, "source_crs", ""),
+    }
+
+
+def _start_ready_input(dialog, kind):
+    failed = lambda message: dialog._background_processor_failed(
+        f'{"LAI" if kind == "lai" else kind.title()} ready input', message
+    )
+    return dialog.morphology_tasks.start_categorical(
+        kind, key=f"ready-{kind}", publish=True, failed=failed
+    )
+
+
 def handle_categorical_type(dialog, kind, text):
     """Open the lookup dialog immediately when lookup mode is selected."""
     text = str(text or "").strip()
@@ -1600,6 +1644,8 @@ def handle_categorical_type(dialog, kind, text):
         return
 
     if normalized == "mhm ready":
+        if not _ready_grid(dialog, kind, previous):
+            return
         input_dialog = MhmReadyInputDialog(
             dialog.project_folder,
             kind,
@@ -1626,10 +1672,7 @@ def handle_categorical_type(dialog, kind, text):
 
     config = input_dialog.selected_config()
     if normalized == "mhm ready":
-        dialog._categorical_ready_configs[kind] = {
-            "input_path": config.input_path,
-            "classdefinition_path": config.classdefinition_path,
-        }
+        dialog._categorical_ready_configs[kind] = _source_values(config)
         dialog._categorical_lookup_configs.pop(kind, None)
     else:
         dialog._categorical_lookup_configs[kind] = {
@@ -1637,6 +1680,8 @@ def handle_categorical_type(dialog, kind, text):
             "lookup_table": config.lookup_table,
             "mapping_field": config.mapping_field,
             "class_field": config.class_field,
+            "variable": config.variable,
+            "source_crs": config.source_crs,
         }
         dialog._categorical_ready_configs.pop(kind, None)
     dialog._categorical_modes[kind] = text
@@ -1647,6 +1692,8 @@ def handle_categorical_type(dialog, kind, text):
         )
     dialog.save_input_state()
     dialog.invalidate_execute_all_meteo()
+    if normalized == "mhm ready":
+        _start_ready_input(dialog, kind)
 
 
 def handle_lai_input_type(dialog, text, previous=""):
@@ -1658,7 +1705,16 @@ def handle_lai_input_type(dialog, text, previous=""):
         dialog._restore_categorical_mode("lai", previous)
         return
     normalized = str(text or "").strip().lower()
-    if "netcdf" in normalized:
+    if normalized == "mhm ready":
+        if not _ready_grid(dialog, "lai", previous):
+            return
+        input_dialog = MhmReadyInputDialog(
+            dialog.project_folder,
+            "lai",
+            dialog,
+            initial=dialog._categorical_ready_configs.get("lai"),
+        )
+    elif "netcdf" in normalized:
         input_dialog = LaiNetcdfInputDialog(
             dialog.project_folder,
             dialog,
@@ -1677,13 +1733,19 @@ def handle_lai_input_type(dialog, text, previous=""):
         dialog._restore_categorical_mode("lai", previous)
         return
     config = input_dialog.selected_config()
-    if "netcdf" in normalized:
+    if normalized == "mhm ready":
+        dialog._categorical_ready_configs["lai"] = _source_values(config)
+        dialog._categorical_lookup_configs.pop("lai", None)
+        dialog._lai_input_config = {}
+    elif "netcdf" in normalized:
         dialog._lai_input_config = {
             "input_path": config.input_path,
             "target_timestep": config.target_timestep,
+            "variable": config.variable,
+            "source_crs": config.source_crs,
         }
         dialog._categorical_lookup_configs.pop("lai", None)
-        from ...applications.mhm_tools_handler import lai_time_step
+        from ...externals.mhm_tools_handler import lai_time_step
         from ...core.handlers.state.nml_settings import update_section
 
         update_section(
@@ -1692,7 +1754,7 @@ def handle_lai_input_type(dialog, text, previous=""):
             {
                 "mode": "netcdf",
                 "source_path": config.input_path,
-                "source_variable": "",
+                "source_variable": config.variable,
                 "target_timestep": config.target_timestep,
                 "time_step": lai_time_step(config.target_timestep),
                 "output_path": os.path.relpath(os.path.join(lai_folder(dialog.project_folder), "lai.nc"), workspace_folder(dialog.project_folder)).replace("\\", "/"),
@@ -1705,6 +1767,8 @@ def handle_lai_input_type(dialog, text, previous=""):
             "lookup_table": config.lookup_table,
             "mapping_field": config.mapping_field,
             "class_field": config.class_field,
+            "variable": config.variable,
+            "source_crs": config.source_crs,
         }
         dialog._lai_input_config = {}
         from ...core.handlers.state.nml_settings import update_section
@@ -1721,6 +1785,8 @@ def handle_lai_input_type(dialog, text, previous=""):
     dialog._categorical_modes["lai"] = str(text)
     dialog.save_input_state()
     dialog.invalidate_execute_all_meteo()
+    if normalized == "mhm ready":
+        _start_ready_input(dialog, "lai")
 
 
 def handle_land_use_input_type(dialog, text, previous=""):
@@ -1735,6 +1801,8 @@ def handle_land_use_input_type(dialog, text, previous=""):
         return
     normalized = str(text).strip().lower()
     if normalized == "mhm ready":
+        if not _ready_grid(dialog, "lc", previous):
+            return
         input_dialog = MhmReadyInputDialog(
             dialog.project_folder,
             "lc",
@@ -1747,10 +1815,7 @@ def handle_land_use_input_type(dialog, text, previous=""):
             dialog._restore_categorical_mode("lc", previous)
             return
         config = input_dialog.selected_config()
-        dialog._categorical_ready_configs["lc"] = {
-            "input_path": config.input_path,
-            "classdefinition_path": "",
-        }
+        dialog._categorical_ready_configs["lc"] = _source_values(config)
         dialog._categorical_lookup_configs.pop("lc", None)
         dialog._advanced_inputs.pop("land_cover", None)
         dialog._land_cover_ready_source = config.input_path
@@ -1772,6 +1837,8 @@ def handle_land_use_input_type(dialog, text, previous=""):
             "lookup_table": config.lookup_table,
             "mapping_field": config.mapping_field,
             "class_field": config.class_field,
+            "variable": config.variable,
+            "source_crs": config.source_crs,
         }
         dialog._categorical_ready_configs.pop("lc", None)
         dialog._advanced_inputs.pop("land_cover", None)
@@ -1797,6 +1864,8 @@ def handle_land_use_input_type(dialog, text, previous=""):
     dialog.save_input_state()
     dialog.invalidate_execute_all_meteo()
     dialog.refresh_morphology_date_control()
+    if normalized == "mhm ready":
+        _start_ready_input(dialog, "lc")
 
 
 def handle_multi_horizon_soil_input(dialog, text, previous=""):

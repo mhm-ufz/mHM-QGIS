@@ -153,9 +153,44 @@ def test_the_v6_namelist_points_at_the_new_locations(tmp_path):
     assert config_input["latlon_path"][0] == "data/master/latlon.nc"
     assert config_input["pre_path"][0] == "data/master/meteo/pre.nc"
     assert config_input["meteo_mask_path"][0] == "data/master/meteo/mask.nc"
-    # LAI classes are not produced yet, so the key names nothing.
+    # Without a categorical LAI selection the optional class path stays empty.
     assert config_input["lai_class_path"][0] == ""
     mpr = values["config_mpr"]
     assert mpr["land_cover_path"][0] == "data/master/morph/lc_periods.nc"
     assert mpr["soil_lut_path"][0] == "data/master/morph/soil_classdefinition.txt"
     assert mpr["geo_lut_path"][0] == "data/master/morph/geology_classdefinition.txt"
+
+
+def test_v6_ready_lai_points_at_the_morphology_bundle(tmp_path):
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+    from mhm_qgis.vSpecific import build_initial_values
+
+    _project(tmp_path, "6.0")
+    update_section(tmp_path, "lai", {
+        "mode": "mhm_ready",
+        "time_step": 0,
+        "output_path": "data/master/morph/LAI_class.nc",
+        "classdefinition_path": "data/master/morph/LAI_classdefinition.txt",
+    })
+
+    class _Dialog:
+        project_folder = str(tmp_path)
+
+        def current_l1_resolution(self):
+            return 1000
+
+        def current_l11_resolution(self):
+            return 2000
+
+        def current_grid_unit(self):
+            return "m"
+
+    main = build_initial_values("6.0", _Dialog())["main"]
+    assert main["config_input"]["lai_class_path"] == [
+        "data/master/morph/input.nc"
+    ]
+    assert main["config_input"]["lai_class_var"] == ["LAI_class"]
+    assert main["config_mpr"]["lai_time_step"] == [0]
+    assert main["config_mpr"]["lai_lut_path"] == [
+        "data/master/morph/LAI_classdefinition.txt"
+    ]
