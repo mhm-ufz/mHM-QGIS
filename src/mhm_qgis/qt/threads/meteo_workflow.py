@@ -11,6 +11,7 @@ class MeteorologyWorkflowWorker(QtCore.QObject):
     """Run only the QGIS-free meteorology phase in a worker thread."""
 
     log_message = QtCore.pyqtSignal(str)
+    progress = QtCore.pyqtSignal(int)
     finished = QtCore.pyqtSignal(str, bool, str)
 
     def __init__(
@@ -37,6 +38,7 @@ class MeteorologyWorkflowWorker(QtCore.QObject):
                 self.meteorology_run,
                 self.meteorology_state,
                 log=self.log_message.emit,
+                progress=self.progress.emit,
             )
             self.finished.emit(self.workflow_key, ok, "")
         except Exception as exc:

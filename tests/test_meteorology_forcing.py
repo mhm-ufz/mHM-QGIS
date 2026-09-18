@@ -300,3 +300,104 @@ def test_execute_meteo_prepares_and_reuses_the_configured_collection(tmp_path, m
     assert not (root / "data/meteo/tmin.nc").exists()
     monkeypatch.setattr(meteo, "process_meteo_inputs", lambda **kwargs: pytest.fail("reused forcing was rebuilt"))
     assert meteo.prepare_forcing(run, state)
+
+
+def test_interval_batching_does_not_change_the_written_values(tmp_path, monkeypatch):
+    """Batching exists only to stop one resample and one file append per day."""
+    from mhm_qgis.core.meteorology.forcing import api
+
+    hours = 24 * 7
+    times = np.datetime64("2001-01-01T00") + np.arange(hours) * np.timedelta64(1, "h")
+    values = np.broadcast_to(
+        np.arange(hours, dtype=float)[:, None, None], (hours, 2, 2)).astype(float)
+    _write_nc(tmp_path / "raw/pre.nc", "pre", times=times, values=values, units="mm")
+    spec = MeteoFolderSpec(
+        "pre", tmp_path / "raw", unit="mm", temporal_resolution="Hourly",
+        output_temporal_resolution="Daily", aggregation="Sum")
+
+    written = {}
+    ticks = []
+    for label, batch in (("one", 1), ("many", 256)):
+        monkeypatch.setattr(api, "INTERVAL_BATCH", batch)
+        result = process_meteo_inputs(
+            [spec], tmp_path / label, target(), progress=ticks.append)
+        with xr.open_dataset(result.outputs["pre"]) as ds:
+            written[label] = (ds["pre"].values.copy(), ds["time"].values.copy(),
+                              ds["time_bnds"].values.copy())
+
+    assert written["one"][0].shape[0] == 7
+    for one, many in zip(written["one"], written["many"]):
+        np.testing.assert_array_equal(one, many)
+    assert ticks and ticks[-1] == 100
+
+
+def test_calendar_interval_keys_and_bounds():
+    """numpy calendar units must floor exactly where pandas offsets did."""
+    from mhm_qgis.core.meteorology.forcing.temporal import output_periods, period_bounds
+
+    starts = np.array([
+        "1980-02-29T13:45", "2000-02-28T23:59", "2001-12-31T23:00",
+        "2024-04-30T12:00", "1969-12-31T23:00", "1901-03-15T07:30",
+    ], dtype="datetime64[ns]")
+    expected = {
+        "Hourly": (["1980-02-29T13:00", "2000-02-28T23:00", "2001-12-31T23:00",
+                    "2024-04-30T12:00", "1969-12-31T23:00", "1901-03-15T07:00"],
+                   ["1980-02-29T14:00", "2000-02-29T00:00", "2002-01-01T00:00",
+                    "2024-04-30T13:00", "1970-01-01T00:00", "1901-03-15T08:00"]),
+        "Daily": (["1980-02-29", "2000-02-28", "2001-12-31",
+                   "2024-04-30", "1969-12-31", "1901-03-15"],
+                  ["1980-03-01", "2000-02-29", "2002-01-01",
+                   "2024-05-01", "1970-01-01", "1901-03-16"]),
+        # The month and year ends are where the pandas offsets earned their keep.
+        "Monthly": (["1980-02-01", "2000-02-01", "2001-12-01",
+                     "2024-04-01", "1969-12-01", "1901-03-01"],
+                    ["1980-03-01", "2000-03-01", "2002-01-01",
+                     "2024-05-01", "1970-01-01", "1901-04-01"]),
+        "Yearly": (["1980-01-01", "2000-01-01", "2001-01-01",
+                    "2024-01-01", "1969-01-01", "1901-01-01"],
+                   ["1981-01-01", "2001-01-01", "2002-01-01",
+                    "2025-01-01", "1970-01-01", "1902-01-01"]),
+    }
+    for cadence, (want_start, want_end) in expected.items():
+        keys = output_periods(starts, cadence)
+        start, end = period_bounds(keys)
+        np.testing.assert_array_equal(start, np.array(want_start, dtype="datetime64[ns]"))
+        np.testing.assert_array_equal(end, np.array(want_end, dtype="datetime64[ns]"))
+        # Distinct inputs inside one interval must share a key.
+        assert output_periods(starts[:1], cadence)[0] == keys[0]
+
+
+@pytest.mark.parametrize("method", ["Maximum", "Minimum", "Sum", "Average"])
+@pytest.mark.parametrize("cadence,expect", [("Daily", 3), ("Monthly", 1)])
+def test_group_reduction_matches_a_plain_python_reference(method, cadence, expect, tmp_path):
+    """The reshape path and the uneven-group path must agree with the obvious loop."""
+    hours = 24 * 3
+    times = np.datetime64("2001-01-01T00") + np.arange(hours) * np.timedelta64(1, "h")
+    values = np.arange(hours * 4, dtype="float64").reshape(hours, 2, 2)
+    values[7, 0, 0] = np.nan          # a hole inside one interval
+    values[24:48, 1, 1] = np.nan      # a whole interval with no valid sample
+    _write_nc(tmp_path / "raw/pre.nc", "pre", times=times, values=values, units="mm")
+    spec = MeteoFolderSpec(
+        "pre", tmp_path / "raw", unit="mm", temporal_resolution="Hourly",
+        output_temporal_resolution=cadence, aggregation=method)
+    result = process_meteo_inputs([spec], tmp_path / "out", target())
+
+    reduce = {"Maximum": np.nanmax, "Minimum": np.nanmin,
+              "Sum": np.nansum, "Average": np.nanmean}[method]
+    span = 24 if cadence == "Daily" else hours
+    reference = []
+    for start in range(0, hours, span):
+        group = values[start:start + span]
+        with np.errstate(all="ignore"):
+            plane = reduce(group, axis=0)
+        # An interval with no valid sample is nodata, not zero.
+        reference.append(np.where(np.isfinite(group).any(axis=0), plane, np.nan))
+    reference = np.stack(reference)
+
+    # Masking on: an interval with no valid sample is stored as _FillValue.
+    with xr.open_dataset(result.outputs["pre"]) as ds:
+        assert ds.sizes["time"] == expect == reference.shape[0]
+        written = ds["pre"].values
+    np.testing.assert_array_equal(np.isnan(written), np.isnan(reference))
+    np.testing.assert_allclose(written[~np.isnan(written)],
+                               reference[~np.isnan(reference)])

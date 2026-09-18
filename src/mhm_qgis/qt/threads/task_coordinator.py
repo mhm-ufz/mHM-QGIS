@@ -1,6 +1,7 @@
 """Bounded QGIS task queue shared by plugin preprocessing tasks."""
 from __future__ import annotations
 
+import threading
 import traceback
 from dataclasses import dataclass, field
 
@@ -251,7 +252,9 @@ class TaskCoordinator(QtCore.QObject):
         def run(task):
             if task.isCanceled():
                 return _CANCELLED
-            return runner(task) if task_aware else runner()
+            return _off_qthread(
+                (lambda: runner(task)) if task_aware else runner
+            )
 
         def finished(exception, result=None):
             if task.isCanceled():
@@ -340,6 +343,33 @@ class TaskCoordinator(QtCore.QObject):
 
 
 _CANCELLED = object()
+
+
+def _off_qthread(work):
+    """Run `work` on a plain thread and return its result, re-raising failures.
+
+    pyproj must never be called from a `QgsTask` thread. QGIS keeps its PROJ
+    context in thread-local storage and tears it down when a task thread ends,
+    which leaves libproj's cached database context dangling for the next pooled
+    thread; the second `proj_create` then segfaults the whole QGIS process
+    (`projCppContext::getDatabaseContext`). A short-lived Python thread gets a
+    clean context, and every background job goes through here, so no plugin
+    code has to know. `isCanceled()` and `setProgress()` stay safe from it.
+    """
+    outcome = {}
+
+    def call():
+        try:
+            outcome["value"] = work()
+        except BaseException as error:  # re-raised on the QgsTask thread
+            outcome["error"] = error
+
+    thread = threading.Thread(target=call, daemon=True)
+    thread.start()
+    thread.join()
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["value"]
 
 
 __all__ = ["TaskCoordinator", "TaskRecord"]

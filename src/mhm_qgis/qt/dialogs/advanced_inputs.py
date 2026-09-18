@@ -24,6 +24,7 @@ from .input_selection import (
     loaded_qgis_items,
     scan_project_inputs,
 )
+from .file_picker import open_file
 
 
 from qgis.PyQt import QtWidgets  # noqa: E402
@@ -83,10 +84,9 @@ class _DynamicInputDialogMixin:
     def _browse_raster(self, adapter: InputComboAdapter, kind: str) -> None:
         extensions = sorted(INPUT_EXTENSIONS[kind] - {".shp"})
         patterns = " ".join(f"*{extension}" for extension in extensions)
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+        path, _ = open_file(
             self,
             "Select Raster Layer",
-            str(self.project_folder),
             f"Raster files ({patterns});;All files (*)",
         )
         if path:

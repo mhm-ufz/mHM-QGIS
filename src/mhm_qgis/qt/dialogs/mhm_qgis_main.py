@@ -10,7 +10,7 @@ from pathlib import Path
 # QGIS and PyQt imports
 from qgis.core import QgsApplication, QgsMapLayer, QgsProject, QgsRasterLayer
 from qgis.PyQt import QtCore
-from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 
 from ..threads.meteo_workflow import MeteorologyWorkflowWorker
@@ -799,8 +799,20 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         QMessageBox.critical(self, "Domain Delineator", error_detail(message))
 
     def morphology_workflow_specs(self):
-        """Return metadata for threaded morphology workflows."""
+        """Return metadata for persisted workflow buttons."""
         return {
+            "project_structure": {
+                "button": "pushButton_createProjectStructure",
+                "label": "Project Structure",
+                "completed_message": "Project structure is ready.",
+                "failed_message": "Project structure setup failed.",
+            },
+            "scan_precipitation": {
+                "button": "pushButton_scanPrecipitationFiles",
+                "label": "Precipitation Scan",
+                "completed_message": "Precipitation scan completed.",
+                "failed_message": "Precipitation scan failed.",
+            },
             "execute_all": {
                 "button": "pushButton_executeAllMorphology",
                 "fallback_button": "pushButton_executeAllMorphology",
@@ -826,6 +838,18 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                     "Meteorology preparation failed. "
                     "Check the log for details."
                 ),
+            },
+            "execute_all_observations": {
+                "button": "pushButton_executeAllObservation",
+                "label": "Observation Preparation",
+                "completed_message": "Observation preparation completed.",
+                "failed_message": "Observation preparation failed.",
+            },
+            "run_mhm": {
+                "button": "pushButton_execute_mHM",
+                "label": "Run mHM",
+                "completed_message": "mHM completed successfully.",
+                "failed_message": "mHM execution failed.",
             },
         }
 
@@ -931,6 +955,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
         self.log_selected_input_paths(spec["action_name"])
         self.save_input_state()
+        main_controller.invalidate_workflows(self, "run_mhm")
         processing_state.mark_workflow(self.project_folder, workflow_key, "running")
         self.set_morphology_workflow_button_state(workflow_key, "running")
         if workflow_key == "execute_all_meteo":
@@ -968,6 +993,11 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         worker.log_message.connect(
             lambda message, key=workflow_key: self.task_coordinator.append_log(
                 f"workflow-{key}", message
+            )
+        )
+        worker.progress.connect(
+            lambda value, key=workflow_key: self.task_coordinator.set_progress(
+                f"workflow-{key}", value
             )
         )
         thread.start()
@@ -1042,6 +1072,10 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             self.project_folder, "workflows", workflow_key
         )
         self.set_morphology_workflow_button_state(workflow_key, "")
+        processing_state.remove_entry(
+            self.project_folder, "workflows", "run_mhm"
+        )
+        self.set_morphology_workflow_button_state("run_mhm", "")
 
     def set_meteo_setup_controls_enabled(self, *args, **kwargs):
         return main_controller.set_meteo_setup_controls_enabled(self, *args, **kwargs)
@@ -1049,8 +1083,14 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def done(self, result):
         """Guard window close, Escape and dialog buttons while work is running."""
         running_key = self.running_morphology_workflow_key()
-        if running_key is not None or self.task_coordinator.is_busy():
-            spec = self.morphology_workflow_specs().get(running_key, {})
+        terminal_busy = (
+            self._terminal_dialog is not None
+            and self._terminal_dialog.command_running()
+        )
+        if running_key is not None or self.task_coordinator.is_busy() or terminal_busy:
+            spec = self.morphology_workflow_specs().get(
+                running_key or ("run_mhm" if terminal_busy else ""), {}
+            )
             QMessageBox.warning(
                 self,
                 spec.get("label", "Morphology Processing"),
@@ -1390,7 +1430,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             "meteo_inputs": self.serialized_meteo_inputs(),
             "observation_inputs": self._observation_inputs,
             "pour_point_outlet_id_field": self.selected_outlet_id_field(),
-            "dem_domain": self.checkBox_DEMdomain.isChecked(),
             "domain_definition_type": self.comboBox_domainDefinitionType.currentText().strip(),
             "crs_authid": crs.authid() if crs and crs.isValid() else "",
             "project_layout": {
@@ -1542,9 +1581,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.comboBox_pourPointOutletID.clear()
         self.comboBox_pourPointOutletID.addItem("")
         self.comboBox_pourPointOutletID.blockSignals(False)
-        self.checkBox_DEMdomain.blockSignals(True)
-        self.checkBox_DEMdomain.setChecked(False)
-        self.checkBox_DEMdomain.blockSignals(False)
         self.comboBox_domainDefinitionType.blockSignals(True)
         self.comboBox_domainDefinitionType.setCurrentIndex(-1)
         self.comboBox_domainDefinitionType.blockSignals(False)
@@ -1587,16 +1623,15 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.task_coordinator.set_max_threads(2)
 
     def restore_domain_inputs(self, state):
-        """Restore the selected outlet ID field and DEM-domain flag."""
+        """Restore the selected outlet ID field and domain mode."""
         self.populate_pour_point_outlet_fields(
             preferred=str(state.get("pour_point_outlet_id_field", "") or "")
         )
-        self.checkBox_DEMdomain.blockSignals(True)
-        self.checkBox_DEMdomain.setChecked(bool(state.get("dem_domain", False)))
-        self.checkBox_DEMdomain.blockSignals(False)
         combo = self.comboBox_domainDefinitionType
         if combo is not None:
             text = str(state.get("domain_definition_type", "") or "")
+            if not text and state.get("dem_domain"):
+                text = combo.itemText(0)
             combo.blockSignals(True)
             combo.setCurrentIndex(combo.findText(text) if text else -1)
             combo.blockSignals(False)

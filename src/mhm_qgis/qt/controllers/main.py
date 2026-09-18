@@ -11,8 +11,7 @@ import os
 from pathlib import Path
 
 from qgis.PyQt.QtCore import QDate, QDateTime, QSignalBlocker
-from qgis.PyQt.QtWidgets import (QComboBox, QDialog, QFileDialog,
-                                 QMessageBox)
+from qgis.PyQt.QtWidgets import QComboBox, QDialog, QMessageBox
 
 from ...core.grid import (
     crs_equal,
@@ -40,6 +39,7 @@ from ...core.handlers.store.paths import (
     data_folder, master_data_folder, plugin_root, version_key, workspace_folder,
 )
 from ..reporting import error_detail
+from ..dialogs.file_picker import open_directory, open_file
 
 
 TIME_WIDGETS = {
@@ -65,6 +65,7 @@ def create_project_structure(dialog):
         return
     if domain_switch_busy(dialog):
         return
+    active_domain = False
     try:
         from ...core.handlers.store.paths import domain_folder
         from ...core.handlers.state import settings
@@ -95,6 +96,8 @@ def create_project_structure(dialog):
             dialog._domain_delineator_dialog.close()
             dialog._domain_delineator_dialog = None
         dialog.project_folder = str(path)
+        active_domain = True
+        set_workflow_status(dialog, "project_structure", "running")
         dialog.geometry_folder = None
         dialog.project_settings = project_settings
         dialog.load_input_state()
@@ -107,15 +110,29 @@ def create_project_structure(dialog):
         dialog.refresh_morphology_workflow_button_states()
         dialog.save_input_state()
         populate_domain_folders(dialog, path.name)
+        set_workflow_status(dialog, "project_structure", "completed")
         from ..dialogs.project_folder_tree import ProjectFolderTreeDialog
         ProjectFolderTreeDialog(dialog.project_folder, dialog).exec()
     except (OSError, ValueError) as error:
+        if active_domain:
+            set_workflow_status(
+                dialog, "project_structure", "failed", str(error)
+            )
+        else:
+            dialog.set_morphology_workflow_button_state(
+                "project_structure", "failed"
+            )
         QMessageBox.warning(dialog, "Project structure", str(error))
 
 
 def domain_switch_busy(dialog):
     """Keep asynchronous results attached to the domain that started them."""
-    if dialog.task_coordinator.is_busy() or dialog.running_morphology_workflow_key():
+    terminal = getattr(dialog, "_terminal_dialog", None)
+    if (
+        dialog.task_coordinator.is_busy()
+        or dialog.running_morphology_workflow_key()
+        or (terminal is not None and terminal.command_running())
+    ):
         QMessageBox.warning(dialog, "Domain selection", "Finish or cancel running tasks before switching domains.")
         return True
     return False
@@ -138,7 +155,7 @@ def select_project_folder(dialog):
     """Choose an outer project without touching its legacy workspace or states."""
     if domain_switch_busy(dialog):
         return
-    directory = QFileDialog.getExistingDirectory(dialog, "Select Project Folder")
+    directory = open_directory(dialog, "Select Project Folder")
     if not directory:
         return
     dialog.save_input_state()
@@ -147,6 +164,8 @@ def select_project_folder(dialog):
         dialog._domain_delineator_dialog = None
     dialog.project_directory = directory
     dialog.project_folder = None
+    for key in dialog.morphology_workflow_specs():
+        dialog.set_morphology_workflow_button_state(key, "")
     dialog.lineEdit_ProjectFolder.setText(directory)
     dialog._loading_input_state = True
     try:
@@ -197,9 +216,35 @@ def invalidate_grid(dialog):
     dialog._grid_l2_header = None
     if dialog.project_folder:
         processing.overlay(dialog.project_folder, {"grid": {}})
-        processing.mark_workflow(dialog.project_folder, "execute_all", "pending")
-        processing.mark_workflow(dialog.project_folder, "execute_all_meteo", "pending")
+        invalidate_workflows(
+            dialog,
+            "scan_precipitation",
+            "execute_all",
+            "execute_all_meteo",
+            "execute_all_observations",
+            "run_mhm",
+        )
     dialog.update_extent_labels()
+
+
+def set_workflow_status(dialog, key, status, message=""):
+    """Persist one workflow status and reflect it on its button."""
+    if dialog.project_folder:
+        processing.mark_workflow(dialog.project_folder, key, status, message)
+    setter = getattr(dialog, "set_morphology_workflow_button_state", None)
+    if setter is not None:
+        setter(key, status)
+
+
+def invalidate_workflows(dialog, *keys):
+    """Clear completed styling for workflows made stale by an input change."""
+    if getattr(dialog, "_loading_input_state", False) or not dialog.project_folder:
+        return
+    for key in keys:
+        processing.mark_workflow(dialog.project_folder, key, "pending")
+        setter = getattr(dialog, "set_morphology_workflow_button_state", None)
+        if setter is not None:
+            setter(key, "")
 
 
 def grid_fingerprint(dialog):
@@ -249,6 +294,9 @@ def edit_meteo_input(dialog, variable=None):
     if prompt.exec() != QDialog.DialogCode.Accepted:
         return
     spec = replace(prompt.spec, crs=dialog.selected_meteo_crs() or None)
+    if variable == "pre":
+        set_workflow_status(dialog, "scan_precipitation", "running")
+
     def scanned(metadata):
         data = asdict(spec)
         data["folder"] = str(spec.folder)
@@ -264,14 +312,26 @@ def edit_meteo_input(dialog, variable=None):
         dialog.invalidate_execute_all_meteo()
         populate_meteo_table(dialog)
         dialog.save_input_state()
-    dialog.task_coordinator.submit(
+
+    def failed(error):
+        if variable == "pre":
+            set_workflow_status(
+                dialog, "scan_precipitation", "failed", str(error)
+            )
+        QMessageBox.warning(dialog, "Meteorology scan", str(error))
+
+    started = dialog.task_coordinator.submit(
         f"meteo-scan-{variable}", f"Scan {variable}",
         partial(inspect_meteo_folder_cached, dialog.project_folder, spec),
         controls=(dialog.tabWidget_steps, dialog.pushButton_BrowseProjectFolder,
                   dialog.comboBox_domainFolderSelector, dialog.pushButton_createProjectStructure),
-        on_success=scanned,
-        on_error=lambda error: QMessageBox.warning(dialog, "Meteorology scan", str(error)),
+        on_success=scanned, on_error=failed,
         resource="morphology-files")
+    if variable == "pre" and not started:
+        set_workflow_status(
+            dialog, "scan_precipitation", "failed", "Scan is already running."
+        )
+    return started
 
 
 def populate_meteo_table(dialog):
@@ -332,6 +392,9 @@ def edit_observation_input(dialog, variable=None):
         data["folder"] = str(spec.folder)
         dialog._observation_inputs[variable] = data
         dialog._observation_inspections[variable] = metadata
+        invalidate_workflows(
+            dialog, "execute_all_observations", "run_mhm"
+        )
         populate_observation_table(dialog)
         dialog.save_input_state()
 
@@ -367,26 +430,32 @@ def start_execute_all_observations(dialog):
             inspections={key: dialog._observation_inspections[key]
                          for key in dialog._observation_inputs
                          if key in dialog._observation_inspections} or None)
-        processing.mark_workflow(dialog.project_folder, "execute_all_observations", "running")
+        set_workflow_status(dialog, "execute_all_observations", "running")
+        invalidate_workflows(dialog, "run_mhm")
     except (OSError, ValueError) as error:
         QMessageBox.warning(dialog, "Observation setup", str(error))
         return False
 
     def completed(_result):
-        processing.mark_workflow(
-            dialog.project_folder, "execute_all_observations", "completed")
+        set_workflow_status(
+            dialog, "execute_all_observations", "completed"
+        )
         dialog.log_message("Observation preparation completed.")
 
     def failed(error):
-        processing.mark_workflow(
-            dialog.project_folder, "execute_all_observations", "failed", str(error))
+        set_workflow_status(
+            dialog, "execute_all_observations", "failed", str(error)
+        )
         QMessageBox.warning(dialog, "Observation setup", str(error))
 
-    return dialog.task_coordinator.submit(
+    started = dialog.task_coordinator.submit(
         "execute-all-observations", "Prepare observations",
         partial(prepare, run),
         controls=(dialog.tabWidget_steps, dialog.pushButton_executeAllObservation),
         on_success=completed, on_error=failed, resource="morphology-files")
+    if not started:
+        failed("Observation preparation is already running.")
+    return started
 
 
 def precipitation_scanned(dialog, metadata):
@@ -418,9 +487,15 @@ def precipitation_scanned(dialog, metadata):
                     getattr(dialog, name).setDateTime(value)
             save_simulation_times(dialog)
         dialog.log_message(f"Scanned {len(metadata.files)} precipitation files ({metadata.source}); common grid saved.")
+        set_workflow_status(dialog, "scan_precipitation", "completed")
+        return True
     except (OSError, ValueError) as error:
         invalidate_grid(dialog)
+        set_workflow_status(
+            dialog, "scan_precipitation", "failed", str(error)
+        )
         QMessageBox.warning(dialog, "Common grid", str(error))
+        return False
 
 
 DISPLAY_KEYS = (
@@ -491,6 +566,7 @@ def handle_version_changed(dialog) -> None:
     """Prepare the selected project layout and persist the selection."""
     if dialog.project_folder:
         ensure_project_structure(dialog.project_folder, selected_version(dialog))
+        invalidate_workflows(dialog, "run_mhm")
         refresh = getattr(dialog, "refresh_advanced_nml_settings", None)
         if refresh is not None:
             refresh()
@@ -541,17 +617,46 @@ def run_mhm(dialog) -> bool:
     """Run mHM in the selected project folder through its terminal."""
     if not _ensure_project_folder(dialog):
         return False
-    ensure_project_structure(dialog.project_folder, selected_version(dialog))
-    workspace = workspace_folder(dialog.project_folder)
-    terminal = dialog.open_project_terminal()
-    if terminal is None:
-        return False
-    dialog.log_message(f"Running mHM in project directory: {workspace}")
+    project_folder = dialog.project_folder
+
+    def finished(exit_code):
+        if exit_code == 0:
+            processing.mark_workflow(project_folder, "run_mhm", "completed")
+            setter = getattr(dialog, "set_morphology_workflow_button_state", None)
+            if dialog.project_folder == project_folder and setter is not None:
+                setter("run_mhm", "completed")
+            dialog.log_message("mHM completed successfully.")
+            return
+        message = f"mHM exited with code {exit_code}."
+        processing.mark_workflow(
+            project_folder, "run_mhm", "failed", message
+        )
+        setter = getattr(dialog, "set_morphology_workflow_button_state", None)
+        if dialog.project_folder == project_folder and setter is not None:
+            setter("run_mhm", "failed")
+        dialog.log_message(f"ERROR: {message}")
+
     try:
         from ...externals.mhm_handler import run
 
-        return run(selected_version(dialog), workspace, terminal.run_command)
-    except (FileNotFoundError, PermissionError) as error:
+        ensure_project_structure(project_folder, selected_version(dialog))
+        workspace = workspace_folder(project_folder)
+        terminal = dialog.open_project_terminal()
+        if terminal is None:
+            raise RuntimeError("Could not open the project terminal.")
+        dialog.log_message(f"Running mHM in project directory: {workspace}")
+        set_workflow_status(dialog, "run_mhm", "running")
+        started = run(
+            selected_version(dialog),
+            workspace,
+            terminal.run_command,
+            on_finished=finished,
+        )
+        if not started:
+            finished(-1)
+        return started
+    except (OSError, ValueError, RuntimeError) as error:
+        set_workflow_status(dialog, "run_mhm", "failed", str(error))
         dialog.log_message(f"ERROR: Run mHM failed. Details: {error}")
         QMessageBox.critical(dialog, "mHM Execution Error", str(error))
         return False
@@ -846,11 +951,7 @@ def _add_folder_combo_item(dialog, combo, folder):
 
 def browse_meteo_input_folder(dialog, kind):
     """Browse for, add, and select one meteorology input folder."""
-    folder = QFileDialog.getExistingDirectory(
-        dialog,
-        f"Select {kind.title()} Data Folder",
-        dialog.selected_meteo_folder(kind) or dialog.project_folder or "",
-    )
+    folder = open_directory(dialog, f"Select {kind.title()} Data Folder")
     if not folder:
         return
     for input_kind, combo, _ in dialog.meteo_input_widgets():
@@ -954,10 +1055,9 @@ def browse_input_file(dialog, kind):
     patterns = " ".join(
         f"*{suffix}" for suffix in sorted(INPUT_EXTENSIONS[kind])
     )
-    path, _ = QFileDialog.getOpenFileName(
+    path, _ = open_file(
         dialog,
         f"Select {kind.replace('_', ' ').title()} Input",
-        dialog.project_folder or "",
         f"Supported files ({patterns});;All files (*)",
     )
     if not path:
@@ -1421,18 +1521,15 @@ def handle_domain_definition_type(dialog, index):
     if dialog._loading_input_state:
         return
     previous = dialog._domain_definition_mode
-    previous_dem = dialog.checkBox_DEMdomain.isChecked()
     if int(index) == 1:
         dialog._domain_definition_mode = dialog.comboBox_domainDefinitionType.currentText()
         dialog.save_input_state()
         dialog.open_domain_delineator()
         return
-    dialog.checkBox_DEMdomain.setChecked(True)
     if dialog.open_domain_assignment():
         dialog._domain_definition_mode = dialog.comboBox_domainDefinitionType.currentText()
         dialog.save_input_state()
         return
-    dialog.checkBox_DEMdomain.setChecked(previous_dem)
     combo = dialog.comboBox_domainDefinitionType
     combo.blockSignals(True)
     combo.setCurrentIndex(combo.findText(previous) if previous else -1)
@@ -1617,6 +1714,37 @@ def _start_ready_input(dialog, kind):
     )
 
 
+def _single_layer_defaults(dialog, kind, config):
+    adapter = dialog.input_combo("land_cover" if kind == "lc" else kind)
+    initial = dict(config or {})
+    initial.setdefault("input_path", adapter.source_path())
+    data = adapter.currentData()
+    layer = (
+        adapter.currentLayer()
+        if isinstance(data, dict) and data.get("origin") == "qgis"
+        else None
+    )
+    return initial, layer
+
+
+def _adopt_single_layer_source(dialog, kind, input_dialog):
+    """Keep the main source combo aligned with its accepted child dialog."""
+    if not hasattr(input_dialog, "comboBox_inputLayer"):
+        return
+    adapter = dialog.input_combo("land_cover" if kind == "lc" else kind)
+    data = input_dialog.comboBox_inputLayer.currentData()
+    if isinstance(data, dict) and data.get("origin") == "qgis":
+        adapter.setLayer(input_dialog.input_adapter.currentLayer())
+        return
+    if not isinstance(data, dict):
+        data = {"origin": "file", "path": input_dialog.selected_config().input_path}
+    index = _matching_input_index(adapter.combo_box, data)
+    if index < 0:
+        adapter.addItem(input_dialog.comboBox_inputLayer.currentText(), data)
+        index = adapter.count() - 1
+    adapter.setCurrentIndex(index)
+
+
 def handle_categorical_type(dialog, kind, text):
     """Open the lookup dialog immediately when lookup mode is selected."""
     text = str(text or "").strip()
@@ -1653,11 +1781,15 @@ def handle_categorical_type(dialog, kind, text):
             initial=dialog._categorical_ready_configs.get(kind),
         )
     elif "lookup table" in normalized:
+        initial, initial_layer = _single_layer_defaults(
+            dialog, kind, dialog._categorical_lookup_configs.get(kind)
+        )
         input_dialog = SingleLayerInputDialog(
             dialog.project_folder,
             kind,
             dialog,
-            initial=dialog._categorical_lookup_configs.get(kind),
+            initial=initial,
+            initial_layer=initial_layer,
         )
     else:
         dialog._categorical_modes[kind] = text
@@ -1675,13 +1807,14 @@ def handle_categorical_type(dialog, kind, text):
         dialog._categorical_ready_configs[kind] = _source_values(config)
         dialog._categorical_lookup_configs.pop(kind, None)
     else:
+        _adopt_single_layer_source(dialog, kind, input_dialog)
         dialog._categorical_lookup_configs[kind] = {
             "input_path": config.input_path,
             "lookup_table": config.lookup_table,
             "mapping_field": config.mapping_field,
             "class_field": config.class_field,
-            "variable": config.variable,
-            "source_crs": config.source_crs,
+            "variable": getattr(config, "variable", ""),
+            "source_crs": getattr(config, "source_crs", ""),
         }
         dialog._categorical_ready_configs.pop(kind, None)
     dialog._categorical_modes[kind] = text
@@ -1721,11 +1854,15 @@ def handle_lai_input_type(dialog, text, previous=""):
             initial=dialog._lai_input_config,
         )
     else:
+        initial, initial_layer = _single_layer_defaults(
+            dialog, "lai", dialog._categorical_lookup_configs.get("lai")
+        )
         input_dialog = SingleLayerInputDialog(
             dialog.project_folder,
             "lai",
             dialog,
-            initial=dialog._categorical_lookup_configs.get("lai"),
+            initial=initial,
+            initial_layer=initial_layer,
         )
     if _exec_dialog(input_dialog) != QDialog.DialogCode.Accepted or (
         input_dialog.selected_config() is None
@@ -1741,8 +1878,8 @@ def handle_lai_input_type(dialog, text, previous=""):
         dialog._lai_input_config = {
             "input_path": config.input_path,
             "target_timestep": config.target_timestep,
-            "variable": config.variable,
-            "source_crs": config.source_crs,
+            "variable": getattr(config, "variable", ""),
+            "source_crs": getattr(config, "source_crs", ""),
         }
         dialog._categorical_lookup_configs.pop("lai", None)
         from ...externals.mhm_tools_handler import lai_time_step
@@ -1762,13 +1899,14 @@ def handle_lai_input_type(dialog, text, previous=""):
             },
         )
     else:
+        _adopt_single_layer_source(dialog, "lai", input_dialog)
         dialog._categorical_lookup_configs["lai"] = {
             "input_path": config.input_path,
             "lookup_table": config.lookup_table,
             "mapping_field": config.mapping_field,
             "class_field": config.class_field,
-            "variable": config.variable,
-            "source_crs": config.source_crs,
+            "variable": getattr(config, "variable", ""),
+            "source_crs": getattr(config, "source_crs", ""),
         }
         dialog._lai_input_config = {}
         from ...core.handlers.state.nml_settings import update_section
@@ -1820,11 +1958,15 @@ def handle_land_use_input_type(dialog, text, previous=""):
         dialog._advanced_inputs.pop("land_cover", None)
         dialog._land_cover_ready_source = config.input_path
     elif "single categorical" in normalized:
+        initial, initial_layer = _single_layer_defaults(
+            dialog, "lc", dialog._categorical_lookup_configs.get("lc")
+        )
         input_dialog = SingleLayerInputDialog(
             dialog.project_folder,
             "lc",
             dialog,
-            initial=dialog._categorical_lookup_configs.get("lc"),
+            initial=initial,
+            initial_layer=initial_layer,
         )
         if _exec_dialog(input_dialog) != QDialog.DialogCode.Accepted or (
             input_dialog.selected_config() is None
@@ -1832,13 +1974,14 @@ def handle_land_use_input_type(dialog, text, previous=""):
             dialog._restore_categorical_mode("lc", previous)
             return
         config = input_dialog.selected_config()
+        _adopt_single_layer_source(dialog, "lc", input_dialog)
         dialog._categorical_lookup_configs["lc"] = {
             "input_path": config.input_path,
             "lookup_table": config.lookup_table,
             "mapping_field": config.mapping_field,
             "class_field": config.class_field,
-            "variable": config.variable,
-            "source_crs": config.source_crs,
+            "variable": getattr(config, "variable", ""),
+            "source_crs": getattr(config, "source_crs", ""),
         }
         dialog._categorical_ready_configs.pop("lc", None)
         dialog._advanced_inputs.pop("land_cover", None)
@@ -1959,10 +2102,9 @@ def browse_lai_file(dialog):
         dialog.log_message("LAI input is now selected from the layer dropdown.")
         return
 
-    file_path, _ = QFileDialog.getOpenFileName(
+    file_path, _ = open_file(
         dialog,
         "Select Leaf Area Index File",
-        "",
         "All Files (*);;GeoTIFF (*.tif *.tiff);;NetCDF (*.nc);;HDF5 (*.h5 *.hdf5)",
     )
     if file_path:

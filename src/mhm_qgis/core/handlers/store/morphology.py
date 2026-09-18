@@ -84,6 +84,7 @@ def resolve_display_output(
 
     candidates = {
         "geology": [
+            morph / "geology_class.nc",
             morph / "geology_class.asc",
             *variants(geometry / "3_geology_processed.tif"),
         ],
@@ -94,7 +95,7 @@ def resolve_display_output(
     return _first(
         candidates,
         key.replace("_", " ").title(),
-        variable="lai" if key == "lai" else None,
+        variable={"lai": "lai", "geology": "geology_class"}.get(key),
     )
 
 

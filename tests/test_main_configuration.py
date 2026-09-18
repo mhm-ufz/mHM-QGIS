@@ -57,6 +57,8 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
         time.sleep(.01)
     assert not dialog.task_coordinator.is_busy("meteo-scan-pre")
     assert not warnings
+    assert processing.workflow(tmp_path, "scan_precipitation")["status"] == "completed"
+    assert "#2e7d32" in dialog.pushButton_scanPrecipitationFiles.styleSheet()
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 2
     assert dialog.label_precipitationResolutionValue.text() == "1"
     assert dialog.label_precipitationStartTimeValue.text().startswith("2001-01-01")
@@ -79,6 +81,8 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     assert restored._meteo_inspections == {}  # Reload never scans the folders.
     restored.lineEdit_precipitationGlobDefinition.setText("none*.nc")
     assert not processing.section(tmp_path, "grid")
+    assert processing.workflow(tmp_path, "scan_precipitation")["status"] == "pending"
+    assert "#2e7d32" not in restored.pushButton_scanPrecipitationFiles.styleSheet()
     with pytest.raises(ValueError, match="Scan precipitation"):
         main.require_common_grid(restored)
     restored.close()
@@ -108,6 +112,8 @@ def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
     assert Path(morph_folder(root)).is_dir()
     assert (root / "settings.yaml").is_file()
     assert (root / "mhm_qgis_input_state.json").is_file()
+    assert processing.workflow(root, "project_structure")["status"] == "completed"
+    assert "#2e7d32" in dialog.pushButton_createProjectStructure.styleSheet()
     assert not (root / "data/master").exists()
     assert not (tmp_path / "settings.yaml").exists()
     assert not (tmp_path / "mhm-plugin").exists()

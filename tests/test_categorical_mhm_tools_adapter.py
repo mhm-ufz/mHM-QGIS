@@ -56,13 +56,13 @@ def test_raster_soil_formats_and_moves_canonical_outputs(tmp_path, monkeypatch):
     input_file = _touch(tmp_path / "input" / "soil.asc")
     dem_file = _touch(tmp_path / "input" / "dem.tif")
     lookup_table = _touch(tmp_path / "input" / "soil.csv")
-    output_file = tmp_path / "geometry" / "3_soil.tif"
+    output_file = tmp_path / "geometry" / "soil_class.nc"
     definition_file = tmp_path / "morph" / "soil_classdefinition.txt"
     formatter_calls = []
 
     def format_soil_data(**kwargs):
         formatter_calls.append(kwargs)
-        kwargs["output_path"].joinpath("soil_class.tif").write_bytes(b"soil")
+        kwargs["output_path"].joinpath("soil_class.nc").write_bytes(b"soil")
         kwargs["output_path"].joinpath("soil_classdefinition.txt").write_text(
             "definition\n", encoding="utf-8"
         )
@@ -99,7 +99,7 @@ def test_raster_soil_formats_and_moves_canonical_outputs(tmp_path, monkeypatch):
         "lookup_table": lookup_table,
         "mapping_field": "map_code",
         "class_field": "SOIL_CLASS",
-        "output_type": "tif",
+        "output_type": "nc",
         "input_crs": "EPSG:4326",
         "dem_crs": "EPSG:32645",
     }
@@ -110,7 +110,7 @@ def test_vector_geology_rasterizes_then_uses_identity_mapping(tmp_path, monkeypa
     input_file = _touch(tmp_path / "input" / "geology.shp")
     dem_file = _touch(tmp_path / "input" / "dem.asc")
     lookup_table = _touch(tmp_path / "input" / "geology.csv")
-    output_file = tmp_path / "geometry" / "3_geology_processed.tif"
+    output_file = tmp_path / "geometry" / "geology_class.nc"
     definition_file = tmp_path / "morph" / "geology_classdefinition.txt"
     rasterize_calls = []
     formatter_calls = []
@@ -135,7 +135,7 @@ def test_vector_geology_rasterizes_then_uses_identity_mapping(tmp_path, monkeypa
     def format_geology_data(**kwargs):
         formatter_calls.append(kwargs)
         assert kwargs["input_file"].read_bytes() == b"rasterized"
-        kwargs["output_path"].joinpath("geology_class.tif").write_bytes(b"geology")
+        kwargs["output_path"].joinpath("geology_class.nc").write_bytes(b"geology")
         kwargs["output_path"].joinpath("geology_classdefinition.txt").write_text(
             "definition\n", encoding="utf-8"
         )
@@ -189,7 +189,7 @@ def test_vector_geology_rasterizes_then_uses_identity_mapping(tmp_path, monkeypa
         "lookup_table": lookup_table,
         "mapping_field": "GEOLOGY_CLASS",
         "class_field": "GEOLOGY_CLASS",
-        "output_type": "tif",
+        "output_type": "nc",
         "dem_crs": "EPSG:32645",
     }
     assert not temporary_input.parent.exists()
@@ -226,14 +226,14 @@ def test_land_cover_dispatches_without_classdefinition(tmp_path, monkeypatch):
         "grid_value\tLC_CLASS\n1\t2\n",
         encoding="utf-8",
     )
-    output_file = tmp_path / "geometry" / "3_land_use.tif"
+    output_file = tmp_path / "geometry" / "lc.nc"
     formatter_calls = []
     lookup_text = []
 
     def format_lc_data(**kwargs):
         formatter_calls.append(kwargs)
         lookup_text.append(kwargs["lookup_table"].read_text(encoding="utf-8"))
-        kwargs["output_path"].joinpath("lc.tif").write_bytes(b"land cover")
+        kwargs["output_path"].joinpath("lc.nc").write_bytes(b"land cover")
 
     _install_fake_mhm_tools(monkeypatch, format_lc_data=format_lc_data)
 
@@ -256,7 +256,7 @@ def test_land_cover_dispatches_without_classdefinition(tmp_path, monkeypatch):
         "dem_file": dem_file,
         "mapping_field": "grid_value",
         "class_field": "LC_CLASS",
-        "output_type": "tif",
+        "output_type": "nc",
     }
     # `as_csv` owns a scratch subdirectory rather than writing into the
     # directory it is handed -- the other call site hands it a real output
@@ -271,7 +271,7 @@ def test_rejects_unknown_kind_and_land_cover_definition(tmp_path):
     common = (
         tmp_path / "input.tif",
         tmp_path / "dem.tif",
-        tmp_path / "output.tif",
+        tmp_path / "output.nc",
         tmp_path / "lookup.csv",
         "source",
         "target",
@@ -281,4 +281,19 @@ def test_rejects_unknown_kind_and_land_cover_definition(tmp_path):
     with pytest.raises(ValueError, match="does not write"):
         categorical.prepare_categorical_file(
             "lc", *common, classdefinition_file=tmp_path / "definition.txt"
+        )
+
+
+def test_rejects_an_output_name_that_misstates_the_written_format(tmp_path):
+    """mhm-tools writes GeoTIFF; a `.asc` name reaches publication as text."""
+    assert categorical.categorical_output_suffix("geology") == ".nc"
+    with pytest.raises(ValueError, match="must be named .nc"):
+        categorical.prepare_categorical_file(
+            "geology",
+            tmp_path / "input.tif",
+            tmp_path / "dem.tif",
+            tmp_path / "geology_class.asc",
+            tmp_path / "lookup.csv",
+            "source",
+            "target",
         )

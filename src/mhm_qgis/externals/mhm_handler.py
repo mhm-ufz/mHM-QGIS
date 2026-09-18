@@ -21,10 +21,13 @@ def executable(version: str) -> Path:
     return path
 
 
-def run(version: str, cwd, run_command) -> bool:
+def run(version: str, cwd, run_command, on_finished=None) -> bool:
     """Launch the selected executable through the caller's terminal runner."""
+    options = {"cwd": str(cwd), "show": True}
+    if on_finished is not None:
+        options["on_finished"] = on_finished
     return bool(
-        run_command(shlex.quote(str(executable(version))), cwd=str(cwd), show=True)
+        run_command(shlex.quote(str(executable(version))), **options)
     )
 
 

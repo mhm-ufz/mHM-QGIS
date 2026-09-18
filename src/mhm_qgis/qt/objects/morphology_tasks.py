@@ -11,6 +11,7 @@ from qgis.PyQt import QtCore
 from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.core import QgsVectorLayer
 
+from ...externals.mhm_tools_handler import categorical_output_suffix
 from ...core.executions import morphology
 from ...core.executions.morphology import commands
 from ...core.handlers.file.netcdf.raster import file_path
@@ -696,7 +697,7 @@ class MorphologyTaskBridge(QtCore.QObject):
                         "input_variable": job["input_variable"],
                         "input_crs": job["input_crs"],
                         "dem_crs": job["dem_crs"],
-                        "format": "common-l0-ascii-1",
+                        "format": "common-l0-nc-1",
                     },
                 )
                 reusable = self._reusable_stage(
@@ -796,12 +797,17 @@ class MorphologyTaskBridge(QtCore.QObject):
         geometry = Path(geometry_folder(self.dialog.project_folder))
         staging = Path(morph_staging_folder(self.dialog.project_folder))
         staging.mkdir(parents=True, exist_ok=True)
-        output = staging / f"{spec['ready_name']}.asc"
+        output = staging / f"{spec['ready_name']}{categorical_output_suffix(kind)}"
         definition = staging / spec["definition"] if spec.get("definition") else None
         metadata = geometry / "geology_class_metadata.json" if kind == "geology" else None
         removals = [
             *categorical.ready_paths(self.dialog.project_folder, kind),
             *categorical.intermediate_paths(self.dialog.project_folder, kind)[1:],
+            # An older run staged this raster under a different extension;
+            # publication would otherwise place both.
+            *(staging / f"{spec['ready_name']}{suffix}"
+              for suffix in (".asc", ".nc", ".tif", ".tiff")
+              if suffix != output.suffix),
         ]
         layer_crs = layer.crs() if layer is not None else None
         input_crs = (
@@ -951,13 +957,14 @@ class MorphologyTaskBridge(QtCore.QObject):
         if not self.dialog.check_prerequisites():
             return False
         try:
-            from ..controllers.main import require_common_grid
+            from ..controllers.main import invalidate_workflows, require_common_grid
             require_common_grid(self.dialog)
         except ValueError as error:
             QMessageBox.warning(self.dialog, "Configuration", str(error))
             return False
         self.execute_all_active = True
         self.dialog.set_meteo_setup_controls_enabled(False)
+        invalidate_workflows(self.dialog, "run_mhm")
         processing.mark_workflow(
             self.dialog.project_folder, "execute_all", "running"
         )
@@ -983,16 +990,24 @@ class MorphologyTaskBridge(QtCore.QObject):
         )
 
     def _finish_execute_all(self):
-        self.dialog.set_meteo_setup_controls_enabled(True)
+        try:
+            self.dialog.finish_morphology_workflow("execute_all", True, "")
+        except Exception as error:
+            self._fail_execute_all(error)
+            return
         self.execute_all_active = False
-        self.dialog.finish_morphology_workflow("execute_all", True, "")
+        self.dialog.set_meteo_setup_controls_enabled(True)
 
     def _fail_execute_all(self, message):
-        self.dialog.set_meteo_setup_controls_enabled(True)
         if not self.execute_all_active:
             return
         self.execute_all_active = False
-        self.dialog.finish_morphology_workflow("execute_all", False, str(message))
+        try:
+            self.dialog.finish_morphology_workflow(
+                "execute_all", False, str(message)
+            )
+        finally:
+            self.dialog.set_meteo_setup_controls_enabled(True)
 
     def _condition(self, name):
         if not name:

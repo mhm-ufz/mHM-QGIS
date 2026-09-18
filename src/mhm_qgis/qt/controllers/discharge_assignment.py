@@ -12,7 +12,9 @@ import os
 from pathlib import Path
 
 from qgis.core import QgsMapLayer, QgsProject, QgsVectorLayer
-from qgis.PyQt.QtWidgets import QComboBox, QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QComboBox, QMessageBox
+
+from ..dialogs.file_picker import open_file
 
 
 def _row_type():
@@ -84,11 +86,9 @@ def _set_discharge_enabled(row: _AssignmentRow, enabled: bool) -> None:
 
 
 def _browse_discharge(dialog, row: _AssignmentRow) -> None:
-    project_folder = getattr(dialog.parent(), "project_folder", "") or ""
-    path, _ = QFileDialog.getOpenFileName(
+    path, _ = open_file(
         dialog,
         "Select discharge data",
-        str(project_folder),
         "Discharge data (*.csv *.txt);;All files (*)",
     )
     if not path:

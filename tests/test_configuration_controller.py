@@ -22,6 +22,7 @@ from mhm_qgis.dependency_bootstrap import (
     dependency_from_requirement_line,
 )
 from mhm_qgis.core.handlers.store.paths import workspace_folder
+from mhm_qgis.core.handlers.state import processing
 
 
 class ComboBox:
@@ -107,13 +108,18 @@ def test_run_mhm_uses_project_terminal(tmp_path: Path, monkeypatch) -> None:
     )
 
     assert controller_module.run_mhm(dialog) is True
-    assert dialog.terminal.calls == [(
+    command, options = dialog.terminal.calls[0]
+    callback = options.pop("on_finished")
+    assert (command, options) == (
         str(
             Path(controller_module.plugin_root())
             / "vSpecific" / "v6" / "mhmv6"
         ),
         {"cwd": workspace_folder(tmp_path), "show": True},
-    )]
+    )
+    assert processing.workflow(tmp_path, "run_mhm")["status"] == "running"
+    callback(0)
+    assert processing.workflow(tmp_path, "run_mhm")["status"] == "completed"
 
 
 def test_version_change_prepares_project_and_saves_state(

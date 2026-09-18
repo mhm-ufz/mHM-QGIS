@@ -1,6 +1,7 @@
 """Independent forcing variables, streamed at a selected output cadence."""
 from __future__ import annotations
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from pathlib import Path
 import os
 import tempfile
@@ -32,7 +33,8 @@ from .temporal import (
     deaccumulate_values,
     interval_bounds,
     normalize_unit,
-    output_period,
+    output_periods,
+    period_bounds,
     time_index,
     validate_spec,
 )
@@ -82,7 +84,7 @@ def inspect_meteo_inputs(inputs):
 
 
 def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
-                         log=None, inspections=None):
+                         log=None, inspections=None, progress=None):
     """Stream inputs onto L2, optionally aggregating to a coarser cadence."""
     target_grid.validate()
     specs = [spec.normalized() for spec in inputs]
@@ -92,6 +94,7 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
     outputs, headers, files_used = {}, {}, {}
+    tick = _file_ticker(specs, inspected, progress, log)
     with tempfile.TemporaryDirectory(prefix=".mhm_qgis-meteo-", dir=root) as temporary:
         stage = Path(temporary)
         for spec in specs:
@@ -100,11 +103,16 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
             _validate_target_coverage(metadata, target_grid)
             output = stage / (f"{spec.kind}.nc" if flat_layout else f"{spec.kind}/{spec.kind}.nc")
             count = 0
-            for block in _prepared_blocks(spec, metadata, target_grid, log=log):
-                assert_matches_header(block, spec.kind, target_grid.header)
-                _write_time_block(block, spec.kind, output, count)
-                count += block.sizes["time"]
-                block.close()
+            handle = None
+            try:
+                for block in _prepared_blocks(spec, metadata, target_grid, log=log, on_file=tick):
+                    assert_matches_header(block, spec.kind, target_grid.header)
+                    handle = _write_time_block(block, spec.kind, output, count, handle)
+                    count += block.sizes["time"]
+                    block.close()
+            finally:
+                if handle is not None:
+                    handle.close()
             if not count:
                 raise ValueError(f"{spec.kind}: no time steps to write.")
             outputs[spec.kind] = output
@@ -120,13 +128,40 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
                                      root, flat_layout=flat_layout)
 
 
-def _prepared_blocks(spec, metadata, target, *, log=None):
-    """Aggregate one interval at a time, then convert and align it."""
+def _file_ticker(specs, inspected, progress, log):
+    """Report percentage and a log line as input files are consumed.
+
+    Without this the run is silent and pinned at 0% from the first line until a
+    whole variable finishes, which on a multi-decade record is most of an hour.
+    """
+    total = sum(len(inspected[spec.kind].files) for spec in specs) or 1
+    state = {"done": 0}
+
+    def tick(kind):
+        state["done"] += 1
+        if progress is not None:
+            progress(int(100 * state["done"] / total))
+        if log and (state["done"] % 25 == 0 or state["done"] == total):
+            log(f"{kind}: {state['done']} of {total} input files processed.")
+
+    return tick
+
+
+# Aggregated intervals are stacked before they are aligned and written: doing
+# that per day meant one resample, one Dataset build and one file append each,
+# which is what made a multi-decade hourly record take hours. The batch is
+# capped again per grid so a large L2 grid cannot buffer gigabytes.
+INTERVAL_BATCH = 256
+
+
+def _prepared_blocks(spec, metadata, target, *, log=None, on_file=None):
+    """Aggregate intervals, then convert and align them in batches."""
     import numpy as np
     import xarray as xr
     previous = None
     pending = None
     last_path = None
+    finished = []
     for path in metadata.files:
         last_path = path
         with _open_dataset(path) as ds:
@@ -142,7 +177,9 @@ def _prepared_blocks(spec, metadata, target, *, log=None):
             raw = raw.transpose("time", y_dim, x_dim)
             cells = max(raw.sizes[y_dim] * raw.sizes[x_dim],
                         int(target.header["nrows"]) * int(target.header["ncols"]))
-            block_size = min(32, max(1, 64 * 1024 * 1024 // (8 * cells)))
+            block_size = min(1024, max(1, 64 * 1024 * 1024 // (8 * cells)))
+            # Buffered intervals are held in memory, so bound them the same way.
+            batch = min(INTERVAL_BATCH, max(1, 64 * 1024 * 1024 // (8 * cells)))
             for start in range(0, raw.sizes["time"], block_size):
                 chunk = raw.isel(time=slice(start, start + block_size)).load()
                 chunk_bounds = bounds[start:start + block_size]
@@ -154,36 +191,51 @@ def _prepared_blocks(spec, metadata, target, *, log=None):
                         chunk.copy(data=converted), chunk_bounds, ds, spec,
                         target, np, xr)
                     continue
-                for number, plane in enumerate(values):
-                    expected = output_period(
-                        chunk_bounds[number], spec.output_temporal_resolution)
+                periods = output_periods(
+                    chunk_bounds[:, 0], spec.output_temporal_resolution)
+                edges = _group_edges(periods, np)
+                group_value, group_count = _reduce_groups(
+                    values, edges, spec.aggregation, np)
+                for number in range(len(edges) - 1):
+                    first, stop = int(edges[number]), int(edges[number + 1])
+                    expected = periods[first]
                     if pending is not None and pending["expected"] != expected:
-                        yield _finish_interval(pending, ds, spec, target, np, xr, log)
+                        finished.append(_finish_interval(pending, spec, np, log))
                         pending = None
+                        if len(finished) >= batch:
+                            yield _stacked_dataset(finished, ds, spec, target, np, xr)
+                            finished = []
                     if pending is None:
                         pending = {
                             "expected": expected,
-                            "start": chunk_bounds[number, 0],
-                            "end": chunk_bounds[number, 1],
-                            "value": np.where(np.isfinite(plane), plane, 0.0),
-                            "count": np.isfinite(plane).astype("int32"),
-                            "template": chunk.isel(time=slice(number, number + 1)),
+                            "start": chunk_bounds[first, 0],
+                            "end": chunk_bounds[stop - 1, 1],
+                            "value": group_value[number],
+                            "count": group_count[number],
+                            "template": chunk.isel(time=slice(first, first + 1)),
                             "source": variable,
                             "input_seconds": float(
-                                (chunk_bounds[number, 1] - chunk_bounds[number, 0])
+                                (chunk_bounds[first, 1] - chunk_bounds[first, 0])
                                 / np.timedelta64(1, "s")),
                         }
                     else:
-                        _accumulate(pending, plane, spec.aggregation, np)
-                        pending["end"] = chunk_bounds[number, 1]
-    if pending is not None and last_path is not None:
+                        _merge_group(
+                            pending, group_value[number], group_count[number],
+                            spec.aggregation, np)
+                        pending["end"] = chunk_bounds[stop - 1, 1]
+        if on_file is not None:
+            on_file(spec.kind)
+    if pending is not None:
+        finished.append(_finish_interval(pending, spec, np, log))
+    if finished and last_path is not None:
         with _open_dataset(last_path) as ds:
-            yield _finish_interval(pending, ds, spec, target, np, xr, log)
+            yield _stacked_dataset(finished, ds, spec, target, np, xr)
 
 
-def _finish_interval(pending, ds, spec, target, np, xr, log):
+def _finish_interval(pending, spec, np, log):
+    """Return one aggregated interval as (single-step template, bounds)."""
     actual = np.asarray([[pending["start"], pending["end"]]], dtype="datetime64[ns]")
-    if tuple(actual[0]) != pending["expected"] and log:
+    if tuple(actual[0]) != period_bounds(pending["expected"]) and log:
         log(
             f"WARNING: {spec.kind}: partial {spec.output_temporal_resolution.lower()} "
             f"interval {actual[0, 0]} to {actual[0, 1]}; aggregating available values."
@@ -192,21 +244,63 @@ def _finish_interval(pending, ds, spec, target, np, xr, log):
     values = convert_units(
         values, actual, spec, pending["source"],
         input_seconds=pending["input_seconds"])
-    template = pending["template"].assign_coords(time=[actual[0, 0]]).copy(data=values)
-    return _prepared_dataset(template, actual, ds, spec, target, np, xr)
+    return pending["template"].assign_coords(time=[actual[0, 0]]).copy(data=values), actual
 
 
-def _accumulate(pending, plane, method, np):
-    valid = np.isfinite(plane)
+def _stacked_dataset(finished, ds, spec, target, np, xr):
+    """Align and convert one batch of finished intervals in a single pass."""
+    chunk = (finished[0][0] if len(finished) == 1
+             else xr.concat([template for template, _ in finished], dim="time"))
+    bounds = np.concatenate([interval for _, interval in finished])
+    return _prepared_dataset(chunk, bounds, ds, spec, target, np, xr)
+
+
+def _group_edges(periods, np):
+    """Return the index boundaries of each run of equal interval keys."""
+    changed = np.flatnonzero(periods[1:] != periods[:-1]) + 1
+    return np.concatenate(([0], changed, [len(periods)]))
+
+
+def _reduce_groups(values, edges, method, np):
+    """Reduce every interval in one chunk along time, without a Python loop.
+
+    Uniform groups -- the usual hourly-to-daily case -- reduce as a single
+    reshaped call. Monthly and yearly intervals have unequal lengths, so those
+    fall back to one vectorised reduction per interval: still tens of
+    iterations per file instead of one per timestep.
+    """
+    lengths = np.diff(edges)
+    if len(lengths) > 1 and bool(np.all(lengths == lengths[0])):
+        block = values.reshape(len(lengths), int(lengths[0]), *values.shape[1:])
+        return _reduce_axis(block, 1, method, np)
+    reduced = [_reduce_axis(values[first:stop], 0, method, np)
+               for first, stop in zip(edges[:-1], edges[1:])]
+    return (np.stack([value for value, _ in reduced]),
+            np.stack([count for _, count in reduced]))
+
+
+def _reduce_axis(values, axis, method, np):
+    """Return the (partial aggregate, valid count) of one axis."""
     if method in {"Average", "Sum"}:
-        pending["value"] += np.where(valid, plane, 0.0)
-    elif method == "Minimum":
-        pending["value"] = np.where(
-            pending["count"] == 0, plane, np.fmin(pending["value"], plane))
+        finite = np.isfinite(values)
+        return (np.add.reduce(np.where(finite, values, 0.0), axis=axis),
+                finite.sum(axis=axis, dtype="int32"))
+    # fmin/fmax already ignore NaN, so no masked copy of the block is needed;
+    # the result is NaN exactly where an interval had no valid sample.
+    reducer = np.fmin if method == "Minimum" else np.fmax
+    value = reducer.reduce(values, axis=axis)
+    return value, np.isfinite(value).astype("int32")
+
+
+def _merge_group(pending, value, count, method, np):
+    """Fold one reduced interval into a partial one carried across a boundary."""
+    if method in {"Average", "Sum"}:
+        pending["value"] = pending["value"] + value
+        pending["count"] = pending["count"] + count
     else:
-        pending["value"] = np.where(
-            pending["count"] == 0, plane, np.fmax(pending["value"], plane))
-    pending["count"] += valid
+        reducer = np.fmin if method == "Minimum" else np.fmax
+        pending["value"] = reducer(pending["value"], value)
+        pending["count"] = np.isfinite(pending["value"]).astype("int32")
 
 
 def _aggregate_result(pending, method, np):
@@ -237,22 +331,27 @@ def _prepared_dataset(chunk, bounds, ds, spec, target, np, xr):
     return _attach_target_coordinates(output, spec.kind, target)
 
 
-def _write_time_block(ds, variable, path, offset):
-    """Create once, then append data and exact CF time coordinates."""
-    if not offset:
-        write_netcdf(ds, variable, path, unlimited_dims=("time",))
-        return
+def _write_time_block(ds, variable, path, offset, handle=None):
+    """Create once, then append through one open handle, and return it.
+
+    Reopening the file per block cost milliseconds each and grew with the
+    unlimited time dimension, which dominated a multi-decade record.
+    """
     import numpy as np
     import pandas as pd
     from netCDF4 import Dataset, date2num
-    with Dataset(path, "a") as handle:
-        stop = offset + ds.sizes["time"]
-        handle[variable][offset:stop] = np.ma.masked_invalid(ds[variable].values)
-        for name in ("time", "time_bnds"):
-            target = handle[name]
-            values = ds[name].values
-            dates = pd.DatetimeIndex(values.reshape(-1)).to_pydatetime()
-            target[offset:stop] = np.asarray(date2num(dates, getattr(target, "units", handle["time"].units), getattr(target, "calendar", handle["time"].calendar))).reshape(values.shape)
+
+    if not offset:
+        write_netcdf(ds, variable, path, unlimited_dims=("time",))
+        return Dataset(path, "a")
+    stop = offset + ds.sizes["time"]
+    handle[variable][offset:stop] = np.ma.masked_invalid(ds[variable].values)
+    for name in ("time", "time_bnds"):
+        target = handle[name]
+        values = ds[name].values
+        dates = pd.DatetimeIndex(values.reshape(-1)).to_pydatetime()
+        target[offset:stop] = np.asarray(date2num(dates, getattr(target, "units", handle["time"].units), getattr(target, "calendar", handle["time"].calendar))).reshape(values.shape)
+    return handle
 
 
 def _publish_meteo_result(
@@ -706,18 +805,32 @@ def _attach_target_coordinates(ds, variable: str, target: TargetGrid):
     ds["lon"].attrs = {"standard_name": "projection_x_coordinate", "axis": "X"}
     ds["lat"].attrs = {"standard_name": "projection_y_coordinate", "axis": "Y"}
     ds[variable].attrs["coordinates"] = "lat2d lon2d"
-    if target.crs:
-        try:
-            from pyproj import CRS
-
-            crs = CRS.from_user_input(target.crs)
-            unit = crs.axis_info[0].unit_name if crs.axis_info else "metre"
-            ds["lon"].attrs["units"] = ds["lat"].attrs["units"] = unit
-            crs_attrs = crs.to_cf()
-            crs_attrs["spatial_ref"] = crs.to_wkt()
-            ds["crs"] = 0
-            ds["crs"].attrs.update(crs_attrs)
-            ds[variable].attrs["grid_mapping"] = "crs"
-        except Exception:
-            pass
+    described = _crs_description(target.crs)
+    if described is not None:
+        unit, crs_attrs = described
+        ds["lon"].attrs["units"] = ds["lat"].attrs["units"] = unit
+        ds["crs"] = 0
+        ds["crs"].attrs.update(crs_attrs)
+        ds[variable].attrs["grid_mapping"] = "crs"
     return ds
+
+
+@lru_cache(maxsize=8)
+def _crs_description(crs_text: str):
+    """Return (axis unit, CF grid-mapping attributes) for one CRS, once.
+
+    This is constant for a whole run but used to be rebuilt for every written
+    block, which on a multi-decade hourly record meant tens of thousands of
+    pyproj calls from a Qt worker thread.
+    """
+    if not crs_text:
+        return None
+    try:
+        from pyproj import CRS
+
+        crs = CRS.from_user_input(crs_text)
+        attrs = dict(crs.to_cf())
+        attrs["spatial_ref"] = crs.to_wkt()
+        return (crs.axis_info[0].unit_name if crs.axis_info else "metre"), attrs
+    except Exception:
+        return None

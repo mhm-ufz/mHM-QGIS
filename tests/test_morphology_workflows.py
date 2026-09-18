@@ -117,3 +117,35 @@ def test_execute_all_plan_contains_every_user_visible_command():
         ("soil",),
         ("geology",),
     ]
+
+
+def test_only_the_dem_comes_from_the_masked_bundle(tmp_path):
+    """Watershed-masking every derivative would carve nodata out of them."""
+    import numpy as np
+    from osgeo import gdal, osr
+    from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters, source
+
+    def raster(name, value):
+        path = tmp_path / f"{name}.tif"
+        dataset = gdal.GetDriverByName("GTiff").Create(str(path), 4, 3, 1, gdal.GDT_Float32)
+        dataset.SetGeoTransform((0.0, 1.0, 0, 3.0, 0, -1.0))
+        crs = osr.SpatialReference()
+        crs.ImportFromEPSG(32632)
+        dataset.SetProjection(crs.ExportToWkt())
+        dataset.GetRasterBand(1).WriteArray(np.full((3, 4), value, dtype="float32"))
+        dataset.GetRasterBand(1).SetNoDataValue(-9999)
+        dataset = None
+        return path
+
+    copy_rasters(tmp_path / "dem_derivatives.nc", {
+        "dem_filled": raster("dem_filled", 1.0),
+        "slope": raster("slope", 2.0),
+        "facc": raster("facc", 3.0),
+    })
+    copy_rasters(tmp_path / "dem_derivatives_masked.nc", {"dem": raster("dem", 4.0)})
+
+    layers = setup._model_sources(tmp_path)
+
+    assert layers["dem"] == source(tmp_path / "dem_derivatives_masked.nc", "dem")
+    assert layers["slope"] == source(tmp_path / "dem_derivatives.nc", "slope")
+    assert layers["facc"] == source(tmp_path / "dem_derivatives.nc", "facc")

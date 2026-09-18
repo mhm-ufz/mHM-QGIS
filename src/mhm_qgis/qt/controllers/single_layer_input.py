@@ -10,7 +10,7 @@ def _selection():
 
     return input_selection
 
-def _browse_lookup(dialog):
+def _browse_lookup(dialog, _checked=False):
     _selection()._browse_into_combo(
         dialog,
         dialog.lookup_table_combo,

@@ -179,7 +179,7 @@ def test_project_without_saved_state_clears_previous_project_inputs(tmp_path):
     dialog.comboBox_soil_inputType.setCurrentIndex(1)
     dialog.comboBox_pourPointOutletID.addItem("old_id")
     dialog.comboBox_pourPointOutletID.setCurrentText("old_id")
-    dialog.checkBox_DEMdomain.setChecked(True)
+    dialog.comboBox_domainDefinitionType.setCurrentIndex(0)
     dialog._categorical_lookup_configs["soil"] = {
         "lookup_table": str(first_project / "soil.csv"),
         "mapping_field": "source",
@@ -195,7 +195,7 @@ def test_project_without_saved_state_clears_previous_project_inputs(tmp_path):
     assert dialog.categorical_lookup_config("soil") is None
     assert not dialog.checkBox_enableFolderSearch.isChecked()
     assert dialog.selected_outlet_id_field() == ""
-    assert not dialog.checkBox_DEMdomain.isChecked()
+    assert dialog.comboBox_domainDefinitionType.currentIndex() == -1
     dialog.close()
 
 
@@ -221,14 +221,15 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     assert dialog.selected_outlet_ids() == ["1", "2"]
 
     dialog.comboBox_pourPointOutletID.setCurrentText("outlet_name")
-    dialog.checkBox_DEMdomain.setChecked(True)
+    dialog.comboBox_domainDefinitionType.setCurrentIndex(0)
     dialog.save_input_state()
     dialog.close()
 
     state_path = Path(workspace_folder(tmp_path)) / "mhm_qgis_input_state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["pour_point_outlet_id_field"] == "outlet_name"
-    assert state["dem_domain"] is True
+    assert "dem_domain" not in state
+    assert state["domain_definition_type"] == "Single Domain [DEM extent]"
 
     restored = MhmQgisDialog()
     restored.project_folder = str(tmp_path)
@@ -236,7 +237,7 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
 
     assert restored.selected_outlet_id_field() == "outlet_name"
     assert restored.selected_outlet_ids() == ["upper", "lower"]
-    assert restored.checkBox_DEMdomain.isChecked()
+    assert restored.comboBox_domainDefinitionType.currentIndex() == 0
     restored.close()
 
 
@@ -300,6 +301,24 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
 
     assert "#2e7d32" in restored.pushButton_executeAllMeteo.styleSheet()
     restored.close()
+
+
+@pytest.mark.parametrize("workflow,button", [
+    ("project_structure", "pushButton_createProjectStructure"),
+    ("scan_precipitation", "pushButton_scanPrecipitationFiles"),
+    ("execute_all_observations", "pushButton_executeAllObservation"),
+    ("run_mhm", "pushButton_execute_mHM"),
+])
+def test_additional_workflow_green_state_restores(
+        tmp_path, workflow, button):
+    _app()
+    processing.mark_workflow(tmp_path, workflow, "completed")
+    dialog = MhmQgisDialog()
+    dialog.project_folder = str(tmp_path)
+    dialog.refresh_morphology_workflow_button_states()
+
+    assert "#2e7d32" in getattr(dialog, button).styleSheet()
+    dialog.close()
 
 
 def test_meteorology_completion_is_independent_of_latlon(tmp_path):

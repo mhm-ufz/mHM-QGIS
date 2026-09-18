@@ -14,6 +14,7 @@ from qgis.PyQt import QtWidgets
 
 from ...core.handlers import lookup
 from ...core.handlers.lookup import LandUseInput, MAX_LAND_USE_PERIODS
+from ..dialogs.file_picker import open_file
 from ..dialogs.input_selection import scan_project_inputs
 
 def set_layer_count(dialog, count: int) -> None:
@@ -135,10 +136,9 @@ def _lookup_changed(dialog, *_args) -> None:
 
 
 def _browse_lookup(dialog) -> None:
-    path, _ = QtWidgets.QFileDialog.getOpenFileName(
+    path, _ = open_file(
         dialog,
         "Select Land-use Lookup Table",
-        str(dialog.project_folder),
         "Lookup tables (*.csv *.txt);;All files (*)",
     )
     if path:

@@ -92,6 +92,8 @@ def test_lookup_selection_lands_on_the_main_dialog(tmp_path, monkeypatch):
         "lookup_table": config.lookup_table,
         "mapping_field": config.mapping_field,
         "class_field": config.class_field,
+        "variable": "",
+        "source_crs": "",
     }
     dialog.close()
 

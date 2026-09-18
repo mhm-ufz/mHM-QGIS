@@ -11,6 +11,7 @@ from .cache import (
     inspect_meteo_folder_cached,
     inspect_meteo_inputs_cached,
     inspection_fingerprint,
+    preparation_fingerprint,
 )
 from .types import (
     ERA5LAND,
@@ -32,6 +33,7 @@ __all__ = [
     "inspect_meteo_inputs",
     "inspect_meteo_inputs_cached",
     "inspection_fingerprint",
+    "preparation_fingerprint",
     "normalize_kind",
     "normalize_source",
     "process_meteo_inputs",

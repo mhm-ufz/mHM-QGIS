@@ -10,7 +10,7 @@ if find_spec("qgis") is None:
 from qgis.core import (QgsApplication, QgsCoordinateReferenceSystem, QgsFeature,
                        QgsGeometry, QgsVectorLayer, QgsRasterLayer, QgsPointXY)
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QDialog, QCheckBox
+from qgis.PyQt.QtWidgets import QDialog
 
 from mhm_qgis.qgis_bridge.layers.domain import snap_points_to_network, DomainWorkflow
 from mhm_qgis.core.handlers.state import domain_state
@@ -84,7 +84,6 @@ def navigation(folder):
     hydrology_files(workflow.filled_dem_path, channel_path=workflow.channel_network_path, threshold_cells=1)
     main = QDialog()
     main.project_folder = str(folder)
-    main.checkBox_DEMdomain = QCheckBox()
     main.get_crs = lambda: QgsCoordinateReferenceSystem("EPSG:32632")
     main.log_message = Mock()
     main.selected_input_file_paths = lambda: []

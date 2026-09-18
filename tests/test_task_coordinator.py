@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 import os
+import threading
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -66,3 +67,33 @@ def test_bounded_jobs_lock_controls_and_keep_per_slot_log():
     assert dialog.tableWidget_threads.rowCount() == 1
     assert dialog.tableWidget_threads.item(0, 2).text() == "Second"
     dialog.close()
+
+
+def test_jobs_run_off_the_qgstask_thread_and_still_report_failures():
+    """pyproj segfaults QGIS when called twice from a QgsTask thread."""
+    app = _app()
+    coordinator = TaskCoordinator(max_threads=1)
+    kinds = []
+    errors = []
+    loop = QtCore.QEventLoop()
+
+    coordinator.submit(
+        "thread-kind",
+        "Thread kind",
+        lambda: threading.current_thread().__class__.__name__,
+        on_success=kinds.append,
+    )
+    coordinator.submit(
+        "boom",
+        "Failing job",
+        lambda: (_ for _ in ()).throw(ValueError("boom")),
+        on_error=lambda message: (errors.append(message), loop.quit()),
+    )
+    QtCore.QTimer.singleShot(5000, loop.quit)
+    loop.exec()
+    app.processEvents()
+
+    # A raw QgsTask thread is not created by Python, so it reports as
+    # `_DummyThread`; a real one means the job ran off the QgsTask thread.
+    assert kinds == ["Thread"]
+    assert errors and "boom" in errors[0]

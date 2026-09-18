@@ -21,6 +21,10 @@ VARIABLES = {
     "twsa": (("twsa", "tws"), "mm", ("mm",)),
 }
 CADENCES = {"Hourly": "h", "Daily": "D", "Monthly": "MS", "Yearly": "YS"}
+# `datetime64` units are calendar units: `[M] + 1` is the next month and
+# `[Y] + 1` the next year, so numpy does the 28/29/30/31-day and leap handling
+# that pandas offsets used to -- in C, over a whole chunk at once.
+PERIOD_UNITS = {"Hourly": "h", "Daily": "D", "Monthly": "M", "Yearly": "Y"}
 AGGREGATIONS = ("Average", "Sum", "Minimum", "Maximum")
 ERA_END_VARIABLES = {"tp", "total_precipitation", "pev", "potential_evaporation",
                      "ssrd", "strd", "surface_solar_radiation_downwards",
@@ -67,25 +71,21 @@ def validate_spec(spec):
             raise ValueError("Cumulative data must be an amount, not a rate or temperature.")
 
 
-def output_period(bounds, cadence):
-    """Return the calendar interval containing one input interval."""
-    import numpy as np
-    import pandas as pd
+def output_periods(starts, cadence):
+    """Return the calendar interval key containing each input interval start.
 
-    start = pd.Timestamp(bounds[0])
-    if cadence == "Hourly":
-        period_start = start.floor("h")
-        period_end = period_start + pd.DateOffset(hours=1)
-    elif cadence == "Daily":
-        period_start = start.normalize()
-        period_end = period_start + pd.DateOffset(days=1)
-    elif cadence == "Monthly":
-        period_start = start.to_period("M").start_time
-        period_end = period_start + pd.DateOffset(months=1)
-    else:
-        period_start = start.to_period("Y").start_time
-        period_end = period_start + pd.DateOffset(years=1)
-    return np.datetime64(period_start, "ns"), np.datetime64(period_end, "ns")
+    One truncation for the whole array. The per-timestep `pd.Timestamp` plus
+    `pd.DateOffset` this replaced fell through to `dateutil.relativedelta` and
+    cost about 38 us a step, which was the largest single item in a long run.
+    """
+    import numpy as np
+
+    return np.asarray(starts).astype(f"datetime64[{PERIOD_UNITS[cadence]}]")
+
+
+def period_bounds(key):
+    """Return the nanosecond start and end of one calendar interval key."""
+    return key.astype("datetime64[ns]"), (key + 1).astype("datetime64[ns]")
 
 
 def time_index(values, cadence):
@@ -140,9 +140,12 @@ def deaccumulate_values(values, bounds, spec, previous=None):
     """Return interval values while retaining the last cumulative plane."""
     import numpy as np
     import pandas as pd
-    result = np.asarray(values, dtype="float64").copy()
+    # Only the cumulative branch writes into the block, so a non-cumulative
+    # variable must not pay a full copy of every chunk for nothing.
+    result = np.asarray(values, dtype="float64")
     if spec.cumulative:
-        frequency = {"Hourly": "h", "Daily": "D", "Monthly": "M", "Yearly": "Y"}[spec.cumulative_resolution]
+        result = result.copy()
+        frequency = PERIOD_UNITS[spec.cumulative_resolution]
         starts = pd.DatetimeIndex(bounds[:, 0])
         groups = starts.to_period(frequency)
         for number, group in enumerate(groups):

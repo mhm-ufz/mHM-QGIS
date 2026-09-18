@@ -6,6 +6,7 @@ import pytest
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -33,6 +34,8 @@ from mhm_qgis.qt.dialogs.input_selection import (  # noqa: E402
     scan_project_folders,
     scan_project_inputs,
 )
+from mhm_qgis.qt.controllers import main as main_controller  # noqa: E402
+from mhm_qgis.qt.dialogs import file_picker, input_selection  # noqa: E402
 # isort: on
 
 _APPLICATION = None
@@ -236,6 +239,91 @@ def test_new_input_dialogs_set_titles_and_return_complete_paths(tmp_path):
     )
     assert single.groupBox_inputLayerType.title() == "Soil"
     assert single.selected_config().input_path == str(raster.resolve())
+
+
+def test_single_layer_dialog_uses_loaded_qgis_layer(tmp_path):
+    _app()
+    source = _raster(tmp_path / "loaded.tif")
+    lookup = tmp_path / "soil.csv"
+    lookup.write_text("code,class_id\nA,1\n", encoding="utf-8")
+    layer = QgsRasterLayer(str(source), "Loaded soil")
+    project = QgsProject.instance()
+    project.addMapLayer(layer)
+    try:
+        dialog = SingleLayerInputDialog(tmp_path, "soil")
+        dialog.comboBox_inputLayer.setCurrentIndex(
+            dialog.comboBox_inputLayer.findText("Loaded soil [unknown CRS]")
+        )
+        dialog.lookup_table_combo.setCurrentIndex(
+            dialog.lookup_table_combo.findData(str(lookup.resolve()))
+        )
+        dialog.mapping_field_combo.setCurrentText("code")
+        dialog.class_field_combo.setCurrentText("class_id")
+
+        config = dialog.selected_config()
+        assert config is not None
+        assert config.input_path == str(source)
+
+        target = InputComboAdapter(QtWidgets.QComboBox(), "soil")
+        main_controller._adopt_single_layer_source(
+            SimpleNamespace(input_combo=lambda _kind: target), "soil", dialog
+        )
+        assert target.currentLayer() is layer
+    finally:
+        project.removeMapLayer(layer.id())
+
+
+def test_lookup_browse_accepts_qt_clicked_boolean(tmp_path, monkeypatch):
+    _app()
+    dialog = SingleLayerInputDialog(tmp_path, "soil")
+    monkeypatch.setattr(input_selection, "_browse_into_combo", lambda *_args: None)
+
+    dialog._browse_lookup(False)
+
+
+def test_file_picker_remembers_directory_per_dialog(tmp_path, monkeypatch):
+    _app()
+    outer = tmp_path / "project"
+    chosen = tmp_path / "inputs"
+    outer.mkdir()
+    chosen.mkdir()
+    selected_file = chosen / "soil.tif"
+    selected_file.touch()
+    values = {}
+
+    class Settings:
+        def value(self, key, default=""):
+            return values.get(key, default)
+
+        def setValue(self, key, value):
+            values[key] = value
+
+    starts = []
+    picker = SimpleNamespace(
+        getOpenFileName=lambda parent, title, start, file_filter: (
+            starts.append(start) or str(selected_file),
+            "",
+        ),
+        getExistingDirectory=lambda parent, title, start: (
+            starts.append(start) or str(chosen)
+        ),
+    )
+    monkeypatch.setattr(file_picker, "QSettings", Settings)
+    monkeypatch.setattr(file_picker, "QFileDialog", picker)
+
+    dialog = QtWidgets.QDialog()
+    dialog.project_directory = str(outer)
+    file_picker.open_file(dialog, "Input", "All files (*)")
+    file_picker.open_directory(dialog, "Folder")
+
+    class OtherDialog(QtWidgets.QDialog):
+        pass
+
+    other = OtherDialog()
+    other.project_directory = str(outer)
+    file_picker.open_directory(other, "Folder")
+
+    assert starts == [str(outer), str(chosen), str(outer)]
 
 
 def test_lai_netcdf_dialog_returns_temporal_choices(tmp_path):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import uuid
 
 from qgis.PyQt import QtCore, QtGui, QtWidgets
 
@@ -25,6 +26,9 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         self._cwd = None
         self._history = []
         self._history_index = 0
+        self._command_marker = ""
+        self._command_buffer = ""
+        self._command_callback = None
         self._process = QtCore.QProcess(self)
         self._process.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
         self._process.readyReadStandardOutput.connect(self._read_output)
@@ -54,8 +58,11 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
             self,
             command: str,
             cwd: str | None = None,
-            show: bool = True) -> bool:
+            show: bool = True,
+            on_finished=None) -> bool:
         """Run a command in the persistent shell session."""
+        if on_finished is not None and self._command_marker:
+            return False
         if cwd is not None and not self.ensure_session(cwd):
             return False
         if cwd is None and not self.is_running():
@@ -64,7 +71,18 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
                 return False
         if show:
             self.show_for_directory(cwd or self._cwd or os.getcwd())
-        self._write_command(command)
+        if on_finished is None:
+            self._write_command(command)
+            return True
+        self._command_marker = f"__MHM_QGIS_DONE_{uuid.uuid4().hex}__="
+        self._command_callback = on_finished
+        self._append_text(f"$ {command}\n")
+        tracked = (
+            f"{command}\r\necho {self._command_marker}%errorlevel%\r\n"
+            if os.name == "nt"
+            else f"{command}\nprintf '\\n{self._command_marker}%s\\n' $?\n"
+        )
+        self._process.write(tracked.encode("utf-8"))
         return True
 
     def ensure_session(self, cwd: str) -> bool:
@@ -89,6 +107,10 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
     def is_running(self) -> bool:
         """Return whether the backing shell process is alive."""
         return self._process.state() != QtCore.QProcess.ProcessState.NotRunning
+
+    def command_running(self) -> bool:
+        """Return whether a tracked command has not reported its exit code."""
+        return bool(self._command_marker)
 
     def send_current_command(self) -> None:
         """Send the command line contents to the shell."""
@@ -141,14 +163,56 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
 
     def _read_output(self) -> None:
         data = bytes(self._process.readAllStandardOutput())
-        if data:
-            self._append_text(data.decode("utf-8", errors="replace"))
+        if not data:
+            return
+        self._consume_output(data.decode("utf-8", errors="replace"))
+
+    def _consume_output(self, text):
+        """Append shell output and resolve a tracked command marker."""
+        if not self._command_marker:
+            self._append_text(text)
+            return
+        self._command_buffer += text
+        marker_at = self._command_buffer.find(self._command_marker)
+        if marker_at < 0:
+            keep = len(self._command_marker) + 12
+            if len(self._command_buffer) > keep:
+                self._append_text(self._command_buffer[:-keep])
+                self._command_buffer = self._command_buffer[-keep:]
+            return
+        line_end = self._command_buffer.find("\n", marker_at)
+        if line_end < 0:
+            return
+        self._append_text(self._command_buffer[:marker_at])
+        status = self._command_buffer[
+            marker_at + len(self._command_marker):line_end
+        ].strip()
+        remainder = self._command_buffer[line_end + 1:]
+        callback = self._command_callback
+        self._command_marker = ""
+        self._command_buffer = ""
+        self._command_callback = None
+        if remainder:
+            self._append_text(remainder)
+        callback(int(status) if status.lstrip("-").isdigit() else -1)
 
     def _process_finished(self, exit_code, exit_status) -> None:
+        self._finish_pending_command(exit_code)
         self._append_text(f"\nShell exited with code {exit_code}.\n")
 
     def _process_error(self, error) -> None:
+        self._finish_pending_command(-1)
         self._append_text(f"Shell error: {self._process.errorString()}\n")
+
+    def _finish_pending_command(self, exit_code):
+        if self._command_buffer:
+            self._append_text(self._command_buffer)
+        callback = self._command_callback
+        self._command_marker = ""
+        self._command_buffer = ""
+        self._command_callback = None
+        if callback is not None:
+            callback(int(exit_code))
 
     def _append_text(self, *args, **kwargs):
         return terminal_controller._append_text(self, *args, **kwargs)

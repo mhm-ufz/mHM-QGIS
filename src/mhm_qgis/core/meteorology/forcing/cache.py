@@ -20,15 +20,35 @@ from ...handlers.state.cache import cached_payload, fingerprint, store_payload
 SECTION = "meteo_inspection"
 
 
+# What `inspect_meteo_folder` actually reads. The output cadence and the
+# aggregation are preparation choices it never sees, so including them only made
+# a changed aggregation silently re-open every file in the folder.
+_INSPECTED_FIELDS = (
+    "kind", "source", "crs", "pattern",
+    "temporal_resolution", "unit", "cumulative", "cumulative_resolution",
+)
+
+
 def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
-    """Return the input fingerprint and the file list it was taken from.
+    """Return the inspection fingerprint and the file list it was taken from.
 
     Listing the folder is cheap; opening the files is not, so the fingerprint is
     built from the listing plus each file's size and modification time.
     """
+    values = asdict(spec)
     files = _files_for_spec(spec)
-    digest = fingerprint(files, {**asdict(spec), "folder": str(spec.folder), "inspection_version": 3})
+    digest = fingerprint(files, {
+        **{name: values[name] for name in _INSPECTED_FIELDS},
+        "folder": str(spec.folder),
+        "inspection_version": 4,
+    })
     return digest, files
+
+
+def preparation_fingerprint(spec: MeteoFolderSpec) -> str:
+    """Return a digest covering every option the prepared forcing depends on."""
+    return fingerprint(_files_for_spec(spec), {
+        **asdict(spec), "folder": str(spec.folder), "preparation_version": 1})
 
 
 def _as_payload(metadata: SpatialMetadata) -> dict:

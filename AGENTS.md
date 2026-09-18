@@ -265,7 +265,11 @@ Four JSON files are used by the plugin.
   filled-DEM cells, not the padded rectangle. Cached per-outlet masks and gauge
   metadata are retained, but all active catchments and gauge memberships map to
   model domain 1. The namelist handoff contains one `master` domain.
-- Publication masks only DEM derivatives into `dem_derivatives_masked.nc`.
+- Publication watershed-masks **only the DEM**, into a single-variable
+  `dem_derivatives_masked.nc`. Slope, aspect, facc, fdir and idgauges go into
+  `input.nc` (v6) or the ASCII set (v5) straight from `dem_derivatives.nc`;
+  `setup._model_sources()` is the one place that composes the two bundles, and
+  `write_morph_mask` still reads the mask off the masked DEM's nodata.
   Soil, geology and land cover keep full class coverage (fill value 1); LAI keeps
   full coverage with fill value 0. They are never watershed-masked.
 - v5 writes the final master `dem.asc`, slope, aspect, facc, fdir and optional
@@ -412,6 +416,42 @@ Four JSON files are used by the plugin.
   NetCDF in a folder **twice**. On a 552-file ERA5-Land record that froze project load for
   ~22 s per folder; reusing an unchanged inspection brings the whole `load_input_state`
   from 22.6 s to 0.26 s. Do not call `inspect_meteo_folder` directly from the dialog.
+- That cache has **two** digests, and they are not interchangeable.
+  `inspection_fingerprint` covers only what inspection reads (files, kind, source,
+  CRS, pattern, input cadence, unit, cumulative settings); it deliberately omits
+  the aggregation and output cadence, which used to make a changed aggregation
+  silently re-open 4x552x2 files inside the worker. `preparation_fingerprint`
+  covers the whole spec and is what `executions/meteo._input_digest` uses, so a
+  changed aggregation still rebuilds the forcing.
+- Forcing preparation covers the **whole input record**, not the simulation
+  period; `run.times` only validates coverage.
+- Output interval keys come from `temporal.output_periods`, one vectorised
+  `datetime64` truncation per chunk, with `period_bounds` giving the interval's
+  start and end. `datetime64` units are calendar units, so `[M] + 1` and
+  `[Y] + 1` do the 28/29/30/31-day and leap arithmetic that the removed
+  `output_period` used `pd.DateOffset` for -- that call was per timestep, fell
+  through to `dateutil.relativedelta`, and cost ~38 us a step. Do not put
+  pandas back on that path.
+- Intervals are reduced with numpy, never a per-timestep Python loop.
+  `_group_edges` finds each run of equal keys, `_reduce_groups` reduces them all
+  in one reshaped call when their lengths are uniform (the hourly-to-daily case)
+  and falls back to one vectorised reduction per interval when they are not
+  (monthly, yearly). `_reduce_axis` uses `fmin`/`fmax`, which ignore NaN, so
+  Minimum/Maximum need no masked copy of the block. `_merge_group` folds the one
+  interval that straddles a file boundary. The read block is sized only by the
+  64 MiB budget: the old hard cap of 32 steps split every month file into 24
+  chunks and made whole-interval reduction impossible.
+- Aggregated intervals are stacked into batches of `api.INTERVAL_BATCH` before
+  they are aligned and written, and the output NetCDF is opened **once** per
+  variable. Doing either per output interval meant one resample, one Dataset
+  build and one file append per day, and the append cost grew with the unlimited
+  time dimension. `_crs_description` is memoized for the same reason: pyproj was
+  rebuilding a constant CF grid mapping on a Qt worker thread per block.
+- `process_meteo_inputs` takes `progress=`, ticked once per input file and wired
+  through `MeteorologyWorkflowWorker.progress` to
+  `TaskCoordinator.set_progress`. The workflow runs on a plain `QThread`
+  registered with `start_external`, which has no `QgsTask` to report through, so
+  without that signal the monitor sits at 0% for the entire run.
 
 ## Categorical Morphology Inputs
 
@@ -435,6 +475,15 @@ Four JSON files are used by the plugin.
 - The filled DEM defines the exact target grid and CRS. Original input and DEM CRS
   arguments are missing-metadata fallbacks and must not override conflicting embedded
   metadata.
+- Lookup mode stages `lc.nc`, `soil_class.nc` and `geology_class.nc` under
+  `Z Temp/Morphology/morph`. `externals/mhm_tools_handler._OUTPUTS` is the single
+  statement of that format: the raster name is handed to mhm-tools as its `-e`
+  extension, `categorical_output_suffix(kind)` is what callers name the file
+  with, and `prepare_categorical_file` refuses an output name whose suffix
+  disagrees. A GeoTIFF named `.asc` once reached publication as a text grid and
+  failed there with a `UnicodeDecodeError` instead of failing at the boundary.
+  v6 publishes those NetCDFs as they are and `write()` merges them into
+  `data/morph/input.nc`; v5.13 converts them to ASCII at publication.
 - Lookup mode retains `3_land_use.tif`, `3_soil.tif` and `3_geology_processed.tif` for
   the existing crop/mask/write workflow.
 - Soil and geology classdefinitions are produced once by their formatter and moved to
@@ -585,6 +634,16 @@ Four JSON files are used by the plugin.
   The worker sets `oom_score_adj=500` so the kernel takes the child first. Cancellation
   must terminate that child; a nonzero or signal exit is reported as a task failure
   rather than crashing QGIS.
+- **pyproj must never run on a `QgsTask` thread.** QGIS keeps its PROJ context in
+  thread-local storage and tears it down when a task thread ends, leaving libproj's
+  cached database context dangling for the next pooled thread: the *second* pyproj
+  call in a run segfaults the whole QGIS process in
+  `projCppContext::getDatabaseContext`. `osgeo.osr` is unaffected, and so is pyproj on
+  the GUI thread or on a plain Python thread. `TaskCoordinator._off_qthread` therefore
+  runs every submitted job on a short-lived `threading.Thread`; do not remove that
+  hop or call pyproj from a `QgsTask` body directly. This crashed Execute All between
+  the hydrology and gauge-position stages.
+
 - **Worker-side modules must not import Qt or QGIS.** Morphology commands live under
   `core/executions/morphology`; QGIS layer extraction/materialization stays under
   `qgis_bridge/layers`, and `core/handlers/lookup` keeps third-party imports lazy. There

@@ -11,7 +11,6 @@ from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QFileDialog,
     QLabel,
     QMessageBox,
     QPushButton,

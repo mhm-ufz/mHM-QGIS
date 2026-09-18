@@ -125,7 +125,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
     def _load_state(self):
         self.state = self.workflow.load_synced_state(
             DOMAIN_MODE_DELINEATOR,
-            bool(self.main_dialog.checkBox_DEMdomain.isChecked()),
+            False,
         )
 
     @staticmethod
@@ -466,9 +466,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         record["is_domain"] = self.checkBox_isDomainOutlet.isChecked()
         record["discharge_file"] = str(self.comboBox_dischargeFile.currentData() or "")
         record["threshold_cells"] = self.spinBox_channelThreshold.value()
-        self._draft_state["dem_domain"] = bool(
-            self.main_dialog.checkBox_DEMdomain.isChecked()
-        )
+        self._draft_state["dem_domain"] = False
         assign_domain_ids(self._draft_state)
 
     def _default_gauge_point(self, outlet_id):

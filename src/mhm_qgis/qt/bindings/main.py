@@ -157,9 +157,6 @@ def bind(dialog):
     dialog.comboBox_pourPointOutletID.currentIndexChanged.connect(
         dialog.handle_model_input_changed
     )
-    dialog.checkBox_DEMdomain.toggled.connect(
-        dialog.handle_model_input_changed
-    )
     dialog.comboBox_domainDefinitionType.activated.connect(
         dialog.handle_domain_definition_type
     )

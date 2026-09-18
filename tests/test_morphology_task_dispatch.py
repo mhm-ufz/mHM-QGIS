@@ -57,6 +57,28 @@ def test_execute_all_uses_managed_pipeline():
     dialog.close()
 
 
+def test_execute_all_completion_failure_restores_controls():
+    _app()
+    dialog = MhmQgisDialog()
+    bridge = dialog.morphology_tasks
+    states, finishes = [], []
+    bridge.execute_all_active = True
+    dialog.set_meteo_setup_controls_enabled = states.append
+
+    def finish(_key, ok, message):
+        if ok:
+            raise RuntimeError("completion failed")
+        finishes.append(message)
+
+    dialog.finish_morphology_workflow = finish
+    bridge._finish_execute_all()
+
+    assert bridge.execute_all_active is False
+    assert states == [True]
+    assert finishes == ["completion failed"]
+    dialog.close()
+
+
 @pytest.mark.parametrize("action,variable", [
     ("Fill DEM", "filled_dem"), ("Slope", "slope"), ("Aspect", "aspect"),
     ("Flow Accumulation", "flow_accumulation"), ("Flow Direction", "flow_direction"),

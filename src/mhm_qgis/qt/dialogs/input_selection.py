@@ -19,6 +19,7 @@ from ...qt.bindings.netcdf_asc_additional_input import bind as bind_raster_detai
 from ...qt.bindings.single_layer_input import bind_single_layer_lookup
 from ...qt.bindings.single_layer_lookup import bind_lookup_config
 from ..ui import load_form
+from .file_picker import open_file
 
 Ui_LaiNetcdfInputDialog = load_form("lai_netcdf_input_dialog.ui")
 Ui_MhmReadyInputDialog = load_form("mhm_ready_morph_input.ui")
@@ -466,6 +467,27 @@ def _populate_file_combo(combo_box, project_folder, kind, initial=""):
     combo_box.setCurrentIndex(selected)
 
 
+def _populate_layer_combo(adapter, project_folder, kind, initial=""):
+    """Populate a categorical input with loaded layers and project files."""
+    combo_box = adapter.combo_box
+    combo_box.clear()
+    adapter.addItem("", {"origin": "empty"})
+    selected = 0
+    initial = str(initial or "")
+    for item in (*loaded_qgis_items(kind), *scan_project_inputs(project_folder, kind)):
+        adapter.addItem(item.label, item.data)
+        source = str(item.data.get("source") or item.data.get("path") or "")
+        if initial and source == initial:
+            selected = combo_box.count() - 1
+    if initial and selected == 0 and Path(initial).is_file():
+        adapter.addItem(
+            str(Path(initial).resolve()),
+            {"origin": "file", "kind": kind, "path": str(Path(initial).resolve())},
+        )
+        selected = combo_box.count() - 1
+    combo_box.setCurrentIndex(selected)
+
+
 def _combo_raster_details(combo_box):
     value = combo_box.currentData()
     return dict(value) if isinstance(value, dict) else {}
@@ -477,11 +499,15 @@ def _restore_raster_details(combo_box, initial):
     index = combo_box.currentIndex()
     if index < 0:
         return
-    combo_box.setItemData(index, {
-        "path": str(initial["input_path"]),
-        "variable": str(initial.get("variable", "")),
-        "source_crs": str(initial.get("source_crs", "")),
-    })
+    data = combo_box.itemData(index)
+    data = dict(data) if isinstance(data, dict) else {}
+    data.update(
+        origin="file",
+        path=str(initial["input_path"]),
+        variable=str(initial.get("variable", "")),
+        source_crs=str(initial.get("source_crs", "")),
+    )
+    combo_box.setItemData(index, data)
 
 
 def raster_details(parent, path):
@@ -518,13 +544,14 @@ def _ensure_raster_details(parent, combo_box):
 
 
 def _browse_raster_into_combo(parent, combo_box, title, file_filter):
-    path, _ = QtWidgets.QFileDialog.getOpenFileName(parent, title, "", file_filter)
+    path, _ = open_file(parent, title, file_filter)
     if not path:
         return False
     details = raster_details(parent, path)
     if details is None:
         return False
     data = {
+        "origin": "file",
         "path": details.input_path,
         "variable": details.variable,
         "source_crs": details.source_crs,
@@ -540,7 +567,7 @@ def _browse_raster_into_combo(parent, combo_box, title, file_filter):
 
 
 def _browse_into_combo(parent, combo_box, title, file_filter):
-    path, _ = QtWidgets.QFileDialog.getOpenFileName(parent, title, "", file_filter)
+    path, _ = open_file(parent, title, file_filter)
     if not path:
         return
     path = str(Path(path).resolve())
@@ -702,7 +729,9 @@ class MhmReadyInputDialog(QtWidgets.QDialog, Ui_MhmReadyInputDialog):
 class SingleLayerInputDialog(QtWidgets.QDialog, Ui_SingleLayerLookupDialog):
     """Select one categorical layer and its lookup configuration."""
 
-    def __init__(self, project_folder, kind, parent=None, initial=None):
+    def __init__(
+        self, project_folder, kind, parent=None, initial=None, initial_layer=None
+    ):
         super().__init__(parent)
         self.setupUi(self)
         self.kind = str(kind)
@@ -715,13 +744,18 @@ class SingleLayerInputDialog(QtWidgets.QDialog, Ui_SingleLayerLookupDialog):
         self.groupBox_inputLayerType.setTitle(title)
         initial = initial or {}
         source_kind = "land_cover" if self.kind == "lc" else self.kind
-        _populate_file_combo(
-            self.comboBox_inputLayer,
+        self.input_adapter = InputComboAdapter(
+            self.comboBox_inputLayer, source_kind, self
+        )
+        _populate_layer_combo(
+            self.input_adapter,
             project_folder,
             source_kind,
             initial.get("input_path", "") if isinstance(initial, dict) else "",
         )
         _restore_raster_details(self.comboBox_inputLayer, initial)
+        if initial_layer is not None:
+            self.input_adapter.setLayer(initial_layer)
         _populate_file_combo(
             self.lookup_table_combo,
             project_folder,
@@ -739,13 +773,18 @@ class SingleLayerInputDialog(QtWidgets.QDialog, Ui_SingleLayerLookupDialog):
         return single_layer_controller._refresh_fields(self, *args, **kwargs)
 
     def selected_config(self) -> SingleLayerLookupConfig | None:
-        source = _combo_path(self.comboBox_inputLayer)
+        source = self.input_adapter.source_path()
         lookup = _combo_path(self.lookup_table_combo)
         mapping = self.mapping_field_combo.currentText().strip()
         class_field = self.class_field_combo.currentText().strip()
         if not source or not lookup or not mapping or not class_field:
             return None
-        if not Path(source).is_file() or not Path(lookup).is_file():
+        data = self.comboBox_inputLayer.currentData()
+        qgis_source = isinstance(data, dict) and data.get("origin") == "qgis"
+        layer = self.input_adapter.currentLayer() if qgis_source else None
+        if not ((layer is not None and layer.isValid()) or Path(source).is_file()):
+            return None
+        if not Path(lookup).is_file():
             return None
         details = _combo_raster_details(self.comboBox_inputLayer)
         return SingleLayerLookupConfig(
@@ -758,7 +797,7 @@ class SingleLayerInputDialog(QtWidgets.QDialog, Ui_SingleLayerLookupDialog):
         )
 
     def accept(self):
-        source = _combo_path(self.comboBox_inputLayer)
+        source = self.input_adapter.source_path()
         if Path(source).suffix.lower() in {".asc", ".nc"} and not _ensure_raster_details(
             self, self.comboBox_inputLayer
         ):

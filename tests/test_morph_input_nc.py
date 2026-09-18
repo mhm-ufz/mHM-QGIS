@@ -15,7 +15,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from mhm_qgis.core.morphology.layers.morph_input_nc import (  # noqa: E402
     MORPH_VARIABLES,
-    available_layers,
     write_morph_input_nc,
 )
 from mhm_qgis.core.morphology.layers.mask import write_morph_mask
@@ -43,6 +42,7 @@ def _raster(path, values, nodata=-9999, epsg=32632):
 
 
 def _masked_set(folder, names=None):
+    """Stage a bundle and return the name -> source map `write` would build."""
     folder.mkdir(parents=True, exist_ok=True)
     written = {}
     base = np.arange(12, dtype="float64").reshape(3, 4)
@@ -54,20 +54,14 @@ def _masked_set(folder, names=None):
     derivatives = {name: path for name, path in written.items() if name not in {"soil_class", "geology_class"}}
     if derivatives:
         copy_rasters(bundle, derivatives)
-    return written
-
-
-def test_available_layers_finds_the_masked_rasters(tmp_path):
-    _masked_set(tmp_path, names={"dem", "slope"})
-    found = available_layers(tmp_path)
-    assert sorted(found) == ["dem", "slope"]
-    assert found["dem"] == source(tmp_path / "dem_derivatives_masked.nc", "dem")
+    return {name: (source(bundle, name) if name in derivatives else path)
+            for name, path in written.items()}
 
 
 def test_input_nc_has_the_example_structure(tmp_path):
-    _masked_set(tmp_path)
+    layers = _masked_set(tmp_path)
     output = write_morph_input_nc(
-        tmp_path / "input.nc", available_layers(tmp_path), L0,
+        tmp_path / "input.nc", layers, L0,
         crs_string="EPSG:32632", title="Static morphology inputs for test",
     )
 
@@ -108,9 +102,9 @@ def test_input_nc_has_the_example_structure(tmp_path):
 
 
 def test_values_are_copied_verbatim_from_the_masked_rasters(tmp_path):
-    _masked_set(tmp_path)
+    layers = _masked_set(tmp_path)
     output = write_morph_input_nc(
-        tmp_path / "input.nc", available_layers(tmp_path), L0,
+        tmp_path / "input.nc", layers, L0,
         crs_string="EPSG:32632")
 
     base = np.arange(12, dtype="float64").reshape(3, 4)
@@ -139,7 +133,7 @@ def test_a_geographic_project_writes_lon_lat_without_transforming(tmp_path):
 
     copy_rasters(folder / "dem_derivatives_masked.nc", {"dem": path})
     output = write_morph_input_nc(
-        tmp_path / "input.nc", available_layers(folder), geographic,
+        tmp_path / "input.nc", {"dem": source(folder / "dem_derivatives_masked.nc", "dem")}, geographic,
         crs_string="EPSG:4326")
 
     with xr.open_dataset(output) as result:
@@ -149,9 +143,9 @@ def test_a_geographic_project_writes_lon_lat_without_transforming(tmp_path):
 
 
 def test_missing_layers_are_simply_omitted(tmp_path):
-    _masked_set(tmp_path, names={"dem", "facc"})
+    layers = _masked_set(tmp_path, names={"dem", "facc"})
     output = write_morph_input_nc(
-        tmp_path / "input.nc", available_layers(tmp_path), L0,
+        tmp_path / "input.nc", layers, L0,
         crs_string="EPSG:32632")
 
     with xr.open_dataset(output) as result:
@@ -191,8 +185,7 @@ def test_writing_without_any_layer_is_rejected(tmp_path):
 
 
 def test_a_failed_write_leaves_no_partial_file(tmp_path):
-    _masked_set(tmp_path, names={"dem"})
-    layers = available_layers(tmp_path)
+    layers = _masked_set(tmp_path, names={"dem"})
     layers["slope"] = tmp_path / "absent.tif"
 
     with pytest.raises(RuntimeError, match="Could not open the masked raster"):

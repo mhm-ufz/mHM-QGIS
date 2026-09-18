@@ -13,8 +13,9 @@ from pathlib import Path
 import copy
 
 from qgis.core import QgsVectorLayer
-from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QMessageBox
 
+from ..dialogs.file_picker import open_file
 from ..dialogs.input_selection import scan_project_inputs
 
 
@@ -118,10 +119,9 @@ def _path_label(dialog, path):
 
 
 def _browse_discharge(dialog, _checked=False):
-    path, _ = QFileDialog.getOpenFileName(
+    path, _ = open_file(
         dialog,
         "Select discharge data",
-        dialog.project_folder,
         "Discharge data (*.csv *.txt)",
     )
     if not path:

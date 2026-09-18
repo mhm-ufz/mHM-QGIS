@@ -14,7 +14,7 @@ from ...handlers.store.layout import is_v6, morph_folder
 from ...handlers.store.paths import geometry_folder, master_data_folder, workspace_folder
 from ...morphology.layers import lai
 from ...morphology.layers.advanced_l0 import missing_model_inputs, publish_model_inputs
-from ...morphology.layers.morph_input_nc import available_layers, write_morph_input_nc
+from ...morphology.layers.morph_input_nc import write_morph_input_nc
 from ...morphology.layers.mask import write_morph_mask
 from . import PUBLICATION_STAGES
 from .delineation import domain_mask
@@ -45,8 +45,15 @@ def _derivative_sources(folder, suffix=""):
     return layers
 
 
+def _model_sources(folder):
+    """Only the DEM is watershed-masked; the rest are already model-ready."""
+    layers = _derivative_sources(folder)
+    layers.update(_derivative_sources(folder, "_masked"))
+    return layers
+
+
 def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
-    """Mask DEM derivatives while retaining categorical coverage everywhere."""
+    """Mask the domain DEM while retaining full coverage for every other layer."""
     l0 = dict(request.headers["L0"])
     folder = Path(geometry_folder(request.project_folder))
     filled = folder / "filled_dem.nc"
@@ -56,8 +63,8 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     if "dem" not in derivatives:
         raise FileNotFoundError("Prepare the NetCDF DEM derivatives before masking.")
     keep = _target_mask(watershed, l0, request.crs, filled)
-    output = copy_rasters(folder / "dem_derivatives_masked.nc", derivatives, l0,
-                          reference_path=filled, mask=keep, task=task)
+    output = copy_rasters(folder / "dem_derivatives_masked.nc", {"dem": derivatives["dem"]},
+                          l0, reference_path=filled, mask=keep, task=task)
     outputs.append(output)
     _record(request.project_folder, output, "aligned L0 NetCDF mask")
     if request.lai_source:
@@ -102,7 +109,7 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     if is_v6(request.project_folder):
         from ...handlers.state.nml_settings import load_settings
         settings = load_settings(request.project_folder)
-        layers = available_layers(folder)
+        layers = _model_sources(folder)
         for name, section in (
             ("soil_class", "soil"),
             ("geology_class", "geology"),
@@ -149,7 +156,7 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         return (Path(output), Path(dem), Path(morph_mask))
 
     outputs = []
-    for name, uri in _derivative_sources(folder, "_masked").items():
+    for name, uri in _model_sources(folder).items():
         output = write_domain_dem_ascii(uri, destination / f"{name}.asc",
                                         request.headers["L0"], None, reference_path=folder / "filled_dem.nc", task=task)
         outputs.append(Path(output))

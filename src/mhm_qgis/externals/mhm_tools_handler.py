@@ -15,16 +15,23 @@ from ..core.handlers import lookup
 
 LogCallback = Callable[[str], None]
 
+# The raster name states the format: mhm-tools takes it as its `-e` extension
+# and names the file after it, so the two can never drift apart.
 _OUTPUTS = {
-    "soil": ("format_soil_data", "soil_class.tif", "soil_classdefinition.txt"),
+    "soil": ("format_soil_data", "soil_class.nc", "soil_classdefinition.txt"),
     "geology": (
         "format_geology_data",
-        "geology_class.tif",
+        "geology_class.nc",
         "geology_classdefinition.txt",
     ),
-    "lc": ("format_lc_data", "lc.tif", None),
-    "lai": ("format_lai_data", "lai_class.tif", "LAI_classdefinition.txt"),
+    "lc": ("format_lc_data", "lc.nc", None),
+    "lai": ("format_lai_data", "lai_class.nc", "LAI_classdefinition.txt"),
 }
+
+
+def categorical_output_suffix(kind: str) -> str:
+    """Return the file extension `prepare_categorical_file` writes for `kind`."""
+    return Path(_OUTPUTS[kind][1]).suffix
 
 
 class _StreamToCallback(io.TextIOBase):
@@ -129,6 +136,13 @@ def prepare_categorical_file(
     formatter_name, raster_name, definition_name = _OUTPUTS[kind]
     if classdefinition_file is not None and definition_name is None:
         raise ValueError("Land-cover formatting does not write a classdefinition.")
+    if Path(output_file).suffix.lower() != Path(raster_name).suffix:
+        # A GeoTIFF named `.asc` reaches publication as a text grid and fails
+        # there instead of here; the name must state the real format.
+        raise ValueError(
+            f"Categorical {kind} output must be named {Path(raster_name).suffix}, "
+            f"not {Path(output_file).suffix}: {output_file}"
+        )
 
     input_path = Path(input_file)
     dem_path = Path(dem_file)
@@ -200,7 +214,7 @@ def prepare_categorical_file(
                     "lookup_table": lookup_for_tools,
                     "mapping_field": formatter_mapping_field,
                     "class_field": class_field,
-                    "output_type": "tif",
+                    "output_type": Path(raster_name).suffix.lstrip("."),
                 }
                 if formatter_input_crs is not None:
                     formatter_kwargs["input_crs"] = formatter_input_crs

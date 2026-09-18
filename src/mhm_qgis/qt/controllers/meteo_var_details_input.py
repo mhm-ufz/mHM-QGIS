@@ -1,10 +1,11 @@
 """Populate and validate meteorology metadata without opening data files."""
 from pathlib import Path
-from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QMessageBox
 from ...core.meteorology.forcing.types import MeteoFolderSpec
 from ...core.meteorology.forcing.temporal import (
     CADENCES, VARIABLES, normalize_unit, validate_spec,
 )
+from ..dialogs.file_picker import open_directory
 
 
 def populate(dialog, initial):
@@ -55,7 +56,7 @@ def update_aggregation_control(dialog):
 
 def browse(dialog):
     """Select a folder without scanning its contents."""
-    folder = QFileDialog.getExistingDirectory(dialog, "Meteorology folder", dialog.comboBox_inputFolder.currentText() or dialog.project_directory or "")
+    folder = open_directory(dialog, "Meteorology folder")
     if folder:
         dialog.comboBox_inputFolder.setCurrentText(folder)
 

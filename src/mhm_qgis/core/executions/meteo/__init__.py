@@ -17,7 +17,7 @@ from ...meteorology.forcing import (
     SpatialMetadata,
     process_meteo_inputs,
     inspect_meteo_inputs_cached,
-    inspection_fingerprint,
+    preparation_fingerprint,
 )
 from ...grid import TargetGrid
 from ...meteorology.mask import write_meteo_mask
@@ -106,7 +106,7 @@ def reuse_prepared(run: MeteorologyRun, state, *, log=None) -> bool:
     return True
 
 
-def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None) -> bool:
+def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None, progress=None) -> bool:
     """Prepare every selected meteorology forcing file. Returns success."""
     _say(log, "\n--- Preparing meteorology forcing files ---")
     _say(log, f"Meteorology output folder: {meteo_output_root(run.project_folder)}")
@@ -130,6 +130,7 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None) -> boo
             flat_layout=flat,
             log=log,
             inspections=run.inspections,
+            progress=progress,
         )
         mask = None
         if flat:
@@ -163,8 +164,7 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None) -> boo
 
 def _input_digest(run):
     """Grid checks alone cannot detect a changed glob, source or input file."""
-    return [inspection_fingerprint(spec.normalized())[0]
-            for spec in run.inputs]
+    return [preparation_fingerprint(spec.normalized()) for spec in run.inputs]
 
 
 __all__ = [

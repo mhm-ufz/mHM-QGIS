@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ...grid import header_center_arrays
-from ...handlers.file.netcdf.raster import source, variables
 from ...handlers.raster.tasks import _aligned_l0_window, _dependencies
 
 
@@ -59,21 +58,6 @@ MORPH_VARIABLES = (
         "units": "1",
     }),
 )
-
-
-def available_layers(geometry_folder, suffix="_masked") -> dict[str, Path | str]:
-    """Return the masked rasters present for each `input.nc` variable."""
-    folder = Path(geometry_folder)
-    found = {}
-    bundle = folder / f"dem_derivatives{suffix}.nc"
-    names = variables(bundle)
-    for name, stem, _dtype, _attrs in MORPH_VARIABLES:
-        candidate = folder / f"{stem}{suffix}.tif"
-        if name in names:
-            found[name] = source(bundle, name)
-        elif stem.startswith("3_") and candidate.is_file():
-            found[name] = candidate
-    return found
 
 
 def write_morph_input_nc(
@@ -250,6 +234,5 @@ def _copy_layer(
 
 __all__ = [
     "MORPH_VARIABLES",
-    "available_layers",
     "write_morph_input_nc",
 ]
