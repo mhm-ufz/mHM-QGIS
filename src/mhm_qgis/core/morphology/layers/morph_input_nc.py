@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Assemble the masked L0 morphology rasters into one v6 `input.nc`.
+"""Assemble common-L0 morphology rasters into one v6 ``input.nc``.
 
 mHM v6 reads its static morphology from a single NetCDF whose variables share
 the model grid, instead of the separate Arc/Info ASCII files v5.13 expects. The
@@ -16,13 +16,13 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from ...grid import header_center_arrays
-from ...handlers.raster.tasks import _aligned_l0_window, _dependencies
+from ...handlers.raster.tasks import _aligned_l0_window
 
 
 NODATA = -9999
 BLOCK_ROWS = 256
 
-# Variable name -> (masked raster stem, dtype, attributes).
+# Variable name -> (source raster stem, dtype, attributes).
 MORPH_VARIABLES = (
     ("dem", "dem", "f8", {
         "long_name": "elevation",
@@ -74,8 +74,8 @@ def write_morph_input_nc(
     from netCDF4 import Dataset
 
     if not layers:
-        raise ValueError("No masked morphology rasters were found for input.nc.")
-    _np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
+        raise ValueError("No morphology rasters were found for input.nc.")
+    from osgeo import gdal
 
     rows = int(target_header["nrows"])
     columns = int(target_header["ncols"])
@@ -196,10 +196,10 @@ def _to_wgs84(block_x, block_y, crs_string):
 def _copy_layer(
         variable, source_path, target_header, reference_path,
         rows, columns, gdal, np) -> None:
-    """Copy one masked raster into its variable, block by block."""
+    """Copy one aligned raster into its variable, block by block."""
     source = gdal.Open(str(source_path), gdal.GA_ReadOnly)
     if source is None:
-        raise RuntimeError(f"Could not open the masked raster: {source_path}")
+        raise RuntimeError(f"Could not open the morphology raster: {source_path}")
     try:
         window = _aligned_l0_window(
             source, source_path, target_header, reference_path)
@@ -220,7 +220,7 @@ def _copy_layer(
                 )
                 if read is None:
                     raise RuntimeError(
-                        f"Could not read the masked raster: {source_path}")
+                        f"Could not read the morphology raster: {source_path}")
                 block[
                     overlap_start - start: overlap_stop - start,
                     window["target_x"]: window["target_x"] + window["copy_cols"],

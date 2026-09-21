@@ -4,95 +4,32 @@ x-fortran-namelist: PET3
 type: object
 properties:
   canopyheigth_forest:
+    $ref: parameter.yml#/$defs/parameter
     title: Canopy height forest
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[15.00, 40.00, 15.000, 1, 1]]
   canopyheigth_impervious:
+    $ref: parameter.yml#/$defs/parameter
     title: Canopy height impervious
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.01, 0.50, 0.0200, 1, 1]]
   canopyheigth_pervious:
+    $ref: parameter.yml#/$defs/parameter
     title: Canopy height pervious
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.10, 5.00, 0.1100, 1, 1]]
   displacementheight_coeff:
+    $ref: parameter.yml#/$defs/parameter
     title: Displacement height coefficient
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.50, 0.85, 0.6400, 1, 1]]
   roughnesslength_momentum_coeff:
+    $ref: parameter.yml#/$defs/parameter
     title: Roughness length momentum coefficient
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.09, 0.16, 0.0950, 1, 1]]
   roughnesslength_heat_coeff:
+    $ref: parameter.yml#/$defs/parameter
     title: Roughness length heat coefficient
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.07, 0.13, 0.0750, 1, 1]]
   stomatal_resistance:
+    $ref: parameter.yml#/$defs/parameter
     title: Stomatal resistance
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[10.00, 200.00, 56.000, 1, 1]]
 required:
   - canopyheigth_forest

@@ -340,6 +340,14 @@ def prepare_soil_horizons(
 
 def xarray_coord_key(data, *, lat: bool = False, lon: bool = False) -> str:
     """Return the name of a dataset's latitude or longitude coordinate."""
+    axis = "Y" if lat else "X"
+    for name, coordinate in data.coords.items():
+        if (
+            coordinate.ndim == 1
+            and coordinate.attrs.get("axis", "").upper() == axis
+        ):
+            return str(name)
+
     from mhm_tools.common.xarray_utils import get_coord_key
 
     return get_coord_key(data, lat=lat, lon=lon)

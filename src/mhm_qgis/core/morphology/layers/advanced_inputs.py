@@ -15,6 +15,7 @@ from ...handlers.lookup import (
 )
 from ....externals.mhm_tools_handler import prepare_land_cover_periods, prepare_soil_horizons
 from ...handlers.state.nml_settings import relative_workspace_path, update_section, load_settings
+from ...handlers.store.layout import morph_folder
 from ...handlers.store.paths import geometry_folder, morph_staging_folder
 
 
@@ -25,7 +26,10 @@ def input_fingerprint(value, dem_file, version):
              if isinstance(value, LandUseInput) else
              [getattr(horizon, name) for horizon in value.horizons
               for name in ("clay_layer", "sand_layer", "silt_layer", "bulk_density_layer")])
-    return fingerprint([dem_file, *paths], {"inputs": value.as_dict(), "version": version})
+    return fingerprint(
+        [dem_file, *paths],
+        {"inputs": value.as_dict(), "format": "common-l0-nc-1"},
+    )
 
 
 def process_land_cover_input(
@@ -42,7 +46,7 @@ def process_land_cover_input(
                             simulation_end=times.get("sim_end"), version=version)
     manifest = _manifest_path(project_folder, "land_cover")
     write_land_use_manifest(value, manifest)
-    output_type = "asc" if str(version).startswith("5") else "nc"
+    output_type = "nc"
     with TemporaryDirectory(
         prefix="mhm_qgis_land_cover_", dir=geometry_folder(project_folder)
     ) as temporary:
@@ -58,14 +62,11 @@ def process_land_cover_input(
         )
         published = _publish_directory(temporary, morph_staging_folder(project_folder))
 
-    data_outputs = tuple(
-        path for path in published if path.suffix.lower() in {".asc", ".nc"}
-    )
+    data_outputs = tuple(path for path in published if path.suffix.lower() == ".nc")
     if not data_outputs:
         raise RuntimeError("Land-cover formatting did not create model input files.")
     scenes = []
-    asc_outputs = [path for path in data_outputs if path.suffix.lower() == ".asc"]
-    for index, period in enumerate(value.periods):
+    for period in value.periods:
         scene = {
             "start_time": period.start_time.isoformat(),
             "end_time": period.end_time.isoformat(),
@@ -73,9 +74,10 @@ def process_land_cover_input(
             "end_year": period.end_year,
             "source_path": str(period.file_path),
         }
-        if index < len(asc_outputs):
+        if str(version).startswith("5"):
+            name = f"lc_{period.start_year}_{period.end_year}.asc"
             scene["output_path"] = relative_workspace_path(
-                project_folder, asc_outputs[index]
+                project_folder, Path(morph_folder(project_folder)) / name
             )
         scenes.append(scene)
     shared = next(
@@ -111,7 +113,7 @@ def process_soil_input(
     """Write a horizon manifest and stage outputs for common-L0 publication."""
     manifest = _manifest_path(project_folder, "soil")
     write_soil_manifest(value, manifest)
-    output_type = "asc" if str(version).startswith("5") else "nc"
+    output_type = "nc"
     with TemporaryDirectory(
         prefix="mhm_qgis_soil_", dir=geometry_folder(project_folder)
     ) as temporary:
@@ -143,7 +145,7 @@ def process_soil_input(
         "soil",
         {
             "mode": "multi_horizon",
-            "soil_db_mode": 0 if output_type == "asc" else 1,
+            "soil_db_mode": 1,
             "manifest_path": relative_workspace_path(project_folder, manifest),
             "output_path": relative_workspace_path(project_folder, data_path),
             "variable": "soil_class",

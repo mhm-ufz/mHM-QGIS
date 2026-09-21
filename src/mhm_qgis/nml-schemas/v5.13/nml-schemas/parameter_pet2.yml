@@ -4,30 +4,12 @@ x-fortran-namelist: PET2
 type: object
 properties:
   PriestleyTaylorCoeff:
+    $ref: parameter.yml#/$defs/parameter
     title: Priestley-Taylor coefficient
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.75, 1.75, 1.1900, 1, 1]]
   PriestleyTaylorLAIcorr:
+    $ref: parameter.yml#/$defs/parameter
     title: Priestley-Taylor LAI correction factor
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[-0.50, 0.20, 0.0580, 1, 1]]
 required:
   - PriestleyTaylorCoeff

@@ -4,43 +4,16 @@ x-fortran-namelist: PET0
 type: object
 properties:
   minCorrectionFactorPET:
+    $ref: parameter.yml#/$defs/parameter
     title: minimum factor for PET correction with aspect
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.7000, 1.3000, 0.9, 1, 1]]
   maxCorrectionFactorPET:
+    $ref: parameter.yml#/$defs/parameter
     title: maximum factor for PET correction with aspect
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.0000, 0.2000, 0.1, 1, 1]]
   aspectTresholdPET:
+    $ref: parameter.yml#/$defs/parameter
     title: aspect threshold
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[160.00, 200.00, 180.0, 1, 1]]
 required:
   - minCorrectionFactorPET

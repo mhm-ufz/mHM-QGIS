@@ -80,11 +80,11 @@ def test_an_inconsistent_saved_grid_contract_is_discarded(tmp_path: Path) -> Non
 def test_workflow_updates_preserve_sections_other_writers_own(tmp_path: Path) -> None:
     from mhm_qgis.core.handlers.state.cache import cached_payload, store_payload
 
-    processing.mark_workflow(tmp_path, "execute_all", "running")
+    processing.mark_workflow(tmp_path, "execute_all_morphology", "running")
     store_payload(tmp_path, "stages", "geology", "d1", {"outputs": ["g.tif"]})
     store_payload(tmp_path, "meteo_inspection", "pre", "d2", {"files": []})
 
-    processing.mark_workflow(tmp_path, "execute_all", "completed")
+    processing.mark_workflow(tmp_path, "execute_all_morphology", "completed")
 
     assert cached_payload(tmp_path, "stages", "geology", "d1") == {
         "outputs": ["g.tif"]
@@ -92,7 +92,7 @@ def test_workflow_updates_preserve_sections_other_writers_own(tmp_path: Path) ->
     assert cached_payload(tmp_path, "meteo_inspection", "pre", "d2") == {
         "files": []
     }
-    assert processing.workflow(tmp_path, "execute_all")["status"] == "completed"
+    assert processing.workflow(tmp_path, "execute_all_morphology")["status"] == "completed"
 
 
 def test_a_corrupt_state_file_does_not_lose_the_new_write(tmp_path: Path) -> None:
@@ -100,6 +100,6 @@ def test_a_corrupt_state_file_does_not_lose_the_new_write(tmp_path: Path) -> Non
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("{ not json", encoding="utf-8")
 
-    processing.mark_workflow(tmp_path, "execute_all", "completed")
+    processing.mark_workflow(tmp_path, "execute_all_morphology", "completed")
 
-    assert processing.workflow(tmp_path, "execute_all")["status"] == "completed"
+    assert processing.workflow(tmp_path, "execute_all_morphology")["status"] == "completed"

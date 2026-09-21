@@ -250,16 +250,18 @@ Four JSON files are used by the plugin.
 - Scan establishes the common grid before either execution. `core/grid/raster.py`
   reads DEM metadata only (a warped VRT when CRS conversion is necessary).
 - `pushButton_executeAllMorphology` schedules `EXECUTE_ALL_STAGES`: NetCDF DEM
-  derivatives, categorical inputs, LAI, hydrology, optional snapping and gauges,
-  then publication. `setup.PUBLICATION_STAGES` is mask → publish → latlon (both versions)
-  → write. There are no late crop, per-outlet link or per-outlet DEM stages.
+  derivatives, saved gauge positions, morphology mask, categorical inputs, LAI,
+  then one version-aware publication stage. Snapping and delineation must already
+  be saved by Domain Delineator. There are no late crop, per-outlet link or
+  per-outlet DEM stages.
 - `pushButton_executeAllMeteo` runs only `core/executions/meteo`, never morphology.
 - DEM processing does not modify mHM-tools. Derive terrain on the real DEM first, then place all
   variables once on the common L0 extent in `Z Temp/Geometry/dem_derivatives.nc`.
   Extract `dem_filled` as the single raster variable `dem` in `filled_dem.nc` with
   x/y/CRS metadata. Common-grid padding cannot invent sinks or flow paths.
-- Derivative reuse fingerprints the DEM, CRS and exact target header. Channel,
-  gauge and catchment jobs reuse saved D8 `fdir`. Missing filled DEMs are extracted
+- Derivative reuse fingerprints the DEM, CRS and exact target header. Channel and
+  catchment jobs reuse saved D8 `fdir`; gauges burn their saved snapped coordinates
+  directly into `idgauges.nc`. Missing filled DEMs are extracted
   from an unchanged bundle. Legacy derivative TIFFs are neither reused nor deleted.
 - One model domain is the union of selected catchments; no selection means valid
   filled-DEM cells, not the padded rectangle. Cached per-outlet masks and gauge
@@ -330,15 +332,16 @@ Four JSON files are used by the plugin.
 - Prepared L0 rasters use integer window copies and padding, never resampling.
   `crop_aligned_l0_raster()`/`mask_aligned_l0_raster()` remain low-level APIs and
   reject a misaligned or wrong-CRS source; they are not a late crop workflow.
-- Class inputs must never carry nodata. `advanced_l0.pad_spec_for` declares class
-  pad/fill 1 and LAI pad/fill 0, while band nodata stays -9999. Publication fills
-  invalid class cells even when the grid already matches. Only derivative masks
-  may carve nodata outside catchments.
+- Categorical and LAI staging outputs must already match the exact common L0 grid.
+  Publication validates and copies them without a second crop, resample or invented
+  class-1 fill. Only the v5 DEM is watershed-masked; v6 keeps `dem.nc` whole and
+  uses `morph_mask.nc` to define active cells.
 - ASCII padding/filling streams rows (`handlers/file/ascii/pad.py`). Do not load
   huge class rasters into memory to pad them. Only class products are published;
   original soil horizon inputs are never rewritten.
-- Publication records each substep under `execute_all_mask`, `_publish`, `_latlon`
-  and `_write`. Failures must identify the failed stage.
+- Publication is one `execute_all_morphology_publish` boundary. It emits v5 ASCII
+  inputs or v6 NetCDF inputs and always publishes `idgauges.asc` separately when
+  `idgauges.nc` exists; `idgauges` never belongs in v6 `input.nc`.
 - Aligned L2 forcing is sliced/padded by `core/grid/arrays.py`; only misaligned or
   reprojected forcing is resampled (nearest-neighbour). Check every output against
   the saved L2 header before publication.
@@ -590,6 +593,21 @@ Four JSON files are used by the plugin.
   dimensions to nml-tools, which owns the editor and the rendering. There is no
   `Configuration/` package.
 - Schemas ship under `nml-schemas/v5.13` and `nml-schemas/v6`.
+- **Every schema file must be reachable from a file profile.** `nml-config.toml`
+  registers namelists and the `[[file_profiles]]` lists decide which ones exist;
+  a schema that no profile names is dead, and a namelist registered but unlisted
+  is invisible in the GUI. v5.13 carried 13 stray v6 schemas (`config_project`,
+  `config_time`, `output_mhm`, ... - v6 namelist names mHM 5.13 does not have)
+  plus an unlisted `rivertemp1`; all were removed.
+- Each version defines its calibration parameter **once** in
+  `nml-schemas/parameter.yml` and every parameter property `$ref`s it. The two
+  base types are deliberately different and must not be swapped: v6 is the
+  `parameter_t` derived type with named `value`/`min`/`max`/`optimize` fields,
+  v5.13 is the five-element array `[lower, upper, value, flag, scaling]` that
+  mHM 5.13 parses. `parameter.yml` is a `$defs` library, so it is the one
+  schema file with no `[[namelists]]` entry. A property that `$ref`s it must not
+  also spell out `x-fortran-shape` or `x-nml-tools-ui`, or the two can drift.
+  v5.13's `GeoParam` is the one exception: a `[max_geo_units, 5]` table.
 - Version-specific initial values are built by `vSpecific/` (`build_initial_values`,
   `build_dimensions`), which reads `nml-settings.json` through
   `state/nml_settings.load_settings`.

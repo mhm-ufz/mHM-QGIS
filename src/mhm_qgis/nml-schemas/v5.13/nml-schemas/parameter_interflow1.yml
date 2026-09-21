@@ -4,69 +4,24 @@ x-fortran-namelist: interflow1
 type: object
 properties:
   interflowStorageCapacityFactor:
+    $ref: parameter.yml#/$defs/parameter
     title: Storage capacity factor for interflow
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[75.000, 200.00, 85.0, 1, 1]]
   interflowRecession_slope:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for slope to derive interflow recession constant
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.0000, 10.000, 7.0, 1, 1]]
   fastInterflowRecession_forest:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for forest to derive fast interflow recession constant
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[1.0000, 3.0000, 1.5, 1, 1]]
   slowInterflowRecession_Ks:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for variability of saturated hydraulic conductivity to derive slow interflow recession constant
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[1.0000, 30.000, 15.0, 1, 1]]
   exponentSlowInterflow:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for variability of saturated hydraulic conductivity to derive slow interflow exponent
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.0500, 0.3000, 0.125, 1, 1]]
 required:
   - interflowStorageCapacityFactor

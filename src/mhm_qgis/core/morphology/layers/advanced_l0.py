@@ -7,45 +7,17 @@ import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
-from . import CATEGORICAL_PAD_VALUE, LAI_PAD_VALUE
 from ...handlers.state.nml_settings import load_settings, relative_workspace_path, save_settings
 from ...handlers.store.paths import morph_staging_folder, workspace_folder
 from ...handlers.store.layout import morph_folder, is_v6
-from ...handlers.file.ascii.morphology import file_matches_header, pad_l0_file_to_header
+from ...handlers.file.ascii.morphology import file_matches_header
 
 
-# Rasters are padded onto the L0 grid; everything else is carried across as is.
 RASTER_SUFFIXES = {".asc", ".nc", ".tif", ".tiff"}
 # Class definitions and projection sidecars travel with their raster untouched.
 CARRIED_SUFFIXES = {".txt", ".prj", ".xml", ".cpg", ".csv"}
 PATH_KEYS = ("output_path", "classdefinition_path")
 SECTIONS = ("land_cover", "soil", "geology")
-# Staged rasters are named after their model input, so the file name is what
-# tells us how to pad them: (name prefixes, pad value, integer output).
-PAD_SPECS = (
-    (
-        ("lc", "land_cover", "land_use", "landuse", "soil", "geology"),
-        CATEGORICAL_PAD_VALUE,
-        True,
-    ),
-    (("lai",), LAI_PAD_VALUE, False),
-)
-
-
-def pad_spec_for(path: Path) -> tuple[float | int | None, bool]:
-    """Return the pad value and integer flag for one staged raster.
-
-    Class layers pad with a valid class and LAI with a valid leaf area index;
-    padding them with nodata would leave cells mHM cannot read inside the
-    model domain. Anything unrecognised keeps the historical nodata padding.
-    """
-    stem = path.stem.lower()
-    for prefixes, pad_value, integer in PAD_SPECS:
-        if stem.startswith(prefixes):
-            return pad_value, integer
-    return None, True
-
-
 def staged_files(project_folder) -> list[Path]:
     """Return the files Execute All staged for publication, rasters first."""
     staging = Path(morph_staging_folder(project_folder))
@@ -63,13 +35,12 @@ def publish_model_inputs(
         l0_header: Mapping[str, Any],
         *,
         log=None) -> list[Path]:
-    """Publish exact-L0 copies, retaining full source rasters for extent changes."""
+    """Publish already-final common-L0 NetCDFs, converting only for v5.13."""
     master = Path(morph_folder(project_folder))
     master.mkdir(parents=True, exist_ok=True)
     published: list[Path] = []
 
-    # Older projects moved their sources into master. Preserve those before
-    # cropping; never let a smaller domain destroy the reusable coverage.
+    # Keep older published inputs available as staging sources.
     staging = Path(morph_staging_folder(project_folder))
     for path in _configured_rasters(project_folder):
         source = staging / path.name
@@ -81,37 +52,18 @@ def publish_model_inputs(
         suffix = path.suffix.lower()
         target = master / path.name
         if suffix in RASTER_SUFFIXES:
-            convert = suffix in {".tif", ".tiff"} or (suffix == ".nc" and not is_v6(project_folder))
-            if convert:
-                target = target.with_suffix(".asc")
-            if (target.is_file() and target.stat().st_mtime_ns >= path.stat().st_mtime_ns
-                    and file_matches_header(target, l0_header)):
-                continue
-            pad_value, integer = pad_spec_for(path)
-            temporary = target.with_name(f".{target.stem}.publish{target.suffix}")
-            try:
-                if convert:
-                    from ...handlers.raster.tasks import write_domain_dem_ascii
-                    write_domain_dem_ascii(path, temporary, l0_header, None, fill_value=pad_value)
-                else:
-                    shutil.copy2(path, temporary)
-                    pad_l0_file_to_header(
-                        temporary, l0_header, nodata_value=-9999,
-                        integer=integer, pad_value=pad_value, fill_nodata=pad_value is not None,
-                    )
-                if not file_matches_header(temporary, l0_header):
-                    raise ValueError(f"{path.name} does not match the common L0 grid.")
-                os.replace(temporary, target)
-                if convert and temporary.with_suffix(".prj").is_file():
-                    os.replace(temporary.with_suffix(".prj"), target.with_suffix(".prj"))
-            finally:
-                temporary.unlink(missing_ok=True)
+            if not file_matches_header(path, l0_header):
+                raise ValueError(f"{path.name} does not match the common L0 grid.")
+            outputs = (
+                _publish_v5_raster(project_folder, path, master, l0_header)
+                if not is_v6(project_folder)
+                else (_publish_netcdf(path, target),)
+            )
+            published.extend(output for output in outputs if output not in published)
             if log:
-                padding = "nodata" if pad_value is None else str(pad_value)
-                log(
-                    f"{path.name} placed on the common L0 grid "
-                    f"(padded with {padding})."
-                )
+                for output in outputs:
+                    log(f"Published {output.name} to {master}.")
+            continue
         elif suffix not in CARRIED_SUFFIXES:
             if log:
                 log(f"Skipping unexpected staged file: {path.name}")
@@ -129,6 +81,55 @@ def publish_model_inputs(
         if path.is_file() and not file_matches_header(path, l0_header):
             raise ValueError(f"Published input {path} does not match the common L0 grid.")
     return published
+
+
+def _publish_netcdf(source: Path, target: Path) -> Path:
+    if source.suffix.lower() != ".nc":
+        raise ValueError(f"Expected a common-L0 NetCDF intermediate: {source}")
+    if (
+        target.is_file()
+        and target.stat().st_mtime_ns == source.stat().st_mtime_ns
+        and target.stat().st_size == source.stat().st_size
+    ):
+        return target
+    temporary = target.with_name(f".{target.name}.publish")
+    try:
+        shutil.copy2(source, temporary)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
+
+
+def _publish_v5_raster(project_folder, source, master, header) -> tuple[Path, ...]:
+    """Convert one exact-grid NetCDF into the ASCII files v5.13 expects."""
+    from osgeo import gdal
+    from ...handlers.raster.tasks import write_domain_dem_ascii
+
+    dataset = gdal.Open(str(source))
+    if dataset is None:
+        raise ValueError(f"Could not open prepared morphology input: {source}")
+    bands = dataset.RasterCount
+    dataset = None
+    if source.stem == "lc_periods":
+        scenes = load_settings(project_folder).get("land_cover", {}).get("scenes", [])
+        names = [Path(scene.get("output_path", "")).name for scene in scenes]
+        if len(names) != bands or any(not name for name in names):
+            raise ValueError("Land-cover periods do not match lc_periods.nc.")
+    elif source.stem == "soil_horizon_class":
+        names = [f"soil_class_horizon_{index:02d}.asc" for index in range(1, bands + 1)]
+    else:
+        if bands != 1:
+            raise ValueError(f"Expected one raster layer in {source.name}.")
+        names = [source.with_suffix(".asc").name]
+    outputs = []
+    for band, name in enumerate(names, 1):
+        target = master / name
+        write_domain_dem_ascii(
+            source, target, header, None, band_index=band
+        )
+        outputs.append(target)
+    return tuple(outputs)
 
 
 def _configured_rasters(project_folder):
@@ -193,6 +194,17 @@ def _repoint_settings(project_folder, published, log=None) -> None:
                 if updated != value:
                     scene["output_path"] = updated
                     changed = True
+        if not is_v6(project_folder) and section == "land_cover" and record.get("scenes"):
+            if record.get("output_path"):
+                record["output_path"] = ""
+                changed = True
+        if not is_v6(project_folder) and section == "soil":
+            first = by_name.get("soil_class_horizon_01.asc")
+            if first is not None:
+                updated = relative_workspace_path(project_folder, first)
+                if record.get("output_path") != updated:
+                    record["output_path"] = updated
+                    changed = True
 
     if changed:
         save_settings(project_folder, settings)
@@ -241,7 +253,6 @@ def missing_model_inputs(project_folder) -> list[str]:
 
 __all__ = [
     "missing_model_inputs",
-    "pad_spec_for",
     "publish_model_inputs",
     "staged_files",
 ]

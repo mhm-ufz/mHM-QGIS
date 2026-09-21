@@ -61,6 +61,35 @@ def configured_gauged_outlet_ids(project_folder) -> list[str] | None:
     return gauged_outlet_ids(state)
 
 
+def configured_gauge_points(project_folder) -> tuple[tuple[int, float, float, str], ...]:
+    """Return saved snapped gauge locations without reopening a QGIS layer."""
+    state = configured_domain_state(project_folder)
+    if state is None:
+        raise StationIdError("Save the Domain Delineator configuration first.")
+    points = []
+    for outlet_id in gauged_outlet_ids(state):
+        record = state["outlets"][outlet_id]
+        point = record.get("gauge_point")
+        if not isinstance(point, dict):
+            raise StationIdError(
+                f"Gauged outlet '{outlet_id}' has no saved snapped location."
+            )
+        try:
+            points.append((
+                station_id_int(outlet_id),
+                float(point["x"]),
+                float(point["y"]),
+                str(point.get("crs", "") or ""),
+            ))
+        except (KeyError, TypeError, ValueError) as error:
+            raise StationIdError(
+                f"Saved gauge location for outlet '{outlet_id}' is invalid."
+            ) from error
+    if not points:
+        raise StationIdError("No outlets are marked as gauged in Domain Delineator.")
+    return tuple(points)
+
+
 def find_outlet_id_field(layer, preferred_field=None) -> str:
     """Return the requested outlet id field, including shapefile truncation."""
     if not layer or not layer.isValid():

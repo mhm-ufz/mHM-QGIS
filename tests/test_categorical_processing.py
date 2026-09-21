@@ -54,13 +54,13 @@ def test_ready_land_cover_is_published_and_recorded(tmp_path):
 
     outputs = categorical.copy_ready(tmp_path, "lc", source)
 
-    target = Path(morph_staging_folder(tmp_path)) / "lc.asc"
+    target = Path(morph_staging_folder(tmp_path)) / "lc.nc"
     assert target.read_bytes() == b"new raster"
     assert target.with_suffix(".prj").read_bytes() == b"projection"
     assert set(outputs) == {target, target.with_suffix(".prj")}
     assert all(path.exists() for path in stale)
     assert load_settings(tmp_path)["land_cover"]["output_path"] == (
-        "Z Temp/Morphology/morph/lc.asc"
+        "Z Temp/Morphology/morph/lc.nc"
     )
 
 
@@ -69,7 +69,7 @@ def test_ready_soil_optionally_publishes_its_class_definition(tmp_path):
     source = _touch(tmp_path / "input" / "soil.tif", b"soil")
 
     first = categorical.copy_ready(tmp_path, "soil", source)
-    target = Path(morph_staging_folder(tmp_path)) / "soil_class.tif"
+    target = Path(morph_staging_folder(tmp_path)) / "soil_class.nc"
     assert first == (target,)
 
     definition = _touch(tmp_path / "input" / "soil_classes.txt", b"classes")
@@ -122,8 +122,8 @@ def test_ready_raster_is_placed_on_the_common_grid(tmp_path):
     values = gdal.Open(str(output)).ReadAsArray()
     assert values.shape == (4, 4)
     np.testing.assert_array_equal(values[1:3, 1:3], 4)
-    assert np.all(values[[0, 3], :] == 1)
-    assert np.all(values[:, [0, 3]] == 1)
+    assert np.all(values[[0, 3], :] == -9999)
+    assert np.all(values[:, [0, 3]] == -9999)
 
 
 def test_ready_lai_records_the_class_mode(tmp_path):
@@ -137,7 +137,7 @@ def test_ready_lai_records_the_class_mode(tmp_path):
 
     folder = Path(morph_staging_folder(tmp_path))
     assert set(outputs) == {
-        folder / "LAI_class.asc", folder / "LAI_classdefinition.txt"
+        folder / "LAI_class.nc", folder / "LAI_classdefinition.txt"
     }
     settings = load_settings(tmp_path)["lai"]
     assert settings["mode"] == "mhm_ready"

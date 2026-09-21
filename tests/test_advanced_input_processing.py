@@ -54,28 +54,23 @@ def test_land_cover_processing_writes_period_state(tmp_path, monkeypatch):
     def fake_formatter(input_file, dem_file, output_path, *args, **kwargs):
         manifests.append(Path(input_file))
         output = Path(output_path)
-        return (
-            _touch(output / "lc_1990_1999.asc"),
-            _touch(output / "lc_2000_2010.asc"),
-        )
+        assert kwargs["output_type"] == "nc"
+        return (_touch(output / "lc_periods.nc"),)
 
     monkeypatch.setattr(processing, "prepare_land_cover_periods", fake_formatter)
     outputs = processing.process_land_cover_input(
         tmp_path, "5.13", value, dem
     )
 
-    assert [path.name for path in outputs] == [
-        "lc_1990_1999.asc",
-        "lc_2000_2010.asc",
-    ]
+    assert [path.name for path in outputs] == ["lc_periods.nc"]
     # mHM-tools reads the manifest itself, so it must receive the CSV.
     assert manifests[0].is_file() and manifests[0].suffix == ".csv"
 
     state = load_settings(tmp_path)["land_cover"]
     assert state["variable"] == "land_cover"
     assert [scene["output_path"] for scene in state["scenes"]] == [
-        "Z Temp/Morphology/morph/lc_1990_1999.asc",
-        "Z Temp/Morphology/morph/lc_2000_2010.asc",
+        "data/master/static/morph/lc_1990_1999.asc",
+        "data/master/static/morph/lc_2000_2010.asc",
     ]
     values = build_initial_values("5.13", Dialog(tmp_path))["main"]["LCover"]
     assert values["nLCoverScene"] == 2

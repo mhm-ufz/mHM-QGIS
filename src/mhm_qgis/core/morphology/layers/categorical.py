@@ -157,7 +157,7 @@ def copy_ready(
             f"mHM-ready {spec['label']} input must be a local ASC, NetCDF, or TIFF raster."
         )
     target = Path(morph_staging_folder(project_folder)) / (
-        spec["ready_name"] + source.suffix.lower()
+        spec["ready_name"] + ".nc"
     )
     target.parent.mkdir(parents=True, exist_ok=True)
     definition_source = Path(definition_source) if definition_source else None
@@ -172,17 +172,31 @@ def copy_ready(
         temporary = Path(name)
         prepared = temporary / target.name
         if target_header:
-            from ...handlers.file.netcdf.raster import source as raster_source
+            from ...handlers.file.netcdf.raster import copy_rasters, source as raster_source
             from ...handlers.raster.tasks import warp_raster_to_header
 
             uri = raster_source(source, variable) if source.suffix.lower() == ".nc" else source
+            warped = temporary / f"{spec['ready_name']}.tif"
             warp_raster_to_header(
                 uri,
-                prepared,
+                warped,
                 target_header,
                 target_crs,
                 source_crs=source_crs,
-                pad_value=1,
+                pad_value=-9999,
+                task=task,
+            )
+            output_variable = {
+                "lc": "land_cover",
+                "soil": "soil_class",
+                "geology": "geology_class",
+                "lai": "LAI_class",
+            }[kind]
+            copy_rasters(
+                prepared,
+                {output_variable: warped},
+                target_header,
+                reference_path=warped,
                 task=task,
             )
         else:

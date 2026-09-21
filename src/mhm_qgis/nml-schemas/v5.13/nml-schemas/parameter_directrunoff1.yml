@@ -4,17 +4,8 @@ x-fortran-namelist: directRunoff1
 type: object
 properties:
   imperviousStorageCapacity:
+    $ref: parameter.yml#/$defs/parameter
     title: Capacity of impervious storage [mm]
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.0000, 5.0000, 0.5, 1, 1]]
 required:
   - imperviousStorageCapacity

@@ -219,7 +219,7 @@ def invalidate_grid(dialog):
         invalidate_workflows(
             dialog,
             "scan_precipitation",
-            "execute_all",
+            "execute_all_morphology",
             "execute_all_meteo",
             "execute_all_observations",
             "run_mhm",
@@ -470,7 +470,7 @@ def precipitation_scanned(dialog, metadata):
         grid["configuration_fingerprint"] = grid_fingerprint(dialog)
         previous = dialog._grid_l2_metadata or {}
         if previous.get("configuration_fingerprint") != grid["configuration_fingerprint"]:
-            processing.mark_workflow(dialog.project_folder, "execute_all", "pending")
+            processing.mark_workflow(dialog.project_folder, "execute_all_morphology", "pending")
             processing.mark_workflow(dialog.project_folder, "execute_all_meteo", "pending")
         processing.save_grid_metadata(dialog.project_folder, grid)
         dialog.set_meteo_l2_grid_metadata(grid)
@@ -1154,7 +1154,7 @@ def handle_model_input_changed(dialog, value=None):
     dialog.save_input_state()
     dialog.invalidate_execute_all_meteo()
     if dialog.project_folder:
-        processing.mark_workflow(dialog.project_folder, "execute_all", "pending")
+        processing.mark_workflow(dialog.project_folder, "execute_all_morphology", "pending")
 
 
 def refresh_grid_resolution_controls(dialog):
@@ -1549,14 +1549,7 @@ def _capture_workflow_button_default_styles(dialog):
 
 def morphology_workflow_button(dialog, workflow_key):
     """Return the button associated with a morphology workflow."""
-    spec = dialog.morphology_workflow_specs().get(workflow_key, {})
-    for button_name in (spec.get("button"), spec.get("fallback_button")):
-        if not button_name:
-            continue
-        button = getattr(dialog, button_name, None)
-        if button is not None:
-            return button
-    return None
+    return dialog.morphology_workflow_specs().get(workflow_key, {}).get("button")
 
 
 def set_meteo_setup_controls_enabled(dialog, enabled):
@@ -1571,7 +1564,7 @@ def set_meteo_setup_controls_enabled(dialog, enabled):
 
 def set_execute_all_button_state(dialog, status):
     """Reflect execute-all state on the toolbar-style button."""
-    dialog.set_morphology_workflow_button_state("execute_all", status)
+    dialog.set_morphology_workflow_button_state("execute_all_morphology", status)
 
 
 def set_morphology_workflow_button_state(dialog, workflow_key, status):
@@ -1619,7 +1612,7 @@ def set_morphology_workflow_button_state(dialog, workflow_key, status):
 
 def refresh_execute_all_button_state(dialog):
     """Restore execute-all button styling from project processing state."""
-    dialog.refresh_morphology_workflow_button_state("execute_all")
+    dialog.refresh_morphology_workflow_button_state("execute_all_morphology")
 
 
 def refresh_morphology_workflow_button_states(dialog):

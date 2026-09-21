@@ -253,7 +253,9 @@ def test_v513_array_axis_labels_match_version_contract(tmp_path: Path) -> None:
         for field in page.schema.get("properties", {}).values()
         if field.get("x-fortran-shape") == 5
     ]
-    assert len(parameter_fields) == 140
+    # 136 after `rivertemp1` was dropped: it was registered but listed in no
+    # file profile, so its four parameters were never reachable from the GUI.
+    assert len(parameter_fields) == 136
     for field in parameter_fields:
         assert axis_labels(field, 1, 5) == PARAMETER_COMPONENT_LABELS
 
@@ -381,3 +383,31 @@ def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
                 assert "&rivertemp1\n" not in rendered
             editor.close()
     assert application is not None
+
+
+def test_v513_parameters_share_one_base_type(tmp_path: Path) -> None:
+    """Each v5.13 parameter $refs parameter.yml instead of repeating the array."""
+    import yaml
+
+    root = SCHEMAS / "v5.13" / "nml-schemas"
+    base = yaml.safe_load((root / "parameter.yml").read_text())["$defs"]["parameter"]
+    assert base["x-fortran-shape"] == 5
+    assert base["x-nml-tools-ui"]["axes"]["1"]["labels"] == PARAMETER_COMPONENT_LABELS
+
+    referencing = repeated = 0
+    for path in sorted(root.glob("parameter_*.yml")):
+        for name, field in yaml.safe_load(path.read_text())["properties"].items():
+            if field.get("$ref") == "parameter.yml#/$defs/parameter":
+                referencing += 1
+                # The $ref carries the shape; repeating it here would let the
+                # two drift apart.
+                assert "x-fortran-shape" not in field, f"{path.name}:{name}"
+                assert "x-nml-tools-ui" not in field, f"{path.name}:{name}"
+            elif field.get("x-fortran-shape") == 5:
+                repeated = repeated + 1
+    assert referencing == 136
+    assert repeated == 0, "a five-element parameter still spells the array out"
+
+    # GeoParam is the one genuine exception: a [max_geo_units, 5] table.
+    geo = yaml.safe_load((root / "parameter_geoparameter.yml").read_text())
+    assert geo["properties"]["GeoParam"]["x-fortran-shape"] == ["max_geo_units", 5]

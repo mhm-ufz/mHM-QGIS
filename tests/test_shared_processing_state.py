@@ -61,13 +61,13 @@ def test_the_cache_keeps_the_meteorology_outputs(project):
 
 def test_unrelated_sections_written_by_anyone_else_survive(project):
     path = cache.state_path(project)
-    jsonio.write(path, {"workflows": {"execute_all": "done"}, "grid": {"ncols": 10}})
+    jsonio.write(path, {"workflows": {"execute_all_morphology": "done"}, "grid": {"ncols": 10}})
 
     cache.store_payload(project, "stages", "soil", "digest-3", {"outputs": []})
     MeteorologyOutputState(project).mark_prepared(project / "tavg.nc")
 
     state = jsonio.read_mapping(path)
-    assert state["workflows"] == {"execute_all": "done"}
+    assert state["workflows"] == {"execute_all_morphology": "done"}
     assert state["grid"] == {"ncols": 10}
     assert "stages" in state and "outputs" in state
 

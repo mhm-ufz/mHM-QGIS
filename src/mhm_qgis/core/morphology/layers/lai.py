@@ -5,8 +5,9 @@ import os
 import shutil
 from pathlib import Path
 
-from ....externals.mhm_tools_handler import copy_lai_file_to_grid, lai_time_step
+from ....externals.mhm_tools_handler import lai_time_step
 from ...grid import write_header_file
+from ...handlers.file.ascii.morphology import file_matches_header
 from ...handlers.state.nml_settings import relative_workspace_path, update_section
 from ...handlers.store.layout import lai_folder
 from ...handlers.store.paths import lai_dem_staging_path
@@ -70,21 +71,21 @@ def publish_to_l0(
     classdefinition_source: str = "",
     log=None,
 ) -> Path:
-    """Publish unmasked LAI over the complete common L0 extent."""
+    """Publish the already final common-L0 LAI without another grid operation."""
     folder = Path(lai_folder(project_folder))
     staged = Path(lai_dem_staging_path(project_folder))
     if not staged.is_file():
         raise FileNotFoundError("Prepare LAI on the common DEM grid first.")
+    if not file_matches_header(staged, l0_header):
+        raise ValueError("The prepared LAI does not match the common L0 grid.")
     folder.mkdir(parents=True, exist_ok=True)
     output = folder / "lai.nc"
-    copy_lai_file_to_grid(
-        staged,
-        output,
-        l0_header,
-        crs or "",
-        "Monthly LAI on the common L0 model extent",
-        log=log,
-    )
+    temporary = output.with_name(f".{output.name}.tmp")
+    try:
+        shutil.copy2(staged, temporary)
+        os.replace(temporary, output)
+    finally:
+        temporary.unlink(missing_ok=True)
     _write_header(folder, l0_header)
     if source:
         source_path, source_variable = parse_source(source)

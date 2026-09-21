@@ -20,6 +20,8 @@ class Stage:
 
 EXECUTE_ALL_STAGES = (
     Stage("dem_derivatives", "DEM derivatives", options={"key": "execute-all-dem"}),
+    Stage("gauge_position", "Gauge positions", condition="gauged_outlets"),
+    Stage("morph_mask", "Morphology mask"),
     Stage(
         "categorical",
         "Land cover",
@@ -36,30 +38,15 @@ EXECUTE_ALL_STAGES = (
         "categorical",
         "Geology",
         args=("geology",),
-        options={"key": "execute-all-geology"},
+        options={"key": "execute-all-geology", "reuse_existing": True},
     ),
     Stage("lai", "LAI"),
-    Stage(
-        "hydrology",
-        "Hydrology",
-        options={
-            "key": "execute-all-hydrology",
-            "load": "",
-            "accumulation": False,
-            "direction": False,
-        },
-    ),
-    Stage("snap_points", "Snap pour points", condition="pour_points"),
-    Stage("gauge_position", "Gauge positions", condition="gauged_outlets"),
     Stage("publication", "Publish single-domain morphology"),
 )
 
 
 PUBLICATION_STAGES = (
-    Stage("mask", "Build domain mask and mask DEM derivatives"),
-    Stage("publish", "Publish categorical inputs"),
-    Stage("latlon", "Create latlon.nc"),
-    Stage("write", "Write model inputs"),
+    Stage("publish", "Publish model inputs"),
 )
 
 

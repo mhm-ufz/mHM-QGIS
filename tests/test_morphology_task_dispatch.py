@@ -51,7 +51,7 @@ def test_execute_all_uses_managed_pipeline():
     calls = []
     dialog.morphology_tasks.start_execute_all = lambda: calls.append(True) or True
 
-    dialog.start_execute_all_processing()
+    dialog.start_execute_all_morphology_processing()
 
     assert calls == [True]
     dialog.close()
@@ -122,7 +122,7 @@ def test_saved_land_cover_and_soil_outputs_are_reusable(tmp_path):
     assert commands.categorical_outputs(tmp_path, "soil") == (soil, definition)
 
 
-def test_execute_all_stage_order_includes_lai_before_hydrology():
+def test_execute_all_stage_order_uses_saved_hydrology_inputs():
     """The LAI stage must be in the sequence the button actually runs.
 
     This used to scrape the source text of `start_execute_all` for its lambdas,
@@ -133,10 +133,10 @@ def test_execute_all_stage_order_includes_lai_before_hydrology():
 
     order = [stage.command for stage in EXECUTE_ALL_STAGES]
     assert order == [
-        "dem_derivatives", "categorical", "categorical", "categorical",
-        "lai", "hydrology", "snap_points", "gauge_position", "publication",
+        "dem_derivatives", "gauge_position", "morph_mask", "categorical",
+        "categorical", "categorical", "lai", "publication",
     ]
-    assert order.index("lai") < order.index("hydrology")
+    assert "hydrology" not in order and "snap_points" not in order
     # The three categorical stages are lc, soil, geology -- in that order.
     assert [s.args[0] for s in EXECUTE_ALL_STAGES if s.command == "categorical"] == [
         "lc", "soil", "geology",

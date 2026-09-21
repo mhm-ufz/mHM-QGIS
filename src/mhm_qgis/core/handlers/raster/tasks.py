@@ -33,7 +33,9 @@ def _progress(task, value):
 
 
 def _read_raster(path, *, as_float=False):
-    np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
+    import numpy as np
+    from osgeo import gdal
+
     dataset = gdal.Open(str(path))
     if dataset is None:
         raise RuntimeError(f"Could not open raster: {path}")
@@ -59,7 +61,8 @@ def _write_raster(path, array, reference, nodata, data_type):
         from ..file.netcdf.raster import write_array
 
         return write_array(path, Path(path).stem, array, reference, nodata)
-    _np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
+    from osgeo import gdal
+
     path = os.path.abspath(str(path))
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if os.path.exists(path):
@@ -412,6 +415,7 @@ def write_domain_dem_ascii(
         reference_path=None,
         nodata=-9999,
         fill_value=None,
+        band_index=1,
         task=None):
     """Write one domain DEM as Arc/Info ASCII on the common L0 grid.
 
@@ -426,7 +430,12 @@ def write_domain_dem_ascii(
         raise RuntimeError(f"Could not open the cropped L0 DEM: {source_path}")
     projection = source.GetProjection()
     window = _aligned_l0_window(source, source_path, target_header, reference_path)
-    band = source.GetRasterBand(1)
+    band = source.GetRasterBand(int(band_index))
+    if band is None:
+        source = None
+        raise ValueError(
+            f"Raster band {band_index} does not exist: {source_path}"
+        )
     keep = _target_mask(mask_path, target_header, projection, reference_path) if mask_path else None
 
     cellsize = float(target_header["cellsize"])
@@ -682,52 +691,47 @@ def hydrology_files(
 
 
 def gauge_position_file(filled_dem, gauges, output_path, *, task=None):
-    """Burn explicit gauge IDs onto their nearest stream cells."""
-    np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
-    _cancelled(task)
-    context = _flow_context(filled_dem)
-    cells = context["flwdir"].upstream_area(unit="cell")
-    cells[context["invalid"]] = 0
-    valid = cells[cells > 0]
-    if valid.size == 0:
-        raise RuntimeError("No stream cells were found in the filled DEM.")
-    threshold = max(
-        1,
-        int(
-            round(
-                10_000_000.0
-                / pyflwdir_handler.cell_area_m2(context["reference"])
-            )
-        ),
-    )
-    if threshold > int(np.nanmax(valid)):
-        threshold = max(1, int(np.nanpercentile(valid, 95)))
-    streams = cells >= threshold
-    candidates = np.argwhere(streams)
-    if candidates.size == 0:
-        raise RuntimeError("No stream cells satisfy the channel threshold.")
+    """Burn the gauge locations already snapped by Domain Delineator."""
+    import numpy as np
+    from affine import Affine
+    from osgeo import gdal
 
+    _cancelled(task)
+    reference = _read_raster(filled_dem)
     output = np.full(
-        (context["reference"]["rows"], context["reference"]["cols"]),
+        (reference["rows"], reference["cols"]),
         -9999,
         dtype=np.int32,
     )
-    inverse = ~context["transform"]
-    for index, (station_id, x, y) in enumerate(gauges):
+    inverse = ~Affine.from_gdal(*reference["geotransform"])
+    target_crs = reference.get("projection") or ""
+    occupied = set()
+    for index, gauge in enumerate(gauges):
         _cancelled(task)
+        station_id, x, y, *source_crs = gauge
+        if source_crs and source_crs[0] and target_crs:
+            from pyproj import Transformer
+
+            x, y = Transformer.from_crs(
+                source_crs[0], target_crs, always_xy=True
+            ).transform(float(x), float(y))
         col_value, row_value = inverse * (float(x), float(y))
-        row = min(max(int(np.floor(row_value)), 0), output.shape[0] - 1)
-        col = min(max(int(np.floor(col_value)), 0), output.shape[1] - 1)
-        local = candidates.astype(float)
-        local[:, 0] -= row
-        local[:, 1] -= col
-        target = candidates[int(np.argmin(np.hypot(local[:, 0], local[:, 1])))]
-        output[int(target[0]), int(target[1])] = int(station_id)
+        row, col = int(np.floor(row_value)), int(np.floor(col_value))
+        if not (0 <= row < output.shape[0] and 0 <= col < output.shape[1]):
+            raise ValueError(f"Gauge {station_id} lies outside the common L0 grid.")
+        nodata = reference.get("nodata")
+        value = reference["array"][row, col]
+        if not np.isfinite(value) or (nodata is not None and value == nodata):
+            raise ValueError(f"Gauge {station_id} lies on an invalid DEM cell.")
+        if (row, col) in occupied:
+            raise ValueError("Two gauges resolve to the same common-L0 cell.")
+        occupied.add((row, col))
+        output[row, col] = int(station_id)
         _progress(task, 15 + 80 * (index + 1) / max(1, len(gauges)))
     written = _write_raster(
         output_path,
         output,
-        context["reference"],
+        reference,
         -9999,
         gdal.GDT_Int32,
     )

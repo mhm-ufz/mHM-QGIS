@@ -57,6 +57,15 @@ def _soil(value):
 def run(job):
     if job.get("mode") == "lookup":
         return run_lookup_job(job["job"])
+    if job["kind"] == "gauge-position":
+        from .handlers.raster.tasks import gauge_position_file
+
+        return {
+            "kind": job["kind"],
+            "output": gauge_position_file(
+                job["filled_dem"], job["gauges"], job["output_path"]
+            ),
+        }
     if job["kind"] == "dem-derivatives":
         # Imported here so the worker never pulls in the QGIS-only packages.
         from ..externals.mhm_tools_handler import create_dem_derivative_files

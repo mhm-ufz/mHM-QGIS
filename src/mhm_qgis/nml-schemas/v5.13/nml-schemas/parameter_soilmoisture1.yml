@@ -5,226 +5,73 @@ x-fortran-namelist: soilmoisture1
 type: object
 properties:
   orgMatterContent_forest:
+    $ref: parameter.yml#/$defs/parameter
     title: Organic matter content for forest
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[5.0000, 10.0000, 7.0, 1, 1]]
   orgMatterContent_impervious:
+    $ref: parameter.yml#/$defs/parameter
     title: Organic matter content for impervious
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.0000, 1.0000, 0.5, 1, 1]]
   orgMatterContent_pervious:
+    $ref: parameter.yml#/$defs/parameter
     title: Organic matter content for pervious
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[1.0000, 5.0000, 2.5, 1, 1]]
   PTF_lower66_5_constant:
+    $ref: parameter.yml#/$defs/parameter
     title: Zacharias PTF parameters below 66.5 % sand content
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.7500, 0.8000, 7.880E-01, 1, 1]]
   PTF_lower66_5_clay:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for clay constant below 66.5 % sand content
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.0008, 0.0012, 1.000E-03, 1, 1]]
   PTF_lower66_5_Db:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for mineral bulk density below 66.5 % sand content
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[-0.2700, -0.2500, -2.630E-01, 1, 1]]
   PTF_higher66_5_constant:
+    $ref: parameter.yml#/$defs/parameter
     title: Zacharias PTF parameters above 66.5 % sand content
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.8000, 0.9000, 8.907E-01, 1, 1]]
   PTF_higher66_5_clay:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for clay constant above 66.5 % sand content
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[-0.0012, -0.0008, -1.000E-03, 1, 1]]
   PTF_higher66_5_Db:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for mineral bulk density above 66.5 % sand content
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[-0.3500, -0.3000, -3.220E-01, 1, 1]]
   PTF_Ks_constant:
+    $ref: parameter.yml#/$defs/parameter
     title: PTF constant for saturated hydraulic conductivity
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[-1.2000, -0.2850, -0.585, 1, 1]]
   PTF_Ks_sand:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for sand for saturated hydraulic conductivity
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.0060, 0.0260, 0.0125, 1, 1]]
   PTF_Ks_clay:
+    $ref: parameter.yml#/$defs/parameter
     title: Multiplier for clay for saturated hydraulic conductivity
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.0030, 0.0130, 0.0063, 1, 1]]
   PTF_Ks_curveSlope:
+    $ref: parameter.yml#/$defs/parameter
     title: Unit conversion factor
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     description: Unit conversion factor from inch/h to cm/d -> should not be here
     default: [60.960, 60.960, 60.960, 0, 1]
   rootFractionCoefficient_forest:
+    $ref: parameter.yml#/$defs/parameter
     title: Root fraction coefficient for forest
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.9000, 0.9990, 0.97, 1, 1]]
   rootFractionCoefficient_impervious:
+    $ref: parameter.yml#/$defs/parameter
     title: Root fraction coefficient for impervious
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.9000, 0.9500, 0.93, 1, 1]]
   rootFractionCoefficient_pervious:
+    $ref: parameter.yml#/$defs/parameter
     title: Root fraction coefficient for pervious
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     examples: [[0.0010, 0.0900, 0.02, 1, 1]]
   infiltrationShapeFactor:
+    $ref: parameter.yml#/$defs/parameter
     title: Infiltration shape factor
-    type: array
-    items:
-      type: number
-      x-fortran-kind: dp
-    x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
     description: |-
       Shape factor for partitioning effective precipitation into
       runoff and infiltration based on soil wetness [-]

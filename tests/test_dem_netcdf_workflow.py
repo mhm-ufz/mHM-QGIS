@@ -16,7 +16,11 @@ from mhm_qgis.core.handlers.state import domain_state, processing
 from mhm_qgis.core.handlers.store.layout import (
     MERGED_MASK_NAME, domain_dem_path, ensure_project_structure, input_state_path, morph_folder,
 )
-from mhm_qgis.core.handlers.store.paths import geometry_folder, morph_staging_folder
+from mhm_qgis.core.handlers.store.paths import (
+    geometry_folder,
+    master_data_folder,
+    morph_staging_folder,
+)
 
 
 def _raster(path, values=None, *, epsg=32632, cell=100, origin=(0, 1000)):
@@ -136,7 +140,7 @@ def test_hydrology_reuses_saved_direction_without_recomputing_dem(tmp_path, monk
 
 
 
-@pytest.mark.parametrize("version,category_format", [("5.13", "tif"), ("6", "tif"), ("6", "nc")])
+@pytest.mark.parametrize("version,category_format", [("5.13", "nc"), ("6", "nc")])
 @pytest.mark.parametrize("catchments", [False, True])
 def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, category_format, catchments):
     from mhm_qgis.core.handlers.state import nml_settings
@@ -170,6 +174,15 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
                     fingerprint=domain_state.delineation_fingerprint(result["filled_dem"], 50, 50)))
         domain_state.save_state(tmp_path, state)
 
+    watershed = _raster(
+        folder / "Watersheds" / "4_watershed_merged_mask.tif",
+        keep.astype("int32"),
+        origin=(-100, 1100),
+    )
+    state = domain_state.load_state(tmp_path)
+    state["merged_mask_path"] = str(watershed)
+    domain_state.save_state(tmp_path, state)
+
     gauges = np.full((12, 12), -9999.0)
     gauges[5, 3] = 280
     copy_rasters(folder / "idgauges.nc", {"idgauges": _raster(tmp_path / "gauges.tif", gauges, origin=(-100, 1100))})
@@ -193,6 +206,14 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
             "output_path": nml_settings.relative_workspace_path(tmp_path, path)})
     request = setup.SetupRequest(str(tmp_path), {level: header for level in ("L0", "L1", "L11", "L2")},
                                  crs="EPSG:32632")
+    latlon = Path(master_data_folder(tmp_path)) / "latlon.nc"
+    latlon.parent.mkdir(parents=True, exist_ok=True)
+    with Dataset(latlon, "w") as coordinates:
+        coordinates.createDimension("y", 12)
+        coordinates.createDimension("x", 12)
+        coordinates.createVariable("lat_l0", "f8", ("y", "x"))[:] = 0
+        coordinates.createVariable("lon_l0", "f8", ("y", "x"))[:] = 0
+    setup.mask(request)
     target = Path(domain_dem_path(tmp_path, "ignored"))
     target.parent.mkdir(parents=True, exist_ok=True)
     old = tmp_path / "old-dem"
@@ -205,18 +226,23 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
     assert not (folder / "dem_derivatives_crop.nc").exists()
     values = gdal.Open(str(target)).ReadAsArray()
     np.testing.assert_array_equal(values[keep], filled[keep])
-    assert np.all(values[~keep] == -9999)
+    if version == "5.13":
+        assert np.all(values[~keep] == -9999)
+    else:
+        np.testing.assert_array_equal(values, filled)
     master = Path(morph_folder(tmp_path))
     if version == "5.13":
         assert gdal.Open(str(master / "idgauges.asc")).ReadAsArray()[5, 3] == 280
         classes = gdal.Open(str(master / "soil_class.asc")).ReadAsArray()
     else:
         assert "dem" in variables(master / "input.nc")
+        assert "idgauges" not in variables(master / "input.nc")
+        assert gdal.Open(str(master / "idgauges.asc")).ReadAsArray()[5, 3] == 280
         classes = gdal.Open(source(master / "input.nc", "soil_class")).ReadAsArray()
-    assert classes[0, 0] == 1
+    assert classes[0, 0] == -9999
     assert classes[5, 5] == 2  # Full class coverage, even outside selected catchments.
-    if category_format == "nc":
-        assert nml_settings.load_settings(tmp_path)["soil"]["output_path"].endswith("soil_class.nc")
+    expected_suffix = "soil_class.asc" if version == "5.13" else "soil_class.nc"
+    assert nml_settings.load_settings(tmp_path)["soil"]["output_path"].endswith(expected_suffix)
     domains = nml_settings.load_settings(tmp_path)["domains"]
     assert len(domains) == 1 and domains[0]["name"] == "master"
     assert len(processing.section(tmp_path, "domains", [])) == 1

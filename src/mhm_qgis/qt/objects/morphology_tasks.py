@@ -22,7 +22,10 @@ from ...core.handlers.store.paths import (
 from ...core.handlers.state import processing
 from ...core.handlers.state import settings as project_settings
 from ...core.handlers.store import registry
-from ...core.morphology.hydrology.outlets import configured_gauged_outlet_ids
+from ...core.morphology.hydrology.outlets import (
+    configured_gauge_points,
+    configured_gauged_outlet_ids,
+)
 from ...core.morphology.layers import categorical, lai
 from ...core.morphology.layers.categorical import SPECS
 from ...qgis_bridge import layers
@@ -338,28 +341,9 @@ class MorphologyTaskBridge(QtCore.QObject):
         done=None,
         failed=None,
     ):
-        """Extract QGIS gauge points, then burn them in a file-only worker."""
-        if not Path(self.snapped_points_path).is_file():
-            return self.start_snap_points(
-                key=f"{key}-snap",
-                controls=controls,
-                load=False,
-                done=lambda _result: self.start_gauge_position(
-                    key=key,
-                    controls=controls,
-                    load=load,
-                    done=done,
-                    failed=failed,
-                ),
-                failed=failed,
-            )
+        """Burn the locations already saved by Domain Delineator."""
         try:
-            gauges = layers.gauge_coordinates(
-                self.dialog.project_folder,
-                self.snapped_points_path,
-                self.filled_dem_path,
-                preferred_field=self.dialog.selected_outlet_id_field(),
-            )
+            gauges = configured_gauge_points(self.dialog.project_folder)
         except Exception as error:
             self._error("Gauge Position", error, failed)
             return False
@@ -645,9 +629,41 @@ class MorphologyTaskBridge(QtCore.QObject):
                     "target_header": self.dialog.grid_level_headers()["L0"],
                     "publish": bool(publish),
                 }
+                inputs = tuple(
+                    path for path in (
+                        source,
+                        config.get("classdefinition_path", ""),
+                        self.filled_dem_path,
+                    ) if path
+                )
+                digest = self._stage_digest(inputs, {
+                    "kind": kind,
+                    "variable": job["variable"],
+                    "source_crs": job["source_crs"],
+                    "target_crs": job["target_crs"],
+                    "target_header": job["target_header"],
+                    "format": "common-l0-nc-1",
+                })
+                reusable = self._reusable_stage(
+                    kind,
+                    digest,
+                    inputs=inputs,
+                    outputs=categorical.saved_outputs(
+                        self.dialog.project_folder, kind
+                    ),
+                ) if reuse_existing else None
+                if reusable:
+                    result = {"kind": kind, "outputs": reusable["outputs"]}
+                    QtCore.QTimer.singleShot(
+                        0,
+                        lambda: self._ready_input_ready(
+                            result, load, done, reused=True
+                        ),
+                    )
+                    return True
                 runner = partial(_run_ready, job=job)
                 finish = lambda result: self._ready_input_ready(
-                    result, load, done
+                    result, load, done, digest=digest
                 )
             elif self.dialog.uses_advanced_categorical_input(kind):
                 value = (
@@ -747,7 +763,9 @@ class MorphologyTaskBridge(QtCore.QObject):
             on_error=lambda message: self._error(SPECS[kind]["label"], message, failed),
         )
 
-    def _ready_input_ready(self, result, load, done):
+    def _ready_input_ready(
+        self, result, load, done, *, digest=None, reused=False
+    ):
         outputs = [Path(path) for path in result.get("outputs", ())]
         published = [Path(path) for path in result.get("published", ())]
         for output in (*outputs, *published):
@@ -755,6 +773,8 @@ class MorphologyTaskBridge(QtCore.QObject):
         if load and (published or outputs):
             self._load(str((published or outputs)[0]), SPECS[result["kind"]]["layer_name"])
         self._categorical_complete(result["kind"], published or outputs)
+        if digest and not reused:
+            self._record_stage(result["kind"], digest, outputs)
         if done is not None:
             done(result)
 
@@ -920,27 +940,41 @@ class MorphologyTaskBridge(QtCore.QObject):
         )
 
     def start_publication(self, *, done, failed):
-        mode = self.dialog.categorical_input_mode("lai").lower()
-        config = (
-            self.dialog.lai_netcdf_config() if "netcdf" in mode else {}
-        ) or {}
-        source = str(config.get("input_path") or "")
-        if source and config.get("variable"):
-            from ...core.handlers.file.netcdf.raster import source as netcdf_source
-
-            source = netcdf_source(source, config["variable"])
         request = morphology.setup.SetupRequest(
             project_folder=self.dialog.project_folder,
             headers=self.dialog.grid_level_headers(),
             crs=self.dialog.selected_meteo_crs(),
-            lai_source=source,
-            lai_timestep=config.get("target_timestep") or lai.DEFAULT_TIMESTEP,
         )
         return self.coordinator.submit(
             "morphology-publication", "Publish morphology",
             lambda task: morphology.setup.run(request, task=task, log=self.message.emit),
             task_aware=True,
             on_success=done, on_error=failed, resource="morphology-files")
+
+    def start_morph_mask(
+        self, *, key="execute-all-morph-mask", controls=(), done=None,
+        failed=None,
+    ):
+        """Create the saved-domain mask before preparing model inputs."""
+        request = morphology.setup.SetupRequest(
+            project_folder=self.dialog.project_folder,
+            headers=self.dialog.grid_level_headers(),
+            crs=self.dialog.selected_meteo_crs(),
+        )
+        return self.coordinator.submit(
+            key,
+            "Prepare morphology mask",
+            lambda task: morphology.setup.mask(
+                request, task=task, log=self.message.emit
+            ),
+            controls=self._controls(controls),
+            task_aware=True,
+            on_success=done,
+            on_error=lambda message: self._error(
+                "Morphology mask", message, failed
+            ),
+            resource="morphology-files",
+        )
 
     def start_execute_all(self):
         if self.execute_all_active:
@@ -966,9 +1000,9 @@ class MorphologyTaskBridge(QtCore.QObject):
         self.dialog.set_meteo_setup_controls_enabled(False)
         invalidate_workflows(self.dialog, "run_mhm")
         processing.mark_workflow(
-            self.dialog.project_folder, "execute_all", "running"
+            self.dialog.project_folder, "execute_all_morphology", "running"
         )
-        self.dialog.set_morphology_workflow_button_state("execute_all", "running")
+        self.dialog.set_morphology_workflow_button_state("execute_all_morphology", "running")
 
         def start(stage, advance):
             if not self._condition(stage.condition):
@@ -991,7 +1025,7 @@ class MorphologyTaskBridge(QtCore.QObject):
 
     def _finish_execute_all(self):
         try:
-            self.dialog.finish_morphology_workflow("execute_all", True, "")
+            self.dialog.finish_morphology_workflow("execute_all_morphology", True, "")
         except Exception as error:
             self._fail_execute_all(error)
             return
@@ -1004,7 +1038,7 @@ class MorphologyTaskBridge(QtCore.QObject):
         self.execute_all_active = False
         try:
             self.dialog.finish_morphology_workflow(
-                "execute_all", False, str(message)
+                "execute_all_morphology", False, str(message)
             )
         finally:
             self.dialog.set_meteo_setup_controls_enabled(True)

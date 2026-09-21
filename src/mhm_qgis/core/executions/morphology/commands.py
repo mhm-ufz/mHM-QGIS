@@ -11,7 +11,6 @@ from tempfile import TemporaryDirectory
 from ....externals.mhm_tools_handler import prepare_lai_file
 from ...handlers.raster.tasks import (
     dem_derivative_files,
-    gauge_position_file,
     hydrology_files,
 )
 from ...handlers.state.cache import (
@@ -51,7 +50,12 @@ def hydrology(task, options):
 
 
 def gauge_position(task, options):
-    return gauge_position_file(task=task, **options)
+    result = native_worker(
+        task,
+        {"kind": "gauge-position", **options},
+        Path(options["output_path"]).parent,
+    )
+    return result["output"]
 
 
 def lai(task, options, messages):

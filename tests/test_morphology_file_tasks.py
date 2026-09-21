@@ -482,3 +482,24 @@ def test_native_worker_runs_the_dem_derivative_job(tmp_path):
     assert result["kind"] == "dem-derivatives"
     assert {"dem", "dem_filled", "slope", "aspect", "facc", "fdir"} <= set(variables(result["output"]))
     assert Path(result["output"]).is_file()
+
+
+def test_gauge_positions_use_saved_points_in_a_native_worker(tmp_path):
+    from netCDF4 import Dataset
+
+    from mhm_qgis.core.executions.morphology.commands import gauge_position
+
+    dem = tmp_path / "filled_dem.tif"
+    output = tmp_path / "idgauges.nc"
+    _dem(dem)
+
+    assert gauge_position(None, {
+        "filled_dem": str(dem),
+        "gauges": ((42, 350.0, 750.0, "EPSG:32632"),),
+        "output_path": str(output),
+    }) == str(output)
+
+    with Dataset(output) as dataset:
+        values = dataset.variables["idgauges"][:].filled(-9999)
+    assert values[2, 3] == 42
+    assert np.count_nonzero(values != -9999) == 1

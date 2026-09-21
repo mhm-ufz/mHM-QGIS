@@ -21,6 +21,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from mhm_qgis.core.handlers.file.ascii.morphology import (  # noqa: E402
     _read_raster,
     align_dataset_to_header,
+    file_matches_header,
 )
 from mhm_qgis.core.grid import header_center_coordinates  # noqa: E402
 
@@ -128,6 +129,23 @@ def test_the_exact_header_coordinates_are_restored(tmp_path):
     np.testing.assert_array_equal(aligned["y"].values, target_y)
     np.testing.assert_array_equal(aligned["x"].values, target_x)
     assert np.all(np.diff(aligned["y"].values) < 0)
+
+
+def test_cf_axis_attributes_identify_xc_yc_coordinates(tmp_path):
+    """mHM-tools does not list the xc/yc names written by its LAI formatter."""
+    target_x, target_y = header_center_coordinates(HEADER)
+    dataset = xr.Dataset(
+        {"lai": (("time", "yc", "xc"), np.ones((1, 4, 4)))},
+        coords={
+            "time": [1],
+            "yc": ("yc", target_y, {"axis": "Y"}),
+            "xc": ("xc", target_x, {"axis": "X"}),
+        },
+    )
+    path = tmp_path / "lai.nc"
+    dataset.to_netcdf(path)
+
+    assert file_matches_header(path, HEADER)
 
 
 def test_a_coarser_source_is_upsampled_instead_of_framed_in_nodata(tmp_path):

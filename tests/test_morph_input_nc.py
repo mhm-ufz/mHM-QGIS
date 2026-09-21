@@ -180,7 +180,7 @@ def test_morph_mask_uses_selected_dem_cells_and_l0_coordinates(tmp_path):
 
 
 def test_writing_without_any_layer_is_rejected(tmp_path):
-    with pytest.raises(ValueError, match="No masked morphology rasters"):
+    with pytest.raises(ValueError, match="No morphology rasters"):
         write_morph_input_nc(tmp_path / "input.nc", {}, L0)
 
 
@@ -188,7 +188,7 @@ def test_a_failed_write_leaves_no_partial_file(tmp_path):
     layers = _masked_set(tmp_path, names={"dem"})
     layers["slope"] = tmp_path / "absent.tif"
 
-    with pytest.raises(RuntimeError, match="Could not open the masked raster"):
+    with pytest.raises(RuntimeError, match="Could not open the morphology raster"):
         write_morph_input_nc(tmp_path / "input.nc", layers, L0,
                              crs_string="EPSG:32632")
     assert not (tmp_path / "input.nc").exists()

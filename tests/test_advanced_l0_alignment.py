@@ -17,14 +17,10 @@ from mhm_qgis.core.handlers.file.ascii.morphology import (  # noqa: E402
 )
 from mhm_qgis.core.morphology.layers.advanced_l0 import (  # noqa: E402
     missing_model_inputs,
-    pad_spec_for,
     publish_model_inputs,
     staged_files,
 )
-from mhm_qgis.core.morphology.layers import (  # noqa: E402
-    CATEGORICAL_PAD_VALUE,
-    LAI_PAD_VALUE,
-)
+from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE  # noqa: E402
 from mhm_qgis.core.handlers.state.nml_settings import update_section  # noqa: E402
 from mhm_qgis.core.handlers.store.paths import morph_staging_folder, workspace_folder
 from mhm_qgis.core.handlers.store.layout import morph_folder  # noqa: E402
@@ -124,21 +120,34 @@ def test_a_file_already_on_the_l0_grid_is_left_untouched(tmp_path):
     assert path.read_bytes() == before
 
 
-def _staged_asc(project, name, ncols=2, nrows=2, xll=100.0, yll=100.0, cell=100.0):
-    """Write a staged ASCII grid as Execute All would."""
+def _staged_nc(project, name, header=None, variable="soil_class"):
+    from osgeo import gdal, osr
+    from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters
+
+    header = header or L0_TARGET
+    values = np.arange(header["nrows"] * header["ncols"]).reshape(
+        header["nrows"], header["ncols"]
+    )
     folder = Path(morph_staging_folder(project))
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / name
-    rows = "\n".join(
-        " ".join(str(row * ncols + column + 1) for column in range(ncols))
-        for row in range(nrows)
+    raster = folder / f".{path.stem}.tif"
+    dataset = gdal.GetDriverByName("GTiff").Create(
+        str(raster), header["ncols"], header["nrows"], 1, gdal.GDT_Int32
     )
-    path.write_text(
-        f"ncols         {ncols}\nnrows         {nrows}\n"
-        f"xllcorner     {xll}\nyllcorner     {yll}\n"
-        f"cellsize      {cell}\nNODATA_value  -9999\n{rows}\n",
-        encoding="utf-8",
-    )
+    dataset.SetGeoTransform((
+        header["xllcorner"], header["cellsize"], 0,
+        header["yllcorner"] + header["nrows"] * header["cellsize"],
+        0, -header["cellsize"],
+    ))
+    crs = osr.SpatialReference()
+    crs.ImportFromEPSG(32632)
+    dataset.SetProjection(crs.ExportToWkt())
+    dataset.GetRasterBand(1).SetNoDataValue(-9999)
+    dataset.GetRasterBand(1).WriteArray(values)
+    dataset = None
+    copy_rasters(path, {variable: raster})
+    raster.unlink()
     return path
 
 
@@ -148,8 +157,8 @@ L0_TARGET = {
 }
 
 
-def test_rasters_are_padded_then_moved_and_definitions_carried(tmp_path):
-    _staged_asc(tmp_path, "soil_class.asc")
+def test_exact_netcdf_is_converted_and_definitions_are_carried(tmp_path):
+    _staged_nc(tmp_path, "soil_class.nc")
     definition = Path(morph_staging_folder(tmp_path)) / "soil_classdefinition.txt"
     definition.write_text("1 sand\n", encoding="utf-8")
 
@@ -160,83 +169,40 @@ def test_rasters_are_padded_then_moved_and_definitions_carried(tmp_path):
         "soil_class.asc", "soil_classdefinition.txt",
     ]
     # Keep the uncropped raster for later changes to the common extent.
-    assert [path.name for path in staged_files(tmp_path)] == ["soil_class.asc", "soil_classdefinition.txt"]
+    assert [path.name for path in staged_files(tmp_path)] == ["soil_class.nc", "soil_classdefinition.txt"]
     assert (master / "soil_classdefinition.txt").read_text(encoding="utf-8") == "1 sand\n"
     header = (master / "soil_class.asc").read_text(encoding="utf-8").splitlines()
     assert header[0].split()[1] == "4" and header[1].split()[1] == "4"
 
 
-def test_reused_legacy_products_shrink_then_expand_without_losing_cells(tmp_path):
-    from mhm_qgis.core.handlers.file.ascii.pad import read_ascii_header
-    from mhm_qgis.core.handlers.store.morphology import resolve_display_output
-
-    master = Path(morph_folder(tmp_path))
-    master.mkdir(parents=True, exist_ok=True)
-    names = ("soil_class.asc", "lc_2015_2015.asc", "lc_2016_2016.asc")
-    originals = {}
-    for name in names:
-        path = _staged_asc(tmp_path, name, ncols=4, nrows=4, xll=0, yll=0)
-        originals[name] = path.read_text().splitlines()[6:]
-        path.replace(master / name)  # Older publication discarded staging.
-    update_section(tmp_path, "soil", {"output_path": str(master / names[0])})
-    update_section(tmp_path, "land_cover", {"scenes": [
-        {"start_year": year, "end_year": year, "output_path": str(master / name)}
-        for year, name in zip((2015, 2016), names[1:])
-    ]})
+def test_publication_rejects_a_grid_that_is_not_the_common_extent(tmp_path):
+    _staged_nc(tmp_path, "soil_class.nc", L0_TARGET)
     small = {**L0_TARGET, "ncols": 2, "nrows": 2, "xllcorner": 100, "yllcorner": 100}
-    publish_model_inputs(tmp_path, small)
-    for name in names:
-        assert read_ascii_header(master / name)["ncols"] == 2
-        assert (master / name).read_text().splitlines()[6:] == ["6 7", "10 11"]
-    assert resolve_display_output(tmp_path, "soil").path == master / names[0]
-    assert resolve_display_output(tmp_path, "land_cover", year=2016).path == master / names[2]
-    assert publish_model_inputs(tmp_path, small) == []
-    publish_model_inputs(tmp_path, L0_TARGET)
-    for name in names:
-        assert (master / name).read_text().splitlines()[6:] == originals[name]
+    with pytest.raises(ValueError, match="does not match the common L0 grid"):
+        publish_model_inputs(tmp_path, small)
 
 
-def test_class_layers_are_padded_with_a_class_and_lai_with_zero(tmp_path):
-    """Padding onto L0 must never leave nodata inside the model domain."""
-    assert pad_spec_for(Path("lc_2015_2015.asc")) == (CATEGORICAL_PAD_VALUE, True)
-    assert pad_spec_for(Path("soil_class.asc")) == (CATEGORICAL_PAD_VALUE, True)
-    assert pad_spec_for(Path("soil_horizon_class.nc")) == (CATEGORICAL_PAD_VALUE, True)
-    assert pad_spec_for(Path("geology_class.asc")) == (CATEGORICAL_PAD_VALUE, True)
-    assert pad_spec_for(Path("lai.nc")) == (LAI_PAD_VALUE, False)
-    # An unrecognised raster keeps the historical nodata padding.
-    assert pad_spec_for(Path("dem.asc")) == (None, True)
-
-    _staged_asc(tmp_path, "soil_class.asc")
-    publish_model_inputs(tmp_path, L0_TARGET)
-
-    lines = (
-        (Path(morph_folder(tmp_path)) / "soil_class.asc")
-        .read_text(encoding="utf-8")
-        .splitlines()
-    )
-    # The source occupies the two centre cells of the 4x4 target.
-    assert lines[5].split() == ["NODATA_value", "-9999"]
-    rows = [line.split() for line in lines[6:] if line.strip()]
-    assert rows[0] == [str(CATEGORICAL_PAD_VALUE)] * 4
-    assert rows[3] == [str(CATEGORICAL_PAD_VALUE)] * 4
-    assert rows[1] == [str(CATEGORICAL_PAD_VALUE), "1", "2", str(CATEGORICAL_PAD_VALUE)]
-    assert rows[2] == [str(CATEGORICAL_PAD_VALUE), "3", "4", str(CATEGORICAL_PAD_VALUE)]
+def test_publication_does_not_invent_class_values_for_missing_cells(tmp_path):
+    source = {**L0_TARGET, "ncols": 2, "nrows": 2, "xllcorner": 100, "yllcorner": 100}
+    _staged_nc(tmp_path, "soil_class.nc", source)
+    with pytest.raises(ValueError, match="does not match the common L0 grid"):
+        publish_model_inputs(tmp_path, L0_TARGET)
 
 
 def test_publishing_repoints_the_namelist_handoff_at_data_master(tmp_path):
-    _staged_asc(tmp_path, "soil_class.asc")
-    _staged_asc(tmp_path, "lc_2015_2015.asc")
+    _staged_nc(tmp_path, "soil_class.nc")
+    _staged_nc(tmp_path, "lc.nc", variable="land_cover")
     definition = Path(morph_staging_folder(tmp_path)) / "soil_classdefinition.txt"
     definition.write_text("1 sand\n", encoding="utf-8")
 
     # Execute All recorded the staged locations.
     update_section(tmp_path, "soil", {
-        "output_path": "Z Temp/Morphology/morph/soil_class.asc",
+        "output_path": "Z Temp/Morphology/morph/soil_class.nc",
         "classdefinition_path": "Z Temp/Morphology/morph/soil_classdefinition.txt",
     })
     update_section(tmp_path, "land_cover", {
         "output_path": "",
-        "scenes": [{"output_path": "Z Temp/Morphology/morph/lc_2015_2015.asc"}],
+        "scenes": [{"output_path": "Z Temp/Morphology/morph/lc.asc"}],
     })
 
     publish_model_inputs(tmp_path, L0_TARGET)
@@ -251,7 +217,7 @@ def test_publishing_repoints_the_namelist_handoff_at_data_master(tmp_path):
         "data/master/static/morph/soil_classdefinition.txt"
     )
     assert settings["land_cover"]["scenes"][0]["output_path"] == (
-        "data/master/static/morph/lc_2015_2015.asc"
+        "data/master/static/morph/lc.asc"
     )
     # Every recorded path now resolves.
     assert missing_model_inputs(tmp_path) == []
@@ -277,7 +243,7 @@ def test_an_unexpected_staged_file_is_left_alone(tmp_path):
     folder.mkdir(parents=True, exist_ok=True)
     stray = folder / "scratch.tmp"
     stray.write_text("x", encoding="utf-8")
-    _staged_asc(tmp_path, "soil_class.asc")
+    _staged_nc(tmp_path, "soil_class.nc")
 
     published = publish_model_inputs(tmp_path, L0_TARGET)
 

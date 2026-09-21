@@ -799,35 +799,39 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         QMessageBox.critical(self, "Domain Delineator", error_detail(message))
 
     def morphology_workflow_specs(self):
-        """Return metadata for persisted workflow buttons."""
+        """Return metadata for persisted workflow buttons.
+
+        `button` is the widget itself, not its name: `setupUi` has already run
+        by the time anything asks, and a misspelled attribute must fail here
+        rather than silently resolve to nothing.
+        """
         return {
             "project_structure": {
-                "button": "pushButton_createProjectStructure",
+                "button": self.pushButton_createProjectStructure,
                 "label": "Project Structure",
                 "completed_message": "Project structure is ready.",
                 "failed_message": "Project structure setup failed.",
             },
             "scan_precipitation": {
-                "button": "pushButton_scanPrecipitationFiles",
+                "button": self.pushButton_scanPrecipitationFiles,
                 "label": "Precipitation Scan",
                 "completed_message": "Precipitation scan completed.",
                 "failed_message": "Precipitation scan failed.",
             },
-            "execute_all": {
-                "button": "pushButton_executeAllMorphology",
-                "fallback_button": "pushButton_executeAllMorphology",
-                "label": "Execute All Processing",
-                "action_name": "Execute All Processing",
+            "execute_all_morphology": {
+                "button": self.pushButton_executeAllMorphology,
+                "label": "Execute All Morphology",
+                "action_name": "Execute All Morphology",
                 "thread_name": "mHM QGISExecuteAllThread",
                 "completed_message": (
                     "Morphology preparation completed successfully."
                 ),
                 "failed_message": (
-                    "Execute All Processing failed. Check the log for details."
+                    "Execute All Morphology failed. Check the log for details."
                 ),
             },
             "execute_all_meteo": {
-                "button": "pushButton_executeAllMeteo",
+                "button": self.pushButton_executeAllMeteo,
                 "label": "Meteorology Preparation",
                 "action_name": "Meteorology Preparation",
                 "thread_name": "mHM QGISMeteoThread",
@@ -840,13 +844,13 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
                 ),
             },
             "execute_all_observations": {
-                "button": "pushButton_executeAllObservation",
+                "button": self.pushButton_executeAllObservation,
                 "label": "Observation Preparation",
                 "completed_message": "Observation preparation completed.",
                 "failed_message": "Observation preparation failed.",
             },
             "run_mhm": {
-                "button": "pushButton_execute_mHM",
+                "button": self.pushButton_execute_mHM,
                 "label": "Run mHM",
                 "completed_message": "mHM completed successfully.",
                 "failed_message": "mHM execution failed.",
@@ -862,13 +866,13 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def running_morphology_workflow_key(self):
         """Return the first running morphology workflow key, if any."""
         if self.morphology_tasks.execute_all_active:
-            return "execute_all"
+            return "execute_all_morphology"
         for workflow_key, thread in self._morphology_workflow_threads.items():
             if thread is not None and thread.isRunning():
                 return workflow_key
         return None
 
-    def start_execute_all_processing(self):
+    def start_execute_all_morphology_processing(self):
         """Run Execute All as a sequence of QGIS-managed file tasks."""
         self.morphology_tasks.start_execute_all()
 
@@ -915,7 +919,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
     def start_morphology_workflow(self, workflow_key):
         """Start a named morphology workflow in a background worker thread."""
-        if workflow_key == "execute_all":
+        if workflow_key == "execute_all_morphology":
             self.morphology_tasks.start_execute_all()
             return
         spec = self.morphology_workflow_specs().get(workflow_key)
@@ -1209,9 +1213,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         data.update(
             {
                 "mode": "multi_horizon",
-                "soil_db_mode": (
-                    0 if self.comboBox_mHMversion.currentText().startswith("5") else 1
-                ),
+                "soil_db_mode": 1,
                 "variable": "soil_class",
                 "source_bulk_density_unit": value.bulk_density_unit,
                 "bulk_density_unit": "g/cm3",

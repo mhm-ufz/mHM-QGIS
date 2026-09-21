@@ -215,9 +215,9 @@ def bind(dialog):
     )
 
     # Batch morphology workflows
-    execute_all_button = dialog.morphology_workflow_button("execute_all")
-    if execute_all_button is not None:
-        execute_all_button.clicked.connect(dialog.start_execute_all_processing)
+    dialog.pushButton_executeAllMorphology.clicked.connect(
+        dialog.start_execute_all_morphology_processing
+    )
     dialog.pushButton_executeAllMeteo.clicked.connect(
         dialog.start_execute_all_meteo_processing
     )
