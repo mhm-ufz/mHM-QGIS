@@ -10,7 +10,7 @@ properties:
       type: string
       x-fortran-len: buf
       format: file-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[restart/mhm_restart_in.nc]]
   mrm_file_RestartIn:
     description: Path of the mRM restart input file for each domain.
@@ -19,7 +19,7 @@ properties:
       type: string
       x-fortran-len: buf
       format: file-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[restart/mrm_restart_in.nc]]
   resolution_Routing:
     description: |-
@@ -29,7 +29,7 @@ properties:
     items:
       type: number
       exclusiveMinimum: 0
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[1.0]]
   timestep:
     description: Model simulation time step in hours; supported values are 1 and 24.

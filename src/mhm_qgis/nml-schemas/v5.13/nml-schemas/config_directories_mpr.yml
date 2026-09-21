@@ -10,5 +10,5 @@ properties:
       type: string
       x-fortran-len: buf
       format: directory-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[data/master/lai/]]

@@ -9,7 +9,7 @@ properties:
     items:
       type: number
       x-fortran-kind: dp
-    x-fortran-shape: [max_geo_units, 5]
+    x-fortran-shape: [nGeoUnits, 5]
     x-nml-tools-ui:
       axes:
         "1":

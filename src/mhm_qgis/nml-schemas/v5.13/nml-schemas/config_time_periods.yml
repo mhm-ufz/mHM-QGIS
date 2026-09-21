@@ -12,12 +12,12 @@ properties:
       type: integer
       minimum: 0
       default: 0
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[0]]
   eval_Per:
     description: Start and end date of the requested evaluation period for each domain.
     type: array
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     items:
       type: object
       x-fortran-type: eval_period_t

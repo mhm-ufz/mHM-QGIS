@@ -13,14 +13,14 @@ properties:
     type: array
     items:
       type: integer
-    x-fortran-shape: max_lcover_scenes
+    x-fortran-shape: nLcoverScene
     examples: [[1900]]
   LCoverYearEnd:
     description: Last year represented by each land-cover scene.
     type: array
     items:
       type: integer
-    x-fortran-shape: max_lcover_scenes
+    x-fortran-shape: nLcoverScene
     examples: [[2100]]
   LCoverfName:
     description: File name of each land-cover scene; scene names must be the same for all domains.
@@ -29,5 +29,5 @@ properties:
       type: string
       x-fortran-len: buf
       format: file-path
-    x-fortran-shape: max_lcover_scenes
+    x-fortran-shape: nLcoverScene
     examples: [[lc.asc]]

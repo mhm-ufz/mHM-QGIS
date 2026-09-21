@@ -20,7 +20,7 @@ properties:
       type: string
       x-fortran-len: buf
       format: directory-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[data/master/meteo/pre/]]
   dir_Temperature:
     <<: *domain_directory
@@ -63,5 +63,5 @@ properties:
     items:
       type: integer
       minimum: -3
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[0]]

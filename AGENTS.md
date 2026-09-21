@@ -607,10 +607,23 @@ Four JSON files are used by the plugin.
   mHM 5.13 parses. `parameter.yml` is a `$defs` library, so it is the one
   schema file with no `[[namelists]]` entry. A property that `$ref`s it must not
   also spell out `x-fortran-shape` or `x-nml-tools-ui`, or the two can drift.
-  v5.13's `GeoParam` is the one exception: a `[max_geo_units, 5]` table.
+  v5.13's `GeoParam` is the one exception: a `[nGeoUnits, 5]` table.
 - Version-specific initial values are built by `vSpecific/` (`build_initial_values`,
   `build_dimensions`), which reads `nml-settings.json` through
   `state/nml_settings.load_settings`.
+- **v5.13 array sizes are dimensions, not fixed maxima.** `nDomains`, `nGeoUnits`,
+  `nSoilHorizons`, `nLcoverScene` and `nGaugesTotal` are named after the namelist
+  variables they size, and `build_dimensions` computes each from the same helper
+  that builds the values, so a dimension cannot disagree with its array. The two
+  gauge/land-cover sizes used to be `[constants]`, which made one land-cover
+  scene write 50 entries and one gauge write 200 per domain -- 233 rendered
+  lines for a single-domain project where 79 carry information. Do not pad
+  values out to a dimension: nml-tools rejects an extent larger than the
+  dimension, and `buf` is the only remaining constant.
+- nml-tools canonicalises dimension names to **lower case** (`name.lower()` in
+  `_normalize_dimensions`), so camelCase in `nml-config.toml` is for readers and
+  `default_dimensions` keys come back lowercased. An unknown name raises rather
+  than being ignored.
 - The handoff goes through `externals/nml_tools_handler.launch_profile_editor`.
   `configure_qtpy_api()` must run before it, because nml-tools loads Qt on first call.
 - Use the installed nml-tools API (development checkout now `/home/bashyal/Codes/nml-tools`),

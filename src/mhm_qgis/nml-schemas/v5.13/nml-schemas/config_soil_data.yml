@@ -31,5 +31,5 @@ properties:
     items:
       type: number
       exclusiveMinimum: 0
-    x-fortran-shape: max_layers
+    x-fortran-shape: nSoilHorizons
     examples: [[200.0]]

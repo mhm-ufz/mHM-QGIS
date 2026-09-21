@@ -158,10 +158,14 @@ def test_version_projects_have_model_filenames_and_dimensions(tmp_path: Path) ->
     v5 = load_project(SCHEMAS / "v5.13", tmp_path)
     v6 = load_project(SCHEMAS / "v6", tmp_path)
 
+    # nml-tools canonicalises dimension names to lower case, so the camelCase
+    # spellings in nml-config.toml are for readers only.
     assert v5.default_dimensions == {
-        "max_domains": 100,
-        "max_geo_units": 25,
-        "max_layers": 10,
+        "ndomains": 100,
+        "ngeounits": 25,
+        "nsoilhorizons": 10,
+        "nlcoverscene": 50,
+        "ngaugestotal": 200,
     }
     assert {profile.name: profile.default_file for profile in v5.profiles} == {
         "main": "mhm.nml",
@@ -226,7 +230,7 @@ def test_v513_schemas_match_reference_groups_and_fields(tmp_path: Path) -> None:
     )
     for name in ("LCoverYearStart", "LCoverYearEnd", "LCoverfName"):
         field = schemas["LCover"]["properties"][name]
-        assert field["x-fortran-shape"] == "max_lcover_scenes"
+        assert field["x-fortran-shape"] == "nLcoverScene"
         assert "x-fortran-flex-tail-dims" not in field
 
 
@@ -305,7 +309,7 @@ def test_domain_dimensions_and_paths_follow_plugin_domains(tmp_path: Path) -> No
     dialog = Dialog(tmp_path)
     dialog._input_adapters["pour_points"] = LayerWidget()
 
-    assert build_dimensions("5.13", dialog)["max_domains"] == 1
+    assert build_dimensions("5.13", dialog)["nDomains"] == 1
     assert build_dimensions("6.0", dialog)["n_domains"] == 1
     v5_values = build_initial_values("5.13", dialog)
     v6_values = build_initial_values("6.0", dialog)
@@ -408,6 +412,33 @@ def test_v513_parameters_share_one_base_type(tmp_path: Path) -> None:
     assert referencing == 136
     assert repeated == 0, "a five-element parameter still spells the array out"
 
-    # GeoParam is the one genuine exception: a [max_geo_units, 5] table.
+    # GeoParam is the one genuine exception: a [nGeoUnits, 5] table.
     geo = yaml.safe_load((root / "parameter_geoparameter.yml").read_text())
-    assert geo["properties"]["GeoParam"]["x-fortran-shape"] == ["max_geo_units", 5]
+    assert geo["properties"]["GeoParam"]["x-fortran-shape"] == ["nGeoUnits", 5]
+
+
+def test_v513_arrays_are_sized_to_the_project_not_to_a_maximum(tmp_path: Path) -> None:
+    """Each dimension comes from a real count, so no array is zero-padded."""
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+
+    dialog = Dialog(tmp_path)
+    update_section(tmp_path, "soil", {"horizons": [
+        {"lower_depth": 200}, {"lower_depth": 500}, {"lower_depth": 1000}]})
+    update_section(tmp_path, "gauges", [
+        {"gauge_id": 1, "domain_ids": [1]},
+        {"gauge_id": 2, "domain_ids": [1]},
+    ])
+    project, dimensions, document = _document("5.13", dialog)
+
+    assert dimensions["nSoilHorizons"] == 3
+    assert dimensions["nLcoverScene"] == 1
+    assert dimensions["nGaugesTotal"] == 2
+
+    main = project.profile("main")
+    rendered = render_profile(project, main, profile_values(document, main), dimensions)
+
+    # The padding these dimensions replaced wrote 50 land-cover entries and ten
+    # soil depths for a project that has one scene and three horizons.
+    assert "LCoverfName(1)" in rendered and "LCoverfName(2)" not in rendered
+    assert "soil_Depth(3)" in rendered and "soil_Depth(4)" not in rendered
+    assert "Gauge_id(1,2)" in rendered and "Gauge_id(1,3)" not in rendered

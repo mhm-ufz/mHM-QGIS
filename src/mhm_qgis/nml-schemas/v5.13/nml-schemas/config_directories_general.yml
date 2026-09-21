@@ -22,7 +22,7 @@ properties:
       type: string
       x-fortran-len: buf
       format: directory-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[data/<outlet-id>/]]
   dir_LCover:
     description: Directory containing land-cover input files for each domain.
@@ -31,7 +31,7 @@ properties:
       type: string
       x-fortran-len: buf
       format: directory-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[data/master/static/morph/]]
   mhm_file_RestartOut:
     description: Path of the mHM restart file to write for each domain.
@@ -40,7 +40,7 @@ properties:
       type: string
       x-fortran-len: buf
       format: file-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[restart/mhm_restart_out.nc]]
   mrm_file_RestartOut:
     description: Path of the mRM restart file to write for each domain.
@@ -49,7 +49,7 @@ properties:
       type: string
       x-fortran-len: buf
       format: file-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[restart/mrm_restart_out.nc]]
   dir_Out:
     description: Directory in which model output is written for each domain.
@@ -58,7 +58,7 @@ properties:
       type: string
       x-fortran-len: buf
       format: directory-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[output/]]
   file_LatLon:
     description: NetCDF file containing latitude and longitude at the hydrological resolution for each domain.
@@ -67,5 +67,5 @@ properties:
       type: string
       x-fortran-len: buf
       format: file-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[data/master/latlon.nc]]

@@ -18,10 +18,21 @@ from ..common import (
 
 
 def build_dimensions(dialog: Any) -> dict[str, int]:
+    """Size every v5.13 array from the counts the project actually has.
+
+    These were fixed maxima, so one land-cover scene still wrote 50 entries and
+    one gauge wrote 200 per domain. Each name matches the namelist variable it
+    sizes, and the counts come from the same helpers that build the values, so
+    a dimension can never disagree with the array it measures.
+    """
+    domains = domain_count(dialog)
+    settings = namelist_settings(dialog)
     return {
-        "max_domains": domain_count(dialog),
-        "max_geo_units": geology_count(dialog),
-        "max_layers": 10,
+        "nDomains": domains,
+        "nGeoUnits": geology_count(dialog),
+        "nSoilHorizons": _soil_horizons(settings),
+        "nLcoverScene": _land_cover_scenes(settings),
+        "nGaugesTotal": _gauges_per_domain(settings, domains),
     }
 
 
@@ -152,14 +163,17 @@ def _land_cover_values(settings: dict[str, Any]) -> dict[str, Any]:
             valid.append((start, end, Path(str(path)).name))
     if not valid:
         valid = [(1900, 2100, "lc.asc")]
-    valid = valid[:50]
-    pad = 50 - len(valid)
     return {
         "nLCoverScene": len(valid),
-        "LCoverYearStart": [item[0] for item in valid] + [0] * pad,
-        "LCoverYearEnd": [item[1] for item in valid] + [0] * pad,
-        "LCoverfName": [item[2] for item in valid] + [""] * pad,
+        "LCoverYearStart": [item[0] for item in valid],
+        "LCoverYearEnd": [item[1] for item in valid],
+        "LCoverfName": [item[2] for item in valid],
     }
+
+
+def _land_cover_scenes(settings: dict[str, Any]) -> int:
+    """Size the `nLcoverScene` dimension from the scenes actually configured."""
+    return len(_land_cover_values(settings)["LCoverfName"])
 
 
 def _soil_values(settings: dict[str, Any]) -> dict[str, Any]:
@@ -176,13 +190,17 @@ def _soil_values(settings: dict[str, Any]) -> dict[str, Any]:
     if not depths:
         return {}
     tillage = int(soil.get("tillage_depth") or depths[0])
-    padded = depths + [depths[-1]] * (10 - len(depths))
     return {
         "iFlag_soilDB": 0,
         "tillageDepth": tillage,
         "nSoilHorizons_mHM": len(depths),
-        "soil_Depth": padded,
+        "soil_Depth": depths,
     }
+
+
+def _soil_horizons(settings: dict[str, Any]) -> int:
+    """Size the `nSoilHorizons` dimension, falling back to the schema default."""
+    return len(_soil_values(settings).get("soil_Depth", ())) or 10
 
 
 def _gauge_values(settings: dict[str, Any], count: int) -> dict[str, Any]:
@@ -203,13 +221,16 @@ def _gauge_values(settings: dict[str, Any], count: int) -> dict[str, Any]:
                 index = int(domain_id) - 1
             except (TypeError, ValueError):
                 continue
-            if 0 <= index < count and len(rows[index]) < 200:
+            if 0 <= index < count:
                 rows[index].append((gauge_id, Path(filename).name))
+    # Fortran arrays are rectangular, so every row is padded to the widest one
+    # -- but only to that, not to a fixed maximum.
+    widest = max((len(row) for row in rows), default=0)
     identifiers = [
-        [item[0] for item in row] + [0] * (200 - len(row)) for row in rows
+        [item[0] for item in row] + [0] * (widest - len(row)) for row in rows
     ]
     filenames = [
-        [item[1] for item in row] + [""] * (200 - len(row)) for row in rows
+        [item[1] for item in row] + [""] * (widest - len(row)) for row in rows
     ]
     return {
         # mHM reads nGaugesTotal as the "sum of all gauges in all subbains", so a
@@ -220,6 +241,12 @@ def _gauge_values(settings: dict[str, Any], count: int) -> dict[str, Any]:
         "Gauge_id": identifiers,
         "gauge_filename": filenames,
     }
+
+
+def _gauges_per_domain(settings: dict[str, Any], count: int) -> int:
+    """Size the `nGaugesTotal` dimension from the widest domain's gauge row."""
+    identifiers = _gauge_values(settings, count).get("Gauge_id", ())
+    return max((len(row) for row in identifiers), default=0) or 1
 
 
 def _lai_values(settings: dict[str, Any]) -> dict[str, Any]:

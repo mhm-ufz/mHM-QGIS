@@ -17,5 +17,5 @@ properties:
     type: array
     items:
       type: number
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[0.5]]

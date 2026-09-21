@@ -14,14 +14,14 @@ properties:
     items:
       type: integer
       minimum: 0
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[0]]
   InflowGauge_id:
     description: Identifier of each inflow gauge, indexed by domain and gauge position.
     type: array
     items:
       type: integer
-    x-fortran-shape: [max_domains, max_gauges]
+    x-fortran-shape: [nDomains, nGaugesTotal]
     examples: [[[-9]]]
   InflowGauge_filename:
     description: Name of the inflow time-series file for each domain and gauge position.
@@ -29,12 +29,12 @@ properties:
     items:
       type: string
       x-fortran-len: buf
-    x-fortran-shape: [max_domains, max_gauges]
+    x-fortran-shape: [nDomains, nGaugesTotal]
     examples: [[[""]]]
   InflowGauge_Headwater:
     description: Whether flows from upstream or headwater cells of each inflow gauge are included.
     type: array
     items:
       type: boolean
-    x-fortran-shape: [max_domains, max_gauges]
+    x-fortran-shape: [nDomains, nGaugesTotal]
     examples: [[[false]]]

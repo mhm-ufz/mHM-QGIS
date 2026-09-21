@@ -3,26 +3,26 @@
 value = 256
 doc = "String buffer length."
 
-[constants.max_gauges]
-value = 200
-doc = "Maximum number of gauges per domain."
-
-[constants.max_lcover_scenes]
-value = 50
-doc = "Maximum number of land-cover scenes."
-
 [dimensions]
-[dimensions.max_domains]
+[dimensions.nDomains]
 default = 100
-doc = "Maximum number of domains."
+doc = "Number of domains."
 
-[dimensions.max_geo_units]
+[dimensions.nGeoUnits]
 default = 25
-doc = "Maximum number of geological units."
+doc = "Number of geological units."
 
-[dimensions.max_layers]
+[dimensions.nSoilHorizons]
 default = 10
-doc = "Maximum number of soil layers."
+doc = "Number of soil horizons."
+
+[dimensions.nLcoverScene]
+default = 50
+doc = "Number of land-cover scenes."
+
+[dimensions.nGaugesTotal]
+default = 200
+doc = "Number of gauges stored per domain."
 
 [[namelists]]
 name = "project_description"

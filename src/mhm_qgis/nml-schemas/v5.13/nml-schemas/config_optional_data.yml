@@ -10,7 +10,7 @@ properties:
       type: string
       x-fortran-len: buf
       format: directory-path
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[data/optional_data/]]
   nSoilHorizons_sm_input:
     description: Number of mHM soil layers, counted from the top, represented by the soil-moisture input.

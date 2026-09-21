@@ -14,14 +14,14 @@ properties:
     items:
       type: integer
       minimum: 0
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[1]]
   Gauge_id:
     description: Consecutively listed gauge identifier for each domain and gauge position; identifiers must match the gauge-location grid.
     type: array
     items:
       type: integer
-    x-fortran-shape: [max_domains, max_gauges]
+    x-fortran-shape: [nDomains, nGaugesTotal]
     examples: [[[398]]]
   gauge_filename:
     description: Name of the observed discharge time-series file for each domain and gauge position.
@@ -29,5 +29,5 @@ properties:
     items:
       type: string
       x-fortran-len: buf
-    x-fortran-shape: [max_domains, max_gauges]
+    x-fortran-shape: [nDomains, nGaugesTotal]
     examples: [[["00398.txt"]]]

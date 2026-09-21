@@ -23,7 +23,7 @@ properties:
     items:
       type: number
       exclusiveMinimum: 0
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[1.0]]
   L0Domain:
     description: |-
@@ -33,7 +33,7 @@ properties:
     items:
       type: integer
       minimum: 1
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[1]]
   write_restart:
     description: Write restart output at the end of the simulation.
@@ -49,5 +49,5 @@ properties:
       type: integer
       minimum: 0
       maximum: 6
-    x-fortran-shape: max_domains
+    x-fortran-shape: nDomains
     examples: [[0]]
