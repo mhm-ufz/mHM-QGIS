@@ -1,11 +1,6 @@
-# Every v5.13 calibration parameter is this five-element Fortran array, so it
-# is defined once here and referenced. The element order is the namelist
-# contract mHM 5.13 parses; v6 replaces it with the `parameter_t` derived type.
 $defs:
   parameter:
     title: Calibration parameter
-    description: >-
-      Lower bound, upper bound, value, calibration flag and scaling.
     type: array
     items:
       type: number

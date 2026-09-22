@@ -4,6 +4,16 @@ Guidance for coding agents working on `mhm_qgis`: a plugin targeting QGIS 3/Qt5 
 that prepares mHM inputs and namelists. The GUI requires real QGIS libraries,
 whether hosted by QGIS Desktop or launched directly.
 
+## Working Style
+
+- **Invoke the `ponytail` skill on every coding task here** -- writing, fixing,
+  refactoring, reviewing or choosing a dependency. Shortest working diff,
+  deletion over addition, stdlib before a new helper, and no abstraction with
+  one caller. It is the house style, not an option.
+- Keep code and schema comments to what is not obvious from the names. The
+  reasoning belongs in this file, where it is read once rather than in every
+  diff.
+
 ## Repository Shape
 
 - `src/mhm_qgis/`: the QGIS plugin folder **and** the Python package. Both at once --

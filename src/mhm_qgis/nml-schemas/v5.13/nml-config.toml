@@ -5,23 +5,23 @@ doc = "String buffer length."
 
 [dimensions]
 [dimensions.nDomains]
-default = 100
+default = 3
 doc = "Number of domains."
 
 [dimensions.nGeoUnits]
-default = 25
+default = 16
 doc = "Number of geological units."
 
 [dimensions.nSoilHorizons]
-default = 10
+default = 6
 doc = "Number of soil horizons."
 
 [dimensions.nLcoverScene]
-default = 50
+default = 5
 doc = "Number of land-cover scenes."
 
 [dimensions.nGaugesTotal]
-default = 200
+default = 20
 doc = "Number of gauges stored per domain."
 
 [[namelists]]

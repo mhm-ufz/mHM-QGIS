@@ -18,13 +18,6 @@ from ..common import (
 
 
 def build_dimensions(dialog: Any) -> dict[str, int]:
-    """Size every v5.13 array from the counts the project actually has.
-
-    These were fixed maxima, so one land-cover scene still wrote 50 entries and
-    one gauge wrote 200 per domain. Each name matches the namelist variable it
-    sizes, and the counts come from the same helpers that build the values, so
-    a dimension can never disagree with the array it measures.
-    """
     domains = domain_count(dialog)
     settings = namelist_settings(dialog)
     return {
@@ -172,7 +165,6 @@ def _land_cover_values(settings: dict[str, Any]) -> dict[str, Any]:
 
 
 def _land_cover_scenes(settings: dict[str, Any]) -> int:
-    """Size the `nLcoverScene` dimension from the scenes actually configured."""
     return len(_land_cover_values(settings)["LCoverfName"])
 
 
@@ -199,7 +191,6 @@ def _soil_values(settings: dict[str, Any]) -> dict[str, Any]:
 
 
 def _soil_horizons(settings: dict[str, Any]) -> int:
-    """Size the `nSoilHorizons` dimension, falling back to the schema default."""
     return len(_soil_values(settings).get("soil_Depth", ())) or 10
 
 
@@ -223,8 +214,7 @@ def _gauge_values(settings: dict[str, Any], count: int) -> dict[str, Any]:
                 continue
             if 0 <= index < count:
                 rows[index].append((gauge_id, Path(filename).name))
-    # Fortran arrays are rectangular, so every row is padded to the widest one
-    # -- but only to that, not to a fixed maximum.
+    # Rectangular rows: pad to the widest, not to a fixed maximum.
     widest = max((len(row) for row in rows), default=0)
     identifiers = [
         [item[0] for item in row] + [0] * (widest - len(row)) for row in rows
@@ -244,7 +234,6 @@ def _gauge_values(settings: dict[str, Any], count: int) -> dict[str, Any]:
 
 
 def _gauges_per_domain(settings: dict[str, Any], count: int) -> int:
-    """Size the `nGaugesTotal` dimension from the widest domain's gauge row."""
     identifiers = _gauge_values(settings, count).get("Gauge_id", ())
     return max((len(row) for row in identifiers), default=0) or 1
 
