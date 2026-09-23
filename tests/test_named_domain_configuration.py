@@ -163,9 +163,6 @@ def test_meteo_dialog_cancel_and_edit_do_not_prepare_data(tmp_path, monkeypatch)
         assert prompt.groupBox.title() == "tavg"
         assert prompt.comboBox_temporalResolutionInput.currentText() == "Hourly"
         assert prompt.comboBox_unitInput.currentText() == "K"
-        assert not prompt.comboBox_cumulativeTemporalResolution.isEnabled()
-        prompt.checkBox_cumulative.setChecked(True)
-        assert prompt.comboBox_cumulativeTemporalResolution.isEnabled()
         return prompt.DialogCode.Rejected
     monkeypatch.setattr(MeteoVarDetailsDialog, "exec", cancel)
     monkeypatch.setattr(dialog.task_coordinator, "submit", lambda *a, **k: pytest.fail("Cancel started scanning"))

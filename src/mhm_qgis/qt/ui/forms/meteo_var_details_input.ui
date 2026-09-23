@@ -208,57 +208,20 @@
        <height>20</height>
       </size>
      </property>
-     <layout class="QHBoxLayout" name="horizontalLayout" stretch="2,3">
+     <layout class="QHBoxLayout" name="horizontalLayout" stretch="">
       <property name="topMargin">
        <number>1</number>
       </property>
       <property name="bottomMargin">
        <number>1</number>
       </property>
-      <item>
-       <widget class="QCheckBox" name="checkBox_cumulative">
-        <property name="text">
-         <string>Cumulative</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QComboBox" name="comboBox_cumulativeTemporalResolution">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-        <property name="currentIndex">
-         <number>-1</number>
-        </property>
-        <item>
-         <property name="text">
-          <string>Hourly</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Daily</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Monthly</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Yearly</string>
-         </property>
-        </item>
-       </widget>
-      </item>
      </layout>
     </widget>
    </item>
    <item>
     <spacer name="verticalSpacer">
      <property name="orientation">
-      <enum>Qt::Vertical</enum>
+      <enum>Qt::Orientation::Vertical</enum>
      </property>
      <property name="sizeHint" stdset="0">
       <size>
@@ -271,10 +234,10 @@
    <item>
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+      <enum>Qt::Orientation::Horizontal</enum>
      </property>
      <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
      </property>
     </widget>
    </item>

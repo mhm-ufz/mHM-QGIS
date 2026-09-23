@@ -242,8 +242,8 @@ Four JSON files live under each domain's `.temp/` directory.
 - Precipitation Scan and Add/Edit Meteorology open `meteo_var_details_input.ui`.
   Only OK starts metadata inspection; Cancel leaves saved inputs unchanged. The
   variable table is populated after successful inspection and restores without scanning.
-- Each variable declares folder/glob, unit, input cadence, cumulative flag and reset
-  cadence. Metadata must agree. The reset combo is enabled only for cumulative input.
+- Each variable declares folder/glob, unit and input cadence; the form has no cumulative
+  controls, so user specs are non-cumulative. Metadata must agree.
   No temperature triplet or dedicated PET workflow remains.
 - Output cadence is the input cadence or a coarser hourly/daily/monthly/yearly cadence.
   Coarser output requires Average, Sum, Minimum or Maximum aggregation. Drop
@@ -471,7 +471,8 @@ Four JSON files live under each domain's `.temp/` directory.
 
 - Plain input combo boxes are exposed through compatibility adapters under the former
   `mMapLayerComboBox_*` names. Loaded QGIS layers are always listed; folder searching
-  optionally adds relative project paths.
+  (disabled in the form) would add relative project paths. The precipitation folder combo
+  never scans the project: it holds a blank entry plus the browsed or saved folder.
 - Land cover, soil and geology use either `mHM_ready` or `Lookup Table` mode. Lookup mode
   stores an explicit CSV or delimited TXT lookup file, mapping field and class field.
 - **All lookup-table reading goes through `core/handlers/lookup`.** `table.read` reads

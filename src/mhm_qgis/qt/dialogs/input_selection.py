@@ -140,35 +140,6 @@ def scan_project_inputs(project_folder, kind: str) -> list[InputItem]:
     return sorted(items, key=lambda item: item.label.casefold())
 
 
-def scan_project_folders(project_folder) -> list[InputItem]:
-    """List project subfolders while pruning the plugin-owned workspace."""
-    project_root = Path(project_folder).expanduser().resolve()
-    if not project_root.is_dir():
-        return []
-
-    items = []
-    for current_root, directories, _ in os.walk(project_root):
-        current_path = Path(current_root)
-        if current_path == project_root:
-            excluded = {name.casefold() for name in EXCLUDED_PROJECT_FOLDERS}
-            directories[:] = [
-                name for name in directories
-                if name.casefold() not in excluded
-            ]
-        for dirname in directories:
-            path = current_path / dirname
-            items.append(
-                InputItem(
-                    path.relative_to(project_root).as_posix(),
-                    {
-                        "origin": "folder",
-                        "path": str(path.resolve()),
-                    },
-                )
-            )
-    return sorted(items, key=lambda item: item.label.casefold())
-
-
 def _layer_id(layer):
     getter = getattr(layer, "id", None)
     if not callable(getter):

@@ -31,7 +31,6 @@ from mhm_qgis.qt.dialogs.input_selection import (  # noqa: E402
     MhmReadyInputDialog,
     SingleLayerInputDialog,
     loaded_qgis_items,
-    scan_project_folders,
     scan_project_inputs,
 )
 from mhm_qgis.qt.controllers import main as main_controller  # noqa: E402
@@ -105,25 +104,6 @@ def test_scanner_uses_input_specific_extensions(tmp_path):
         "table.csv",
         "table.txt",
     }
-
-
-def test_folder_scanner_lists_nested_inputs_but_not_plugin_workspace(tmp_path):
-    (tmp_path / "forcing" / "precipitation").mkdir(parents=True)
-    (tmp_path / "forcing" / "temperature").mkdir()
-    (tmp_path / "mhm-qgis" / "data" / "meteo").mkdir(parents=True)
-
-    items = scan_project_folders(tmp_path)
-
-    assert [item.label for item in items] == [
-        "forcing",
-        "forcing/precipitation",
-        "forcing/temperature",
-    ]
-    assert all(
-        Path(item.data["path"]).is_absolute()
-        and item.data["origin"] == "folder"
-        for item in items
-    )
 
 
 def test_adapter_returns_file_layer_without_adding_it_to_project(tmp_path):

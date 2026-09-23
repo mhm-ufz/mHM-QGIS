@@ -291,6 +291,9 @@
           </item>
           <item>
            <widget class="QCheckBox" name="checkBox_enableFolderSearch">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
             <property name="toolTip">
              <string>Enable file searching within the folder</string>
             </property>

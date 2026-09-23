@@ -252,7 +252,8 @@ def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
     dialog.project_folder = str(tmp_path)
     dialog._loading_input_state = True
     dialog.refresh_meteo_folder_sources()
-    dialog.comboBox_precipitationFile.setCurrentIndex(dialog._folder_combo_index(dialog.comboBox_precipitationFile, str(folder)))
+    dialog._add_folder_combo_item(dialog.comboBox_precipitationFile, str(folder))
+    dialog.comboBox_precipitationFile.setCurrentIndex(dialog.comboBox_precipitationFile.count() - 1)
     dialog._meteo_inputs = {v: asdict(MeteoFolderSpec(v, str(folder), unit=unit))
                             for v, unit in (("pre", "mm"), ("tavg", "K"))}
     dialog.spinBox_L2ResolutionMultiplier.setValue(4)

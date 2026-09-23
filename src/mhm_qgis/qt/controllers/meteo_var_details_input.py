@@ -25,10 +25,6 @@ def populate(dialog, initial):
     update_aggregation_control(dialog)
     dialog.comboBox_unitInput.addItems(VARIABLES[dialog.variable][2])
     dialog.comboBox_unitInput.setCurrentText(normalize_unit(initial.get("unit", VARIABLES[dialog.variable][2][0])))
-    dialog.checkBox_cumulative.setChecked(bool(initial.get("cumulative")))
-    dialog.comboBox_cumulativeTemporalResolution.setCurrentText(initial.get("cumulative_resolution") or "Daily")
-    dialog.comboBox_cumulativeTemporalResolution.setEnabled(dialog.checkBox_cumulative.isChecked())
-    dialog.checkBox_cumulative.setToolTip("Running amounts reset at UTC calendar boundaries. CF interval bounds are required unless ERA timing is recognized.")
 
 
 def populate_output_resolutions(dialog, selected=None):
@@ -77,9 +73,7 @@ def validate(dialog):
             output_temporal_resolution=dialog.comboBox_temporalResolutionOutput.currentText(),
             aggregation=("" if not dialog.comboBox_temporalAggregationTypeMeteoOutput.isEnabled()
                          else dialog.comboBox_temporalAggregationTypeMeteoOutput.currentText()),
-            unit=dialog.comboBox_unitInput.currentText(),
-            cumulative=dialog.checkBox_cumulative.isChecked(),
-            cumulative_resolution=dialog.comboBox_cumulativeTemporalResolution.currentText()).normalized()
+            unit=dialog.comboBox_unitInput.currentText()).normalized()
         validate_spec(dialog.spec)
     except (OSError, ValueError) as error:
         QMessageBox.warning(dialog, "Meteorology input", str(error))

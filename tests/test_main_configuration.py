@@ -40,7 +40,8 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
     dialog.input_combo("dem").setLayer(QgsRasterLayer(str(dem), "DEM"))
     dialog.refresh_meteo_folder_sources()
-    dialog.comboBox_precipitationFile.setCurrentIndex(dialog._folder_combo_index(dialog.comboBox_precipitationFile, str(folder)))
+    dialog._add_folder_combo_item(dialog.comboBox_precipitationFile, str(folder))
+    dialog.comboBox_precipitationFile.setCurrentIndex(dialog.comboBox_precipitationFile.count() - 1)
     dialog.lineEdit_precipitationGlobDefinition.setText("wanted*.nc")
     dialog._loading_input_state = False
     assert dialog._meteo_inspections.get("precipitation") is None

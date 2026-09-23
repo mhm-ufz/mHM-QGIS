@@ -26,7 +26,7 @@ from ...core.grid import (
 from ..dialogs.input_selection import (INPUT_EXTENSIONS, InputComboAdapter,
                                 LaiNetcdfInputDialog, MhmReadyInputDialog,
                                 SingleLayerInputDialog, loaded_qgis_items,
-                                raster_details, scan_project_folders,
+                                raster_details,
                                 scan_project_inputs)
 from ...core.meteorology.forcing import MeteoFolderSpec
 from ...core.meteorology.forcing import inspect_meteo_folder_cached
@@ -887,18 +887,12 @@ def meteo_input_widgets(dialog):
 
 
 def refresh_meteo_folder_sources(dialog):
-    """Populate meteo folder boxes from the outer project directory."""
-    available = (
-        scan_project_folders(dialog.project_directory or dialog.project_folder)
-        if dialog.project_directory or dialog.project_folder else ()
-    )
+    """Reset meteo folder boxes to a blank entry plus the browsed folder."""
     for _, combo, _ in dialog.meteo_input_widgets():
         previous = dialog.selected_folder_path(combo)
         combo.blockSignals(True)
         combo.clear()
         combo.addItem("", None)
-        for item in available:
-            combo.addItem(item.label, item.data)
         index = dialog._folder_combo_index(combo, previous)
         if index < 0 and previous and os.path.isdir(previous):
             dialog._add_folder_combo_item(combo, previous)
