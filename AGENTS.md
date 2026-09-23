@@ -246,6 +246,9 @@ Four JSON files live under each domain's `.temp/` directory.
   controls, so user specs are non-cumulative. Metadata must agree.
   No temperature triplet or dedicated PET workflow remains.
 - Output cadence is the input cadence or a coarser hourly/daily/monthly/yearly cadence.
+- Each successful meteo run saves `meteo_period` (the span every selected variable covers)
+  in the processing state. Editing the simulation period inside it resets only Run mHM;
+  leaving it also resets Execute All Meteo.
   Coarser output requires Average, Sum, Minimum or Maximum aggregation. Drop
   incomplete record-edge periods; reject incomplete interior periods and require
   every other variable to cover the complete precipitation window. Deaccumulation, temporal

@@ -122,6 +122,7 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None,
                 if times["sim_start"] < metadata.start_time[:16] or times["sim_end"] > metadata.end_time[:16]:
                     raise ValueError(f"Simulation period is outside {kind} coverage ({metadata.start_time} to {metadata.end_time}).")
         if reuse_prepared(run, state, log=log):
+            _save_period(run)
             return True
         flat = is_v6(run.project_folder)
         result = process_meteo_inputs(
@@ -160,10 +161,29 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None,
     _say(log, f"Prepared variables: {', '.join(sorted(result.outputs))}")
     processing.save_grid_metadata(run.project_folder, run.grid_metadata)
     processing.overlay(run.project_folder, {"meteo_source_fingerprint": _input_digest(run)})
+    _save_period(run)
     if report is not None:
         report(INFORMATION, "Success",
                "Meteorology forcing files prepared successfully.")
     return True
+
+
+def _save_period(run):
+    """Record the span every prepared variable covers."""
+    metadata = (run.inspections or {}).values()
+    if not metadata:
+        return
+    processing.overlay(run.project_folder, {"meteo_period": {
+        "start": max(item.start_time[:16] for item in metadata),
+        "end": min(item.end_time[:16] for item in metadata),
+    }})
+
+
+def covers_period(project_folder, times) -> bool:
+    """Whether a simulation period lies inside the last prepared forcing."""
+    period = processing.section(project_folder, "meteo_period") or {}
+    return bool(period) and (
+        period["start"] <= times["sim_start"][:16] and times["sim_end"][:16] <= period["end"])
 
 
 def _input_digest(run):
@@ -173,6 +193,7 @@ def _input_digest(run):
 
 __all__ = [
     "MeteorologyRun",
+    "covers_period",
     "existing_outputs",
     "prepare_forcing",
     "reuse_prepared",

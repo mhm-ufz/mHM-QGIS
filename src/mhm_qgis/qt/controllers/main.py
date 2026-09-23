@@ -193,7 +193,11 @@ def save_simulation_times(dialog):
     values = {key: getattr(dialog, name).dateTime().toString("yyyy-MM-ddTHH:mm")
               for key, name in TIME_WIDGETS.items()}
     update_section(dialog.project_folder, "time", values)
-    dialog.invalidate_execute_all_meteo()
+    from ...core.executions.meteo import covers_period
+    if covers_period(dialog.project_folder, values):
+        invalidate_workflows(dialog, "run_mhm")
+    else:
+        dialog.invalidate_execute_all_meteo()
 
 
 def restore_simulation_times(dialog):
