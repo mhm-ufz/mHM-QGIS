@@ -21,8 +21,8 @@ from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
 
 from mhm_qgis.qt.dialogs.input_selection import InputComboAdapter  # noqa: E402
 from mhm_qgis.core.handlers.state import processing  # noqa: E402
-from mhm_qgis.core.handlers.store.paths import master_data_folder
-from mhm_qgis.core.handlers.store.layout import workspace_folder  # noqa: E402
+from mhm_qgis.core.handlers.store.paths import data_folder
+from mhm_qgis.core.handlers.store.layout import input_state_path  # noqa: E402
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog  # noqa: E402
 # isort: on
 
@@ -225,7 +225,7 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     dialog.save_input_state()
     dialog.close()
 
-    state_path = Path(workspace_folder(tmp_path)) / "mhm_qgis_input_state.json"
+    state_path = Path(input_state_path(tmp_path))
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["pour_point_outlet_id_field"] == "outlet_name"
     assert "dem_domain" not in state
@@ -283,7 +283,7 @@ def test_meteo_requires_pre_but_not_unconfigured_variables(tmp_path):
 
 def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     _app()
-    latlon = Path(master_data_folder(tmp_path)) / "latlon.nc"
+    latlon = Path(data_folder(tmp_path)) / "latlon.nc"
     latlon.parent.mkdir(parents=True)
     latlon.touch()
     dialog = MhmQgisDialog()

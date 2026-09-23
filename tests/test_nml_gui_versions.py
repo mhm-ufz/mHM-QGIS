@@ -14,7 +14,7 @@ from nml_tools.gui.model import (
     render_profile as _render_profile,
 )
 
-from mhm_qgis.core.handlers.store.paths import geometry_folder
+from mhm_qgis.core.handlers.store.paths import temp_morphology_folder
 from mhm_qgis.vSpecific import build_dimensions, build_initial_values
 
 
@@ -161,11 +161,11 @@ def test_version_projects_have_model_filenames_and_dimensions(tmp_path: Path) ->
     # nml-tools canonicalises dimension names to lower case, so the camelCase
     # spellings in nml-config.toml are for readers only.
     assert v5.default_dimensions == {
-        "ndomains": 100,
-        "ngeounits": 25,
-        "nsoilhorizons": 10,
-        "nlcoverscene": 50,
-        "ngaugestotal": 200,
+        "ndomains": 3,
+        "ngeounits": 16,
+        "nsoilhorizons": 6,
+        "nlcoverscene": 5,
+        "ngaugestotal": 20,
     }
     assert {profile.name: profile.default_file for profile in v5.profiles} == {
         "main": "mhm.nml",
@@ -285,7 +285,7 @@ def test_initial_values_render_version_specific_main_groups(tmp_path: Path) -> N
     assert "&mainconfig\n" in rendered_v5
     assert "&directories_mHM\n" in rendered_v5
     assert "resolution_Hydrology(1) = 1000.0" in rendered_v5
-    assert 'dir_Morpho(1) = "data/master/static/morph/"' in rendered_v5
+    assert 'dir_Morpho(1) = "data/static/morph/"' in rendered_v5
     assert "&config_input" not in rendered_v5
 
     v6, v6_dimensions, v6_document = _document("6.0", dialog)
@@ -296,13 +296,9 @@ def test_initial_values_render_version_specific_main_groups(tmp_path: Path) -> N
         profile_values(v6_document, v6_main),
         v6_dimensions,
     )
-    assert "&config_input\n" in rendered_v6
+    assert "&config_input\n/" in rendered_v6
     assert "&config_resolution\n" in rendered_v6
     assert "hydro(1) = 1000.0" in rendered_v6
-    # v6 reads its morphology from the bundled input.nc, not separate ASCII.
-    assert 'dem_path(1) = "data/master/morph/dem.nc"' in rendered_v6
-    assert 'slope_path(1) = "data/master/morph/input.nc"' in rendered_v6
-    assert 'pre_path(1) = "data/master/meteo/pre.nc"' in rendered_v6
 
 
 def test_domain_dimensions_and_paths_follow_plugin_domains(tmp_path: Path) -> None:
@@ -314,11 +310,11 @@ def test_domain_dimensions_and_paths_follow_plugin_domains(tmp_path: Path) -> No
     v5_values = build_initial_values("5.13", dialog)
     v6_values = build_initial_values("6.0", dialog)
     assert len(v5_values["main"]["directories_general"]["dir_Morpho"]) == 1
-    assert len(v6_values["main"]["config_input"]["dem_path"]) == 1
+    assert v6_values["main"]["config_input"] == {}
 
 
 def test_geoparameter_orientation_is_version_specific(tmp_path: Path) -> None:
-    metadata = Path(geometry_folder(tmp_path)) / "geology_class_metadata.json"
+    metadata = Path(temp_morphology_folder(tmp_path)) / "geology_class_metadata.json"
     metadata.parent.mkdir(parents=True)
     metadata.write_text(
         json.dumps(

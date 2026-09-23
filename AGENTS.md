@@ -34,7 +34,7 @@ smoke test exercises the working tree rather than a copy. Check before relying o
 ## Package Layout
 
 Paths in this section and below are relative to `src/mhm_qgis/` unless they start with
-`src/`, `tests/`, or a project-runtime folder (`data/`, `Z Temp/`, `output/`).
+`src/`, `tests/`, or a project-runtime folder (`data/`, `.temp/`, `output/`).
 
 Each package is an API with one job. The point of the split is that a change has exactly
 one obvious home; working out which package it belongs in is usually the whole design
@@ -196,7 +196,7 @@ Rules that follow from it:
 
 ## State Files
 
-Four JSON files are used by the plugin.
+Four JSON files live under each domain's `.temp/` directory.
 
 - `mhm_qgis_input_state.json`: UI state. `store/layout.project_version()` reads
   `mhm_version` from it.
@@ -222,12 +222,13 @@ Four JSON files are used by the plugin.
   `<new>` last; it does not restore inputs or scan forcing. Create Project Structure
   opens the selected setup, or asks for an unused name with `domain_folder_name.ui`,
   then opens the read-only lazy `project_folder_tree.py` dialog.
-- Each domain owns its four JSON state files, settings, namelists and outputs.
-  Legacy root-level `mhm-qgis` and `mhm-plugin` layouts stay untouched; do not call
-  `migrate_workspace()` automatically. Unsafe names, files and symlinks are rejected.
+- Each domain owns its four JSON state files under `.temp/`; settings, namelists and
+  outputs remain at their established locations.
+  Older layouts (`Z Temp`, `data_raw`, `data/master`, `mhm-plugin`) are unsupported;
+  add no compatibility code for them. Unsafe names, files and symlinks are rejected.
   Do not switch setups while background work is running.
 - A new domain may clone another domain's mutable state and namelists. Prepared files
-  under `data/`, `data_raw/` and `Z Temp/` are relative symlinks; writers must replace
+  under `data/` and `.temp/Morphology/` are relative symlinks; writers must replace
   the link itself before writing so the source domain remains unchanged. `output/` and
   `restart/` are never cloned.
 - Configuration lives in `tabWidget_steps` and `stackedWidget_configuration`.
@@ -245,8 +246,9 @@ Four JSON files are used by the plugin.
   cadence. Metadata must agree. The reset combo is enabled only for cumulative input.
   No temperature triplet or dedicated PET workflow remains.
 - Output cadence is the input cadence or a coarser hourly/daily/monthly/yearly cadence.
-  Coarser output requires Average, Sum, Minimum or Maximum aggregation; partial
-  boundary intervals warn and use available values. Deaccumulation, temporal
+  Coarser output requires Average, Sum, Minimum or Maximum aggregation. Drop
+  incomplete record-edge periods; reject incomplete interior periods and require
+  every other variable to cover the complete precipitation window. Deaccumulation, temporal
   aggregation, unit conversion, nearest-grid alignment and padding happen only
   during execution, in that order. Cumulative sequences must be continuous across files;
   missing prefixes or ambiguous interval conventions fail rather than guessing.
@@ -266,7 +268,7 @@ Four JSON files are used by the plugin.
   per-outlet DEM stages.
 - `pushButton_executeAllMeteo` runs only `core/executions/meteo`, never morphology.
 - DEM processing does not modify mHM-tools. Derive terrain on the real DEM first, then place all
-  variables once on the common L0 extent in `Z Temp/Geometry/dem_derivatives.nc`.
+  variables once on the common L0 extent in `.temp/Morphology/dem_derivatives.nc`.
   Extract `dem_filled` as the single raster variable `dem` in `filled_dem.nc` with
   x/y/CRS metadata. Common-grid padding cannot invent sinks or flow paths.
 - Derivative reuse fingerprints the DEM, CRS and exact target header. Channel and
@@ -359,8 +361,7 @@ Four JSON files are used by the plugin.
   only one preceding cumulative plane and one output-interval accumulator across files.
 - Meteorology reuse checks both the input-file/selection fingerprint and target L2
   grid, as well as output existence. PET is required only when selected.
-- Model inputs live under each named domain’s `data/`. Legacy path helpers retain
-  their old `data/master/` mapping only for legacy callers. v5 morphology is `data/static/morph`, forcing `data/meteo`,
+- Model inputs live under each named domain’s `data/`. v5 morphology is `data/static/morph`, forcing `data/meteo`,
   LAI `data/lai`, lat/lon `data/latlon.nc`, observations
   `data/observation/streamflow`. See version differences below.
 
@@ -394,9 +395,9 @@ Four JSON files are used by the plugin.
 
 - Execute All formats inputs on the already established common filled-DEM grid.
   Lookup, advanced and mHM-ready categorical modes all stage under
-  `Z Temp/Morphology/morph`, then publish during Execute All's final stage.
+  `.temp/Morphology/morph`, then publish during Execute All's final stage.
 - `advanced_l0.publish_model_inputs()` validates exact alignment, fills class
-  nodata, and copies into master. It retains staged rasters and definitions for
+  nodata, and copies into `data/`. It retains staged rasters and definitions for
   reuse. Ready TIFFs and v5 NetCDF class rasters are exported to ASCII by streaming
   rows, without interpolation. Advanced v6 NetCDF products remain NetCDF.
 - Publication rewrites `output_path`, `classdefinition_path` and historical scene
@@ -431,13 +432,13 @@ Four JSON files are used by the plugin.
   from 22.6 s to 0.26 s. Do not call `inspect_meteo_folder` directly from the dialog.
 - That cache has **two** digests, and they are not interchangeable.
   `inspection_fingerprint` covers only what inspection reads (files, kind, source,
-  CRS, pattern, input cadence, unit, cumulative settings); it deliberately omits
-  the aggregation and output cadence, which used to make a changed aggregation
-  silently re-open 4x552x2 files inside the worker. `preparation_fingerprint`
+  CRS, pattern, input and output cadence, unit, cumulative settings); it deliberately
+  omits aggregation, which must not re-open 4x552x2 files in the worker. `preparation_fingerprint`
   covers the whole spec and is what `executions/meteo._input_digest` uses, so a
   changed aggregation still rebuilds the forcing.
-- Forcing preparation covers the **whole input record**, not the simulation
-  period; `run.times` only validates coverage.
+- Forcing preparation covers complete periods within the precipitation record,
+  not only the simulation period; `run.times` only validates coverage. Both v5
+  and v6 write `time` and `time_bnds` in hours since 1900-01-01.
 - Output interval keys come from `temporal.output_periods`, one vectorised
   `datetime64` truncation per chunk, with `period_bounds` giving the interval's
   start and end. `datetime64` units are calendar units, so `[M] + 1` and
@@ -489,7 +490,7 @@ Four JSON files are used by the plugin.
   arguments are missing-metadata fallbacks and must not override conflicting embedded
   metadata.
 - Lookup mode stages `lc.nc`, `soil_class.nc` and `geology_class.nc` under
-  `Z Temp/Morphology/morph`. `externals/mhm_tools_handler._OUTPUTS` is the single
+  `.temp/Morphology/morph`. `externals/mhm_tools_handler._OUTPUTS` is the single
   statement of that format: the raster name is handed to mhm-tools as its `-e`
   extension, `categorical_output_suffix(kind)` is what callers name the file
   with, and `prepare_categorical_file` refuses an output name whose suffix
@@ -502,11 +503,11 @@ Four JSON files are used by the plugin.
 - Soil and geology classdefinitions are produced once by their formatter and moved to
   `data/static/morph`. Only geology `PARAMETER_VALUE` metadata remains
   plugin-specific, written by `core/handlers/lookup/geology.py` to
-  `Z Temp/Geometry/geology_class_metadata.json`.
+  `.temp/Morphology/geology_class_metadata.json`.
 - `mHM_ready` accepts local `.asc`, `.nc` or `.tif` rasters, copies them to
   `data/static/morph`, and bypasses categorical crop/mask/write. Soil and geology require
   their existing classdefinition in that folder; geology also requires its plugin
-  metadata in `Z Temp/Geometry`.
+  metadata in `.temp/Morphology`.
 - Prefer direct local paths. Materialize provider sublayers and non-file-backed QGIS
   layers only at the plugin boundary.
 - Do not add Shapely validity checks or `make_valid` calls before rasterizing.
@@ -540,7 +541,7 @@ Four JSON files are used by the plugin.
   staged extent with the same **0**. LAI is not watershed-masked, so `-9999` should not
   appear in a published LAI cube.
 - Execute All resamples LAI onto the common filled-DEM grid and stages
-  `Z Temp/Morphology/lai/lai_dem.nc`. Its publication step window-copies this to
+  `.temp/Morphology/lai/lai_dem.nc`. Its publication step window-copies this to
   `lai.nc` with zero filling and no watershed mask. There is no `lai_crop.nc`.
   A changed common grid invalidates staged LAI through the filled-DEM fingerprint.
 - Reusable temporal conversion, Rasterio warping, streaming NetCDF writing and aligned
@@ -714,8 +715,8 @@ Four JSON files are used by the plugin.
 
 ## Output Paths To Remember
 
-- Temporary geometry: `Z Temp/Geometry`
-- Morphology staging: `Z Temp/Morphology/morph`
+- Temporary morphology: `.temp/Morphology`
+- Morphology staging: `.temp/Morphology/morph`
 - Shared static morphology: `data/static/morph` (v6: `data/morph`)
 - Single-domain DEM: `data/static/morph/dem.asc` (v6: `data/morph/dem.nc`)
 - LAI: `data/lai` (v6: `data/morph`)

@@ -60,7 +60,7 @@ def test_ready_land_cover_is_published_and_recorded(tmp_path):
     assert set(outputs) == {target, target.with_suffix(".prj")}
     assert all(path.exists() for path in stale)
     assert load_settings(tmp_path)["land_cover"]["output_path"] == (
-        "Z Temp/Morphology/morph/lc.nc"
+        ".temp/Morphology/morph/lc.nc"
     )
 
 
@@ -192,9 +192,9 @@ def test_saved_outputs_requires_the_complete_recorded_set(tmp_path):
         tmp_path,
         "soil",
         {
-            "output_path": "data/master/static/morph/soil_class.asc",
+            "output_path": "data/static/morph/soil_class.asc",
             "classdefinition_path": (
-                "data/master/static/morph/soil_classdefinition.txt"
+                "data/static/morph/soil_classdefinition.txt"
             ),
         },
     )

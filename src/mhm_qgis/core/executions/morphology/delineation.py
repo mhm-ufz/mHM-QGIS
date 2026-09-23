@@ -10,11 +10,11 @@ def domain_mask(task, project_folder, filled_dem, crs):
     from pyproj import Transformer
     from ...handlers.state import domain_state, nml_settings
     from ...handlers.store.layout import MERGED_MASK_NAME, domain_dem_path
-    from ...handlers.store.paths import geometry_folder
+    from ...handlers.store.paths import temp_morphology_folder
 
     state = domain_state.load_state(project_folder)
     domain_state.assign_domain_ids(state)
-    folder = Path(geometry_folder(project_folder)) / "Watersheds"
+    folder = Path(temp_morphology_folder(project_folder)) / "Watersheds"
     folder.mkdir(parents=True, exist_ok=True)
     outlets = []
     for index, (outlet_id, record) in enumerate(state["outlets"].items(), 1):

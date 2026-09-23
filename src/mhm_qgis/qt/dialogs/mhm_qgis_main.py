@@ -25,8 +25,13 @@ from ...core.handlers.state import settings as project_settings
 from ...core.handlers.state.meteo_outputs import MeteorologyOutputState
 from ...core.executions.meteo import MeteorologyRun
 from ...core.morphology.hydrology.outlets import StationIdError
-from ...core.handlers.store.layout import morph_folder
-from ...core.handlers.store.paths import data_folder, data_raw_folder, geometry_folder, output_folder, restart_folder, workspace_folder, z_temp_folder
+from ...core.handlers.store.layout import (
+    input_state_path as project_input_state_path,
+    morph_folder,
+)
+from ...core.handlers.store.paths import (
+    data_folder, temp_morphology_folder, output_folder, restart_folder, workspace_folder,
+)
 from ...qt.bindings.main import bind as bind_main_form
 from ...qt.controllers import main as main_controller
 from ...qgis_bridge import layers as qgis_layers
@@ -81,8 +86,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.project_directory = None  # Outer folder shown in the project selector.
         self._meteo_inputs = {}
         self._observation_inputs = {}
-        self.geometry_folder = None  # Subfolder for geometry outputs
-        self.input_state_filename = "mhm_qgis_input_state.json"
+        self.temp_morphology_folder = None  # Subfolder for geometry outputs
         self._loading_input_state = False
         self._suspend_input_state_saves = False
         self._preserve_missing_layer_state = False
@@ -101,6 +105,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._domain_delineator_dialog = None
         self._morphology_workflow_threads = {}
         self._morphology_workflow_workers = {}
+        self._closing = False
         self._workflow_button_default_styles = {}
         self.spinBox_L2ResolutionMultiplier.setMinimum(1)
         self.spinBox_L2ResolutionMultiplier.setMaximum(1_000_000)
@@ -631,14 +636,14 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             self,
             "Reset Geometry",
             "This will remove all geometry layers from QGIS and delete all files "
-            "in the Geometry folder.\n\nAre you sure you want to continue?",
+            "in the temporary Morphology folder.\n\nAre you sure you want to continue?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
             self.log_message("Reset cancelled by user.")
             return False
-        folder = geometry_folder(self.project_folder)
+        folder = temp_morphology_folder(self.project_folder)
         removed = qgis_layers.remove_under(folder, log=self.log_message)
         deleted = morphology_reset.clear_geometry(
             self.project_folder, log=self.log_message
@@ -993,6 +998,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             f"workflow-{workflow_key}",
             spec["label"],
             resource="morphology-processor",
+            cancel=worker.cancel,
         )
         worker.log_message.connect(
             lambda message, key=workflow_key: self.task_coordinator.append_log(
@@ -1051,11 +1057,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.task_coordinator.finish_external(
             f"workflow-{workflow_key}", False, message
         )
-        QMessageBox.critical(
-            self,
-            spec["label"],
-            message,
-        )
+        if not self._closing:
+            QMessageBox.critical(self, spec["label"], message)
 
     def clear_morphology_workflow_worker(self, workflow_key):
         """Drop worker references after a morphology workflow thread stops."""
@@ -1085,12 +1088,27 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         return main_controller.set_meteo_setup_controls_enabled(self, *args, **kwargs)
 
     def done(self, result):
-        """Guard window close, Escape and dialog buttons while work is running."""
+        """Cancel active work before closing through Cancel or Escape."""
+        if self._closing:
+            return
         running_key = self.running_morphology_workflow_key()
-        terminal_busy = (
-            self._terminal_dialog is not None
-            and self._terminal_dialog.command_running()
-        )
+        terminal = self._terminal_dialog
+        terminal_busy = terminal is not None and terminal.command_running()
+        if int(result) == int(QDialog.DialogCode.Rejected) and (
+            running_key is not None or self.task_coordinator.is_busy()
+            or (terminal is not None and terminal.is_running())
+        ):
+            self._closing = True
+            self._close_result = result
+            self.task_coordinator.cancel_all()
+            for worker in tuple(self._morphology_workflow_workers.values()):
+                worker.cancel()
+            for thread in tuple(self._morphology_workflow_threads.values()):
+                thread.requestInterruption()
+            if terminal is not None:
+                terminal.stop()
+            QtCore.QTimer.singleShot(0, self._finish_cancelled_close)
+            return
         if running_key is not None or self.task_coordinator.is_busy() or terminal_busy:
             spec = self.morphology_workflow_specs().get(
                 running_key or ("run_mhm" if terminal_busy else ""), {}
@@ -1105,6 +1123,17 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             )
             return
         super().done(result)
+
+    def _finish_cancelled_close(self):
+        terminal = self._terminal_dialog
+        if (self.task_coordinator.is_busy()
+                or self._morphology_workflow_threads
+                or (terminal is not None and terminal.is_running())):
+            QtCore.QTimer.singleShot(50, self._finish_cancelled_close)
+            return
+        if self._domain_delineator_dialog is not None:
+            self._domain_delineator_dialog.close()
+        super().done(self._close_result)
 
     def set_execute_all_button_state(self, *args, **kwargs):
         return main_controller.set_execute_all_button_state(self, *args, **kwargs)
@@ -1337,10 +1366,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Return the project-local input state file path."""
         if not self.project_folder:
             return None
-        return os.path.join(
-            workspace_folder(self.project_folder),
-            self.input_state_filename,
-        )
+        return project_input_state_path(self.project_folder)
 
     def save_input_state(self):
         """Save selected inputs to a JSON file in the project folder."""
@@ -1436,9 +1462,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             "crs_authid": crs.authid() if crs and crs.isValid() else "",
             "project_layout": {
                 "data_folder": data_folder(self.project_folder),
-                "data_raw_folder": data_raw_folder(self.project_folder),
-                "z_temp_folder": z_temp_folder(self.project_folder),
-                "geometry_folder": geometry_folder(self.project_folder),
+                "temp_morphology_folder": temp_morphology_folder(self.project_folder),
                 "output_folder": output_folder(self.project_folder),
                 "restart_folder": restart_folder(self.project_folder),
             },

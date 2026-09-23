@@ -95,7 +95,7 @@ def test_derivative_buttons_share_the_netcdf_command(action, variable):
 
 def test_saved_land_cover_and_soil_outputs_are_reusable(tmp_path):
     ensure_project_structure(tmp_path, "5.13")
-    morph = tmp_path / "mhm-qgis/data/master/static/morph"
+    morph = tmp_path / "data/static/morph"
     land_cover = morph / "lc_2000_2010.asc"
     soil = morph / "soil_class.asc"
     definition = morph / "soil_classdefinition.txt"
@@ -105,15 +105,15 @@ def test_saved_land_cover_and_soil_outputs_are_reusable(tmp_path):
     update_section(
         tmp_path,
         "land_cover",
-        {"scenes": [{"output_path": "data/master/static/morph/lc_2000_2010.asc"}]},
+        {"scenes": [{"output_path": "data/static/morph/lc_2000_2010.asc"}]},
     )
     update_section(
         tmp_path,
         "soil",
         {
-            "output_path": "data/master/static/morph/soil_class.asc",
+            "output_path": "data/static/morph/soil_class.asc",
             "classdefinition_path": (
-                "data/master/static/morph/soil_classdefinition.txt"
+                "data/static/morph/soil_classdefinition.txt"
             ),
         },
     )

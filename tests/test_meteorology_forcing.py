@@ -35,7 +35,7 @@ def test_legacy_era5land_apis_are_removed():
 def _write_nc(
         path: Path,
         variable: str,
-        times=("2001-01-01T12:00:00",),
+        times=("2001-01-01T00:00:00",),
         lat=LAT,
         lon=LON,
         values=None,
@@ -103,6 +103,7 @@ def test_scan_reads_metadata_and_glob_only(tmp_path, monkeypatch):
     ("Yearly", ("2000-01-01", "2001-01-01", "2002-01-01")),
 ])
 def test_native_cadence_is_preserved(tmp_path, cadence, times):
+    from netCDF4 import Dataset
     _write_nc(tmp_path / "raw/pre.nc", "pre", times=times, units="mm")
     spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="mm", temporal_resolution=cadence)
     result = process_meteo_inputs([spec], tmp_path / "out", target())
@@ -111,6 +112,9 @@ def test_native_cadence_is_preserved(tmp_path, cadence, times):
         np.testing.assert_allclose(ds.pre, 1.)
         assert ds.pre.dtype == "float64"
         assert ds.time.attrs["bounds"] == "time_bnds"
+    with Dataset(result.outputs["pre"]) as raw:
+        assert raw.variables["time"].units.startswith("hours since 1900-01-01")
+        assert raw.variables["time_bnds"].units == raw.variables["time"].units
 
 
 def test_cumulative_hourly_cross_file_and_chunk_boundaries(tmp_path):
@@ -154,17 +158,58 @@ def test_hourly_values_are_aggregated_before_conversion(
         np.testing.assert_allclose(ds[variable], expected)
 
 
-def test_partial_output_interval_warns_and_is_written(tmp_path):
+def test_partial_output_interval_without_a_full_period_is_rejected(tmp_path):
     times = np.datetime64("2001-01-01T03") + np.arange(3) * np.timedelta64(1, "h")
     _write_nc(tmp_path / "raw/pre.nc", "pre", times=times, units="mm")
-    messages = []
     spec = MeteoFolderSpec(
         "pre", tmp_path / "raw", unit="mm", temporal_resolution="Hourly",
         output_temporal_resolution="Daily", aggregation="Sum")
-    result = process_meteo_inputs([spec], tmp_path / "out", target(), log=messages.append)
-    with xr.open_dataset(result.outputs["pre"]) as ds:
-        np.testing.assert_allclose(ds.pre, 3.0)
-    assert any("partial daily interval" in message for message in messages)
+    with pytest.raises(ValueError, match="complete output periods"):
+        process_meteo_inputs([spec], tmp_path / "out", target())
+
+
+def test_cf_edge_fragments_are_dropped_and_other_variables_share_precipitation_window(tmp_path):
+    from netCDF4 import Dataset
+
+    folder = tmp_path / "raw"
+    path = folder / "pre.nc"
+    _write_nc(path, "pre", times=(
+        "2001-01-01T00", "2001-01-02T00", "2001-01-03T00", "2001-01-03T23",
+    ), units="mm")
+    with xr.open_dataset(path) as source:
+        data = source.load()
+    data["time_bnds"] = (("time", "bnds"), np.array([
+        ["2000-12-31T23", "2001-01-01T00"],
+        ["2001-01-01T00", "2001-01-02T00"],
+        ["2001-01-02T00", "2001-01-03T00"],
+        ["2001-01-03T00", "2001-01-03T23"],
+    ], dtype="datetime64[ns]"))
+    data.time.attrs["bounds"] = "time_bnds"
+    data.to_netcdf(path, engine="scipy")
+    _write_nc(folder / "tavg.nc", "tavg", times=(
+        "2000-12-31", "2001-01-01", "2001-01-02", "2001-01-03",
+    ), units="Celsius")
+    specs = [
+        MeteoFolderSpec("pre", folder, pattern="pre.nc", unit="mm"),
+        MeteoFolderSpec("tavg", folder, pattern="tavg.nc", unit="Celsius"),
+    ]
+    metadata = inspect_meteo_folder(specs[0])
+    assert metadata.start_time.startswith("2001-01-01")
+    assert metadata.end_time.startswith("2001-01-02")
+    result = process_meteo_inputs(specs, tmp_path / "out", target())
+    for variable, path in result.outputs.items():
+        with xr.open_dataset(path) as output:
+            assert output.sizes["time"] == 2
+            np.testing.assert_array_equal(
+                output.time, np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"))
+            assert output.time_bnds[0, 0] == np.datetime64("2001-01-01")
+            assert output.time_bnds[-1, 1] == np.datetime64("2001-01-03")
+        with Dataset(path) as raw:
+            assert raw.variables["time"].units.startswith("hours since 1900-01-01")
+            assert raw.variables["time_bnds"].units == raw.variables["time"].units
+    _write_nc(folder / "tavg.nc", "tavg", times=("2001-01-02",), units="Celsius")
+    with pytest.raises(ValueError, match="cover the precipitation period"):
+        process_meteo_inputs(specs, tmp_path / "out", target())
 
 
 def test_era_hourly_precipitation_can_use_daily_maximum(tmp_path):
@@ -210,7 +255,7 @@ def test_discontinuous_times_units_and_grids_are_rejected(tmp_path):
         inspect_meteo_folder(spec)
     spec = MeteoFolderSpec("pre", folder, unit="mm")
     _write_nc(folder / "b.nc", "pre", times=("2001-01-03",), units="mm")
-    with pytest.raises(ValueError, match="continuous"):
+    with pytest.raises(ValueError, match="missing intervals"):
         inspect_meteo_folder(spec)
     _write_nc(folder / "b.nc", "pre", times=("2001-01-02",), lon=np.array([10., 12.]), units="mm")
     with pytest.raises(ValueError, match="spatial"):
@@ -368,10 +413,10 @@ def test_calendar_interval_keys_and_bounds():
 
 
 @pytest.mark.parametrize("method", ["Maximum", "Minimum", "Sum", "Average"])
-@pytest.mark.parametrize("cadence,expect", [("Daily", 3), ("Monthly", 1)])
-def test_group_reduction_matches_a_plain_python_reference(method, cadence, expect, tmp_path):
+@pytest.mark.parametrize("cadence,days", [("Daily", 3), ("Monthly", 31)])
+def test_group_reduction_matches_a_plain_python_reference(method, cadence, days, tmp_path):
     """The reshape path and the uneven-group path must agree with the obvious loop."""
-    hours = 24 * 3
+    hours = 24 * days
     times = np.datetime64("2001-01-01T00") + np.arange(hours) * np.timedelta64(1, "h")
     values = np.arange(hours * 4, dtype="float64").reshape(hours, 2, 2)
     values[7, 0, 0] = np.nan          # a hole inside one interval
@@ -396,7 +441,7 @@ def test_group_reduction_matches_a_plain_python_reference(method, cadence, expec
 
     # Masking on: an interval with no valid sample is stored as _FillValue.
     with xr.open_dataset(result.outputs["pre"]) as ds:
-        assert ds.sizes["time"] == expect == reference.shape[0]
+        assert ds.sizes["time"] == reference.shape[0]
         written = ds["pre"].values
     np.testing.assert_array_equal(np.isnan(written), np.isnan(reference))
     np.testing.assert_allclose(written[~np.isnan(written)],

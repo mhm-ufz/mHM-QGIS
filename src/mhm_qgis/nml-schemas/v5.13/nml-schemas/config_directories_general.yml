@@ -14,7 +14,7 @@ properties:
     type: string
     x-fortran-len: buf
     format: directory-path
-    default: data/master/static/morph/
+    default: data/static/morph/
   dir_Morpho:
     description: Directory containing morphological input files for each domain.
     type: array
@@ -32,7 +32,7 @@ properties:
       x-fortran-len: buf
       format: directory-path
     x-fortran-shape: nDomains
-    examples: [[data/master/static/morph/]]
+    examples: [[data/static/morph/]]
   mhm_file_RestartOut:
     description: Path of the mHM restart file to write for each domain.
     type: array
@@ -68,4 +68,4 @@ properties:
       x-fortran-len: buf
       format: file-path
     x-fortran-shape: nDomains
-    examples: [[data/master/latlon.nc]]
+    examples: [[data/latlon.nc]]

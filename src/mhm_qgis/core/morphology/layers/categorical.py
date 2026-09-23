@@ -12,7 +12,7 @@ from ...handlers.state.nml_settings import (
     update_section,
 )
 from ...handlers.store.layout import morph_folder
-from ...handlers.store.paths import geometry_folder, workspace_folder, morph_staging_folder
+from ...handlers.store.paths import temp_morphology_folder, workspace_folder, morph_staging_folder
 
 
 SPECS = {
@@ -58,7 +58,7 @@ def normalized_mode(value: object) -> str:
 
 def intermediate_paths(project_folder, kind: str) -> tuple[Path, ...]:
     """Return raw, cropped and masked geometry outputs for ``kind``."""
-    path = Path(geometry_folder(project_folder)) / SPECS[kind]["geometry"]
+    path = Path(temp_morphology_folder(project_folder)) / SPECS[kind]["geometry"]
     return (
         path,
         path.with_name(f"{path.stem}_crop{path.suffix}"),

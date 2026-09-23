@@ -37,9 +37,9 @@ def _load_outlet(dialog, outlet_id):
     dialog.checkBox_isGaugedOutlet.blockSignals(True)
     dialog.checkBox_isDomainOutlet.blockSignals(True)
     dialog.checkBox_isGaugedOutlet.setChecked(
-        bool(record.get("is_gauged", record.get("gauged", False))))
+        bool(record.get("is_gauged")))
     dialog.checkBox_isDomainOutlet.setChecked(
-        bool(record.get("is_domain", record.get("domain", False))))
+        bool(record.get("is_domain")))
     dialog.checkBox_isGaugedOutlet.blockSignals(False)
     dialog.checkBox_isDomainOutlet.blockSignals(False)
     dialog._set_discharge_enabled(
@@ -201,4 +201,5 @@ def _show_picked_coordinates(dialog, picked):
 
 def _show_error(dialog, title, error):
     dialog.main_dialog.log_message(f"ERROR: {title}: {error}")
-    QMessageBox.critical(dialog, title, str(error))
+    if not dialog.main_dialog._closing:
+        QMessageBox.critical(dialog, title, str(error))

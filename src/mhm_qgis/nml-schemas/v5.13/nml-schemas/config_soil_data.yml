@@ -7,7 +7,7 @@ properties:
     description: |-
       Soil-database mode.
       0: classical mHM database with soil_class.asc and soil_classdefinition.txt;
-      provide depths for horizons 1 through n-1 because the last depth comes from the lookup table.
+      provide one depth per supplied layer; the final modeled horizon comes from the lookup table.
       1: harmonized horizon-specific database with soil_class_horizon_XX.asc and
       soil_classdefinition_iFlag_soilDB_1.txt; provide all horizon depths.
     type: integer
@@ -18,14 +18,14 @@ properties:
     type: integer
     default: 200
   nSoilHorizons_mHM:
-    description: Number of soil horizons represented by mHM; version 5.13 supports at most ten.
+    description: Number of soil horizons represented by mHM; in database mode 0 this is the number of supplied layers plus one.
     type: integer
     minimum: 1
     default: 2
   soil_Depth:
     description: |-
-      Bottom depth of each supplied soil horizon relative to the ground surface, in millimeters and positive downward.
-      In database mode 0 omit the final horizon depth because it is read from the soil lookup table;
+      Bottom depth of each supplied soil layer relative to the ground surface, in millimeters and positive downward.
+      In database mode 0 provide one depth per layer; the additional final horizon is read from the soil lookup table;
       in mode 1 provide every horizon depth and a corresponding horizon-specific soil-class grid.
     type: array
     items:

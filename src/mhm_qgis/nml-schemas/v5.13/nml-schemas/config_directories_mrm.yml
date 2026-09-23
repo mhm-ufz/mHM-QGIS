@@ -11,7 +11,7 @@ properties:
       x-fortran-len: buf
       format: directory-path
     x-fortran-shape: nDomains
-    examples: [[data/master/observation/streamflow/]]
+    examples: [[data/observation/streamflow/]]
   dir_Total_Runoff:
     <<: *domain_directory
     description: Directory containing simulated total runoff when mRM is not directly coupled to mHM.
@@ -19,4 +19,4 @@ properties:
   dir_Bankfull_Runoff:
     <<: *domain_directory
     description: Directory containing runoff at bankfull conditions when coupling mRM to a groundwater model.
-    examples: [[data/master/static/morph/]]
+    examples: [[data/static/morph/]]

@@ -27,7 +27,6 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
     count = domain_count(dialog)
     settings = namelist_settings(dialog)
     data = model_data_path(dialog)
-    domain_dems = _domain_dem_paths(settings, count, data)
     geo_count = geology_count(dialog)
     l1 = resolution(dialog, "current_l1_resolution")
     l11 = resolution(dialog, "current_l11_resolution")
@@ -45,32 +44,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
                 "max_layers": 10,
             },
             "config_resolution": resolution_values,
-            "config_input": {
-                "latlon_path": repeat(f"{data}/latlon.nc", count),
-                "meteo_mask_path": repeat(
-                    f"{data}/meteo/mask.nc", count),
-                "pre_path": repeat(f"{data}/meteo/pre.nc", count),
-                "pet_path": repeat(f"{data}/meteo/pet.nc", count),
-                "temp_path": repeat(f"{data}/meteo/tavg.nc", count),
-                "tann_path": repeat(f"{data}/meteo/tann.nc", count),
-                "tmin_path": repeat(f"{data}/meteo/tmin.nc", count),
-                "tmax_path": repeat(f"{data}/meteo/tmax.nc", count),
-                "ssrd_path": repeat(f"{data}/meteo/ssrd.nc", count),
-                "strd_path": repeat(f"{data}/meteo/strd.nc", count),
-                "netrad_path": repeat(f"{data}/meteo/net_rad.nc", count),
-                "eabs_path": repeat(f"{data}/meteo/eabs.nc", count),
-                "wind_path": repeat(f"{data}/meteo/windspeed.nc", count),
-                "hydro_mask_path": domain_dems,
-                "dem_path": domain_dems,
-                "slope_path": repeat(f"{data}/morph/input.nc", count),
-                "aspect_path": repeat(f"{data}/morph/input.nc", count),
-                "fdir_path": repeat(f"{data}/morph/input.nc", count),
-                "facc_path": repeat(f"{data}/morph/input.nc", count),
-                "geo_class_path": repeat(f"{data}/morph/input.nc", count),
-                "soil_class_path": repeat(f"{data}/morph/input.nc", count),
-                "lai_class_path": repeat("", count),
-                "morph_mask_path": domain_dems,
-            },
+            "config_input": {},
             "config_mpr": {
                 "land_cover_path": repeat(f"{data}/morph/lc_periods.nc", count),
                 "lai_path": repeat(f"{data}/morph/lai.nc", count),
@@ -131,21 +105,6 @@ def _apply_registered(values, settings):
         for namelist, fields in namelists.items():
             if isinstance(fields, dict):
                 values[profile].setdefault(namelist, {}).update(fields)
-
-
-def _domain_dem_paths(settings: dict[str, Any], count: int, data="data/master") -> list[str]:
-    domains = settings.get("domains", [])
-    if not isinstance(domains, list):
-        domains = []
-    ordered = sorted(
-        (item for item in domains if isinstance(item, dict)),
-        key=lambda item: int(item.get("domain_id", 0) or 0),
-    )
-    values = [
-        str(item.get("dem_path", "") or f"{data}/morph/dem.nc")
-        for item in ordered[:count]
-    ]
-    return values + [f"{data}/morph/dem.nc" for _ in range(max(0, count - len(values)))]
 
 
 def _apply_land_cover(main, settings, count):

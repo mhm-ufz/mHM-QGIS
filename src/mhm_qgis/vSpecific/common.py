@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..core.grid import ceil_cellsize, is_geographic_unit
-from ..core.handlers.store.paths import geometry_folder, morph_staging_folder, master_data_folder, workspace_folder
+from ..core.handlers.store.paths import temp_morphology_folder, morph_staging_folder
 from ..core.handlers.store.layout import morph_folder
 from ..core.handlers.state.nml_settings import load_settings
 
@@ -16,8 +16,7 @@ from ..core.handlers.state.nml_settings import load_settings
 def model_data_path(dialog: Any) -> str:
     """Return the model-input root relative to this setup's namelists."""
     project = getattr(dialog, "project_folder", None)
-    return (Path(master_data_folder(project)).relative_to(workspace_folder(project)).as_posix()
-            if project else "data/master")
+    return "data"
 
 
 def repeat(value: Any, count: int) -> list[Any]:
@@ -39,7 +38,7 @@ def geology_rows(dialog: Any) -> list[dict[str, Any]]:
     project = getattr(dialog, "project_folder", None)
     if not project:
         return []
-    path = Path(geometry_folder(project)) / "geology_class_metadata.json"
+    path = Path(temp_morphology_folder(project)) / "geology_class_metadata.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):

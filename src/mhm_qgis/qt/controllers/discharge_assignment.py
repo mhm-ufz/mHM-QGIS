@@ -28,12 +28,7 @@ def _configure_row(dialog, row: _AssignmentRow) -> None:
     row.id_value.setText(row.outlet_id)
     dialog._populate_discharge_layers(row.discharge)
 
-    is_gauge = bool(
-        record.get(
-            "is_gauged",
-            record.get("gauged", dialog.default_is_gauge),
-        )
-    )
+    is_gauge = bool(record.get("is_gauged", dialog.default_is_gauge))
     row.gauge.setChecked(is_gauge)
 
     source = str(record.get("discharge_file", "") or "")

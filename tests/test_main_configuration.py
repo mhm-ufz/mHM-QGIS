@@ -111,10 +111,8 @@ def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
     from mhm_qgis.core.handlers.store.layout import morph_folder
     assert Path(morph_folder(root)).is_dir()
     assert (root / "settings.yaml").is_file()
-    assert (root / "mhm_qgis_input_state.json").is_file()
+    assert (root / ".temp" / "mhm_qgis_input_state.json").is_file()
     assert processing.workflow(root, "project_structure")["status"] == "completed"
     assert "#2e7d32" in dialog.pushButton_createProjectStructure.styleSheet()
-    assert not (root / "data/master").exists()
     assert not (tmp_path / "settings.yaml").exists()
-    assert not (tmp_path / "mhm-plugin").exists()
     dialog.close()

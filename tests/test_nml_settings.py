@@ -45,9 +45,9 @@ def test_domain_gauges_project_to_v5_namelist_values(tmp_path):
                     "is_gauged": True,
                     "gauge_id": 1,
                     "gauge_filename": "001.txt",
-                    "gauge_path": "data/master/observation/streamflow/001.txt",
+                    "gauge_path": "data/observation/streamflow/001.txt",
                     "domain_directory": "data/001",
-                    "dem_path": "data/master/static/morph/dem.asc",
+                    "dem_path": "data/static/morph/dem.asc",
                     "domain_ids": [1],
                 }
             },
@@ -58,9 +58,9 @@ def test_domain_gauges_project_to_v5_namelist_values(tmp_path):
     state = load_settings(tmp_path)
     assert state["domains"] == [
         {
-            "data_path": "data/master/",
-            "dem_path": "data/master/static/morph/dem.asc",
-            "directory": "data/master/static/morph",
+            "data_path": "data/",
+            "dem_path": "data/static/morph/dem.asc",
+            "directory": "data/static/morph",
             "domain_id": 1,
             "gauge_ids": [1],
             "is_dem_domain": False,
@@ -80,8 +80,8 @@ def test_domain_gauges_project_to_v5_namelist_values(tmp_path):
     directories = build_initial_values("5.13", Dialog(tmp_path))["main"][
         "directories_general"
     ]
-    assert directories["dir_Morpho"] == ["data/master/static/morph/"]
-    assert directories["dirCommonFiles"] == "data/master/static/morph/"
+    assert directories["dir_Morpho"] == ["data/static/morph/"]
+    assert directories["dirCommonFiles"] == "data/static/morph/"
 
 
 def test_sole_dem_domain_projects_with_its_gauges(tmp_path):
@@ -101,7 +101,7 @@ def test_sole_dem_domain_projects_with_its_gauges(tmp_path):
                     "is_gauged": True,
                     "gauge_id": 1,
                     "gauge_filename": "001.txt",
-                    "gauge_path": "data/master/observation/streamflow/001.txt",
+                    "gauge_path": "data/observation/streamflow/001.txt",
                     "domain_ids": [1],
                 }
             },
@@ -117,9 +117,9 @@ def test_sole_dem_domain_projects_with_its_gauges(tmp_path):
     # The valid-DEM domain is the only merged domain and owns domain_id 1.
     assert state["domains"] == [
         {
-            "data_path": "data/master/",
-            "dem_path": "data/master/static/morph/dem.asc",
-            "directory": "data/master/static/morph",
+            "data_path": "data/",
+            "dem_path": "data/static/morph/dem.asc",
+            "directory": "data/static/morph",
             "domain_id": 1,
             "gauge_ids": [1],
             "is_dem_domain": True,
@@ -131,8 +131,8 @@ def test_sole_dem_domain_projects_with_its_gauges(tmp_path):
     directories = build_initial_values("5.13", Dialog(tmp_path))["main"][
         "directories_general"
     ]
-    assert directories["dir_Morpho"] == ["data/master/static/morph/"]
-    assert directories["dirCommonFiles"] == "data/master/static/morph/"
+    assert directories["dir_Morpho"] == ["data/static/morph/"]
+    assert directories["dirCommonFiles"] == "data/static/morph/"
 
 
 def test_shared_gauges_are_counted_once_per_domain(tmp_path):
@@ -159,7 +159,7 @@ def test_shared_gauges_are_counted_once_per_domain(tmp_path):
                     "is_gauged": True,
                     "gauge_id": 240,
                     "gauge_filename": "240.txt",
-                    "gauge_path": "data/master/observation/streamflow/240.txt",
+                    "gauge_path": "data/observation/streamflow/240.txt",
                     "domain_directory": "data/240",
                     "dem_path": "data/240/dem.asc",
                     "domain_ids": [1, 3],
@@ -169,7 +169,7 @@ def test_shared_gauges_are_counted_once_per_domain(tmp_path):
                     "is_gauged": True,
                     "gauge_id": 280,
                     "gauge_filename": "280.txt",
-                    "gauge_path": "data/master/observation/streamflow/280.txt",
+                    "gauge_path": "data/observation/streamflow/280.txt",
                     "domain_ids": [1, 3],
                 },
                 "350": {
@@ -177,7 +177,7 @@ def test_shared_gauges_are_counted_once_per_domain(tmp_path):
                     "is_gauged": True,
                     "gauge_id": 350,
                     "gauge_filename": "350.txt",
-                    "gauge_path": "data/master/observation/streamflow/350.txt",
+                    "gauge_path": "data/observation/streamflow/350.txt",
                     "domain_directory": "data/350",
                     "dem_path": "data/350/dem.asc",
                     "domain_ids": [2, 3],

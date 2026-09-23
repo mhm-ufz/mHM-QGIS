@@ -6,6 +6,21 @@ pytest.importorskip("qgis.core")
 from mhm_qgis.qt.dialogs.project_terminal import ProjectTerminalDialog
 
 
+def test_stop_ends_active_shell_and_command(tmp_path):
+    from qgis.PyQt import QtCore
+
+    terminal = ProjectTerminalDialog()
+    assert terminal.ensure_session(str(tmp_path))
+    assert terminal.run_command("sleep 30", show=False, on_finished=lambda _: None)
+    loop = QtCore.QEventLoop()
+    terminal._process.finished.connect(loop.quit)
+    terminal.stop()
+    QtCore.QTimer.singleShot(3000, loop.quit)
+    loop.exec()
+    assert not terminal.is_running()
+    assert not terminal.command_running()
+
+
 def test_tracked_command_marker_may_span_output_chunks():
     terminal = ProjectTerminalDialog()
     output, statuses = [], []

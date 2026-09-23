@@ -11,4 +11,4 @@ properties:
       x-fortran-len: buf
       format: directory-path
     x-fortran-shape: nDomains
-    examples: [[data/master/lai/]]
+    examples: [[data/lai/]]

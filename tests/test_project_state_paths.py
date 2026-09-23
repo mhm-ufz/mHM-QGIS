@@ -5,11 +5,11 @@ from pathlib import Path
 
 from mhm_qgis.core.handlers.state import processing
 from mhm_qgis.core.handlers.state.meteo_outputs import MeteorologyOutputState
-from mhm_qgis.core.handlers.store.layout import workspace_folder
+from mhm_qgis.core.handlers.store.paths import temp_folder, workspace_folder
 
 
 def test_processing_state_is_saved_in_workspace(tmp_path: Path) -> None:
-    expected = Path(workspace_folder(tmp_path)) / processing.STATE_FILENAME
+    expected = Path(temp_folder(tmp_path)) / processing.STATE_FILENAME
 
     assert processing.state_path(tmp_path) == expected
     processing.overlay(tmp_path, {"version": processing.STATE_VERSION})

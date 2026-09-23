@@ -14,7 +14,7 @@ from qgis.core import QgsCoordinateReferenceSystem  # noqa: E402
 
 from mhm_qgis.core.executions.morphology.reset import clear_geometry  # noqa: E402
 from mhm_qgis.core.handlers.state.domain_state import load_state, save_state  # noqa: E402
-from mhm_qgis.core.handlers.store.layout import geometry_folder  # noqa: E402
+from mhm_qgis.core.handlers.store.layout import temp_morphology_folder  # noqa: E402
 from mhm_qgis.qgis_bridge.layers import gauges  # noqa: E402
 from mhm_qgis.qt.controllers.main import update_gauged_outlet_count  # noqa: E402
 from mhm_qgis.vSpecific.common import domain_count  # noqa: E402
@@ -171,7 +171,7 @@ def test_configured_project_with_no_gauges_is_rejected(tmp_path, monkeypatch):
 
 
 def test_geometry_reset_invalidates_only_derived_domain_outputs(tmp_path: Path) -> None:
-    geometry = Path(geometry_folder(tmp_path))
+    geometry = Path(temp_morphology_folder(tmp_path))
     generated = geometry / "Watersheds" / "mask.tif"
     generated.parent.mkdir(parents=True, exist_ok=True)
     generated.write_text("generated", encoding="utf-8")

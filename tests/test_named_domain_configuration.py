@@ -17,9 +17,6 @@ from mhm_qgis.vSpecific import build_initial_values
 
 @pytest.mark.parametrize("version", ["5.13", "6"])
 def test_domain_paths_states_and_namelists_are_isolated(tmp_path, version):
-    legacy = tmp_path / "mhm-qgis/data/master"
-    legacy.mkdir(parents=True)
-    (legacy / "keep").write_bytes(b"legacy")
     roots = [paths.domain_folder(tmp_path, name) for name in ("Alpine", "Valley")]
     for number, root in enumerate(roots):
         layout.ensure_project_structure(root, version)
@@ -28,23 +25,21 @@ def test_domain_paths_states_and_namelists_are_isolated(tmp_path, version):
         nml_settings.sync_domain_settings(root)
         processing.overlay(root, {"test": number})
         assert paths.workspace_folder(root) == str(root)
-        assert paths.master_data_folder(root) == str(root / "data")
-        assert not (root / "data/master").exists()
+        assert paths.data_folder(root) == str(root / "data")
         values = build_initial_values(version, SimpleNamespace(project_folder=root))["main"]
-        latlon = (values["directories_general"]["file_LatLon"] if version.startswith("5")
-                  else values["config_input"]["latlon_path"])
-        assert latlon == ["data/latlon.nc"]
-        assert "data/master" not in str(values)
+        if version.startswith("5"):
+            assert values["directories_general"]["file_LatLon"] == ["data/latlon.nc"]
+        else:
+            assert values["config_input"] == {}
         assert nml_settings.load_settings(root)["domains"][0]["data_path"] == "data/"
     assert layout.domain_folders(tmp_path) == tuple(roots)
     assert nml_settings.load_settings(roots[0])["test"] == {"number": 0}
     assert processing.section(roots[1], "test") == 1
-    assert (legacy / "keep").read_bytes() == b"legacy"
     assert not (tmp_path / "settings.yaml").exists()
 
 
-@pytest.mark.parametrize("name", ["", "..", "../outside", "a/b", "a\\b", "data", "Z Temp", "<new>"])
-def test_domain_names_cannot_escape_or_replace_legacy_folders(tmp_path, name):
+@pytest.mark.parametrize("name", ["", "..", "../outside", "a/b", "a\\b", "data", ".temp", "<new>"])
+def test_domain_names_cannot_escape_or_replace_reserved_folders(tmp_path, name):
     with pytest.raises(ValueError):
         paths.domain_folder(tmp_path, name)
 
@@ -52,7 +47,7 @@ def test_domain_names_cannot_escape_or_replace_legacy_folders(tmp_path, name):
 def test_clone_domain_copies_state_and_links_inputs(tmp_path):
     source = paths.domain_folder(tmp_path, "Alpine")
     target = paths.domain_folder(tmp_path, "Valley")
-    for relative in ("data/morph/input.nc", "data_raw/raw.nc", "Z Temp/work.nc",
+    for relative in ("data/morph/input.nc", ".temp/Morphology/work.nc",
                      "output/result.nc", "restart/state.nc"):
         path = source / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,8 +58,8 @@ def test_clone_domain_copies_state_and_links_inputs(tmp_path):
     clone_domain_inputs(source, target)
 
     assert nml_settings.load_settings(target)["source"] == str(target / "data/morph/input.nc")
-    assert not (target / "nml-settings.json").is_symlink()
-    for relative in ("data/morph/input.nc", "data_raw/raw.nc", "Z Temp/work.nc"):
+    assert not nml_settings.settings_path(target).is_symlink()
+    for relative in ("data/morph/input.nc", ".temp/Morphology/work.nc"):
         linked = target / relative
         assert linked.is_symlink()
         assert linked.read_text() == relative
@@ -75,10 +70,24 @@ def test_clone_domain_copies_state_and_links_inputs(tmp_path):
     assert (source / "data/morph/input.nc").read_text() == "data/morph/input.nc"
 
 
+def test_clone_rejects_different_mhm_versions_before_creating_target(tmp_path):
+    source = paths.domain_folder(tmp_path, "Alpine")
+    target = paths.domain_folder(tmp_path, "Valley")
+    source.mkdir(parents=True)
+    state_path = Path(layout.input_state_path(source))
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text('{"mhm_version": "6"}')
+    with pytest.raises(ValueError, match="different mHM version"):
+        clone_domain_inputs(source, target, "5.13")
+    assert not target.exists()
+
+
 def test_v6_prepared_outputs_are_registered_for_namelists(tmp_path):
     root = paths.domain_folder(tmp_path, "Alpine")
     root.mkdir(parents=True)
-    Path(layout.input_state_path(root)).write_text('{"mhm_version": "6"}')
+    state_path = Path(layout.input_state_path(root))
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text('{"mhm_version": "6"}')
     register_morphology(
         root, bundle=root / "data/morph/input.nc", dem=root / "data/morph/dem.nc",
         mask=root / "data/morph/morph_mask.nc", latlon=root / "data/latlon.nc")

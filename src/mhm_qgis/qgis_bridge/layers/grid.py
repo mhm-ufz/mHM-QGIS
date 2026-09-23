@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ...core.grid import raster_resolution_info as resolution_info
 from ...core.handlers.store.layout import MERGED_MASK_NAME
-from ...core.handlers.store.paths import geometry_folder
+from ...core.handlers.store.paths import temp_morphology_folder
 
 
 def crs_unit(crs) -> str:
@@ -64,7 +64,7 @@ def merged_domain_bounds(project_folder, target_crs):
 
     from ...core.handlers.raster.tasks import domain_mask_bounds
 
-    folder = Path(geometry_folder(project_folder))
+    folder = Path(temp_morphology_folder(project_folder))
     candidates = (
         folder / "Watersheds" / MERGED_MASK_NAME,
         folder / "Watersheds" / "4_watershed_merged_vector.shp",

@@ -42,7 +42,9 @@ def test_the_version_is_read_from_the_saved_input_state(project):
 
 
 def test_an_unreadable_state_falls_back_rather_than_raising(project):
-    Path(layout.input_state_path(project)).write_text("{ not json", encoding="utf-8")
+    path = Path(layout.input_state_path(project))
+    path.parent.mkdir(parents=True)
+    path.write_text("{ not json", encoding="utf-8")
     layout.forget_project_version(project)
     assert layout.project_version(project) == "v5.13"
 
@@ -55,26 +57,26 @@ def test_the_version_cache_does_not_outlive_a_rewrite(project):
 
     jsonio.write(state, {"mhm_version": "6.0"})
     layout.forget_project_version(project)
-    assert layout.morph_folder(project).endswith("master/morph")
+    assert layout.morph_folder(project).endswith("data/morph")
 
 
 def test_an_explicit_version_overrides_the_saved_one(project):
     jsonio.write(Path(layout.input_state_path(project)), {"mhm_version": "5.13"})
     layout.forget_project_version(project)
     # This is what ensure_project_structure needs: a new project has no state.
-    assert layout.morph_folder(project, version="v6").endswith("master/morph")
-    assert layout.lai_folder(project, version="v6").endswith("master/morph")
+    assert layout.morph_folder(project, version="v6").endswith("data/morph")
+    assert layout.lai_folder(project, version="v6").endswith("data/morph")
 
 
 # --- registry: what exists ---
 
 def test_the_key_is_workspace_relative_so_a_project_stays_portable(project):
-    key = registry.key_for(project, Path(paths.geometry_folder(project)) / "dem.tif")
-    assert key == "Z Temp/Geometry/dem.tif"
+    key = registry.key_for(project, Path(paths.temp_morphology_folder(project)) / "dem.tif")
+    assert key == ".temp/Morphology/dem.tif"
 
 
 def test_the_most_processed_variant_wins(project):
-    geometry = Path(paths.geometry_folder(project))
+    geometry = Path(paths.temp_morphology_folder(project))
     geometry.mkdir(parents=True)
     raw = geometry / "1_dem_filled.tif"
     for name in ("1_dem_filled.tif", "1_dem_filled_crop.tif"):
@@ -86,7 +88,7 @@ def test_the_most_processed_variant_wins(project):
 
 
 def test_an_already_masked_path_is_left_alone(project):
-    geometry = Path(paths.geometry_folder(project))
+    geometry = Path(paths.temp_morphology_folder(project))
     geometry.mkdir(parents=True)
     masked = geometry / "dem_masked.tif"
     masked.write_bytes(b"")

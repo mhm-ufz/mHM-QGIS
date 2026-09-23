@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import traceback
+from threading import Event
 
 from qgis.PyQt import QtCore
 
@@ -25,6 +26,10 @@ class MeteorologyWorkflowWorker(QtCore.QObject):
         self.workflow_label = workflow_label
         self.meteorology_state = meteorology_state
         self.meteorology_run = meteorology_run
+        self._cancelled = Event()
+
+    def cancel(self):
+        self._cancelled.set()
 
     @QtCore.pyqtSlot()
     def run(self):
@@ -39,8 +44,12 @@ class MeteorologyWorkflowWorker(QtCore.QObject):
                 self.meteorology_state,
                 log=self.log_message.emit,
                 progress=self.progress.emit,
+                cancelled=self._cancelled.is_set,
             )
-            self.finished.emit(self.workflow_key, ok, "")
+            self.finished.emit(
+                self.workflow_key, ok and not self._cancelled.is_set(),
+                "Meteorology task cancelled." if self._cancelled.is_set() else "",
+            )
         except Exception as exc:
             self.log_message.emit(
                 f"\nERROR: {self.workflow_label} worker failed: {exc}"

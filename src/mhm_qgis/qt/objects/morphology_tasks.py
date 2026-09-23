@@ -16,7 +16,7 @@ from ...core.executions import morphology
 from ...core.executions.morphology import commands
 from ...core.handlers.file.netcdf.raster import file_path
 from ...core.handlers.store.paths import (
-    geometry_folder,
+    temp_morphology_folder,
     morph_staging_folder,
 )
 from ...core.handlers.state import processing
@@ -59,7 +59,7 @@ class MorphologyTaskBridge(QtCore.QObject):
 
     def path(self, name: str) -> str:
         """Return a fixed morphology workspace path."""
-        return str(Path(geometry_folder(self.dialog.project_folder)) / name)
+        return str(Path(temp_morphology_folder(self.dialog.project_folder)) / name)
 
     @property
     def filled_dem_path(self) -> str:
@@ -130,7 +130,7 @@ class MorphologyTaskBridge(QtCore.QObject):
         self.dialog.log_message(f"ERROR: {label}: {message}")
         if callback is not None:
             callback(detail)
-        else:
+        elif not self.dialog._closing:
             QMessageBox.critical(self.dialog, label, detail)
 
     def _dem_options(self):
@@ -145,7 +145,7 @@ class MorphologyTaskBridge(QtCore.QObject):
         configured_crs = data.get("source_crs", "") if isinstance(data, dict) else ""
         source_crs = layer.crs() if layer is not None else None
         target_crs = self.dialog.get_crs()
-        folder = Path(geometry_folder(self.dialog.project_folder))
+        folder = Path(temp_morphology_folder(self.dialog.project_folder))
         return {
             "source": source,
             "output_folder": str(folder),
@@ -189,7 +189,7 @@ class MorphologyTaskBridge(QtCore.QObject):
         write_flow=True,
         accumulation=True,
     ):
-        folder = Path(geometry_folder(self.dialog.project_folder))
+        folder = Path(temp_morphology_folder(self.dialog.project_folder))
         return {
             "filled_dem": self.filled_dem_path,
             "accumulation": write_flow and accumulation,
@@ -811,10 +811,10 @@ class MorphologyTaskBridge(QtCore.QObject):
                         log=self.dialog.log_message,
                     )
                 )
-                permanent = Path(geometry_folder(self.dialog.project_folder)) / f"_{kind}_input{Path(materialized).suffix}"
+                permanent = Path(temp_morphology_folder(self.dialog.project_folder)) / f"_{kind}_input{Path(materialized).suffix}"
                 shutil.copy2(materialized, permanent)
                 local = str(permanent)
-        geometry = Path(geometry_folder(self.dialog.project_folder))
+        geometry = Path(temp_morphology_folder(self.dialog.project_folder))
         staging = Path(morph_staging_folder(self.dialog.project_folder))
         staging.mkdir(parents=True, exist_ok=True)
         output = staging / f"{spec['ready_name']}{categorical_output_suffix(kind)}"
@@ -921,7 +921,7 @@ class MorphologyTaskBridge(QtCore.QObject):
         except Exception as error:
             self._error("Domain Delineator", error, failed)
             return False
-        folder = Path(geometry_folder(self.dialog.project_folder))
+        folder = Path(temp_morphology_folder(self.dialog.project_folder))
         paths = (
             folder / "filled_dem.nc",
             folder / "dem_derivatives.nc",
@@ -1011,7 +1011,7 @@ class MorphologyTaskBridge(QtCore.QObject):
             starter = getattr(self, f"start_{stage.command}")
             return starter(
                 *stage.args,
-                done=lambda _result: advance(),
+                done=lambda _result: QtCore.QTimer.singleShot(0, advance),
                 failed=self._fail_execute_all,
                 **stage.options,
             )

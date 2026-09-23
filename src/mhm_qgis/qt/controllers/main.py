@@ -36,7 +36,7 @@ from ...core.handlers.state import processing
 from ...core.handlers.store.layout import ensure_project_structure, lai_folder
 from ...core.handlers.store.morphology import land_cover_periods, resolve_display_output
 from ...core.handlers.store.paths import (
-    data_folder, master_data_folder, plugin_root, version_key, workspace_folder,
+    data_folder, plugin_root, version_key, workspace_folder,
 )
 from ..reporting import error_detail
 from ..dialogs.file_picker import open_directory, open_file
@@ -78,7 +78,7 @@ def create_project_structure(dialog):
             path = prompt.path
             if prompt.source_path:
                 from ...core.handlers.store.clone import clone_domain_inputs
-                clone_domain_inputs(prompt.source_path, path)
+                clone_domain_inputs(prompt.source_path, path, selected_version(dialog))
             else:
                 path.mkdir(parents=True)
         else:
@@ -98,12 +98,12 @@ def create_project_structure(dialog):
         dialog.project_folder = str(path)
         active_domain = True
         set_workflow_status(dialog, "project_structure", "running")
-        dialog.geometry_folder = None
+        dialog.temp_morphology_folder = None
         dialog.project_settings = project_settings
         dialog.load_input_state()
         ensure_project_structure(path, selected_version(dialog))
-        from ...core.handlers.store.paths import geometry_folder
-        dialog.geometry_folder = geometry_folder(path)
+        from ...core.handlers.store.paths import temp_morphology_folder
+        dialog.temp_morphology_folder = temp_morphology_folder(path)
         dialog.update_l2_resolution_from_metadata()
         dialog.refresh_meteo_display()
         dialog.refresh_output_display()
@@ -278,7 +278,6 @@ def scan_precipitation(dialog):
 def edit_meteo_input(dialog, variable=None):
     """Accept metadata, then schedule only inspection; failed scans keep old input."""
     from dataclasses import asdict, replace
-    from functools import partial
     from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
     if not _ensure_project_folder(dialog) or domain_switch_busy(dialog):
         return
@@ -318,11 +317,14 @@ def edit_meteo_input(dialog, variable=None):
             set_workflow_status(
                 dialog, "scan_precipitation", "failed", str(error)
             )
-        QMessageBox.warning(dialog, "Meteorology scan", str(error))
+        if not dialog._closing:
+            QMessageBox.warning(dialog, "Meteorology scan", str(error))
 
     started = dialog.task_coordinator.submit(
         f"meteo-scan-{variable}", f"Scan {variable}",
-        partial(inspect_meteo_folder_cached, dialog.project_folder, spec),
+        lambda task: inspect_meteo_folder_cached(
+            dialog.project_folder, spec, cancelled=task.isCanceled),
+        task_aware=True,
         controls=(dialog.tabWidget_steps, dialog.pushButton_BrowseProjectFolder,
                   dialog.comboBox_domainFolderSelector, dialog.pushButton_createProjectStructure),
         on_success=scanned, on_error=failed,
@@ -371,7 +373,6 @@ def _populate_forcing_table(table, inputs, edit):
 def edit_observation_input(dialog, variable=None):
     """Collect and inspect one L2 gridded observation."""
     from dataclasses import asdict, replace
-    from functools import partial
     from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
 
     if not _ensure_project_folder(dialog) or domain_switch_busy(dialog):
@@ -400,10 +401,13 @@ def edit_observation_input(dialog, variable=None):
 
     dialog.task_coordinator.submit(
         f"observation-scan-{variable}", f"Scan {variable}",
-        partial(inspect_meteo_folder_cached, dialog.project_folder, spec),
+        lambda task: inspect_meteo_folder_cached(
+            dialog.project_folder, spec, cancelled=task.isCanceled),
+        task_aware=True,
         controls=(dialog.tabWidget_steps, dialog.pushButton_BrowseProjectFolder),
         on_success=scanned,
-        on_error=lambda error: QMessageBox.warning(dialog, "Observation scan", str(error)),
+        on_error=lambda error: None if dialog._closing else QMessageBox.warning(
+            dialog, "Observation scan", str(error)),
         resource="morphology-files")
 
 
@@ -415,7 +419,6 @@ def selected_observation_specs(dialog):
 
 def start_execute_all_observations(dialog):
     """Prepare every configured observation through the shared L2 API."""
-    from functools import partial
     from ...core.executions.observations import ObservationRun, prepare
     from ...core.grid import target_grid_from_header
 
@@ -446,11 +449,13 @@ def start_execute_all_observations(dialog):
         set_workflow_status(
             dialog, "execute_all_observations", "failed", str(error)
         )
-        QMessageBox.warning(dialog, "Observation setup", str(error))
+        if not dialog._closing:
+            QMessageBox.warning(dialog, "Observation setup", str(error))
 
     started = dialog.task_coordinator.submit(
         "execute-all-observations", "Prepare observations",
-        partial(prepare, run),
+        lambda task: prepare(run, cancelled=task.isCanceled),
+        task_aware=True,
         controls=(dialog.tabWidget_steps, dialog.pushButton_executeAllObservation),
         on_success=completed, on_error=failed, resource="morphology-files")
     if not started:

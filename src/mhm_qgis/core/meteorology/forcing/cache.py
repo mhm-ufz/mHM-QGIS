@@ -20,12 +20,12 @@ from ...handlers.state.cache import cached_payload, fingerprint, store_payload
 SECTION = "meteo_inspection"
 
 
-# What `inspect_meteo_folder` actually reads. The output cadence and the
-# aggregation are preparation choices it never sees, so including them only made
-# a changed aggregation silently re-open every file in the folder.
+# Inspection selects the first and last complete output periods. Aggregation
+# remains a preparation-only choice.
 _INSPECTED_FIELDS = (
     "kind", "source", "crs", "pattern",
-    "temporal_resolution", "unit", "cumulative", "cumulative_resolution",
+    "temporal_resolution", "output_temporal_resolution", "unit",
+    "cumulative", "cumulative_resolution",
 )
 
 
@@ -40,7 +40,7 @@ def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
     digest = fingerprint(files, {
         **{name: values[name] for name in _INSPECTED_FIELDS},
         "folder": str(spec.folder),
-        "inspection_version": 4,
+        "inspection_version": 5,
     })
     return digest, files
 
@@ -48,7 +48,7 @@ def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
 def preparation_fingerprint(spec: MeteoFolderSpec) -> str:
     """Return a digest covering every option the prepared forcing depends on."""
     return fingerprint(_files_for_spec(spec), {
-        **asdict(spec), "folder": str(spec.folder), "preparation_version": 1})
+        **asdict(spec), "folder": str(spec.folder), "preparation_version": 2})
 
 
 def _as_payload(metadata: SpatialMetadata) -> dict:
@@ -72,21 +72,23 @@ def _from_payload(payload) -> SpatialMetadata | None:
         return None
 
 
-def inspect_meteo_folder_cached(project_folder, spec, log=None):
+def inspect_meteo_folder_cached(project_folder, spec, log=None, cancelled=None):
     """Inspect one configured variable, reusing identical metadata options."""
     spec = spec.normalized()
     if not project_folder:
-        return inspect_meteo_folder(spec)
+        return inspect_meteo_folder(spec, cancelled=cancelled)
     digest, files = inspection_fingerprint(spec)
     metadata = _from_payload(cached_payload(project_folder, SECTION, spec.kind, digest))
     if metadata is not None:
         return metadata
-    metadata = inspect_meteo_folder(spec)
+    metadata = inspect_meteo_folder(spec, cancelled=cancelled)
     store_payload(project_folder, SECTION, spec.kind, digest, _as_payload(metadata))
     return metadata
 
 
-def inspect_meteo_inputs_cached(project_folder, inputs, log=None):
+def inspect_meteo_inputs_cached(project_folder, inputs, log=None, cancelled=None):
     """Inspect selected variables without preparing forcing."""
-    return {spec.normalized().kind: inspect_meteo_folder_cached(project_folder, spec, log=log)
+    options = {"cancelled": cancelled} if cancelled is not None else {}
+    return {spec.normalized().kind: inspect_meteo_folder_cached(
+                project_folder, spec, log=log, **options)
             for spec in inputs}

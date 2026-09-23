@@ -21,39 +21,39 @@ properties:
       x-fortran-len: buf
       format: directory-path
     x-fortran-shape: nDomains
-    examples: [[data/master/meteo/pre/]]
+    examples: [[data/meteo/pre/]]
   dir_Temperature:
     <<: *domain_directory
     description: Directory containing mean-temperature forcing data for each domain.
-    examples: [[data/master/meteo/tavg/]]
+    examples: [[data/meteo/tavg/]]
   dir_ReferenceET:
     <<: *domain_directory
     description: Directory containing reference evapotranspiration input when the selected PET process reads PET forcing.
-    examples: [[data/master/meteo/pet/]]
+    examples: [[data/meteo/pet/]]
   dir_MinTemperature:
     <<: *domain_directory
     description: Directory containing minimum-temperature forcing required by the Hargreaves-Samani PET method.
-    examples: [[data/master/meteo/tmin/]]
+    examples: [[data/meteo/tmin/]]
   dir_MaxTemperature:
     <<: *domain_directory
     description: Directory containing maximum-temperature forcing required by the Hargreaves-Samani PET method.
-    examples: [[data/master/meteo/tmax/]]
+    examples: [[data/meteo/tmax/]]
   dir_NetRadiation:
     <<: *domain_directory
     description: Directory containing net-radiation forcing required by the Priestley-Taylor PET method.
-    examples: [[data/master/meteo/netrad/]]
+    examples: [[data/meteo/netrad/]]
   dir_absVapPressure:
     <<: *domain_directory
     description: Directory containing absolute-vapor-pressure forcing required by the Penman-Monteith PET method.
-    examples: [[data/master/meteo/eabs/]]
+    examples: [[data/meteo/eabs/]]
   dir_windspeed:
     <<: *domain_directory
     description: Directory containing wind-speed forcing required by the Penman-Monteith PET method.
-    examples: [[data/master/meteo/windspeed/]]
+    examples: [[data/meteo/windspeed/]]
   dir_Radiation:
     <<: *domain_directory
     description: Directory containing shortwave and longwave radiation forcing used by river-temperature routing.
-    examples: [[data/master/meteo/ssrd/]]
+    examples: [[data/meteo/ssrd/]]
   time_step_model_inputs:
     description: |-
       Read frequency for gridded meteorological input in each domain.

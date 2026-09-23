@@ -106,13 +106,14 @@ def reuse_prepared(run: MeteorologyRun, state, *, log=None) -> bool:
     return True
 
 
-def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None, progress=None) -> bool:
+def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None,
+                    progress=None, cancelled=None) -> bool:
     """Prepare every selected meteorology forcing file. Returns success."""
     _say(log, "\n--- Preparing meteorology forcing files ---")
     _say(log, f"Meteorology output folder: {meteo_output_root(run.project_folder)}")
     try:
         inspected = inspect_meteo_inputs_cached(
-            run.project_folder, run.inputs, log=log)
+            run.project_folder, run.inputs, log=log, cancelled=cancelled)
         run = replace(run, inspections=inspected)
         if run.times:
             from ...handlers.state.nml_settings import validate_times
@@ -131,7 +132,10 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None, progre
             log=log,
             inspections=run.inspections,
             progress=progress,
+            cancelled=cancelled,
         )
+        if cancelled is not None and cancelled():
+            raise RuntimeError("Meteorology task cancelled.")
         mask = None
         if flat:
             # v6 names a meteorology mask in config_input.

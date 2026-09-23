@@ -9,7 +9,7 @@ from ..lookup.manifests import period_datetime
 
 from ..state.nml_settings import load_settings
 from ..file.netcdf.raster import variables
-from .paths import geometry_folder, workspace_folder
+from .paths import temp_morphology_folder, workspace_folder
 from .layout import MERGED_MASK_NAME, morph_folder, lai_folder
 from .registry import first_existing, variants
 
@@ -37,7 +37,7 @@ def resolve_display_output(
     when: datetime | None = None,
 ) -> DisplayOutput | None:
     project_folder = str(project_folder)
-    geometry = Path(geometry_folder(project_folder))
+    geometry = Path(temp_morphology_folder(project_folder))
     morph = Path(morph_folder(project_folder))
     workspace = Path(workspace_folder(project_folder))
     settings = load_settings(project_folder)
@@ -145,12 +145,7 @@ def _configured_path(value, workspace):
     path = Path(str(raw))
     if path.is_absolute():
         return path
-    resolved = workspace / path
-    if resolved.exists() or not path.parts or path.parts[0] != "data":
-        return resolved
-    if len(path.parts) > 1 and path.parts[1] == "master":
-        return resolved
-    return workspace / "data" / "master" / Path(*path.parts[1:])
+    return workspace / path
 
 
 def _first(candidates, name, band=None, variable=None):

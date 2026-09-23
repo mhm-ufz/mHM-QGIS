@@ -14,7 +14,7 @@ doc = "Number of geological units."
 
 [dimensions.nSoilHorizons]
 default = 6
-doc = "Number of soil horizons."
+doc = "Number of supplied soil-layer depth entries."
 
 [dimensions.nLcoverScene]
 default = 5

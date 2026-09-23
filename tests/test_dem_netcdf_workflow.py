@@ -17,8 +17,8 @@ from mhm_qgis.core.handlers.store.layout import (
     MERGED_MASK_NAME, domain_dem_path, ensure_project_structure, input_state_path, morph_folder,
 )
 from mhm_qgis.core.handlers.store.paths import (
-    geometry_folder,
-    master_data_folder,
+    temp_morphology_folder,
+    data_folder,
     morph_staging_folder,
 )
 
@@ -147,7 +147,7 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
 
     ensure_project_structure(tmp_path, version)
     write_json(input_state_path(tmp_path), {"mhm_version": version})
-    folder = Path(geometry_folder(tmp_path))
+    folder = Path(temp_morphology_folder(tmp_path))
     header = {"ncols": 12, "nrows": 12, "xllcorner": -100, "yllcorner": -100,
               "cellsize": 100, "nodata_value": -9999}
     original = _raster(tmp_path / "source.tif")
@@ -206,7 +206,7 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
             "output_path": nml_settings.relative_workspace_path(tmp_path, path)})
     request = setup.SetupRequest(str(tmp_path), {level: header for level in ("L0", "L1", "L11", "L2")},
                                  crs="EPSG:32632")
-    latlon = Path(master_data_folder(tmp_path)) / "latlon.nc"
+    latlon = Path(data_folder(tmp_path)) / "latlon.nc"
     latlon.parent.mkdir(parents=True, exist_ok=True)
     with Dataset(latlon, "w") as coordinates:
         coordinates.createDimension("y", 12)

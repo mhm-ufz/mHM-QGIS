@@ -36,7 +36,7 @@ from ...core.handlers.state.domain_state import (
 )
 from ...core.handlers.store import registry
 from ...core.handlers.store.layout import MERGED_MASK_NAME, domain_dem_path
-from ...core.handlers.store.paths import geometry_folder
+from ...core.handlers.store.paths import temp_morphology_folder
 from ...core.handlers.store.layout import morph_folder
 from ...core.morphology.hydrology.observation_paths import (
     streamflow_observation_folder,
@@ -286,20 +286,20 @@ class DomainWorkflow:
 
     @property
     def filled_dem_path(self) -> str:
-        return str(Path(geometry_folder(self.project_folder)) / "filled_dem.nc")
+        return str(Path(temp_morphology_folder(self.project_folder)) / "filled_dem.nc")
 
     @property
     def flow_accumulation_path(self) -> str:
-        return source(Path(geometry_folder(self.project_folder)) / "dem_derivatives.nc", "facc")
+        return source(Path(temp_morphology_folder(self.project_folder)) / "dem_derivatives.nc", "facc")
 
     @property
     def channel_network_path(self) -> str:
-        return str(Path(geometry_folder(self.project_folder)) / "2_channel_network.shp")
+        return str(Path(temp_morphology_folder(self.project_folder)) / "2_channel_network.shp")
 
     @property
     def snapped_points_path(self) -> str:
         return str(
-            Path(geometry_folder(self.project_folder)) / "2_pour_points_snapped.shp"
+            Path(temp_morphology_folder(self.project_folder)) / "2_pour_points_snapped.shp"
         )
 
     def _require_prepared(self, *paths: str) -> None:
@@ -579,7 +579,7 @@ class DomainWorkflow:
         return merged_path
 
     def domain_output_folder(self) -> str:
-        path = Path(geometry_folder(self.project_folder)) / "Watersheds" / "DomainDelineation"
+        path = Path(temp_morphology_folder(self.project_folder)) / "Watersheds" / "DomainDelineation"
         path.mkdir(parents=True, exist_ok=True)
         return str(path)
 
@@ -601,7 +601,7 @@ class DomainWorkflow:
     @staticmethod
     def merged_mask_path(project_folder) -> str:
         return str(
-            Path(geometry_folder(project_folder)) / "Watersheds" / MERGED_MASK_NAME
+            Path(temp_morphology_folder(project_folder)) / "Watersheds" / MERGED_MASK_NAME
         )
 
     @staticmethod

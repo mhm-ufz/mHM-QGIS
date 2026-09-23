@@ -26,7 +26,7 @@ Ui_MhmReadyInputDialog = load_form("mhm_ready_morph_input.ui")
 Ui_RasterDetailsDialog = load_form("netcdf_asc_additional_input.ui")
 Ui_SingleLayerLookupDialog = load_form("single_layer_input_with_lookup_config_dialog.ui")
 
-EXCLUDED_PROJECT_FOLDERS = {WORKSPACE_FOLDER_NAME, "mhm-plugin"}
+EXCLUDED_PROJECT_FOLDERS = {WORKSPACE_FOLDER_NAME}
 INPUT_EXTENSIONS = {
     "dem": {".asc", ".nc", ".tif"},
     "pour_points": {".shp"},

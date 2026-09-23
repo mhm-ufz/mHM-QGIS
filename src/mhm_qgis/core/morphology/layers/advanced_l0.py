@@ -49,6 +49,10 @@ def publish_model_inputs(
             shutil.copy2(path, source)
 
     for path in staged_files(project_folder):
+        if not is_v6(project_folder) and path.name in {
+            "soil_horizon_class.nc", "soil_classdefinition_iFlag_soilDB_1.txt"
+        }:
+            continue
         suffix = path.suffix.lower()
         target = master / path.name
         if suffix in RASTER_SUFFIXES:
@@ -116,8 +120,6 @@ def _publish_v5_raster(project_folder, source, master, header) -> tuple[Path, ..
         names = [Path(scene.get("output_path", "")).name for scene in scenes]
         if len(names) != bands or any(not name for name in names):
             raise ValueError("Land-cover periods do not match lc_periods.nc.")
-    elif source.stem == "soil_horizon_class":
-        names = [f"soil_class_horizon_{index:02d}.asc" for index in range(1, bands + 1)]
     else:
         if bands != 1:
             raise ValueError(f"Expected one raster layer in {source.name}.")
@@ -152,7 +154,7 @@ def _configured_rasters(project_folder):
 def _repoint_settings(project_folder, published, log=None) -> None:
     """Rewrite the namelist handoff so every path names the published copy.
 
-    Anything already sitting in `data/master` is repointed too, not just what
+    Anything already sitting in `data/` is repointed too, not just what
     this run moved, so a reused stage whose output was published earlier still
     ends up with a resolvable path.
     """
@@ -198,14 +200,6 @@ def _repoint_settings(project_folder, published, log=None) -> None:
             if record.get("output_path"):
                 record["output_path"] = ""
                 changed = True
-        if not is_v6(project_folder) and section == "soil":
-            first = by_name.get("soil_class_horizon_01.asc")
-            if first is not None:
-                updated = relative_workspace_path(project_folder, first)
-                if record.get("output_path") != updated:
-                    record["output_path"] = updated
-                    changed = True
-
     if changed:
         save_settings(project_folder, settings)
         if log:

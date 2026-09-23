@@ -31,21 +31,14 @@ def settings_path(project_folder) -> str:
 
 
 def workspace_folder(project_folder) -> str:
-    """Return the plugin-owned workspace inside the selected project folder."""
-    if is_domain_folder(project_folder):
-        return str(project_folder)
-    return os.path.join(str(project_folder), WORKSPACE_FOLDER_NAME)
-
-
-def is_domain_folder(folder) -> bool:
-    """Whether a path names a setup directly under the workspace container."""
-    return Path(str(folder)).parent.name == WORKSPACE_FOLDER_NAME
+    """Return the domain folder that owns every plugin file of one setup."""
+    return str(project_folder)
 
 
 def domain_folder(project_folder, name) -> Path:
     """Resolve a safe, non-symlink domain name without creating anything."""
     name = str(name).strip()
-    reserved = {"data", "data_raw", "output", "restart", "z temp", "<new>"}
+    reserved = {"data", "output", "restart", "<new>"}
     if (not name or name in {".", ".."} or name.casefold() in reserved
             or name.startswith(".") or any(c in name for c in '/\\\0<>:"|?*')
             or name.endswith((".", " "))):
@@ -64,32 +57,27 @@ def version_key(version_text: str | None) -> str:
     return "v6"
 
 
-def z_temp_folder(project_folder) -> str:
-    """Return the helper-file folder for temporary project artifacts."""
-    return os.path.join(workspace_folder(project_folder), "Z Temp")
+def temp_folder(project_folder) -> str:
+    """Return the hidden folder for temporary artifacts and plugin state."""
+    return os.path.join(workspace_folder(project_folder), ".temp")
 
 
-def geometry_folder(project_folder) -> str:
-    """Return the temporary Geometry folder."""
-    return os.path.join(z_temp_folder(project_folder), "Geometry")
-
-
-def morphology_staging_folder(project_folder) -> str:
-    """Return the staging folder for model-ready morphology inputs."""
-    return os.path.join(z_temp_folder(project_folder), "Morphology")
+def temp_morphology_folder(project_folder) -> str:
+    """Return the temporary morphology workspace, which also stages morph and LAI."""
+    return os.path.join(temp_folder(project_folder), "Morphology")
 
 
 def morph_staging_folder(project_folder) -> str:
     """Return the staging folder for land cover, soil, and geology outputs.
 
-    Execute All stages here before its final publication to master.
+    Execute All stages here before its final publication to data.
     """
-    return os.path.join(morphology_staging_folder(project_folder), "morph")
+    return os.path.join(temp_morphology_folder(project_folder), "morph")
 
 
 def lai_staging_folder(project_folder) -> str:
     """Return the staging folder for common-grid LAI."""
-    return os.path.join(morphology_staging_folder(project_folder), "lai")
+    return os.path.join(temp_morphology_folder(project_folder), "lai")
 
 
 def lai_dem_staging_path(project_folder) -> str:
@@ -102,42 +90,14 @@ def data_folder(project_folder) -> str:
     return os.path.join(workspace_folder(project_folder), "data")
 
 
-def master_data_folder(project_folder) -> str:
-    """Return this setup’s model inputs, retaining legacy path compatibility."""
-    if is_domain_folder(project_folder):
-        return data_folder(project_folder)
-    return os.path.join(data_folder(project_folder), "master")
-
-
-def domain_data_folder(project_folder, outlet_id) -> str:
-    """Return one outlet-named domain folder, rejecting unsafe IDs."""
-    name = str(outlet_id).strip()
-    unsafe = not name or name in {".", ".."} or any(
-        char in name for char in ("/", "\\", "\0")
-    )
-    if unsafe:
-        raise ValueError(f"Outlet ID cannot be used as a domain directory: {outlet_id!r}")
-    return os.path.join(data_folder(project_folder), name)
-
-
-def data_raw_folder(project_folder) -> str:
-    """Return the raw input data folder."""
-    return os.path.join(workspace_folder(project_folder), "data_raw")
-
-
 def static_folder(project_folder) -> str:
     """Return the shared static data folder."""
-    return os.path.join(master_data_folder(project_folder), "static")
+    return os.path.join(data_folder(project_folder), "static")
 
 
 def meteo_folder(project_folder) -> str:
     """Return the meteorology forcing data folder."""
-    return os.path.join(master_data_folder(project_folder), "meteo")
-
-
-def raw_meteo_folder(project_folder) -> str:
-    """Return the raw meteorology input data folder."""
-    return os.path.join(data_raw_folder(project_folder), "meteo")
+    return os.path.join(data_folder(project_folder), "meteo")
 
 
 def output_folder(project_folder) -> str:

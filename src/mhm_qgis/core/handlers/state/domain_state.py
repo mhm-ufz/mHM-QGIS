@@ -7,7 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Union
-from ....core.handlers.store.paths import workspace_folder
+from ....core.handlers.store.paths import temp_folder, workspace_folder
 
 
 STATE_FILENAME = "mhm_qgis_domain_delineation_state.json"
@@ -42,7 +42,7 @@ def default_state() -> Dict[str, Any]:
 
 def state_path(project_folder: PathInput) -> Path:
     """Return the state path inside the plugin-owned workspace."""
-    return Path(workspace_folder(project_folder)) / STATE_FILENAME
+    return Path(temp_folder(project_folder)) / STATE_FILENAME
 
 
 def _normalized_state(value: object) -> Dict[str, Any]:
@@ -120,7 +120,7 @@ def assign_domain_ids(state: Dict[str, Any]) -> Dict[str, Any]:
         record = outlets.get(outlet_id)
         if not isinstance(record, dict):
             continue
-        if _enabled(record, "is_domain", "domain"):
+        if record.get("is_domain"):
             record["domain_id"] = 1
             selected = True
         else:
@@ -277,10 +277,6 @@ def save_state(
     return path
 
 
-def _enabled(record: Mapping[str, Any], key: str, legacy_key: str) -> bool:
-    return bool(record.get(key, record.get(legacy_key, False)))
-
-
 def gauged_outlet_ids(state: Mapping[str, Any]) -> List[str]:
     """Return IDs of outlets marked as gauged, in stored order."""
     outlets = state.get("outlets", {})
@@ -291,7 +287,7 @@ def gauged_outlet_ids(state: Mapping[str, Any]) -> List[str]:
         for outlet_id in ordered_outlet_ids(state)
         for record in (outlets.get(outlet_id),)
         if isinstance(record, Mapping)
-        and _enabled(record, "is_gauged", "gauged")
+        and record.get("is_gauged")
     ]
 
 
@@ -305,7 +301,7 @@ def active_domain_records(state: Mapping[str, Any]) -> List[Dict[str, Any]]:
             record = outlets.get(outlet_id)
             if not isinstance(record, Mapping):
                 continue
-            if _enabled(record, "is_domain", "domain"):
+            if record.get("is_domain"):
                 active = dict(record)
                 active["outlet_id"] = str(outlet_id)
                 active["is_dem_domain"] = False

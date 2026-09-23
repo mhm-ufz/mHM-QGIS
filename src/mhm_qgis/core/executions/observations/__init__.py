@@ -8,7 +8,7 @@ from typing import Mapping
 from ...grid import TargetGrid
 from ...handlers.state.nml_outputs import register_observations
 from ...handlers.store import registry
-from ...handlers.store.paths import master_data_folder
+from ...handlers.store.paths import data_folder
 from ...meteorology.forcing import (
     MeteoFolderSpec, SpatialMetadata, inspect_meteo_inputs_cached,
     process_meteo_inputs,
@@ -23,13 +23,13 @@ class ObservationRun:
     inspections: Mapping[str, SpatialMetadata] | None = None
 
 
-def prepare(run: ObservationRun, *, log=None) -> bool:
+def prepare(run: ObservationRun, *, log=None, cancelled=None) -> bool:
     inspections = run.inspections or inspect_meteo_inputs_cached(
-        run.project_folder, run.inputs, log=log)
-    output_root = Path(master_data_folder(run.project_folder)) / "observation"
+        run.project_folder, run.inputs, log=log, cancelled=cancelled)
+    output_root = Path(data_folder(run.project_folder)) / "observation"
     result = process_meteo_inputs(
         run.inputs, output_root, run.target_grid,
-        flat_layout=True, inspections=inspections, log=log)
+        flat_layout=True, inspections=inspections, log=log, cancelled=cancelled)
     for variable, path in result.outputs.items():
         registry.register(
             run.project_folder, path, name=Path(path).name,

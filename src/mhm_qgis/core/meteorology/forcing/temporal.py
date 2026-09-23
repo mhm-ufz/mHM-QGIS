@@ -88,7 +88,7 @@ def period_bounds(key):
     return key.astype("datetime64[ns]"), (key + 1).astype("datetime64[ns]")
 
 
-def time_index(values, cadence):
+def time_index(values, cadence, *, continuous=True):
     """Validate an ordered continuous Gregorian coordinate against its declared cadence."""
     import numpy as np
     import pandas as pd
@@ -102,7 +102,7 @@ def time_index(values, cadence):
               "Monthly": pd.DateOffset(months=1), "Yearly": pd.DateOffset(years=1)}[cadence]
     if cadence == "Monthly" and index.is_month_end.all():
         offset = pd.offsets.MonthEnd(1)
-    if len(index) > 1 and not np.array_equal((index[:-1] + offset).values, index[1:].values):
+    if continuous and len(index) > 1 and not np.array_equal((index[:-1] + offset).values, index[1:].values):
         raise ValueError(f"Timestamps are not continuous {cadence.lower()} input.")
     return index, offset
 
@@ -110,8 +110,11 @@ def time_index(values, cadence):
 def interval_bounds(ds, time_name, spec, source_name):
     """Read CF intervals or the known ERA interval-end convention."""
     import numpy as np
-    index, offset = time_index(ds[time_name].values, spec.temporal_resolution)
     bounds_name = ds[time_name].attrs.get("bounds")
+    index, offset = time_index(
+        ds[time_name].values, spec.temporal_resolution,
+        continuous=not (bounds_name and bounds_name in ds),
+    )
     if bounds_name and bounds_name in ds:
         bounds = np.asarray(ds[bounds_name].values).astype("datetime64[ns]")
     elif source_name in ERA_END_VARIABLES and (
@@ -129,11 +132,29 @@ def interval_bounds(ds, time_name, spec, source_name):
             or (bounds[:, 1] <= bounds[:, 0]).any()
             or (bounds[:-1, 1] != bounds[1:, 0]).any()):
         raise ValueError("Meteorology time bounds must describe positive, contiguous intervals.")
-    import pandas as pd
-    _, bound_offset = time_index(bounds[:, 0], spec.temporal_resolution)
-    if not np.array_equal((pd.DatetimeIndex(bounds[:, 0]) + bound_offset).values, bounds[:, 1]):
-        raise ValueError("Time bounds differ from the selected input cadence.")
     return bounds
+
+
+def complete_window(bounds, input_cadence, output_cadence):
+    """Return the first through last complete output periods, excluding edge fragments."""
+    import numpy as np
+
+    def complete(starts, ends, cadence):
+        keys = output_periods(starts, cadence)
+        expected_start, expected_end = period_bounds(keys)
+        return (starts == expected_start) & (ends == expected_end)
+
+    input_full = complete(bounds[:, 0], bounds[:, 1], input_cadence)
+    if not input_full[1:-1].all():
+        raise ValueError("Meteorology contains an incomplete input interval inside the record.")
+    keys = output_periods(bounds[:, 0], output_cadence)
+    edges = np.r_[0, np.flatnonzero(keys[1:] != keys[:-1]) + 1, len(bounds)]
+    starts, ends = bounds[edges[:-1], 0], bounds[edges[1:] - 1, 1]
+    full = complete(starts, ends, output_cadence)
+    selected = np.flatnonzero(full)
+    if not len(selected) or not full[selected[0]:selected[-1] + 1].all():
+        raise ValueError("Meteorology has no continuous complete output periods.")
+    return starts[selected[0]], ends[selected[-1]], starts[selected[-1]]
 
 
 def deaccumulate_values(values, bounds, spec, previous=None):

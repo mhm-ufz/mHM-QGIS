@@ -24,6 +24,7 @@ class TaskRecord:
     logs: list[str] = field(default_factory=list)
     task: object = None
     task_aware: bool = False
+    cancel_callback: object = None
 
 
 class TaskCoordinator(QtCore.QObject):
@@ -40,6 +41,7 @@ class TaskCoordinator(QtCore.QObject):
         self._history: dict[int, TaskRecord] = {}
         self._control_owners: dict[int, set[str]] = {}
         self._control_states: dict[int, bool] = {}
+        self._stopping = False
 
     @property
     def max_threads(self):
@@ -89,7 +91,7 @@ class TaskCoordinator(QtCore.QObject):
         task_aware=False,
     ):
         key = str(key)
-        if self.is_busy(key):
+        if self._stopping or self.is_busy(key):
             return False
         record = TaskRecord(
             key=key,
@@ -118,7 +120,7 @@ class TaskCoordinator(QtCore.QObject):
 
     def set_progress(self, key, value):
         record = self._records.get(str(key))
-        if record is None:
+        if record is None or record.status != "running":
             return
         record.progress = max(0, min(100, int(value)))
         self.changed.emit()
@@ -159,10 +161,10 @@ class TaskCoordinator(QtCore.QObject):
     def queued_count(self):
         return len(self._pending)
 
-    def start_external(self, key, label, controls=(), resource=""):
+    def start_external(self, key, label, controls=(), resource="", cancel=None):
         """Expose a separately managed QThread in the same task monitor."""
         key = str(key)
-        if self.is_busy(key) or len(self._active) >= self._max_threads:
+        if self._stopping or self.is_busy(key) or len(self._active) >= self._max_threads:
             return False
         record = TaskRecord(
             key=key,
@@ -172,6 +174,7 @@ class TaskCoordinator(QtCore.QObject):
             status="running",
             slot=self._free_slot(),
             resource=str(resource or ""),
+            cancel_callback=cancel,
         )
         record.logs.append(f"Started: {record.label}")
         self._records[key] = record
@@ -212,13 +215,24 @@ class TaskCoordinator(QtCore.QObject):
         if task is not None and hasattr(task, "cancel"):
             task.cancel()
             return True
+        if record.cancel_callback is not None:
+            record.cancel_callback()
+            return True
         return False
+
+    def cancel_all(self):
+        """Stop queued work and request cancellation of every running worker."""
+        self._stopping = True
+        for key in tuple(record.key for record in (*self._pending, *self._active.values())):
+            self.cancel(key)
 
     def _free_slot(self):
         used = {record.slot for record in self._active.values()}
         return next((slot for slot in range(1, self._max_threads + 1) if slot not in used), None)
 
     def _start_available(self):
+        if self._stopping:
+            return
         while self._pending and len(self._active) < self._max_threads:
             slot = self._free_slot()
             if slot is None:
@@ -293,6 +307,8 @@ class TaskCoordinator(QtCore.QObject):
         self._set_controls(record, True)
         if record.slot is not None:
             self._history[record.slot] = record
+        record.task = None
+        self.changed.emit()
         callback = record.on_success if success else record.on_error
         if callback is not None:
             try:
@@ -308,8 +324,6 @@ class TaskCoordinator(QtCore.QObject):
                         record.on_error(details)
                     except Exception:
                         record.logs.append(traceback.format_exc())
-        record.task = None
-        self.changed.emit()
         self._start_available()
 
     def _set_controls(self, record, enabled):

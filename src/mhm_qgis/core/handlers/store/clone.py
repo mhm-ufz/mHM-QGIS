@@ -6,6 +6,8 @@ import shutil
 from pathlib import Path
 
 from ..file import json as jsonio
+from .layout import project_version
+from .paths import temp_folder, version_key
 
 
 STATE_FILES = {
@@ -14,22 +16,31 @@ STATE_FILES = {
     "mhm_qgis_processing_state.json",
     "nml-settings.json",
 }
-LINKED_TREES = ("data", "data_raw", "Z Temp")
+LINKED_TREES = ("data", ".temp/Morphology")
 
 
-def clone_domain_inputs(source, target) -> Path:
+def clone_domain_inputs(source, target, version=None) -> Path:
     """Create an independent setup whose heavy prepared files are symlinks."""
-    source, target = Path(source).resolve(), Path(target).resolve()
-    if (not source.is_dir() or source.is_symlink() or target.exists()
+    source, target = Path(source), Path(target)
+    if source.is_symlink() or target.is_symlink():
+        raise ValueError("Clone source and target must not be symlinks.")
+    source, target = source.resolve(), target.resolve()
+    if (not source.is_dir() or target.exists()
             or source == target or source in target.parents):
         raise ValueError("Clone source must exist and the new domain must not exist.")
+    if version is not None and project_version(source) != version_key(version):
+        raise ValueError("The source domain uses a different mHM version.")
     target.mkdir(parents=True)
     try:
         for path in source.iterdir():
-            if path.name in STATE_FILES:
-                _copy_state(path, target / path.name, source, target)
-            elif path.name == "settings.yaml" or path.suffix == ".nml":
+            if path.name == "settings.yaml" or path.suffix == ".nml":
                 shutil.copy2(path, target / path.name)
+        source_state = Path(temp_folder(source))
+        target_state = Path(temp_folder(target))
+        target_state.mkdir(parents=True)
+        for name in STATE_FILES:
+            if (source_state / name).is_file():
+                _copy_state(source_state / name, target_state / name, source, target)
         for name in LINKED_TREES:
             _link_tree(source / name, target / name)
     except BaseException:

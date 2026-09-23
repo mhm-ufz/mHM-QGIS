@@ -1,46 +1,10 @@
 """Configuration contracts before either execution workflow starts."""
-from pathlib import Path
-
 import numpy as np
 import pytest
 import xarray as xr
 
-from mhm_qgis.core.handlers.store.layout import migrate_workspace
 from mhm_qgis.core.handlers.state.nml_settings import validate_times, update_section
 from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec, inspect_meteo_folder, inspect_meteo_folder_cached
-
-
-def test_workspace_migration_preserves_old_absolute_references(tmp_path):
-    old = tmp_path / "mhm-plugin"
-    old.mkdir()
-    (old / "saved.json").write_text(str(old / "data.nc"))
-    (old / "data.nc").write_bytes(b"unchanged")
-    migrate_workspace(tmp_path)
-    migrate_workspace(tmp_path)
-    new = tmp_path / "mhm-qgis"
-    assert old.is_symlink() and old.resolve() == new
-    assert Path((new / "saved.json").read_text()).read_bytes() == b"unchanged"
-
-
-def test_workspace_collision_never_merges_user_data(tmp_path):
-    for name in ("mhm-plugin", "mhm-qgis"):
-        (tmp_path / name).mkdir()
-        (tmp_path / name / "keep").write_text(name)
-    with pytest.raises(ValueError, match="Both"):
-        migrate_workspace(tmp_path)
-    assert (tmp_path / "mhm-plugin/keep").read_text() == "mhm-plugin"
-    assert (tmp_path / "mhm-qgis/keep").read_text() == "mhm-qgis"
-
-
-def test_failed_migration_rolls_back(tmp_path, monkeypatch):
-    (tmp_path / "mhm-plugin").mkdir()
-    def denied(*args, **kwargs):
-        raise OSError("denied")
-    monkeypatch.setattr(Path, "symlink_to", denied)
-    with pytest.raises(OSError, match="no files were moved"):
-        migrate_workspace(tmp_path)
-    assert (tmp_path / "mhm-plugin").is_dir()
-    assert not (tmp_path / "mhm-qgis").exists()
 
 
 def precipitation(path, *, variable="pre", units="mm", hours=24, start="2001-01-01"):

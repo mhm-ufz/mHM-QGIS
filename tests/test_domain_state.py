@@ -47,7 +47,7 @@ def test_path_serialization_uses_project_and_workspace_roots(
     project = tmp_path / "project"
     discharge = project / "inputs" / "gauge.csv"
     external = tmp_path / "external" / "gauge.csv"
-    mask = project / "mhm-qgis" / "Z Temp" / "Geometry" / "mask.tif"
+    mask = project / ".temp" / "Morphology" / "mask.tif"
 
     assert serialize_input_path(project, discharge) == "inputs/gauge.csv"
     assert resolve_input_path(project, "inputs/gauge.csv") == discharge.resolve()
@@ -56,10 +56,10 @@ def test_path_serialization_uses_project_and_workspace_roots(
 
     assert (
         serialize_output_path(project, mask)
-        == "Z Temp/Geometry/mask.tif"
+        == ".temp/Morphology/mask.tif"
     )
     assert (
-        resolve_output_path(project, "Z Temp/Geometry/mask.tif")
+        resolve_output_path(project, ".temp/Morphology/mask.tif")
         == mask.resolve()
     )
     with pytest.raises(ValueError, match="plugin workspace"):
@@ -73,9 +73,9 @@ def test_save_is_atomic_normalized_and_does_not_mutate_input(
 ) -> None:
     project = tmp_path / "project"
     discharge = project / "inputs" / "gauge.csv"
-    mask = project / "mhm-qgis" / "Z Temp" / "Geometry" / "mask.tif"
+    mask = project / ".temp" / "Morphology" / "mask.tif"
     vector = mask.with_suffix(".gpkg")
-    domain_directory = project / "mhm-qgis" / "data" / "7"
+    domain_directory = project / "data" / "7"
     domain_dem = domain_directory / "dem.asc"
     state = {
         "version": 99,
@@ -97,15 +97,15 @@ def test_save_is_atomic_normalized_and_does_not_mutate_input(
 
     path = save_state(project, state)
 
-    assert path == project / "mhm-qgis" / path.name
+    assert path == project / ".temp" / path.name
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert saved["version"] == 2
     assert saved["outlet_order"] == ["7"]
     assert saved["outlets"]["7"]["domain_id"] == 1
     assert saved["dem_domain_id"] is None
     assert saved["outlets"]["7"]["discharge_file"] == "inputs/gauge.csv"
-    assert saved["outlets"]["7"]["mask_path"] == "Z Temp/Geometry/mask.tif"
-    assert saved["outlets"]["7"]["vector_path"] == "Z Temp/Geometry/mask.gpkg"
+    assert saved["outlets"]["7"]["mask_path"] == ".temp/Morphology/mask.tif"
+    assert saved["outlets"]["7"]["vector_path"] == ".temp/Morphology/mask.gpkg"
     assert saved["outlets"]["7"]["domain_directory"] == "data/7"
     assert saved["outlets"]["7"]["dem_path"] == "data/7/dem.asc"
     assert state["outlets"][7]["mask_path"] == str(mask)
@@ -119,7 +119,7 @@ def test_active_domains_include_optional_dem_domain_and_gauges() -> None:
         "outlets": {
             "A": {"is_domain": True, "is_gauged": True},
             "B": {"is_domain": False, "is_gauged": True},
-            "C": {"domain": True, "gauged": False},
+            "C": {"is_domain": True, "is_gauged": False},
         },
     }
 
@@ -169,7 +169,6 @@ def test_saved_order_and_gauge_metadata_survive_sorted_json(tmp_path: Path) -> N
     output = (
         tmp_path
         / "project"
-        / "mhm-qgis"
         / "data"
         / "observation"
         / "streamflow"

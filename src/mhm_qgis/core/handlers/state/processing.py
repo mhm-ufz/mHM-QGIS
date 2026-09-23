@@ -14,13 +14,12 @@ from threading import RLock
 from typing import Any
 
 from ..file import json as jsonio
-from ..store.paths import meteo_folder, workspace_folder
+from ..store.paths import temp_folder
 from ...utils.time import utc_timestamp
 
 
 STATE_FILENAME = "mhm_qgis_processing_state.json"
 STATE_VERSION = 1
-LEGACY_GRID_METADATA = "meteo_grid_metadata.json"
 
 # ponytail: one process-wide lock is enough while projects are updated by one
 # plugin process; use per-path/inter-process locks only if that runtime changes.
@@ -29,7 +28,7 @@ _LOCK = RLock()
 
 def state_path(project_folder) -> Path:
     """Return the processing-state path for one project."""
-    return Path(workspace_folder(project_folder)) / STATE_FILENAME
+    return Path(temp_folder(project_folder)) / STATE_FILENAME
 
 
 def load(project_folder) -> dict[str, Any]:
@@ -152,13 +151,11 @@ def save_grid_metadata(project_folder, metadata) -> dict:
 
 
 def grid_metadata(project_folder) -> dict | None:
-    """Return saved grid metadata, adopting the former standalone file once."""
+    """Return saved grid metadata."""
     current = section(project_folder, "grid", {}) or {}
     if isinstance(current, dict) and current.get("l2_header"):
         return dict(current)
-    legacy = Path(meteo_folder(project_folder)) / LEGACY_GRID_METADATA
-    data = jsonio.read_mapping(legacy)
-    return save_grid_metadata(project_folder, data) if data.get("l2_header") else None
+    return None
 
 
 def saved_grid(project_folder, *, log=None):

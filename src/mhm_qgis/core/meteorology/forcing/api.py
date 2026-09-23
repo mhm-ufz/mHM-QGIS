@@ -29,6 +29,7 @@ from .types import (
 
 from .temporal import (
     VARIABLES,
+    complete_window,
     convert_units,
     deaccumulate_values,
     interval_bounds,
@@ -47,7 +48,13 @@ class _SpatialSignature:
     y_values: object
 
 
-def inspect_meteo_folder(folder, kind=None, source=AUTO, crs_fallback=None, **options):
+def _check_cancel(cancelled):
+    if cancelled is not None and cancelled():
+        raise RuntimeError("Meteorology task cancelled.")
+
+
+def inspect_meteo_folder(folder, kind=None, source=AUTO, crs_fallback=None,
+                         *, cancelled=None, **options):
     """Inspect metadata only; no forcing arrays are read or prepared."""
     import numpy as np
     spec = (folder if isinstance(folder, MeteoFolderSpec) else
@@ -55,6 +62,7 @@ def inspect_meteo_folder(folder, kind=None, source=AUTO, crs_fallback=None, **op
     validate_spec(spec)
     signatures, records = [], []
     for path in _files_for_spec(spec):
+        _check_cancel(cancelled)
         signatures.append(_inspect_file(path, spec))
         with _open_dataset(path) as ds:
             variable = _find_variable(ds, spec.kind)
@@ -68,11 +76,13 @@ def inspect_meteo_folder(folder, kind=None, source=AUTO, crs_fallback=None, **op
     records.sort(key=lambda item: item[1][0])
     times = np.concatenate([item[1] for item in records])
     bounds = np.concatenate([item[2] for item in records])
-    time_index(times, spec.temporal_resolution)
+    time_index(times, spec.temporal_resolution, continuous=False)
     if (bounds[:-1, 1] != bounds[1:, 0]).any():
         raise ValueError("Meteorology files contain overlapping or missing intervals.")
+    start, _, last = complete_window(
+        bounds, spec.temporal_resolution, spec.output_temporal_resolution)
     return replace(signatures[0].metadata, files=tuple(item[0] for item in records),
-                   start_time=str(times[0]), end_time=str(times[-1]))
+                   start_time=str(start), end_time=str(last))
 
 
 def inspect_meteo_inputs(inputs):
@@ -84,13 +94,27 @@ def inspect_meteo_inputs(inputs):
 
 
 def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
-                         log=None, inspections=None, progress=None):
+                         log=None, inspections=None, progress=None, cancelled=None):
     """Stream inputs onto L2, optionally aggregating to a coarser cadence."""
     target_grid.validate()
     specs = [spec.normalized() for spec in inputs]
     if not specs or len({spec.kind for spec in specs}) != len(specs):
         raise ValueError("Configure one input per meteorology variable.")
     inspected = inspections if inspections is not None else inspect_meteo_inputs(specs)
+    import numpy as np
+    windows = {
+        spec.kind: (
+            np.datetime64(inspected[spec.kind].start_time),
+            period_bounds(output_periods(
+                np.datetime64(inspected[spec.kind].end_time),
+                spec.output_temporal_resolution))[1],
+        ) for spec in specs
+    }
+    common = windows.get("pre")
+    if common:
+        for kind, (start, end) in windows.items():
+            if start > common[0] or end < common[1]:
+                raise ValueError(f"{kind}: complete data do not cover the precipitation period.")
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
     outputs, headers, files_used = {}, {}, {}
@@ -98,6 +122,7 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
     with tempfile.TemporaryDirectory(prefix=".mhm_qgis-meteo-", dir=root) as temporary:
         stage = Path(temporary)
         for spec in specs:
+            _check_cancel(cancelled)
             validate_spec(spec)
             metadata = inspected[spec.kind]
             _validate_target_coverage(metadata, target_grid)
@@ -105,7 +130,11 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
             count = 0
             handle = None
             try:
-                for block in _prepared_blocks(spec, metadata, target_grid, log=log, on_file=tick):
+                for block in _prepared_blocks(
+                    spec, metadata, target_grid, window=common or windows[spec.kind],
+                    log=log, on_file=tick, cancelled=cancelled,
+                ):
+                    _check_cancel(cancelled)
                     assert_matches_header(block, spec.kind, target_grid.header)
                     handle = _write_time_block(block, spec.kind, output, count, handle)
                     count += block.sizes["time"]
@@ -124,6 +153,7 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
                 headers[spec.kind] = header
             if log:
                 log(f"{spec.kind}: prepared {count} {spec.output_temporal_resolution.lower()} intervals.")
+        _check_cancel(cancelled)
         return _publish_meteo_result(MeteoForcingResult(outputs, headers, files_used),
                                      root, flat_layout=flat_layout)
 
@@ -154,7 +184,8 @@ def _file_ticker(specs, inspected, progress, log):
 INTERVAL_BATCH = 256
 
 
-def _prepared_blocks(spec, metadata, target, *, log=None, on_file=None):
+def _prepared_blocks(spec, metadata, target, *, window=None, log=None,
+                     on_file=None, cancelled=None):
     """Aggregate intervals, then convert and align them in batches."""
     import numpy as np
     import xarray as xr
@@ -163,6 +194,7 @@ def _prepared_blocks(spec, metadata, target, *, log=None, on_file=None):
     last_path = None
     finished = []
     for path in metadata.files:
+        _check_cancel(cancelled)
         last_path = path
         with _open_dataset(path) as ds:
             variable = _find_variable(ds, spec.kind)
@@ -181,11 +213,22 @@ def _prepared_blocks(spec, metadata, target, *, log=None, on_file=None):
             # Buffered intervals are held in memory, so bound them the same way.
             batch = min(INTERVAL_BATCH, max(1, 64 * 1024 * 1024 // (8 * cells)))
             for start in range(0, raw.sizes["time"], block_size):
+                _check_cancel(cancelled)
                 chunk = raw.isel(time=slice(start, start + block_size)).load()
                 chunk_bounds = bounds[start:start + block_size]
                 values, previous = deaccumulate_values(
                     chunk.values, chunk_bounds, spec, previous)
+                if window is not None:
+                    selected = ((chunk_bounds[:, 0] >= window[0])
+                                & (chunk_bounds[:, 1] <= window[1]))
+                    if not selected.any():
+                        continue
+                    chunk = chunk.isel(time=np.flatnonzero(selected))
+                    chunk_bounds = chunk_bounds[selected]
+                    values = values[selected]
                 if spec.output_temporal_resolution == spec.temporal_resolution:
+                    if not spec.cumulative:
+                        chunk = chunk.assign_coords(time=chunk_bounds[:, 0])
                     converted = convert_units(values, chunk_bounds, spec, variable)
                     yield _prepared_dataset(
                         chunk.copy(data=converted), chunk_bounds, ds, spec,
@@ -343,7 +386,10 @@ def _write_time_block(ds, variable, path, offset, handle=None):
 
     if not offset:
         write_netcdf(ds, variable, path, unlimited_dims=("time",))
-        return Dataset(path, "a")
+        handle = Dataset(path, "a")
+        for name in ("units", "calendar"):
+            handle["time_bnds"].setncattr(name, handle["time"].getncattr(name))
+        return handle
     stop = offset + ds.sizes["time"]
     handle[variable][offset:stop] = np.ma.masked_invalid(ds[variable].values)
     for name in ("time", "time_bnds"):

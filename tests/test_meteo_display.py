@@ -14,7 +14,7 @@ def _write_forcing(project, variable, first, days):
     """Write a minimal prepared forcing file in the v5.13 layout."""
     from netCDF4 import Dataset
 
-    folder = project / "mhm-qgis" / "data" / "master" / "meteo" / variable
+    folder = project / "data" / "meteo" / variable
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{variable}.nc"
     offset = (first - display.TIME_EPOCH).days

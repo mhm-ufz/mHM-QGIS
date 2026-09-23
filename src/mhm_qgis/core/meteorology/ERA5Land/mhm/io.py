@@ -19,12 +19,12 @@ def write_netcdf(ds, variable: str, output_file: Path, *, unlimited_dims=None) -
         },
         "time": {
             "dtype": "float64",
-            "units": "seconds since 1900-01-01 00:00:00",
+            "units": "hours since 1900-01-01 00:00:00",
             "calendar": "proleptic_gregorian",
         },
         "time_bnds": {
             "dtype": "float64",
-            "units": "seconds since 1900-01-01 00:00:00",
+            "units": "hours since 1900-01-01 00:00:00",
             "calendar": "proleptic_gregorian",
         },
         "lat": {

@@ -69,8 +69,8 @@ def test_land_cover_processing_writes_period_state(tmp_path, monkeypatch):
     state = load_settings(tmp_path)["land_cover"]
     assert state["variable"] == "land_cover"
     assert [scene["output_path"] for scene in state["scenes"]] == [
-        "data/master/static/morph/lc_1990_1999.asc",
-        "data/master/static/morph/lc_2000_2010.asc",
+        "data/static/morph/lc_1990_1999.asc",
+        "data/static/morph/lc_2000_2010.asc",
     ]
     values = build_initial_values("5.13", Dialog(tmp_path))["main"]["LCover"]
     assert values["nLCoverScene"] == 2
@@ -119,8 +119,25 @@ def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch)
     assert main["config_mpr"]["n_layers"] == [1]
     assert main["config_mpr"]["soil_depth"][0] == [300]
     assert main["config_input"]["soil_horizon_class_path"] == [
-        "Z Temp/Morphology/morph/soil_horizon_class.nc"
+        ".temp/Morphology/morph/soil_horizon_class.nc"
     ]
+
+
+def test_v5_horizons_use_one_class_raster_and_definition(tmp_path, monkeypatch):
+    ensure_project_structure(tmp_path, "5.13")
+    sources = [_touch(tmp_path / f"soil_{index}.tif") for index in range(4)]
+    value = SoilInput((SoilHorizon(1, 0, 300, *sources),), "kg/m3")
+    dem = _touch(tmp_path / "dem.tif")
+
+    def formatter(_manifest, _dem, output, **options):
+        assert options["output_type"] == "asc"
+        return (_touch(Path(output) / "soil_class.asc"),
+                _touch(Path(output) / "soil_classdefinition.txt"))
+
+    monkeypatch.setattr(processing, "prepare_soil_horizons", formatter)
+    data, definition = processing.process_soil_input(tmp_path, "5.13", value, dem)
+    assert (data.name, definition.name) == ("soil_class.asc", "soil_classdefinition.txt")
+    assert load_settings(tmp_path)["soil"]["soil_db_mode"] == 0
 
 
 def test_soil_state_projects_horizons_to_v5_soildata(tmp_path):
@@ -142,5 +159,5 @@ def test_soil_state_projects_horizons_to_v5_soildata(tmp_path):
 
     soil = build_initial_values("5.13", Dialog(tmp_path))["main"]["soildata"]
     assert soil["iFlag_soilDB"] == 0
-    assert soil["nSoilHorizons_mHM"] == 2
-    assert soil["soil_Depth"][:2] == [100, 300]
+    assert soil["nSoilHorizons_mHM"] == 3
+    assert soil["soil_Depth"] == [100, 300]

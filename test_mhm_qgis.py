@@ -155,8 +155,7 @@ configure_qgis_environment()
 # --- IMPORTANT: CONFIGURATION SECTION ---
 # You MUST provide paths to some real test data here for the dialog to work.
 # Replace these placeholder paths with actual paths to a DEM and a points shapefile on your system.
-TEST_DATA_DIR = r"E:\8 WRE Research\5 mHM\2 Pymhm Plugin Development\pymhm Test Basins\Rapti\Z Temp\Geometry"  # <--- EDIT THIS: A folder with your test data
-DEM_PATH = r"E:\8 WRE Research\5 mHM\2 Pymhm Plugin Development\pymhm Test Basins\Rapti\Z Temp\Geometry\1_dem_filled.tif"  # <--- EDIT THIS: Path to a test DEM
+DEM_PATH = r"E:\8 WRE Research\5 mHM\2 Pymhm Plugin Development\pymhm Test Basins\Rapti\mhm-qgis\<domain>\.temp\Morphology\1_dem_filled.tif"  # <--- EDIT THIS: Path to a test DEM
 POUR_POINTS_PATH = r"E:\8 WRE Research\5 mHM\2 Pymhm Plugin Development\pymhm Test Basins\Rapti\0 GIS\2_pour_point.gpkg"  # <--- EDIT THIS: Path to a test pour points shapefile
 
 # This ensures that the script can find the 'mhm_qgis' package and its modules

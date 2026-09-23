@@ -18,7 +18,7 @@ from mhm_qgis.core.handlers.store.layout import (  # noqa: E402
 )
 from mhm_qgis.core.handlers.store.paths import workspace_folder
 from mhm_qgis.core.handlers.store.layout import (  # noqa: E402
-    domain_dem_path, lai_folder, morph_folder, project_version,
+    domain_dem_path, input_state_path, lai_folder, morph_folder, project_version,
     streamflow_observation_folder)
 
 xr = pytest.importorskip("xarray")
@@ -27,8 +27,9 @@ xr = pytest.importorskip("xarray")
 def _project(tmp_path, version):
     workspace = Path(workspace_folder(tmp_path))
     workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "mhm_qgis_input_state.json").write_text(
-        json.dumps({"mhm_version": version}), encoding="utf-8")
+    state = Path(input_state_path(tmp_path))
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(json.dumps({"mhm_version": version}), encoding="utf-8")
     return tmp_path
 
 
@@ -40,30 +41,29 @@ def test_v6_places_every_input_where_the_template_expects_it(tmp_path):
     project = _project(tmp_path, "6.0")
 
     assert project_version(project) == "v6"
-    assert _relative(project, morph_folder(project)) == "data/master/morph"
-    assert _relative(project, lai_folder(project)) == "data/master/morph"
+    assert _relative(project, morph_folder(project)) == "data/morph"
+    assert _relative(project, lai_folder(project)) == "data/morph"
     assert _relative(project, streamflow_observation_folder(project)) == (
-        "data/master/gauge/streamflow")
-    assert _relative(project, domain_dem_path(project, "280")) == "data/master/morph/dem.nc"
+        "data/gauge/streamflow")
+    assert _relative(project, domain_dem_path(project, "280")) == "data/morph/dem.nc"
 
 
 def test_v5_13_layout_is_unchanged(tmp_path):
     project = _project(tmp_path, "5.13")
 
     assert project_version(project) == "v5.13"
-    assert _relative(project, morph_folder(project)) == "data/master/static/morph"
-    assert _relative(project, lai_folder(project)) == "data/master/lai"
+    assert _relative(project, morph_folder(project)) == "data/static/morph"
+    assert _relative(project, lai_folder(project)) == "data/lai"
     assert _relative(project, streamflow_observation_folder(project)) == (
-        "data/master/observation/streamflow")
-    assert _relative(project, domain_dem_path(project, "280")) == "data/master/static/morph/dem.asc"
+        "data/observation/streamflow")
+    assert _relative(project, domain_dem_path(project, "280")) == "data/static/morph/dem.asc"
 
 
 def test_an_unknown_or_missing_version_falls_back_to_v5_13(tmp_path):
     # No state file at all: every existing project already uses this layout.
     assert project_version(tmp_path) == "v5.13"
     broken = _project(tmp_path / "broken", "5.13")
-    (Path(workspace_folder(broken)) / "mhm_qgis_input_state.json").write_text(
-        "{ not json", encoding="utf-8")
+    Path(input_state_path(broken)).write_text("{ not json", encoding="utf-8")
     assert project_version(broken) == "v5.13"
 
 
@@ -71,9 +71,9 @@ def test_v6_meteo_is_flat_and_has_no_header(tmp_path):
     project = _project(tmp_path, "6.0")
     outputs = expected_meteo_outputs(project)
 
-    assert _relative(project, outputs["pre"]["netcdf"]) == "data/master/meteo/pre.nc"
+    assert _relative(project, outputs["pre"]["netcdf"]) == "data/meteo/pre.nc"
     assert outputs["pre"]["header"] is None
-    assert _relative(project, meteo_mask_path(project)) == "data/master/meteo/mask.nc"
+    assert _relative(project, meteo_mask_path(project)) == "data/meteo/mask.nc"
 
 
 def test_v5_13_meteo_keeps_its_folders_and_headers(tmp_path):
@@ -81,9 +81,9 @@ def test_v5_13_meteo_keeps_its_folders_and_headers(tmp_path):
     outputs = expected_meteo_outputs(project)
 
     assert _relative(project, outputs["pre"]["netcdf"]) == (
-        "data/master/meteo/pre/pre.nc")
+        "data/meteo/pre/pre.nc")
     assert _relative(project, outputs["pre"]["header"]) == (
-        "data/master/meteo/pre/header.txt")
+        "data/meteo/pre/header.txt")
 
 
 def test_the_meteo_mask_matches_the_example_format(tmp_path):
@@ -145,20 +145,12 @@ def test_the_v6_namelist_points_at_the_new_locations(tmp_path):
             return "m"
 
     values = build_initial_values("6.0", _Dialog())["main"]
-    config_input = values["config_input"]
-    bundle = "data/master/morph/input.nc"
-    for key in ("dem_path", "slope_path", "aspect_path", "fdir_path",
-                "geo_class_path", "soil_class_path"):
-        assert config_input[key][0] == ("data/master/morph/dem.nc" if key == "dem_path" else bundle), key
-    assert config_input["latlon_path"][0] == "data/master/latlon.nc"
-    assert config_input["pre_path"][0] == "data/master/meteo/pre.nc"
-    assert config_input["meteo_mask_path"][0] == "data/master/meteo/mask.nc"
-    # Without a categorical LAI selection the optional class path stays empty.
-    assert config_input["lai_class_path"][0] == ""
+    # Input paths come only from registered outputs; none are registered here.
+    assert values["config_input"] == {}
     mpr = values["config_mpr"]
-    assert mpr["land_cover_path"][0] == "data/master/morph/lc_periods.nc"
-    assert mpr["soil_lut_path"][0] == "data/master/morph/soil_classdefinition.txt"
-    assert mpr["geo_lut_path"][0] == "data/master/morph/geology_classdefinition.txt"
+    assert mpr["land_cover_path"][0] == "data/morph/lc_periods.nc"
+    assert mpr["soil_lut_path"][0] == "data/morph/soil_classdefinition.txt"
+    assert mpr["geo_lut_path"][0] == "data/morph/geology_classdefinition.txt"
 
 
 def test_v6_ready_lai_points_at_the_morphology_bundle(tmp_path):
@@ -169,8 +161,8 @@ def test_v6_ready_lai_points_at_the_morphology_bundle(tmp_path):
     update_section(tmp_path, "lai", {
         "mode": "mhm_ready",
         "time_step": 0,
-        "output_path": "data/master/morph/LAI_class.nc",
-        "classdefinition_path": "data/master/morph/LAI_classdefinition.txt",
+        "output_path": "data/morph/LAI_class.nc",
+        "classdefinition_path": "data/morph/LAI_classdefinition.txt",
     })
 
     class _Dialog:
@@ -187,10 +179,10 @@ def test_v6_ready_lai_points_at_the_morphology_bundle(tmp_path):
 
     main = build_initial_values("6.0", _Dialog())["main"]
     assert main["config_input"]["lai_class_path"] == [
-        "data/master/morph/input.nc"
+        "data/morph/input.nc"
     ]
     assert main["config_input"]["lai_class_var"] == ["LAI_class"]
     assert main["config_mpr"]["lai_time_step"] == [0]
     assert main["config_mpr"]["lai_lut_path"] == [
-        "data/master/morph/LAI_classdefinition.txt"
+        "data/morph/LAI_classdefinition.txt"
     ]

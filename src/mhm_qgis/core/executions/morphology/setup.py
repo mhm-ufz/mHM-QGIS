@@ -13,9 +13,9 @@ from ...handlers.state.domain_state import load_state as load_domain_state, reso
 from ...handlers.store import registry
 from ...handlers.store.layout import domain_dem_path, is_v6, morph_folder
 from ...handlers.store.paths import (
-    geometry_folder,
+    temp_morphology_folder,
     lai_dem_staging_path,
-    master_data_folder,
+    data_folder,
     workspace_folder,
 )
 from ...morphology.layers import lai
@@ -60,7 +60,7 @@ def _model_sources(folder):
 def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     """Write the saved-domain mask and a masked DEM; leave all other layers whole."""
     l0 = dict(request.headers["L0"])
-    folder = Path(geometry_folder(request.project_folder))
+    folder = Path(temp_morphology_folder(request.project_folder))
     filled = folder / "filled_dem.nc"
     state = load_domain_state(request.project_folder)
     saved = state.get("merged_mask_path")
@@ -86,7 +86,7 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         task=task,
     )
     _record(request.project_folder, masked, "aligned L0 NetCDF mask")
-    latlon_path = Path(master_data_folder(request.project_folder)) / "latlon.nc"
+    latlon_path = Path(data_folder(request.project_folder)) / "latlon.nc"
     if not latlon_path.is_file():
         raise FileNotFoundError("Create latlon.nc before Execute All Morphology.")
     morph_mask = write_morph_mask(
@@ -112,7 +112,7 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
 def latlon(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     """Write the common multilevel coordinate file for either mHM version."""
     headers = request.headers
-    output = Path(master_data_folder(request.project_folder)) / "latlon.nc"
+    output = Path(data_folder(request.project_folder)) / "latlon.nc"
     output.parent.mkdir(parents=True, exist_ok=True)
     create_latlon_file(
         out_file=output,
@@ -129,7 +129,7 @@ def latlon(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
 
 def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     """Write v5 ASCII inputs or the single v6 morphology NetCDF."""
-    folder = Path(geometry_folder(request.project_folder))
+    folder = Path(temp_morphology_folder(request.project_folder))
     destination = Path(morph_folder(request.project_folder))
     destination.mkdir(parents=True, exist_ok=True)
     if is_v6(request.project_folder):
@@ -168,7 +168,7 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         dem = copy_rasters(destination / "dem.nc", {"dem": layers["dem"]},
                            request.headers["L0"], reference_path=folder / "filled_dem.nc", task=task)
         _record(request.project_folder, dem)
-        latlon_path = Path(master_data_folder(request.project_folder)) / "latlon.nc"
+        latlon_path = Path(data_folder(request.project_folder)) / "latlon.nc"
         morph_mask = destination / "morph_mask.nc"
         if not morph_mask.is_file():
             raise FileNotFoundError("Prepare morph_mask.nc before publication.")

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import shlex
+import signal
+import sys
 import uuid
 
 from qgis.PyQt import QtCore, QtGui, QtWidgets
@@ -112,6 +114,30 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         """Return whether a tracked command has not reported its exit code."""
         return bool(self._command_marker)
 
+    def stop(self) -> None:
+        """Stop the shell and its current command before the plugin exits."""
+        if not self.is_running():
+            return
+        if os.name == "posix":
+            try:
+                os.killpg(int(self._process.processId()), signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        else:
+            self._process.kill()
+        QtCore.QTimer.singleShot(2000, self._kill_if_running)
+
+    def _kill_if_running(self):
+        if not self.is_running():
+            return
+        if os.name == "posix":
+            try:
+                os.killpg(int(self._process.processId()), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        else:
+            self._process.kill()
+
     def send_current_command(self) -> None:
         """Send the command line contents to the shell."""
         command = self.command_edit.text()
@@ -147,7 +173,11 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
     def _shell_command(self) -> tuple[str, list[str]]:
         if os.name == "nt":
             return os.environ.get("COMSPEC", "cmd.exe"), []
-        return os.environ.get("SHELL", "/bin/bash"), []
+        shell = os.environ.get("SHELL", "/bin/bash")
+        return sys.executable, [
+            "-c", "import os,sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])",
+            shell,
+        ]
 
     def _cd_command(self, cwd: str) -> str:
         if os.name == "nt":

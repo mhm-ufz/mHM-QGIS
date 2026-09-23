@@ -72,17 +72,6 @@ def test_dialog_returns_typed_records_for_every_outlet():
     dialog.close()
 
 
-def test_dialog_restores_legacy_gauge_flag():
-    _app()
-    dialog = DischargeTableAssignmentDialog(
-        ["1"],
-        initial_records={"1": {"gauged": False}},
-    )
-
-    assert not dialog.checkBox_isGauge.isChecked()
-    dialog.close()
-
-
 def test_gauge_checkbox_controls_only_its_discharge_inputs():
     _app()
     dialog = DischargeTableAssignmentDialog(["1", "2"])

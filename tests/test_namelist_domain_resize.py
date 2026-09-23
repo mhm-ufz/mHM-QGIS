@@ -17,7 +17,7 @@ def test_legacy_domain_migration_preserves_original_until_editor_save(tmp_path, 
     target = tmp_path / "mhm.nml"
     before = target.read_bytes()
     values = {"main": {"config_project": {"n_domains": 1},
-                       "config_input": {"dem_path": ["data/master/morph/dem.nc"]}}}
+                       "config_input": {"dem_path": ["data/morph/dem.nc"]}}}
     with _editor_folder(SCHEMAS, tmp_path, {"main": []}, values, {"n_domains": 1}) as folder:
         assert target.read_bytes() == before
         assert folder != tmp_path

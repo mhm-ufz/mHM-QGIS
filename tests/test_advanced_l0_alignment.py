@@ -197,12 +197,12 @@ def test_publishing_repoints_the_namelist_handoff_at_data_master(tmp_path):
 
     # Execute All recorded the staged locations.
     update_section(tmp_path, "soil", {
-        "output_path": "Z Temp/Morphology/morph/soil_class.nc",
-        "classdefinition_path": "Z Temp/Morphology/morph/soil_classdefinition.txt",
+        "output_path": ".temp/Morphology/morph/soil_class.nc",
+        "classdefinition_path": ".temp/Morphology/morph/soil_classdefinition.txt",
     })
     update_section(tmp_path, "land_cover", {
         "output_path": "",
-        "scenes": [{"output_path": "Z Temp/Morphology/morph/lc.asc"}],
+        "scenes": [{"output_path": ".temp/Morphology/morph/lc.asc"}],
     })
 
     publish_model_inputs(tmp_path, L0_TARGET)
@@ -211,13 +211,13 @@ def test_publishing_repoints_the_namelist_handoff_at_data_master(tmp_path):
 
     settings = load_settings(tmp_path)
     assert settings["soil"]["output_path"] == (
-        "data/master/static/morph/soil_class.asc"
+        "data/static/morph/soil_class.asc"
     )
     assert settings["soil"]["classdefinition_path"] == (
-        "data/master/static/morph/soil_classdefinition.txt"
+        "data/static/morph/soil_classdefinition.txt"
     )
     assert settings["land_cover"]["scenes"][0]["output_path"] == (
-        "data/master/static/morph/lc.asc"
+        "data/static/morph/lc.asc"
     )
     # Every recorded path now resolves.
     assert missing_model_inputs(tmp_path) == []
@@ -225,16 +225,16 @@ def test_publishing_repoints_the_namelist_handoff_at_data_master(tmp_path):
 
 def test_missing_model_inputs_reports_paths_that_do_not_resolve(tmp_path):
     update_section(tmp_path, "soil", {
-        "output_path": "data/master/static/morph/soil_class.asc",
+        "output_path": "data/static/morph/soil_class.asc",
     })
     update_section(tmp_path, "lai", {
-        "output_path": "data/master/lai/lai.nc",
+        "output_path": "data/lai/lai.nc",
     })
 
     missing = missing_model_inputs(tmp_path)
     assert sorted(missing) == [
-        "data/master/lai/lai.nc",
-        "data/master/static/morph/soil_class.asc",
+        "data/lai/lai.nc",
+        "data/static/morph/soil_class.asc",
     ]
 
 
@@ -248,7 +248,7 @@ def test_an_unexpected_staged_file_is_left_alone(tmp_path):
     published = publish_model_inputs(tmp_path, L0_TARGET)
 
     assert [path.name for path in published] == ["soil_class.asc"]
-    assert stray.is_file()          # not moved into data/master
+    assert stray.is_file()          # not moved into data/
 
 
 def test_publishing_an_empty_staging_folder_is_a_no_op(tmp_path):
@@ -262,7 +262,7 @@ def test_a_path_left_pointing_at_staging_is_repointed_to_master(tmp_path):
     master.mkdir(parents=True, exist_ok=True)
     (master / "geology_classdefinition.txt").write_text("1 rock\n", encoding="utf-8")
     update_section(tmp_path, "geology", {
-        "classdefinition_path": "Z Temp/Morphology/morph/geology_classdefinition.txt",
+        "classdefinition_path": ".temp/Morphology/morph/geology_classdefinition.txt",
     })
     assert missing_model_inputs(tmp_path)          # stale path does not resolve
 
@@ -271,6 +271,6 @@ def test_a_path_left_pointing_at_staging_is_repointed_to_master(tmp_path):
     from mhm_qgis.core.handlers.state.nml_settings import load_settings
 
     assert load_settings(tmp_path)["geology"]["classdefinition_path"] == (
-        "data/master/static/morph/geology_classdefinition.txt"
+        "data/static/morph/geology_classdefinition.txt"
     )
     assert missing_model_inputs(tmp_path) == []

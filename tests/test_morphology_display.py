@@ -5,7 +5,7 @@ from pathlib import Path
 from mhm_qgis.core.handlers.store.morphology import land_cover_periods, resolve_display_output
 from mhm_qgis.core.handlers.state.nml_settings import update_section
 from mhm_qgis.core.handlers.store.layout import ensure_project_structure, morph_folder
-from mhm_qgis.core.handlers.store.paths import geometry_folder
+from mhm_qgis.core.handlers.store.paths import temp_morphology_folder
 
 
 def test_historical_land_cover_resolves_the_selected_period(tmp_path):
@@ -42,7 +42,7 @@ def test_historical_land_cover_resolves_the_selected_period(tmp_path):
 
 def test_display_prefers_masked_then_cropped_then_raw(tmp_path):
     ensure_project_structure(tmp_path, "5.13")
-    geometry = Path(geometry_folder(tmp_path))
+    geometry = Path(temp_morphology_folder(tmp_path))
     raw = geometry / "dem_derivatives.nc"
     crop = geometry / "dem_derivatives_crop.nc"
     masked = geometry / "dem_derivatives_masked.nc"
@@ -63,7 +63,7 @@ def test_display_prefers_masked_then_cropped_then_raw(tmp_path):
 
 def test_domain_mask_prefers_vector_to_raster(tmp_path):
     ensure_project_structure(tmp_path, "5.13")
-    watersheds = Path(geometry_folder(tmp_path)) / "Watersheds"
+    watersheds = Path(temp_morphology_folder(tmp_path)) / "Watersheds"
     watersheds.mkdir(exist_ok=True)
     raster = watersheds / "4_watershed_DEM.tif"
     raster.touch()
@@ -78,7 +78,7 @@ def test_domain_mask_prefers_vector_to_raster(tmp_path):
 def test_published_classes_win_over_configured_raw_inputs(tmp_path):
     ensure_project_structure(tmp_path, "5.13")
     morph = Path(morph_folder(tmp_path))
-    geometry = Path(geometry_folder(tmp_path))
+    geometry = Path(temp_morphology_folder(tmp_path))
     for key, raw_name, final_name in (
         ("soil", "3_soil.tif", "soil_class.asc"),
         ("land_cover", "3_land_use.tif", "lc.asc"),

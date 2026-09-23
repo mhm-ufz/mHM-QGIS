@@ -7,7 +7,7 @@ from pathlib import Path
 from qgis.PyQt.QtWidgets import QDialog
 
 from ...core.handlers.store import registry
-from ...core.handlers.store.paths import geometry_folder
+from ...core.handlers.store.paths import temp_morphology_folder
 from ...core.morphology import elevation_bands
 from ...core.utils.report import CRITICAL, INFORMATION, WARNING
 from ...qgis_bridge import layers as qgis_layers
@@ -57,7 +57,7 @@ def _ensure_elevation_prerequisites(dialog) -> tuple[str, tuple[Path, ...]] | No
         _report(dialog, WARNING, "Missing DEM", str(error))
         return None
 
-    watershed_folder = Path(geometry_folder(dialog.project_folder)) / "Watersheds"
+    watershed_folder = Path(temp_morphology_folder(dialog.project_folder)) / "Watersheds"
     rasters = elevation_bands.collect_watershed_rasters(watershed_folder)
     if not rasters:
         _report(
@@ -95,7 +95,7 @@ def process_elevation_bands(dialog) -> None:
     if prerequisites is None:
         return
     filled_dem, watershed_rasters = prerequisites
-    folder = Path(geometry_folder(dialog.project_folder)) / "ElevationBands"
+    folder = Path(temp_morphology_folder(dialog.project_folder)) / "ElevationBands"
     try:
         result = elevation_bands.create_elevation_bands(
             filled_dem,
@@ -146,7 +146,7 @@ def process_band_details(dialog) -> None:
         )
         return
 
-    folder = Path(geometry_folder(dialog.project_folder)) / "ElevationBands"
+    folder = Path(temp_morphology_folder(dialog.project_folder)) / "ElevationBands"
     if not elevation_bands.collect_elevation_band_rasters(folder):
         dialog.log_message(
             "Elevation-band rasters are missing. Running Elevation Bands first..."

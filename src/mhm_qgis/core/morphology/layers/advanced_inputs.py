@@ -16,7 +16,7 @@ from ...handlers.lookup import (
 from ....externals.mhm_tools_handler import prepare_land_cover_periods, prepare_soil_horizons
 from ...handlers.state.nml_settings import relative_workspace_path, update_section, load_settings
 from ...handlers.store.layout import morph_folder
-from ...handlers.store.paths import geometry_folder, morph_staging_folder
+from ...handlers.store.paths import temp_morphology_folder, morph_staging_folder
 
 
 def input_fingerprint(value, dem_file, version):
@@ -28,7 +28,7 @@ def input_fingerprint(value, dem_file, version):
               for name in ("clay_layer", "sand_layer", "silt_layer", "bulk_density_layer")])
     return fingerprint(
         [dem_file, *paths],
-        {"inputs": value.as_dict(), "format": "common-l0-nc-1"},
+        {"inputs": value.as_dict(), "version": version, "format": "common-l0-2"},
     )
 
 
@@ -48,7 +48,7 @@ def process_land_cover_input(
     write_land_use_manifest(value, manifest)
     output_type = "nc"
     with TemporaryDirectory(
-        prefix="mhm_qgis_land_cover_", dir=geometry_folder(project_folder)
+        prefix="mhm_qgis_land_cover_", dir=temp_morphology_folder(project_folder)
     ) as temporary:
         prepare_land_cover_periods(
             manifest,
@@ -113,9 +113,9 @@ def process_soil_input(
     """Write a horizon manifest and stage outputs for common-L0 publication."""
     manifest = _manifest_path(project_folder, "soil")
     write_soil_manifest(value, manifest)
-    output_type = "nc"
+    output_type = "asc" if str(version).startswith("5") else "nc"
     with TemporaryDirectory(
-        prefix="mhm_qgis_soil_", dir=geometry_folder(project_folder)
+        prefix="mhm_qgis_soil_", dir=temp_morphology_folder(project_folder)
     ) as temporary:
         data, definition = prepare_soil_horizons(
             manifest,
@@ -145,7 +145,7 @@ def process_soil_input(
         "soil",
         {
             "mode": "multi_horizon",
-            "soil_db_mode": 1,
+            "soil_db_mode": 0 if output_type == "asc" else 1,
             "manifest_path": relative_workspace_path(project_folder, manifest),
             "output_path": relative_workspace_path(project_folder, data_path),
             "variable": "soil_class",
@@ -163,7 +163,7 @@ def process_soil_input(
 
 
 def _manifest_path(project_folder, name):
-    folder = Path(geometry_folder(project_folder)) / "format-data" / name
+    folder = Path(temp_morphology_folder(project_folder)) / "format-data" / name
     folder.mkdir(parents=True, exist_ok=True)
     return folder / "format-data.csv"
 

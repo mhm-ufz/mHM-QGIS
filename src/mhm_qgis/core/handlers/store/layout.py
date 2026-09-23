@@ -15,16 +15,14 @@ import os
 from pathlib import Path
 
 from ..file import json as jsonio
-from .paths import (data_folder, geometry_folder, master_data_folder,
-                    meteo_folder, morph_staging_folder,
-                    morphology_staging_folder, output_folder, plugin_root,
-                    raw_meteo_folder, restart_folder, static_folder,
-                    version_key, workspace_folder, z_temp_folder,
-                    data_raw_folder, domain_folder)
+from .paths import (data_folder, temp_morphology_folder,
+                    lai_staging_folder, meteo_folder, morph_staging_folder,
+                    output_folder, plugin_root, restart_folder, static_folder,
+                    temp_folder, version_key, workspace_folder, domain_folder)
 
 INPUT_STATE_FILENAME = "mhm_qgis_input_state.json"
 
-#: Union of every active domain mask, under <geometry>/Watersheds. Domains are
+#: Union of every active domain mask, under <temp morphology>/Watersheds. Domains are
 #: delineated as pyflwdir masks, so the merged extent is a raster too; the
 #: legacy watershed flow still writes 4_watershed_merged_vector.shp beside it.
 MERGED_MASK_NAME = "4_watershed_merged_mask.tif"
@@ -36,7 +34,7 @@ METEO_VARIABLES = ("pre", "tavg", "tmin", "tmax", "tann", "pet", "ssrd", "strd",
 
 
 def domain_folders(project_folder) -> tuple[Path, ...]:
-    """List named setups only; legacy data/output trees are not domains."""
+    """List named setups only; reserved data/output folders are not domains."""
     container = Path(project_folder) / "mhm-qgis"
     if not container.is_dir():
         return ()
@@ -46,14 +44,15 @@ def domain_folders(project_folder) -> tuple[Path, ...]:
             path = domain_folder(project_folder, candidate.name)
         except ValueError:
             continue
-        if path.is_dir() and ((path / INPUT_STATE_FILENAME).is_file() or (path / "data").is_dir()):
+        if path.is_dir() and (
+                Path(input_state_path(path)).is_file() or (path / "data").is_dir()):
             found.append(path)
     return tuple(sorted(found, key=lambda path: path.name.casefold()))
 
 
 def input_state_path(project_folder) -> str:
     """Return the saved input state path for one project."""
-    return os.path.join(workspace_folder(project_folder), INPUT_STATE_FILENAME)
+    return os.path.join(temp_folder(project_folder), INPUT_STATE_FILENAME)
 
 
 def project_version(project_folder) -> str:
@@ -157,7 +156,7 @@ def domain_dem_path(project_folder, outlet_id) -> str:
 def morph_folder(project_folder, version: str | None = None) -> str:
     """Return the static morphology data folder."""
     if (version or project_version(project_folder)) == "v6":
-        return os.path.join(master_data_folder(project_folder), "morph")
+        return os.path.join(data_folder(project_folder), "morph")
     return os.path.join(static_folder(project_folder), "morph")
 
 
@@ -173,38 +172,18 @@ def lai_folder(project_folder, version: str | None = None) -> str:
     resolved = version or project_version(project_folder)
     if resolved == "v6":
         return morph_folder(project_folder, version=resolved)
-    return os.path.join(master_data_folder(project_folder), "lai")
+    return os.path.join(data_folder(project_folder), "lai")
 
 
 def streamflow_observation_folder(project_folder, version: str | None = None) -> str:
     """Return the streamflow observation folder."""
     if (version or project_version(project_folder)) == "v6":
         return os.path.join(
-            master_data_folder(project_folder), "gauge", "streamflow"
+            data_folder(project_folder), "gauge", "streamflow"
         )
     return os.path.join(
-        master_data_folder(project_folder), "observation", "streamflow"
+        data_folder(project_folder), "observation", "streamflow"
     )
-
-
-def migrate_workspace(project_folder) -> None:
-    """Rename an old workspace without breaking saved absolute paths or links."""
-    old = Path(project_folder) / "mhm-plugin"
-    new = Path(workspace_folder(project_folder))
-    if not old.exists():
-        return
-    if new.exists():
-        if old.samefile(new):
-            return
-        raise ValueError("Both mhm-plugin and mhm-qgis exist; select which workspace to keep before continuing.")
-    if old.is_symlink() or not old.is_dir():
-        raise ValueError("The legacy mhm-plugin workspace must be a real directory to migrate.")
-    old.rename(new)
-    try:
-        old.symlink_to(new.name, target_is_directory=True)
-    except OSError:
-        new.rename(old)
-        raise OSError("Workspace migration needs permission to create a compatibility symlink; no files were moved.")
 
 
 def ensure_project_structure(project_folder, version_text=None) -> list[str]:
@@ -216,17 +195,20 @@ def ensure_project_structure(project_folder, version_text=None) -> list[str]:
     """
     created = []
     os.makedirs(str(project_folder), exist_ok=True)
-    from ..state.settings import ensure
-
-    ensure(project_folder)
     workspace = workspace_folder(project_folder)
     if not os.path.isdir(workspace):
         os.makedirs(workspace, exist_ok=True)
         created.append(workspace)
-    os.makedirs(z_temp_folder(project_folder), exist_ok=True)
-    os.makedirs(geometry_folder(project_folder), exist_ok=True)
-    os.makedirs(morphology_staging_folder(project_folder), exist_ok=True)
-    os.makedirs(morph_staging_folder(project_folder), exist_ok=True)
+    from ..state.settings import ensure
+
+    ensure(project_folder)
+    for path in (
+        temp_folder(project_folder),
+        temp_morphology_folder(project_folder),
+        morph_staging_folder(project_folder),
+        lai_staging_folder(project_folder),
+    ):
+        os.makedirs(path, exist_ok=True)
 
     # The caller's version wins: on a new project the state file does not exist
     # yet, so reading the version back would always answer v5.13 and build the
@@ -256,12 +238,9 @@ def ensure_project_structure(project_folder, version_text=None) -> list[str]:
 
     for path in (
             data_folder(project_folder),
-            master_data_folder(project_folder),
-            data_raw_folder(project_folder),
             static_folder(project_folder),
             morph_folder(project_folder, version=version),
             meteo_folder(project_folder),
-            raw_meteo_folder(project_folder),
             lai_folder(project_folder, version=version),
             streamflow_observation_folder(project_folder, version=version),
             output_folder(project_folder),

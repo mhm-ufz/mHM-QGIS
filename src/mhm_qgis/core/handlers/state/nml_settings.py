@@ -8,11 +8,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 from datetime import datetime
-from ....core.handlers.store.paths import workspace_folder
+from ....core.handlers.store.paths import temp_folder, workspace_folder
 
 
 def settings_path(project_folder: str | Path) -> Path:
-    return Path(workspace_folder(project_folder)) / "nml-settings.json"
+    return Path(temp_folder(project_folder)) / "nml-settings.json"
 
 
 def load_settings(project_folder: str | Path) -> dict[str, Any]:
@@ -93,13 +93,13 @@ def sync_domain_settings(project_folder: str | Path) -> Path:
     }
     gauges = gauge_records(domain_state)
     from ..store.layout import domain_dem_path, morph_folder
-    from ..store.paths import master_data_folder
+    from ..store.paths import data_folder
     state["domains"] = [{
         "domain_id": 1, "name": "master", "outlet_id": "",
         "is_dem_domain": not any(record.get("is_domain") for record in domain_state.get("outlets", {}).values()),
         "directory": relative_workspace_path(project_folder, morph_folder(project_folder)),
         "dem_path": relative_workspace_path(project_folder, domain_dem_path(project_folder, "master")),
-        "data_path": relative_workspace_path(project_folder, master_data_folder(project_folder)) + "/",
+        "data_path": relative_workspace_path(project_folder, data_folder(project_folder)) + "/",
         "gauge_ids": [int(gauge["gauge_id"]) for gauge in gauges
                       if gauge.get("gauge_id") is not None and gauge.get("domain_ids")],
     }]

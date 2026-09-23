@@ -21,7 +21,7 @@ from ...handlers.state.cache import (
     load_state,
     store_payload,
 )
-from ...handlers.store.paths import geometry_folder
+from ...handlers.store.paths import temp_morphology_folder
 from ...morphology.layers.categorical import saved_outputs
 from ...morphology.layers.categorical import copy_ready
 from ...morphology.layers.advanced_l0 import publish_model_inputs
@@ -89,7 +89,7 @@ def lookup(task, job):
 def advanced(task, job):
     payload = dict(job)
     payload["value"] = job["value"].as_dict()
-    result = native_worker(task, payload, geometry_folder(job["project_folder"]))
+    result = native_worker(task, payload, temp_morphology_folder(job["project_folder"]))
     return {"kind": result["kind"], "outputs": tuple(result["outputs"])}
 
 

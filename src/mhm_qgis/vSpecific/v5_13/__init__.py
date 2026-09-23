@@ -85,9 +85,6 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
                 "dir_Total_Runoff": repeat("output/", count),
                 "dir_Bankfull_Runoff": repeat(f"{data}/static/morph/", count),
             },
-            "processSelection": {
-                "processCase": [1, 1, 1, 1, 0, 1, 1, 3, 1, 0, 0],
-            },
             "LCover": _land_cover_values(settings),
             "directories_MPR": {
                 "dir_gridded_LAI": repeat(f"{data}/lai/", count),
@@ -122,7 +119,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
     return values
 
 
-def _domain_directories(settings: dict[str, Any], count: int, data="data/master") -> list[str]:
+def _domain_directories(settings: dict[str, Any], count: int, data="data") -> list[str]:
     domains = settings.get("domains", [])
     if not isinstance(domains, list):
         domains = []
@@ -185,7 +182,7 @@ def _soil_values(settings: dict[str, Any]) -> dict[str, Any]:
     return {
         "iFlag_soilDB": 0,
         "tillageDepth": tillage,
-        "nSoilHorizons_mHM": len(depths),
+        "nSoilHorizons_mHM": len(depths) + 1,
         "soil_Depth": depths,
     }
 

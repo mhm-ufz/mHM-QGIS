@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ...handlers.state import processing
 from ...handlers.state.domain_state import load_state, save_state, state_path
-from ...handlers.store.paths import geometry_folder
+from ...handlers.store.paths import temp_morphology_folder
 
 
 _DOMAIN_OUTPUT_KEYS = (
@@ -27,13 +27,13 @@ _DOMAIN_OUTPUT_KEYS = (
 
 
 def clear_geometry(project_folder, *, log=None) -> int:
-    """Delete files below ``Z Temp/Geometry`` and invalidate derived state.
+    """Delete files below ``.temp/Morphology`` and invalidate derived state.
 
     The folder is a plugin-owned scratch boundary. User selections and gauge
     assignments remain in domain state; only locations and files derived from
     the former geometry are removed.
     """
-    folder = Path(geometry_folder(project_folder))
+    folder = Path(temp_morphology_folder(project_folder))
     folder.mkdir(parents=True, exist_ok=True)
     deleted = 0
     for path in sorted(folder.rglob("*"), key=lambda item: len(item.parts), reverse=True):

@@ -22,20 +22,6 @@ def test_each_step_owns_its_controls():
     dialog.close()
 
 
-def test_dialog_cannot_reject_while_a_task_is_active(monkeypatch):
-    from qgis.PyQt.QtWidgets import QMessageBox
-
-    dialog = MhmQgisDialog()
-    dialog.show()
-    monkeypatch.setattr(QMessageBox, "warning", lambda *args: None)
-    monkeypatch.setattr(dialog.task_coordinator, "is_busy", lambda: True)
-    dialog.reject()
-    assert dialog.isVisible()
-    monkeypatch.setattr(dialog.task_coordinator, "is_busy", lambda: False)
-    dialog.reject()
-    assert not dialog.isVisible()
-
-
 def test_resolution_fields_preserve_exact_grid_values_and_reject_other_values():
     dialog = MhmQgisDialog()
     exact = 1 / 1200
