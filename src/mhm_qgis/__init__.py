@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """QGIS plugin entry point for mhm_qgis."""
 
+from ._version import __version__
+
 
 # noinspection PyPep8Naming
 def classFactory(iface):  # pylint: disable=invalid-name

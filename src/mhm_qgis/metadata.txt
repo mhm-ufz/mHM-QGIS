@@ -4,15 +4,17 @@
 
 [general]
 name=mHM QGIS
-qgisMinimumVersion=3.0
+qgisMinimumVersion=3.28
 # Qt5/Qt6 compatibility target; real-QGIS workflow checks are required before release.
 qgisMaximumVersion=4.99
 description=Python package for mesoscale Hydrological Model
-version=0.1
+version=0.0.1
 author=Sanjeev Bashyal
 email=sanjeev.bashyal01@gmail.com
 
-about=Python package for mesoscale hydrological model
+about=Prepare, configure and run the mesoscale Hydrological Model. Requires the
+ Python dependencies listed in requirements.txt. mHM 5.13.4 is installed from
+ PyPI; the user selects a compatible mHM v6 executable when using v6.
 
 tracker=https://github.com/SanjeevBashyal/mhm-qgis/issues
 repository=https://github.com/SanjeevBashyal/mhm-qgis
@@ -28,7 +30,7 @@ hasProcessingProvider=no
 tags=python,hydrology,modeling
 
 homepage=https://github.com/SanjeevBashyal/mhm-qgis
-category=Plugins
+category=Raster
 icon=qt/ui/forms/Resources/icon.png
 # experimental flag
 experimental=False
@@ -40,9 +42,6 @@ deprecated=False
 # (or upgraded) can be specified.
 # Check the documentation for more information.
 # plugin_dependencies=
-
-Category of the plugin: Raster, Vector, Database or Web
-# category=
 
 # If the plugin can run on QGIS Server.
 server=False

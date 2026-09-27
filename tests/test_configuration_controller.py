@@ -101,20 +101,29 @@ def test_edit_namelists_forwards_project_values_and_dimensions(
 
 def test_run_mhm_uses_project_terminal(tmp_path: Path, monkeypatch) -> None:
     dialog = Dialog(tmp_path)
+    executable = tmp_path / "mhmv6"
     monkeypatch.setattr(
         controller_module,
         "ensure_project_structure",
         lambda path, version: [],
+    )
+    monkeypatch.setattr(
+        controller_module,
+        "require_mhm_v6_executable",
+        lambda owner: str(executable),
+    )
+    from mhm_qgis.externals import mhm_handler
+    monkeypatch.setattr(
+        mhm_handler,
+        "executable",
+        lambda version, v6_path=None: Path(v6_path),
     )
 
     assert controller_module.run_mhm(dialog) is True
     command, options = dialog.terminal.calls[0]
     callback = options.pop("on_finished")
     assert (command, options) == (
-        str(
-            Path(controller_module.plugin_root())
-            / "vSpecific" / "v6" / "mhmv6"
-        ),
+        str(executable),
         {"cwd": workspace_folder(tmp_path), "show": True},
     )
     assert processing.workflow(tmp_path, "run_mhm")["status"] == "running"

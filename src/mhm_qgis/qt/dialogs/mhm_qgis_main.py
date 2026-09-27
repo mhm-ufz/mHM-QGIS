@@ -192,6 +192,12 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
     def selected_version(self):
         return main_controller.selected_version(self)
 
+    def refresh_mhm_executable(self):
+        return main_controller.refresh_mhm_executable(self)
+
+    def select_mhm_v6_executable(self):
+        return main_controller.select_mhm_v6_executable(self)
+
     def handle_version_changed(self):
         return main_controller.handle_version_changed(self)
 

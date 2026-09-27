@@ -78,8 +78,9 @@ decision.
     `executions/observations/` reuses the forcing pipeline for L2 gridded observations.
 - `externals/`: one handler per external package or executable. Processing calls into
   `mhm_tools`, `nml_tools` and `pyflwdir` go through `mhm_tools_handler.py`,
-  `nml_tools_handler.py` and `pyflwdir_handler.py`; `mhm_handler.py` selects the
-  version-specific development executable. Heavy imports stay inside functions.
+  `nml_tools_handler.py` and `pyflwdir_handler.py`; `mhm_handler.py` resolves the
+  installed `mhm==5.13.4` command for v5 and validates the user-selected v6
+  executable. Heavy imports stay inside functions.
 - `vSpecific/`: version-specific initial values handed to the namelist editor.
 
 Top-level modules that remain include `mhm_qgis.py` (plugin lifecycle, reload-safe
@@ -735,6 +736,13 @@ Four JSON files live under each domain's `.temp/` directory.
 - `.publish/plan.md` is the canonical plan for the PyPI package, QGIS repository ZIP,
   private micromamba QGIS runtime, and standalone/Desktop map-canvas routing. Read it
   before changing publication, runtime bootstrap, entry points, or map-host code.
+- `src/mhm_qgis/_version.py` is the single release version source. PyPI reads it
+  dynamically; `tools/build_qgis_plugin.py` writes it into the staged QGIS metadata.
+- Build PyPI artifacts from the repository root. Build the QGIS upload with
+  `python tools/build_qgis_plugin.py`; its ZIP contains only the `mhm_qgis/` plugin
+  root plus the repository `LICENSE` and `README.md`.
+- Never bundle mHM executables. v5 comes from `mhm==5.13.4`; the machine-local v6
+  path lives in `QSettings` (`mhm_qgis/executables/v6`) or `MHM_QGIS_MHMV6`.
 - Keep package discovery recursive. Every package needs an `__init__.py` or setuptools
   drops it from the wheel. This bites every time a new subpackage is added -- a
   directory that exists but has no `__init__.py` is not importable and not shipped.

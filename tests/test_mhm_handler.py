@@ -1,26 +1,67 @@
-"""Tests for selecting the bundled development mHM executable."""
+"""Tests for resolving external mHM executables."""
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from mhm_qgis.externals import mhm_handler
 
 
-def test_executable_follows_version():
-    assert mhm_handler.executable("5.13").parts[-3:] == (
-        "vSpecific", "v5_13", "mhmv5"
-    )
-    assert mhm_handler.executable("6.0").parts[-3:] == (
-        "vSpecific", "v6", "mhmv6"
-    )
+def _executable(path: Path) -> Path:
+    path.write_text("", encoding="utf-8")
+    path.chmod(0o755)
+    return path
 
 
-def test_run_uses_selected_binary(tmp_path: Path):
+def test_executable_uses_installed_v5_and_supplied_v6(tmp_path, monkeypatch):
+    v5 = _executable(tmp_path / "mhm")
+    v6 = _executable(tmp_path / "mhmv6")
+    monkeypatch.setattr(mhm_handler.shutil, "which", lambda name: str(v5))
+    monkeypatch.setattr(
+        mhm_handler.subprocess,
+        "run",
+        lambda command, **options: SimpleNamespace(
+            returncode=0,
+            stdout="5.13.4" if Path(command[0]) == v5 else "6.0.0",
+            stderr="",
+        ),
+    )
+
+    assert mhm_handler.executable("5.13") == v5
+    assert mhm_handler.executable("6", v6_path=v6) == v6
+
+
+def test_v6_environment_override_is_validated(tmp_path, monkeypatch):
+    v6 = _executable(tmp_path / "mhmv6")
+    monkeypatch.setenv(mhm_handler.V6_ENVIRONMENT_VARIABLE, str(v6))
+    monkeypatch.setattr(
+        mhm_handler.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout="mHM 5.13.4", stderr=""
+        ),
+    )
+
+    with pytest.raises(ValueError, match="Expected mHM v6"):
+        mhm_handler.executable("6")
+
+
+def test_run_uses_selected_v6_binary(tmp_path, monkeypatch):
+    binary = _executable(tmp_path / "mhmv6")
     calls = []
+    monkeypatch.setattr(
+        mhm_handler,
+        "executable",
+        lambda version, v6_path=None: Path(v6_path),
+    )
 
     assert mhm_handler.run(
-        "6", tmp_path,
+        "6",
+        tmp_path,
         lambda command, **options: calls.append((command, options)) or True,
+        v6_path=binary,
     )
     assert calls == [(
-        str(mhm_handler.executable("6")),
+        str(binary),
         {"cwd": str(tmp_path), "show": True},
     )]

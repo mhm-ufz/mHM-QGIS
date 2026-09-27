@@ -11,7 +11,7 @@ import math
 import os
 from pathlib import Path
 
-from qgis.PyQt.QtCore import QDate, QDateTime, QSignalBlocker
+from qgis.PyQt.QtCore import QDate, QDateTime, QSettings, QSignalBlocker
 from qgis.PyQt.QtWidgets import QComboBox, QDialog, QMessageBox
 
 from ...core.grid import (
@@ -48,6 +48,7 @@ TIME_WIDGETS = {
     "eval_start": "dateTimeEdit_evaluationStartTimeInput",
     "sim_end": "dateTimeEdit_simulationEndTimeInput",
 }
+MHM_V6_SETTINGS_KEY = "mhm_qgis/executables/v6"
 
 
 def work_type_changed(dialog):
@@ -529,6 +530,63 @@ def selected_version(dialog) -> str:
     return (combo.currentText().strip() if combo is not None else "") or "6.0"
 
 
+def configured_mhm_v6_executable() -> str:
+    """Return the machine-local v6 override or saved executable path."""
+    return os.environ.get("MHM_QGIS_MHMV6") or str(
+        QSettings().value(MHM_V6_SETTINGS_KEY, "") or ""
+    )
+
+
+def refresh_mhm_executable(dialog) -> None:
+    """Show the user-supplied executable row only for mHM v6."""
+    widget = getattr(dialog, "widget_mHMV6Executable", None)
+    if widget is None:
+        return
+    is_v6 = selected_version(dialog).startswith("6")
+    widget.setVisible(is_v6)
+    dialog.lineEdit_mHMExecutablePath.setText(
+        configured_mhm_v6_executable() if is_v6 else ""
+    )
+
+
+def select_mhm_v6_executable(dialog):
+    """Select, validate and remember the machine-local mHM v6 executable."""
+    path, _ = open_file(dialog, "Select mHM v6 Executable", "Executable (*)")
+    if not path:
+        return None
+    try:
+        from ...externals.mhm_handler import executable
+
+        path = str(executable("6", v6_path=path))
+    except (OSError, ValueError) as error:
+        QMessageBox.warning(dialog, "mHM v6 Executable", str(error))
+        return None
+    QSettings().setValue(MHM_V6_SETTINGS_KEY, path)
+    refresh_mhm_executable(dialog)
+    invalidate_workflows(dialog, "run_mhm")
+    return path
+
+
+def require_mhm_v6_executable(dialog):
+    """Return a valid configured v6 executable, prompting when necessary."""
+    path = configured_mhm_v6_executable()
+    if path:
+        try:
+            from ...externals.mhm_handler import executable
+
+            return str(executable("6", v6_path=path))
+        except (OSError, ValueError) as error:
+            dialog.log_message(f"WARNING: {error}")
+            if os.environ.get("MHM_QGIS_MHMV6"):
+                QMessageBox.warning(
+                    dialog,
+                    "mHM v6 Executable",
+                    f"{error}\n\nCorrect or remove MHM_QGIS_MHMV6.",
+                )
+                return None
+    return select_mhm_v6_executable(dialog)
+
+
 def refresh_observation_stations(dialog):
     from ...core.post.graph import stations
 
@@ -585,6 +643,7 @@ def handle_version_changed(dialog) -> None:
     group = getattr(dialog, "groupBox_editCalibrationNamelists", None)
     if group is not None:
         group.setEnabled(selected_version(dialog).startswith("6"))
+    refresh_mhm_executable(dialog)
 
 
 def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
@@ -649,7 +708,11 @@ def run_mhm(dialog) -> bool:
     try:
         from ...externals.mhm_handler import run
 
-        ensure_project_structure(project_folder, selected_version(dialog))
+        version = selected_version(dialog)
+        v6_path = require_mhm_v6_executable(dialog) if version.startswith("6") else None
+        if version.startswith("6") and not v6_path:
+            return False
+        ensure_project_structure(project_folder, version)
         workspace = workspace_folder(project_folder)
         terminal = dialog.open_project_terminal()
         if terminal is None:
@@ -657,10 +720,11 @@ def run_mhm(dialog) -> bool:
         dialog.log_message(f"Running mHM in project directory: {workspace}")
         set_workflow_status(dialog, "run_mhm", "running")
         started = run(
-            selected_version(dialog),
+            version,
             workspace,
             terminal.run_command,
             on_finished=finished,
+            v6_path=v6_path,
         )
         if not started:
             finished(-1)

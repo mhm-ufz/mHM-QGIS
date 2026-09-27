@@ -1,46 +1,12 @@
-# Include the README
 include README.md
 include LICENSE
-include requirements.txt
-
-# Include package data
-recursive-include src/mhm_qgis *.asc
-recursive-include src/mhm_qgis *.html
-recursive-include src/mhm_qgis *.md
-recursive-include src/mhm_qgis *.nc
-recursive-include src/mhm_qgis *.nml
-recursive-include src/mhm_qgis *.png
-recursive-include src/mhm_qgis *.qrc
-recursive-include src/mhm_qgis *.rst
-recursive-include src/mhm_qgis *.sh
-recursive-include src/mhm_qgis *.ts
-recursive-include src/mhm_qgis *.txt
-recursive-include src/mhm_qgis *.ui
-recursive-include src/mhm_qgis *.yaml
-recursive-include src/mhm_qgis *.yml
-recursive-include src/mhm_qgis i18n/*
+include tools/build_qgis_plugin.py
+include src/mhm_qgis/metadata.txt
+include src/mhm_qgis/requirements.txt
+include src/mhm_qgis/settings.yaml
+prune tests
 graft src/mhm_qgis/nml-schemas
-graft project-template
-graft src/mhm_qgis/qt/ui/forms/Resources
-
-# Include documentation
-recursive-include docs *.rst
-recursive-include docs *.md
-recursive-include docs *.txt
-
-# Include examples
-recursive-include examples *.py
-recursive-include examples *.md
-
-# Include tests
-recursive-include tests *.py
-
-# Exclude development files
-exclude .gitignore
-exclude .github/*
-exclude .vscode/*
-exclude *.pyc
-exclude __pycache__/*
-exclude .pytest_cache/*
-exclude .coverage
-exclude htmlcov/*
+recursive-include src/mhm_qgis/qt/ui/forms *.ui
+recursive-include src/mhm_qgis/qt/ui/forms/Resources *.png
+recursive-exclude src/mhm_qgis *.ipynb *.qrc
+global-exclude *.py[cod]
