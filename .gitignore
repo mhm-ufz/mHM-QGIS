@@ -2,6 +2,9 @@
 src/mhm_qgis/vSpecific/v5_13/mhmv5
 src/mhm_qgis/vSpecific/v6/mhmv6
 
+# publish resources
+.publish/
+
 # Temporary files
 .codex/
 .scripts/

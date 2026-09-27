@@ -22,7 +22,7 @@ def test_each_step_owns_its_controls():
     dialog.close()
 
 
-def test_resolution_fields_preserve_exact_grid_values_and_reject_other_values():
+def test_resolution_fields_preserve_exact_positive_values_for_click_validation():
     dialog = MhmQgisDialog()
     exact = 1 / 1200
     main._populate_resolution_input(dialog, "L1", [exact, 2 * exact], unit="°")
@@ -32,6 +32,6 @@ def test_resolution_fields_preserve_exact_grid_values_and_reject_other_values():
     dialog.lineEdit_L1Resolution.setText("invalid")
     assert dialog.current_l1_resolution() is None
     dialog.lineEdit_L1Resolution.setText("0.5")
-    assert dialog.current_l1_resolution() is None
+    assert dialog.current_l1_resolution() == 0.5
     assert not dialog.comboBox_L1ResolutionUnit.isEnabled()
     dialog.close()

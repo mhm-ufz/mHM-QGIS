@@ -7,6 +7,7 @@ bridge all hold a reference to the dialog and call these through it.
 """
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 
@@ -1454,18 +1455,36 @@ def _populate_resolution_input(dialog, level, values, preferred_value=None, unit
     """Keep exact compatible grid values behind the form's numeric text field."""
     field = getattr(dialog, f"lineEdit_{level}Resolution")
     preferred = preferred_value or _current_resolution_input(dialog, level)
-    selected = next((value for value in values
-                     if preferred and dialog.resolution_values_match(value, preferred, unit)), None)
+    selected = next(
+        (
+            value
+            for value in values
+            if preferred
+            and dialog.resolution_values_match(value, preferred, unit)
+        ),
+        None,
+    )
+    if selected is None and preferred is not None:
+        try:
+            candidate = float(preferred)
+            selected = candidate if math.isfinite(candidate) and candidate > 0 else None
+        except (TypeError, ValueError):
+            selected = None
     matched = preferred is None or selected is not None
+    selected = selected if selected is not None else (values[0] if values else None)
     field.setProperty("resolutions", values)
     with QSignalBlocker(field):
-        field.setText(repr(float(selected if selected is not None else values[0])) if values else "")
-    field.setEnabled(bool(values))
-    field.setToolTip("Compatible resolutions: " + ", ".join(format_resolution(value, unit) for value in values))
+        field.setText(repr(float(selected)) if selected is not None else "")
+    field.setEnabled(bool(values) or selected is not None)
+    field.setToolTip(
+        "Suggested resolutions: "
+        + ", ".join(format_resolution(value, unit) for value in values)
+    )
     units = getattr(dialog, f"comboBox_{level}ResolutionUnit")
     units.clear()
     units.addItem(unit or "")
-    units.setEnabled(False)  # Grid units belong to the selected CRS, not a display override.
+    # Grid units belong to the selected CRS, not a display override.
+    units.setEnabled(False)
     return matched
 
 
@@ -1486,14 +1505,13 @@ def log_resolution_preference_warning(
 
 
 def _current_resolution_input(dialog, level):
-    """Accept only a compatible cell size and return its unrounded grid value."""
+    """Return a positive entered cell size; execution checks compatibility."""
     field = getattr(dialog, f"lineEdit_{level}Resolution")
     try:
         entered = float(field.text())
-    except ValueError:
+    except (TypeError, ValueError):
         return None
-    return next((value for value in (field.property("resolutions") or [])
-                 if dialog.resolution_values_match(value, entered, dialog.current_grid_unit())), None)
+    return entered if math.isfinite(entered) and entered > 0 else None
 
 
 def connect_processor_button(

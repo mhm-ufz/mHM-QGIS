@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mhm-qgis"
-version = "0.1.1"
+version = "0.0.1"
 description = "Python package for mesoscale Hydrological Model"
 readme = "README.md"
 license = {text = "GPL-2.0"}
@@ -36,7 +36,7 @@ dependencies = [
     "pyproj>=3.0.0",
     "pyqtgraph>=0.13.3",
     "mhm-tools>=0.3.0",
-    "nml-tools[gui]",
+    "nml-tools[gui]>=0.6.0",
     "qtpy",
     "guidata",
 ]

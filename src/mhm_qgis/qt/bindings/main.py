@@ -11,6 +11,7 @@ from __future__ import annotations
 from qgis.core import QgsProject
 
 from ...qgis_bridge.display import meteo as meteo_display
+from ...qgis_bridge.display import grid as grid_display
 from ...qgis_bridge.display import output as output_display
 from ..controllers import elevation_band, main
 
@@ -254,6 +255,10 @@ def bind(dialog):
         background=True,
     )
     dialog.update_latlon_button_state()
+    dialog.pushButton_gridDisplay.clicked.connect(
+        lambda checked=False: grid_display.display_selected_grid(dialog)
+    )
+    dialog.pushButton_gridDisplay.setToolTip("Display the selected model grid")
     dialog.pushButton_edit_nmls.setToolTip("Edit mHM namelists")
     dialog.connect_processor_button(
         dialog.pushButton_edit_nmls,
@@ -319,7 +324,10 @@ def _bind_grid_resolution(dialog):
         pass
 
     dialog.lineEdit_L1Resolution.textChanged.connect(
-        lambda _text: dialog.handle_l1_resolution_changed()
+        lambda _text: (
+            dialog.update_l1_resolution_label(),
+            dialog.update_l11_resolution_label(),
+        )
     )
     dialog.lineEdit_L11Resolution.textChanged.connect(
         lambda _text: dialog.update_l11_resolution_label()

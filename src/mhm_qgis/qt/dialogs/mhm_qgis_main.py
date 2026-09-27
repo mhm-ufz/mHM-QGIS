@@ -15,7 +15,19 @@ from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 from ..threads.meteo_workflow import MeteorologyWorkflowWorker
 from ..reporting import error_detail
-from ...core.grid import Extent, Grid, ceil_cellsize, format_resolution, header_bounds, header_for_existing_bounds, is_geographic_unit, l0_header_from_l2, resolution_in_crs, target_grid_from_header
+from ...core.grid import (
+    Extent,
+    Grid,
+    ceil_cellsize,
+    format_resolution,
+    header_bounds,
+    header_for_model_level,
+    is_geographic_unit,
+    l0_header_from_l2,
+    resolution_in_crs,
+    target_grid_from_header,
+    validate_grid_headers,
+)
 from .input_selection import InputComboAdapter
 from ...core.executions import meteo as meteo_execution
 from ...core.executions.morphology import reset as morphology_reset
@@ -442,12 +454,17 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             (self._grid_l2_metadata or {}).get("l2_ratio_to_l0")
             or round(float(l2_header["cellsize"]) / float(l0_resolution))
         )
-        return {
+        headers = {
             "L0": l0_header_from_l2(l2_header, l0_resolution, ratio),
-            "L1": header_for_existing_bounds(l2_header, l1_resolution, unit),
-            "L11": header_for_existing_bounds(l2_header, l11_resolution, unit),
+            "L1": header_for_model_level(
+                l2_header, l1_resolution, l0_resolution, "L1"
+            ),
+            "L11": header_for_model_level(
+                l2_header, l11_resolution, l0_resolution, "L11"
+            ),
             "L2": l2_header,
         }
+        return validate_grid_headers(headers)[0]
 
     def grid_configuration_snapshot(self):
         """Return current grid configuration for project-state reference."""

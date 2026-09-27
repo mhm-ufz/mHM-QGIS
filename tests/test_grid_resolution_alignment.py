@@ -18,7 +18,9 @@ from mhm_qgis.core.grid import (  # noqa: E402
     header_bounds,
     header_for_aligned_bounds,
     header_for_existing_bounds,
+    header_for_model_level,
     l0_header_from_l2,
+    validate_grid_headers,
     validate_l0_l2_alignment,
 )
 
@@ -181,6 +183,34 @@ def test_saved_l2_header_rederives_the_same_l0_header():
     )
 
     assert l0_header_from_l2(l2, L0_ANCHOR["cellsize"], 3) == l0
+
+
+def test_model_levels_use_integer_factors_without_rounding_dimensions():
+    l2 = {
+        "ncols": 12,
+        "nrows": 8,
+        "xllcorner": 100.0,
+        "yllcorner": 200.0,
+        "cellsize": 30.0,
+        "unit": "m",
+    }
+    l0 = header_for_model_level(l2, 10.0, 10.0, "L0")
+    l1 = header_for_model_level(l2, 10.000009, 10.0, "L1")
+    l11 = header_for_model_level(l2, 60.0, 10.0, "L11")
+
+    assert (l1["cellsize"], l1["nrows"], l1["ncols"]) == (10.0, 24, 36)
+    assert (l11["cellsize"], l11["nrows"], l11["ncols"]) == (60.0, 4, 6)
+    _headers, ratios = validate_grid_headers(
+        {"L0": l0, "L1": l1, "L11": l11, "L2": l2}
+    )
+    assert ratios == {"L1_to_L2": 3, "L11_to_L2": 2, "L0_to_L1": 1}
+
+    with pytest.raises(ValueError, match="L1/L0"):
+        header_for_model_level(l2, 10.000011, 10.0, "L1")
+    with pytest.raises(ValueError, match="L1/L2 or L2/L1"):
+        header_for_model_level(l2, 40.0, 10.0, "L1")
+    with pytest.raises(ValueError, match="not divisible"):
+        header_for_model_level({**l2, "ncols": 11}, 60.0, 10.0, "L1")
 
 
 def test_l0_header_from_l2_rejects_a_non_integer_multiple():

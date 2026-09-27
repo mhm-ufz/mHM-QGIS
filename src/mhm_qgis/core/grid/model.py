@@ -629,6 +629,59 @@ def header_for_existing_bounds(reference_header: Mapping, cellsize: float, unit=
     return result
 
 
+def header_for_model_level(
+    l2_header: Mapping,
+    cellsize: float,
+    l0_cellsize: float,
+    level: str,
+    *,
+    tolerance: float = 1e-6,
+) -> dict:
+    """Build one exact common-extent model grid from integer cell factors."""
+    l2 = standardize_header(l2_header)
+    l0_factor = integer_resolution_factor(
+        cellsize, l0_cellsize, tolerance=tolerance
+    )
+    if l0_factor is None:
+        raise ValueError(
+            f"{level}/L0 resolution ratio must be an integer within {tolerance:g}."
+        )
+
+    resolution = l0_factor * float(l0_cellsize)
+    finer_factor = integer_resolution_factor(
+        l2["cellsize"], resolution, tolerance=tolerance
+    )
+    coarser_factor = integer_resolution_factor(
+        resolution, l2["cellsize"], tolerance=tolerance
+    )
+    if finer_factor is not None:
+        ncols = l2["ncols"] * finer_factor
+        nrows = l2["nrows"] * finer_factor
+    elif coarser_factor is not None:
+        if l2["ncols"] % coarser_factor or l2["nrows"] % coarser_factor:
+            raise ValueError(
+                f"{level} is {coarser_factor} x L2, but the L2 dimensions "
+                f"{l2['nrows']} x {l2['ncols']} are not divisible by "
+                f"{coarser_factor} on the common extent."
+            )
+        ncols = l2["ncols"] // coarser_factor
+        nrows = l2["nrows"] // coarser_factor
+    else:
+        raise ValueError(
+            f"{level}/L2 or L2/{level} resolution ratio must be an integer "
+            f"within {tolerance:g}."
+        )
+
+    result = {
+        **l2,
+        "ncols": ncols,
+        "nrows": nrows,
+        "cellsize": resolution,
+    }
+    result["cellsize_precision"] = cellsize_precision_for_unit(result.get("unit"))
+    return result
+
+
 def aligned_l0_l2_headers(bounds, l0_header, multiplier, unit=None, *, anchor=None):
     ratio = _positive_integer(multiplier)
     source = dict(l0_header)
@@ -702,30 +755,35 @@ def validate_grid_headers(headers: Mapping[str, Mapping]):
         if any(abs(left - right) > tolerance for left, right in zip(reference, bounds)):
             raise ValueError(f"{level} extent {bounds} does not match L0 extent {reference}.")
 
-    def ratio(fine_name, coarse_name):
-        fine = standardized[fine_name]
-        coarse = standardized[coarse_name]
-        factor = integer_resolution_factor(coarse["cellsize"], fine["cellsize"])
-        if factor is None:
-            value = coarse["cellsize"] / fine["cellsize"]
+    l0_cellsize = standardized["L0"]["cellsize"]
+    ratios = {}
+    for level, key in (("L1", "L1_to_L2"), ("L11", "L11_to_L2")):
+        header = standardized[level]
+        expected = header_for_model_level(
+            standardized["L2"], header["cellsize"], l0_cellsize, level
+        )
+        if (header["nrows"], header["ncols"]) != (
+            expected["nrows"], expected["ncols"]
+        ):
             raise ValueError(
-                f"{coarse_name}/{fine_name} resolution ratio must be an integer. Got {value}."
+                f"{level} dimensions must be {expected['nrows']} x "
+                f"{expected['ncols']} on the common extent."
             )
-        expected = (coarse["nrows"] * factor, coarse["ncols"] * factor)
-        actual = (fine["nrows"], fine["ncols"])
-        if actual != expected:
-            raise ValueError(
-                f"{fine_name} matrix must be {factor} times {coarse_name}. "
-                f"Got {fine_name}=({actual[0]} rows, {actual[1]} cols), "
-                f"expected ({expected[0]} rows, {expected[1]} cols) from {coarse_name}."
+        ratios[key] = (
+            integer_resolution_factor(
+                header["cellsize"],
+                standardized["L2"]["cellsize"],
+                tolerance=1e-6,
             )
-        return factor
-
-    ratios = {
-        "L0_to_L1": ratio("L0", "L1"),
-        "L1_to_L2": ratio("L1", "L2"),
-        "L11_to_L2": ratio("L11", "L2"),
-    }
+            or integer_resolution_factor(
+                standardized["L2"]["cellsize"],
+                header["cellsize"],
+                tolerance=1e-6,
+            )
+        )
+    ratios["L0_to_L1"] = integer_resolution_factor(
+        standardized["L1"]["cellsize"], l0_cellsize, tolerance=1e-6
+    )
     return standardized, ratios
 
 

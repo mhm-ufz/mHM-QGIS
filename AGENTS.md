@@ -732,6 +732,9 @@ Four JSON files live under each domain's `.temp/` directory.
 
 ## Packaging Rules
 
+- `.publish/plan.md` is the canonical plan for the PyPI package, QGIS repository ZIP,
+  private micromamba QGIS runtime, and standalone/Desktop map-canvas routing. Read it
+  before changing publication, runtime bootstrap, entry points, or map-host code.
 - Keep package discovery recursive. Every package needs an `__init__.py` or setuptools
   drops it from the wheel. This bites every time a new subpackage is added -- a
   directory that exists but has no `__init__.py` is not importable and not shipped.
