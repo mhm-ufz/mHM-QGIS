@@ -235,19 +235,9 @@ class MhmQgis:
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
             self.first_start = False
-            self.dlg = MhmQgisDialog()
+            self.dlg = MhmQgisDialog(iface=self.iface)
 
-        # show the dialog
+        # Non-modal, so Desktop's map canvas stays usable beside the dialog.
         self.dlg.show()
-        # Run the dialog event loop
-        result = self.dlg.exec()
-        # See if OK was pressed
-        if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            # For now, just show a message
-            from qgis.PyQt.QtWidgets import QMessageBox
-
-            QMessageBox.information(
-                None, "mHM QGIS", "mHM QGIS plugin executed successfully!"
-            )
+        self.dlg.raise_()
+        self.dlg.activateWindow()

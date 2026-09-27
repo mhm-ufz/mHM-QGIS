@@ -290,6 +290,7 @@ def bind(dialog):
             "Run mHM",
             dialog.run_mhm,
         )
+    dialog.pushButton_mapCanvas.clicked.connect(dialog.open_map_canvas)
     terminal_button = dialog.pushButton_terminal
     if terminal_button is not None:
         terminal_button.clicked.connect(dialog.open_project_terminal)

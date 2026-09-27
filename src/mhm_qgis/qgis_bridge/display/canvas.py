@@ -31,7 +31,15 @@ def select_band(layer, band: int, log=None) -> bool:
         return False
 
 
-def show_raster(dialog, path, name, *, variable=None, band=None, is_raster=True):
+def _shown(dialog, layer, when):
+    """Tell the dialog a layer is on the map, so a standalone window can open."""
+    notify = getattr(dialog, "map_displayed", None)
+    if layer is not None and notify is not None:
+        notify(when)
+    return layer
+
+
+def show_raster(dialog, path, name, *, variable=None, band=None, is_raster=True, when=None):
     """Reuse by name, refreshing when the source or its file stamp changes.
 
     A time scrubber calls this on every step, and `layers.load` does not
@@ -60,7 +68,7 @@ def show_raster(dialog, path, name, *, variable=None, band=None, is_raster=True)
         layer.setCustomProperty("mhm_qgis/display_source", signature)
     if layer is not None and band:
         select_band(layer, band, log=getattr(dialog, "log_message", None))
-    return layer
+    return _shown(dialog, layer, when)
 
 
 def _materialised_path(name: str) -> Path:
@@ -75,7 +83,7 @@ def _materialised_path(name: str) -> Path:
     return folder / f"{digest}.tif"
 
 
-def show_dataarray(dialog, data, name: str):
+def show_dataarray(dialog, data, name: str, *, when=None):
     """Show a georeferenced DataArray, reusing the loaded layer by name.
 
     mHM output carries no CRS, so it cannot be addressed through a
@@ -96,11 +104,11 @@ def show_dataarray(dialog, data, name: str):
 
     layer = layers.find_by_name(name)
     if layer is None:
-        return layers.load(str(target), name, log=log)
+        return _shown(dialog, layers.load(str(target), name, log=log), when)
     # The file behind the layer was just rewritten in place.
     layer.dataProvider().reloadData()
     layer.triggerRepaint()
-    return layer
+    return _shown(dialog, layer, when)
 
 
 __all__ = [

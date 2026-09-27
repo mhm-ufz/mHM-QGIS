@@ -139,7 +139,7 @@ def display_selected_layer(dialog, checked=False) -> None:
         )
         return
     data = read_slice(output.path, grid, output.band - 1)
-    show_dataarray(dialog, data, output.name)
+    show_dataarray(dialog, data, output.name, when=output.when)
 
 
 __all__ = ["date_changed", "display_selected_layer", "refresh", "slider_moved"]

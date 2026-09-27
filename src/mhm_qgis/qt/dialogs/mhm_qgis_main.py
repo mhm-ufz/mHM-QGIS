@@ -48,6 +48,7 @@ from ...qt.bindings.main import bind as bind_main_form
 from ...qt.controllers import main as main_controller
 from ...qgis_bridge import layers as qgis_layers
 from ...qgis_bridge.layers import map_layer_filters
+from .map_canvas import MapCanvasWindow
 from .project_terminal import ProjectTerminalDialog
 from ..threads.task_coordinator import TaskCoordinator
 from .thread_display import ThreadDisplayDialog
@@ -58,11 +59,13 @@ Ui_MhmQgisDialog = load_form("mhm_qgis_main.ui")
 
 
 class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
-    def __init__(self, parent=None):
-        """Constructor."""
+    def __init__(self, parent=None, iface=None):
+        """Constructor; `iface` is QGIS Desktop's interface, None when standalone."""
 
         super(MhmQgisDialog, self).__init__(parent)
         self.setupUi(self)
+        self.iface = iface
+        self._map_window = None
         self._categorical_lookup_configs = {}
         self._categorical_modes = {}
         self._advanced_inputs = {}
@@ -1178,6 +1181,32 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         if self._terminal_dialog is None:
             self._terminal_dialog = ProjectTerminalDialog(self)
         return self._terminal_dialog
+
+    def map_canvas_window(self):
+        """Return the standalone map window, created on first use."""
+        if self._map_window is None:
+            self._map_window = MapCanvasWindow(self)
+        return self._map_window
+
+    def open_map_canvas(self, checked=False):
+        """Focus Desktop's map canvas, or show the standalone map window."""
+        if self.iface is not None:
+            self.iface.mainWindow().raise_()
+            self.iface.mainWindow().activateWindow()
+            self.iface.mapCanvas().setFocus()
+            return self.iface.mapCanvas()
+        window = self.map_canvas_window()
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        return window
+
+    def map_displayed(self, when=None):
+        """Show the standalone map with the displayed layer's time; Desktop needs nothing."""
+        if self.iface is None:
+            window = self.map_canvas_window()
+            window.set_time(when)
+            window.show()
 
     def open_thread_display(self, checked=False):
         """Show the persistent task monitor for plugin preprocessing."""

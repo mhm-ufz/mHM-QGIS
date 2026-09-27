@@ -159,7 +159,7 @@ def display_selected_layer(dialog, checked=False) -> None:
             dialog, "Display Output", f"{name} could not be read from the output."
         )
         return
-    show_dataarray(dialog, raster.data, raster.name)
+    show_dataarray(dialog, raster.data, raster.name, when=raster.when)
 
 
 __all__ = ["date_changed", "display_selected_layer", "refresh", "slider_moved"]

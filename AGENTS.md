@@ -127,6 +127,10 @@ Rules that follow from it:
 - **Wiring made against a runtime-built object stays where that object is built** -- a
   per-row browse button, a `QProcess`, the task coordinator, a `QgsMapToolEmitPoint`.
   Only wiring fixed by the form belongs in `qt/bindings/`.
+- `qt/dialogs/map_canvas.py` is a programmatic window (no form), so its wiring and
+  drop handling live in that module rather than in `bindings/` and `controllers/`.
+  File drops are handled by the window itself: the canvas and layer tree ignore file
+  drags, so Qt passes them up to it.
 - The map canvas, its map tool and the vertex marker stay on
   `DomainDelineatorDialog`: a tool belongs to the widget that owns the canvas.
 - **Dependencies point downward.** `qgis_bridge/` must not reach up into `qt/`. It used
@@ -147,8 +151,14 @@ Rules that follow from it:
   loaded QGIS Qt major before QtPy/nml-tools/pyqtgraph import. Do not select Qt
   by QGIS major alone or mix bindings in one process.
 - The direct launcher initializes Processing through `qgis_bridge/processing`.
-  Domain delineation has its own canvas; displays requiring Desktop's `iface`
-  do not gain a main map canvas merely by installing runtime libraries.
+- One map host, chosen by `MhmQgisDialog.iface`. Desktop passes its real `iface`, and
+  Map Canvas raises Desktop's canvas; the Desktop dialog is shown non-modally (no
+  `exec()`) so that canvas stays usable. Standalone (`iface=None`) lazily creates
+  `qt/dialogs/map_canvas.py`, parented to the dialog. The parent keeps it alive, keeps it
+  interactive under the dialog's modal `exec()`, and deletes it before `exitQgis()`.
+  Its canvas follows `QgsProject` through `QgsLayerTreeMapCanvasBridge` (tree order,
+  visibility checkboxes, zoom to the first layer); never add a second sync path or
+  a fake `iface`. Domain Delineator keeps its own canvas.
 - Core computations and the native worker remain Qt/QGIS-independent.
 - Test QGIS 3/Qt5 and QGIS 4/Qt6 in separate processes before releasing.
   Form compilation on both bindings is not full QGIS workflow verification.
@@ -589,6 +599,10 @@ Four JSON files live under each domain's `.temp/` directory.
   `registry.variants` and `registry.first_existing`. Selection widgets, date ranges and
   warnings belong to `qt/controllers/main.py`; `qgis_bridge/display/morphology.py`
   only renders the resolved output.
+- Every display ends in `qgis_bridge/display/canvas.py` (`show_raster`,
+  `show_dataarray`). After a successful load, it calls the dialog's one-line
+  `map_displayed(when)` hook, which opens the standalone map window and sets its time
+  label. Meteo and output pass `when=`; morphology and grid pass nothing, which clears it.
 - Three group boxes share one render path: `groupBox_displayMorphLayers`,
   `groupBox_meteoDisplay` and `groupBox_outputDisplay`. Each picks a variable and a time,
   then `qgis_bridge/display` puts a 2-D raster on the canvas.
