@@ -4,20 +4,18 @@ Thank you for your interest in contributing to mHM QGIS! This document provides 
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold this code.
-
 ## How to Contribute
 
 ### Reporting Issues
 
-- Use the [GitHub issue tracker](https://github.com/SanjeevBashyal/mhm-qgis/issues)
+- Use the [issue tracker](https://git.ufz.de/mhm/mhm-qgis/-/issues)
 - Search existing issues before creating new ones
 - Provide detailed information about the problem
 - Include steps to reproduce the issue
 
 ### Suggesting Enhancements
 
-- Use the [GitHub issue tracker](https://github.com/SanjeevBashyal/mhm-qgis/issues) with the "enhancement" label
+- Use the [issue tracker](https://git.ufz.de/mhm/mhm-qgis/-/issues) with the "enhancement" label
 - Describe the feature and its benefits
 - Consider the impact on existing functionality
 
@@ -58,8 +56,8 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 ```bash
 # Clone the repository
-git clone https://github.com/SanjeevBashyal/mhm-qgis.git
-cd mhm_qgis
+git clone https://git.ufz.de/mhm/mhm-qgis.git
+cd mhm-qgis
 
 # Install in development mode
 pip install -e .[dev]
@@ -158,15 +156,17 @@ def example_function(param1: str, param2: int) -> bool:
 
 ## Release Process
 
-1. Update version numbers
-2. Update CHANGELOG.md
-3. Create release branch
-4. Tag the release
-5. Build and upload to PyPI
+1. Set `__version__` in `src/mhm_qgis/_version.py` (the only version source) and date
+   the CHANGELOG entry.
+2. Tag the commit, then build from a clean clone of that tag, never the working tree:
+   `python -m build`, `twine check dist/*` and `python tools/build_qgis_plugin.py`
+   (writes `dist/qgis/mhm_qgis-<version>.zip`).
+3. Upload the wheel and sdist to PyPI with `twine upload`, and upload the exact same
+   ZIP at https://plugins.qgis.org/plugins/add/.
 
 ## Questions?
 
-- Open a [GitHub Discussion](https://github.com/SanjeevBashyal/mhm-qgis/discussions)
-- Contact: sanjeev.bashyal01@gmail.com
+- Open an [issue](https://git.ufz.de/mhm/mhm-qgis/-/issues)
+- Contact: sanjeev.bashyal@ufz.de
 
 Thank you for contributing to mHM QGIS!

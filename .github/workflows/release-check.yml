@@ -1,0 +1,101 @@
+# Release checks that cannot run locally: the private QGIS runtime on every platform.
+# Until mhm-tools 0.3 and nml-tools 0.6 are on PyPI, every job fails at dependency install.
+name: release-check
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build twine
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - run: python tools/build_qgis_plugin.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  core-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e . pytest
+      - run: python -m pytest tests -q
+
+  runtime:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest is Apple Silicon; check the Intel label is still offered.
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install dist/*.whl
+      - id: root
+        run: echo "path=$(python -c 'from mhm_qgis.runtime import runtime_root; print(runtime_root())')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.root.outputs.path }}/mamba/pkgs
+          key: runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/mhm_qgis/runtime/locks/*.lock') }}
+      - run: mhm-qgis-runtime install --yes --wheelhouse dist
+      - run: mhm-qgis-runtime status
+      - run: mhm-qgis --help
+      - name: mHM and the GUI inside the runtime
+        run: |
+          python - <<'EOF'
+          import subprocess
+          from mhm_qgis import runtime
+          root = runtime.runtime_root()
+          marker = runtime.active_runtime(root)
+          run = [str(runtime._micromamba(root, marker["platform"])),
+                 "--root-prefix", str(root / "mamba"), "run", "--prefix", marker["prefix"]]
+          env = runtime._environment(root)
+          subprocess.run(run + ["mhm", "--version"], check=True, env=env)
+          gui = """
+          import sys
+          from qgis.PyQt.QtCore import QTimer
+          from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
+          from mhm_qgis.qt.__main__ import main
+          exec_ = MhmQgisDialog.exec
+          def exec_once(self):
+              assert self.tabWidget_steps.count() == 6
+              self.open_map_canvas()
+              QTimer.singleShot(0, self.reject)
+              return exec_(self)
+          MhmQgisDialog.exec = exec_once
+          sys.exit(main([]))
+          """
+          subprocess.run(run + ["python", "-c", gui], check=True, env=env)
+          EOF

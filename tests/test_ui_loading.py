@@ -34,6 +34,33 @@ def test_launcher_requires_real_qgis():
     assert "Traceback" not in result.stderr
 
 
+def test_launcher_opens_and_closes_the_real_application():
+    """`main` owns its QgsApplication here, unlike every in-process GUI test."""
+    pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
+    script = '''
+import sys
+from qgis.PyQt.QtCore import QTimer
+from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
+from mhm_qgis.qt.__main__ import main
+exec_ = MhmQgisDialog.exec
+def exec_once(self):
+    self.open_map_canvas()
+    QTimer.singleShot(0, self.reject)
+    return exec_(self)
+MhmQgisDialog.exec = exec_once
+sys.exit(main([]))
+'''
+    paths = (str(Path(__file__).parents[1] / "src"), os.environ.get("PYTHONPATH", ""))
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        env=dict(os.environ, QT_QPA_PLATFORM="offscreen",
+                 PYTHONPATH=os.pathsep.join(filter(None, paths))),
+        capture_output=True, text=True, timeout=120,
+    )
+    assert result.returncode == 0, result.stderr[-3000:]
+    assert "Traceback" not in result.stderr
+
+
 @pytest.mark.parametrize("binding", ["PyQt5", "PyQt6"])
 def test_designer_forms_and_icons(binding):
     if importlib.util.find_spec(binding) is None:

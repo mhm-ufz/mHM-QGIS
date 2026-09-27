@@ -1,26 +1,55 @@
 # mHM QGIS — QGIS plugin for Mesoscale Hydrological Model
 
-Prepare model inputs and namelists for **mHM 5.13 and v6** in QGIS.
+Prepare model inputs and namelists for **mHM 5.13 and v6**, then run mHM, in QGIS
+or as a standalone application.
 
 - Delineate domains, snap outlets, and assign discharge observations.
 - Prepare DEM derivatives, soil, land cover, geology, and LAI.
 - Align morphology and meteorology on compatible model grids.
 - Edit namelists with nml-tools and inspect rasters or discharge time series.
 
-This plugin prepares and configures mHM; running simulations requires a
-separately installed `mhm` executable.
+## Install
 
-## Install from source
+### Standalone application (PyPI)
 
 ```bash
-git clone https://git.ufz.de/mhm/mhm-qgis
-cd mhm-qgis
-python3 -m pip install -e .
+python -m pip install mhm-qgis
+mhm-qgis
 ```
 
-For QGIS, copy or symlink `src/mhm_qgis` into your QGIS profile's
-`python/plugins/` directory and enable **mHM QGIS** in the Plugin Manager.
-Install Python dependencies into the environment used by QGIS.
+`pip install` changes nothing outside the Python environment. On first launch,
+`mhm-qgis` uses the QGIS of the current Python if one is importable. Otherwise, after
+you confirm, it installs a private QGIS 3.44 runtime. That runtime needs about a 1 GB
+download and several GB of disk, and needs no administrator rights. It goes into:
+
+- Linux: `~/.local/share/mhm-qgis`
+- macOS: `~/Library/Application Support/mhm-qgis`
+- Windows: `%LOCALAPPDATA%\mhm-qgis`
+
+Manage the runtime without opening the GUI:
+
+```bash
+mhm-qgis-runtime install --yes   # unattended installation
+mhm-qgis-runtime status
+mhm-qgis-runtime remove          # repair = remove, then install
+```
+
+### QGIS plugin
+
+Install **mHM QGIS** from the QGIS Plugin Manager (QGIS 3.44 or newer, including
+QGIS 4). Enable *Show also experimental plugins* while the plugin is experimental. On
+first start the plugin lists its missing Python dependencies (see `requirements.txt`)
+and offers to install them with `pip --user` into the Python that QGIS uses. If that
+fails, install them manually with that same Python. On Windows, use the OSGeo4W Shell:
+
+```bash
+python -m pip install --user -r <plugin folder>/requirements.txt
+```
+
+### mHM executables
+
+mHM 5.13.4 is installed with the `mhm` Python package. For mHM v6, choose a
+compatible executable in the Configuration tab (or set `MHM_QGIS_MHMV6`).
 
 ## Workflow
 
@@ -41,25 +70,24 @@ converts units and optionally deaccumulates running totals. Historical land-use
 periods share exact datetime boundaries (v5 changes must fall on year boundaries).
 Both model versions can generate L0/L1/L11/L2 coordinates in `data/latlon.nc`.
 
-To open the GUI without QGIS Desktop, run `mhm-qgis` (or
-`python -m mhm_qgis.qt`) from a Python environment with the real QGIS runtime
-and Processing libraries installed. There is no QGIS-free GUI or compatibility
-shim. Install QGIS and its matching Qt binding through your platform's QGIS
-packages, not pip. Map previews that use QGIS Desktop's main canvas still
-require Desktop; the domain delineator owns its own canvas.
-
-The UI targets QGIS 3/Qt5 and QGIS 4/Qt6. Designer `.ui` files are loaded at
-runtime through `qgis.PyQt`; no UI/resource compilation is needed. Full QGIS 4
-workflow verification is still pending.
+Displayed layers appear on QGIS Desktop's map canvas. In the standalone application
+they appear in its own map window, which has a layer tree and accepts dropped raster
+and vector files. The Map Canvas button focuses whichever canvas is in use.
 
 ## Development
 
 ```bash
+git clone https://git.ufz.de/mhm/mhm-qgis
+cd mhm-qgis
 python3 -m pip install -e '.[dev]'
 python3 -m pytest tests/ -q
 ```
 
-GUI tests require real QGIS and run offscreen; they are skipped when its
-runtime libraries are unavailable. Core tests remain QGIS-independent.
+For QGIS Desktop development, symlink `src/mhm_qgis` into your QGIS profile's
+`python/plugins/` directory. GUI tests require real QGIS and run offscreen; they are
+skipped when its runtime libraries are unavailable. Core tests remain
+QGIS-independent. Designer `.ui` files load at runtime through `qgis.PyQt`, so no
+UI or resource compilation is needed.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](https://git.ufz.de/mhm/mhm-qgis/-/blob/main/CONTRIBUTING.md) and
+[CHANGELOG.md](https://git.ufz.de/mhm/mhm-qgis/-/blob/main/CHANGELOG.md).

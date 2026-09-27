@@ -5,28 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] - Unreleased
+
+First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgis`).
 
 ### Added
-- Initial PyPI package structure
-- Command line interface
-- Documentation framework
-
-## [0.1.0] - 2025-01-XX
-
-### Added
-- Initial release of mHM QGIS
-- QGIS plugin functionality
-- Basic hydrological modeling capabilities
-- Python package structure
-- Documentation and examples
-
-### Changed
-- Updated for QGIS 3.40.6 compatibility
-- Modernized PyQt imports
-- Improved plugin architecture
-
-### Fixed
-- Fixed import issues for modern QGIS versions
-- Resolved resource loading problems
-- Updated UI files for Qt5 compatibility
+- mHM 5.13 and v6 setups: domain delineation and outlet snapping, DEM derivatives,
+  soil, land cover, geology and LAI, and meteorological forcing on aligned L0/L1/L11/L2
+  grids.
+- Namelist editing through nml-tools, and running mHM: v5.13.4 from the `mhm` PyPI
+  package, v6 from a user-selected executable.
+- A standalone `mhm-qgis` command that reuses an importable QGIS or installs a
+  private, checksum-verified QGIS 3.44 runtime on first launch. `mhm-qgis-runtime
+  install|status|remove` manages it.
+- A standalone map window with a layer tree (visibility, ordering), cursor and time
+  read-outs, and file drops. In QGIS Desktop, Map Canvas focuses Desktop's canvas.
+- Supports QGIS 3.44+ (Qt5) and QGIS 4 (Qt6).

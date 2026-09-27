@@ -147,6 +147,10 @@ Rules that follow from it:
 - Both GUI entry points use real QGIS, never a shim. Install QGIS and its Qt
   binding through the platform's QGIS packages; never add a pip `qgis` or fixed
   `PyQt5`/`PyQt6` dependency to this plugin.
+- `QgsApplication` takes bytes argv: `QgsApplication(sys.argv, ...)` raises
+  `TypeError: expected bytes`. Pass `[]`, as `qt/__main__.py` and `conftest.py` do.
+  `test_launcher_opens_and_closes_the_real_application` is the only test in which `main()`
+  owns its application.
 - Use `qgis.PyQt`, scoped enums and `exec()`. `configure_qtpy_api()` selects the
   loaded QGIS Qt major before QtPy/nml-tools/pyqtgraph import. Do not select Qt
   by QGIS major alone or mix bindings in one process.
@@ -769,6 +773,14 @@ Four JSON files live under each domain's `.temp/` directory.
 - If adding data files under `src/mhm_qgis/`, update `MANIFEST.in` and package-data
   patterns if the extension is new.
 - Do not add `qgis` as a PyPI dependency. QGIS is provided by QGIS itself.
+- The build backend is pinned to `setuptools>=69.3,<70`. 69.3 is the first version with
+  the PEP 625 sdist name PyPI requires (`mhm_qgis-X.tar.gz`). 77+ rejects the current
+  `license = {file}` table plus license classifier, so moving past 70 means switching to
+  an SPDX `license` string first.
+- `.github/workflows/release-check.yml` runs on the GitHub `origin` (public home:
+  `git.ufz.de/mhm/mhm-qgis`). It builds the artifacts, runs core tests on Python 3.10
+  and 3.14, and installs the private runtime plus a GUI open/close on Linux, Windows
+  and both macOS architectures. Publishing stays manual.
 - The private runtime is `runtime/locks/<platform>.lock`, generated from
   `tools/runtime/environment.yml` with `uvx conda-lock lock -f tools/runtime/environment.yml
   --virtual-package-spec tools/runtime/virtual-packages.yml --kind explicit

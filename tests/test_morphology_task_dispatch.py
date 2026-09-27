@@ -21,6 +21,12 @@ from mhm_qgis.core.handlers.store.layout import ensure_project_structure  # noqa
 _APPLICATION = None
 
 
+def _filled_dem(bridge):
+    """Stages after DEM preparation expect the filled DEM to exist already."""
+    Path(bridge.filled_dem_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(bridge.filled_dem_path).write_text("x", encoding="utf-8")
+
+
 def _app():
     global _APPLICATION
     _APPLICATION = QApplication.instance() or _APPLICATION or QApplication([])
@@ -165,6 +171,7 @@ def test_lai_stage_submits_a_background_task_when_selected(tmp_path, monkeypatch
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
     bridge = dialog.morphology_tasks
+    _filled_dem(bridge)
     submitted = []
     bridge.coordinator.submit = (
         lambda key, label, fn, **k: submitted.append((key, label, k)) or True
@@ -201,6 +208,7 @@ def test_unchanged_lai_inputs_reuse_the_staged_file(tmp_path, monkeypatch):
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
     bridge = dialog.morphology_tasks
+    _filled_dem(bridge)
     submitted = []
     bridge.coordinator.submit = lambda *a, **k: submitted.append(a) or True
 
@@ -260,6 +268,7 @@ def test_a_missing_staged_file_forces_the_lai_resample(tmp_path, monkeypatch):
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
     bridge = dialog.morphology_tasks
+    _filled_dem(bridge)
     submitted = []
     bridge.coordinator.submit = lambda *a, **k: submitted.append(a) or True
 
@@ -315,8 +324,7 @@ def test_geology_outputs_already_on_disk_are_adopted_not_rebuilt(tmp_path):
         path.write_text("x", encoding="utf-8")
         inputs[name] = path
     inputs["1_dem_filled.tif"] = bridge.filled_dem_path
-    Path(bridge.filled_dem_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(bridge.filled_dem_path).write_text("x", encoding="utf-8")
+    _filled_dem(bridge)
     outputs = {}
     for name in ("3_geology_processed.tif", "geology_classdefinition.txt",
                  "geology_class_metadata.json"):
@@ -331,6 +339,7 @@ def test_geology_outputs_already_on_disk_are_adopted_not_rebuilt(tmp_path):
     job = {
         "kind": "geology",
         "input_file": str(inputs["geology_input.shp"]),
+        "input_variable": "",
         "filled_dem": str(inputs["1_dem_filled.tif"]),
         "lookup_table": str(inputs["lookup.csv"]),
         "output": str(outputs["3_geology_processed.tif"]),

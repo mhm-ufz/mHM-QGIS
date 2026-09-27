@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=68,<69", "wheel"]
+requires = ["setuptools>=69.3,<70", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mhm-qgis"
 dynamic = ["version"]
-description = "Python package for mesoscale Hydrological Model"
+description = "Prepare, configure and run mHM 5.13 and v6 models in QGIS or as a standalone app"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
@@ -21,13 +21,14 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Hydrology",
     "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.20.0",
     "scipy>=1.7.0",
@@ -60,10 +61,9 @@ docs = [
     "sphinx-rtd-theme",
 ]
 [project.urls]
-Homepage = "https://github.com/SanjeevBashyal/mhm-qgis"
-Documentation = "https://github.com/SanjeevBashyal/mhm-qgis/wiki"
-Repository = "https://github.com/SanjeevBashyal/mhm-qgis"
-"Bug Tracker" = "https://github.com/SanjeevBashyal/mhm-qgis/issues"
+Homepage = "https://git.ufz.de/mhm/mhm-qgis"
+Repository = "https://git.ufz.de/mhm/mhm-qgis"
+"Bug Tracker" = "https://git.ufz.de/mhm/mhm-qgis/-/issues"
 
 [project.scripts]
 mhm-qgis = "mhm_qgis.runtime:launch"

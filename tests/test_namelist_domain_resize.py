@@ -30,3 +30,17 @@ def test_legacy_domain_migration_preserves_original_until_editor_save(tmp_path, 
         assert target.with_suffix(".nml.before-single-domain").read_bytes() == before
     else:
         assert target.read_bytes() == before
+
+
+def test_v5_camel_case_dimensions_still_shrink_legacy_domains(tmp_path):
+    """The plugin names v5 sizes `nDomains`; nml-tools recovers them lower-cased."""
+    schemas = SCHEMAS.parent / "v5.13"
+    project = model.load_project(schemas, tmp_path)
+    model.save_profiles(project, [(project.profile("main"), {
+        "mainconfig": {"nDomains": 2, "resolution_Hydrology": [12000.0, 24000.0]},
+    }, {"ndomains": 2})])
+    values = {"main": {"mainconfig": {"nDomains": 1, "resolution_Hydrology": [12000.0]}}}
+    with _editor_folder(schemas, tmp_path, {"main": []}, values, {"nDomains": 1}) as folder:
+        assert folder != tmp_path
+        staged = model.load_project(schemas, folder, {"main": []})
+        assert model.recover_dimensions(staged)["ndomains"] == 1

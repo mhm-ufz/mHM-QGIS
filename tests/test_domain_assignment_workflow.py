@@ -123,15 +123,7 @@ def test_assignment_state_separates_filename_text_from_numeric_gauge_id(tmp_path
             "outlet_id": "001",
             "gauge_id": 1,
             "gauge_filename": "001.txt",
-            "gauge_path": str(
-                tmp_path
-                / "mhm-qgis"
-                / "data"
-                / "master"
-                / "observation"
-                / "streamflow"
-                / "001.txt"
-            ),
+            "gauge_path": str(tmp_path / "data" / "observation" / "streamflow" / "001.txt"),
             "domain_ids": [],
         }
     ]

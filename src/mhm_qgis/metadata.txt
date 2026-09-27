@@ -1,47 +1,32 @@
-# This file contains metadata for your plugin.
-
-# This file should be included when you package your plugin.# Mandatory items:
-
 [general]
 name=mHM QGIS
-qgisMinimumVersion=3.28
-# Qt5/Qt6 compatibility target; real-QGIS workflow checks are required before release.
+qgisMinimumVersion=3.44
 qgisMaximumVersion=4.99
-description=Python package for mesoscale Hydrological Model
-version=0.0.1
+description=Prepare, configure and run the mesoscale Hydrological Model (mHM) 5.13 and v6.
+version=0.1.0
 author=Sanjeev Bashyal
-email=sanjeev.bashyal01@gmail.com
-
-about=Prepare, configure and run the mesoscale Hydrological Model. Requires the
- Python dependencies listed in requirements.txt. mHM 5.13.4 is installed from
- PyPI; the user selects a compatible mHM v6 executable when using v6.
-
-tracker=https://github.com/SanjeevBashyal/mhm-qgis/issues
-repository=https://github.com/SanjeevBashyal/mhm-qgis
-# End of mandatory metadata
-
-# Recommended items:
-
-hasProcessingProvider=no
-# Uncomment the following line and add your changelog:
-# changelog=
-
-# Tags are comma separated with spaces allowed
-tags=python,hydrology,modeling
-
-homepage=https://github.com/SanjeevBashyal/mhm-qgis
+email=sanjeev.bashyal@ufz.de
+about=Builds mHM model setups: domain delineation and outlet snapping, DEM
+ derivatives, soil, land cover, geology and LAI, meteorological forcing on
+ aligned model grids, namelist editing with nml-tools, and running mHM.
+ Python dependencies are listed in requirements.txt in the plugin folder. On
+ first start the plugin offers to install missing ones with pip --user into the
+ Python that QGIS uses. If that fails, install them manually with that Python:
+ in the plugin folder run python -m pip install --user -r requirements.txt
+ (on Windows from the OSGeo4W Shell; on Linux or macOS with QGIS's Python).
+ Without QGIS Desktop, install the standalone app with pip install mhm-qgis and
+ run mhm-qgis; its first launch installs a private QGIS runtime.
+ mHM 5.13.4 comes from the mhm Python package; for mHM v6 select a compatible
+ executable in the Configuration tab.
+tracker=https://git.ufz.de/mhm/mhm-qgis/-/issues
+repository=https://git.ufz.de/mhm/mhm-qgis
+homepage=https://git.ufz.de/mhm/mhm-qgis
+changelog=0.1.0 First public release: mHM 5.13 and v6 setup preparation,
+ namelist editing, mHM execution, and a standalone map window.
+tags=hydrology,mhm,hydrological model,catchment,raster,modeling
 category=Raster
 icon=qt/ui/forms/Resources/icon.png
-# experimental flag
-experimental=False
-
-# deprecated flag (applies to the whole plugin, not just a single version)
+experimental=True
 deprecated=False
-
-# Since QGIS 3.8, a comma separated list of plugins to be installed
-# (or upgraded) can be specified.
-# Check the documentation for more information.
-# plugin_dependencies=
-
-# If the plugin can run on QGIS Server.
+hasProcessingProvider=no
 server=False

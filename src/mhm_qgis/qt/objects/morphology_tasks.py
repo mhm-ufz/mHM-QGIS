@@ -423,6 +423,14 @@ class MorphologyTaskBridge(QtCore.QObject):
         failed=None,
     ):
         """Resample the selected LAI NetCDF onto the filled DEM grid."""
+        mode = self.dialog.categorical_input_mode("lai").lower()
+        categorical = mode == "mhm ready" or "lookup" in mode
+        if not categorical and "netcdf" not in mode:
+            self.dialog.log_message(
+                "No LAI NetCDF input is selected. Skipping LAI.")
+            if done is not None:
+                done(None)
+            return True
         if not os.path.isfile(self.filled_dem_path):
             return self.start_dem_derivatives(
                 key=f"{key}-dem",
@@ -436,19 +444,12 @@ class MorphologyTaskBridge(QtCore.QObject):
                 ),
                 failed=failed,
             )
-        mode = self.dialog.categorical_input_mode("lai").lower()
-        if mode == "mhm ready" or "lookup" in mode:
+        if categorical:
             return self.start_categorical(
                 "lai", key=key, controls=controls, load=False,
                 reuse_existing=True, publish=publish,
                 done=done, failed=failed,
             )
-        if "netcdf" not in mode:
-            self.dialog.log_message(
-                "No LAI NetCDF input is selected. Skipping LAI.")
-            if done is not None:
-                done(None)
-            return True
         config = self.dialog.lai_netcdf_config() or {}
         source_path = str(config.get("input_path", "") or self._selected_source("lai"))
         source = source_path

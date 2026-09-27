@@ -355,6 +355,8 @@ def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
         {"lower_depth": 200}, {"lower_depth": 500}, {"lower_depth": 1000}]})
     for version in ("5.13", "6.0"):
         project, dimensions, document = _document(version, dialog)
+        # The editor window normalizes names before building its tabs.
+        dimensions = {name.lower(): size for name, size in dimensions.items()}
         for profile in project.profiles:
             editor = ProfileTab(
                 project,

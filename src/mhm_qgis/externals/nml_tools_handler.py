@@ -29,6 +29,8 @@ def _editor_folder(schemas, output, profiles, initial, dimensions, log=None):
     )
 
     output = Path(output)
+    # nml-tools keys dimensions in lower case; v5 names them `nDomains`.
+    dimensions = {key.lower(): size for key, size in dimensions.items()}
     project = load_project(schemas, output, profiles)
     previous = recover_dimensions(project)
     shrunk = {key for key, size in dimensions.items() if size < previous.get(key, size)}
@@ -54,7 +56,7 @@ def _editor_folder(schemas, output, profiles, initial, dimensions, log=None):
                 for name, schema in page.schema.get("properties", {}).items():
                     shape = schema.get("x-fortran-shape", [])
                     shape = shape if isinstance(shape, list) else [shape]
-                    if name in fields and shrunk.intersection(shape):
+                    if name in fields and shrunk.intersection(str(t).lower() for t in shape):
                         # A merged domain has no single predecessor: do not pick
                         # one old catchment's settings arbitrarily.
                         fields[name] = suggestion(schema, sizes)

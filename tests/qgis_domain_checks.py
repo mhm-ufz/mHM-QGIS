@@ -162,4 +162,8 @@ if __name__ == "__main__":
             widget.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     application.exitQgis()
-    print("Real QGIS snapping and deferred navigation passed")
+    print("Real QGIS snapping and deferred navigation passed", flush=True)
+    # ponytail: skips native teardown, where Qt5 crashes on this script's stub parent
+    # dialog after every check has passed; the real launcher exit is tested separately.
+    import os
+    os._exit(0)

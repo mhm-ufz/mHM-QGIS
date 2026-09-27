@@ -19,7 +19,7 @@ def main(argv=None):
     app = QgsApplication.instance()
     owns_app = app is None
     if owns_app:
-        app = QgsApplication(sys.argv[:1], True)
+        app = QgsApplication([], True)
         app.initQgis()
     try:
         initialize()
