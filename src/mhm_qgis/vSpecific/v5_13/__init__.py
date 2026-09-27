@@ -180,9 +180,9 @@ def _soil_values(settings: dict[str, Any]) -> dict[str, Any]:
         return {}
     tillage = int(soil.get("tillage_depth") or depths[0])
     return {
-        "iFlag_soilDB": 0,
+        "iFlag_soilDB": 1,
         "tillageDepth": tillage,
-        "nSoilHorizons_mHM": len(depths) + 1,
+        "nSoilHorizons_mHM": len(depths),
         "soil_Depth": depths,
     }
 

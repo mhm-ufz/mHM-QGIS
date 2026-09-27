@@ -49,10 +49,6 @@ def publish_model_inputs(
             shutil.copy2(path, source)
 
     for path in staged_files(project_folder):
-        if not is_v6(project_folder) and path.name in {
-            "soil_horizon_class.nc", "soil_classdefinition_iFlag_soilDB_1.txt"
-        }:
-            continue
         suffix = path.suffix.lower()
         target = master / path.name
         if suffix in RASTER_SUFFIXES:
@@ -120,6 +116,14 @@ def _publish_v5_raster(project_folder, source, master, header) -> tuple[Path, ..
         names = [Path(scene.get("output_path", "")).name for scene in scenes]
         if len(names) != bands or any(not name for name in names):
             raise ValueError("Land-cover periods do not match lc_periods.nc.")
+    elif source.stem == "soil_horizon_class":
+        horizons = load_settings(project_folder).get("soil", {}).get("horizons", [])
+        if bands != len(horizons):
+            raise ValueError("Soil horizons do not match soil_horizon_class.nc.")
+        names = [
+            f"soil_class_horizon_{index:02d}.asc"
+            for index in range(1, bands + 1)
+        ]
     else:
         if bands != 1:
             raise ValueError(f"Expected one raster layer in {source.name}.")
@@ -210,6 +214,8 @@ def _published_path(by_name, value, v6):
     if not value:
         return None
     path = Path(value)
+    if not v6 and path.name == "soil_horizon_class.nc":
+        return by_name.get("soil_class_horizon_01.asc")
     if path.suffix.lower() in {".tif", ".tiff"} or (path.suffix.lower() == ".nc" and not v6):
         return by_name.get(path.with_suffix(".asc").name)
     return by_name.get(path.name)

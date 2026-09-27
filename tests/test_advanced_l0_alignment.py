@@ -151,6 +151,46 @@ def _staged_nc(project, name, header=None, variable="soil_class"):
     return path
 
 
+def _staged_soil_horizons(project, count=2):
+    from pyproj import CRS
+
+    folder = Path(morph_staging_folder(project))
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "soil_horizon_class.nc"
+    header = L0_TARGET
+    x = header["xllcorner"] + (
+        np.arange(header["ncols"]) + 0.5
+    ) * header["cellsize"]
+    y = header["yllcorner"] + (
+        np.arange(header["nrows"])[::-1] + 0.5
+    ) * header["cellsize"]
+    values = np.arange(count * header["nrows"] * header["ncols"]).reshape(
+        count, header["nrows"], header["ncols"]
+    )
+    dataset = xr.DataArray(
+        values,
+        dims=("horizon", "y", "x"),
+        coords={"horizon": range(1, count + 1), "y": y, "x": x},
+        name="soil_class",
+    ).to_dataset()
+    crs = CRS.from_epsg(32632)
+    dataset["x"].attrs = {
+        "axis": "X", "standard_name": "projection_x_coordinate", "units": "m"
+    }
+    dataset["y"].attrs = {
+        "axis": "Y", "standard_name": "projection_y_coordinate", "units": "m"
+    }
+    dataset["soil_class"].attrs["grid_mapping"] = "crs"
+    dataset["soil_class"].encoding["_FillValue"] = -9999
+    dataset["crs"] = xr.DataArray(0, attrs={
+        **crs.to_cf(),
+        "spatial_ref": crs.to_wkt(),
+        "GeoTransform": "0 100 0 400 0 -100",
+    })
+    dataset.to_netcdf(path)
+    return path
+
+
 L0_TARGET = {
     "ncols": 4, "nrows": 4, "xllcorner": 0.0, "yllcorner": 0.0,
     "cellsize": 100.0, "unit": "m", "nodata_value": -9999.0,
@@ -173,6 +213,37 @@ def test_exact_netcdf_is_converted_and_definitions_are_carried(tmp_path):
     assert (master / "soil_classdefinition.txt").read_text(encoding="utf-8") == "1 sand\n"
     header = (master / "soil_class.asc").read_text(encoding="utf-8").splitlines()
     assert header[0].split()[1] == "4" and header[1].split()[1] == "4"
+
+
+def test_v5_soil_horizons_are_published_as_ascii_layers(tmp_path):
+    _staged_soil_horizons(tmp_path)
+    definition = Path(morph_staging_folder(tmp_path)) / (
+        "soil_classdefinition_iFlag_soilDB_1.txt"
+    )
+    definition.write_text("definition\n", encoding="utf-8")
+    update_section(tmp_path, "soil", {
+        "output_path": ".temp/Morphology/morph/soil_horizon_class.nc",
+        "classdefinition_path": (
+            ".temp/Morphology/morph/soil_classdefinition_iFlag_soilDB_1.txt"
+        ),
+        "horizons": [{"lower_depth": 100}, {"lower_depth": 300}],
+    })
+
+    published = publish_model_inputs(tmp_path, L0_TARGET)
+
+    assert sorted(path.name for path in published) == [
+        "soil_class_horizon_01.asc",
+        "soil_class_horizon_02.asc",
+        "soil_classdefinition_iFlag_soilDB_1.txt",
+    ]
+    from mhm_qgis.core.handlers.state.nml_settings import load_settings
+
+    soil = load_settings(tmp_path)["soil"]
+    assert soil["output_path"] == "data/static/morph/soil_class_horizon_01.asc"
+    assert soil["classdefinition_path"] == (
+        "data/static/morph/soil_classdefinition_iFlag_soilDB_1.txt"
+    )
+    assert missing_model_inputs(tmp_path) == []
 
 
 def test_publication_rejects_a_grid_that_is_not_the_common_extent(tmp_path):

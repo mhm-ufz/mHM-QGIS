@@ -417,6 +417,10 @@ Four JSON files live under each domain's `.temp/` directory.
 - Execute All formats inputs on the already established common filled-DEM grid.
   Lookup, advanced and mHM-ready categorical modes all stage under
   `.temp/Morphology/morph`, then publish during Execute All's final stage.
+- Multi-horizon soil always stages as `soil_horizon_class.nc` in database mode 1.
+  Both versions keep `soil_classdefinition_iFlag_soilDB_1.txt`; v5 publishes one
+  `soil_class_horizon_XX.asc` per horizon while v6 keeps the NetCDF.
+  Its `nSoilHorizons_mHM` and `soil_Depth` contain exactly the configured horizons.
 - `advanced_l0.publish_model_inputs()` validates exact alignment, fills class
   nodata, and copies into `data/`. It retains staged rasters and definitions for
   reuse. Ready TIFFs and v5 NetCDF class rasters are exported to ASCII by streaming
