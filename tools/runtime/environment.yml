@@ -1,0 +1,42 @@
+channels:
+  - conda-forge
+  - nodefaults
+platforms:
+  - linux-64
+  - win-64
+  - osx-64
+  - osx-arm64
+dependencies:
+  - python=3.12
+  - qgis=3.44.14
+  - pip
+  - numpy>=1.20,<2.4
+  - scipy>=1.7
+  - pandas>=1.3
+  - pyproj>=3
+  - pyqtgraph>=0.13.3
+  - pyflwdir>=0.5.12
+  - qtpy
+  - guidata
+  - netcdf4>=1.5
+  - xarray>=0.19
+  - rioxarray>=0.13
+  # Requirements of the pip-only mhm, mhm-tools, nml-tools, easy_mpl and cdo wheels.
+  - cartopy
+  - click>=8.1
+  - crick
+  - distributed
+  - geopandas>=1.1.3,<2
+  - h5netcdf
+  - h5py
+  - jinja2
+  - joblib
+  - jsonschema
+  - matplotlib-base>=3.6.1,<3.11
+  - packaging
+  - pypdf>=3,<6
+  - pyyaml
+  - rasterio
+  - seaborn-base
+  - six
+  - trogon>=0.6.0

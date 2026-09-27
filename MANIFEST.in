@@ -4,8 +4,11 @@ include tools/build_qgis_plugin.py
 include src/mhm_qgis/metadata.txt
 include src/mhm_qgis/requirements.txt
 include src/mhm_qgis/settings.yaml
+include tools/runtime/*.yml
 prune tests
 graft src/mhm_qgis/nml-schemas
+graft src/mhm_qgis/runtime/locks
+include src/mhm_qgis/runtime/micromamba.json
 recursive-include src/mhm_qgis/qt/ui/forms *.ui
 recursive-include src/mhm_qgis/qt/ui/forms/Resources *.png
 recursive-exclude src/mhm_qgis *.ipynb *.qrc

@@ -1,0 +1,21 @@
+subdirs:
+  linux-64:
+    packages:
+      __unix: "0"
+      __linux: "5.10"
+      __archspec: "1 x86_64"
+      __glibc: "2.28"
+  win-64:
+    packages:
+      __win: "0"
+      __archspec: "1 x86_64"
+  osx-64:
+    packages:
+      __unix: "0"
+      __archspec: "1 x86_64"
+      __osx: "13.3"
+  osx-arm64:
+    packages:
+      __unix: "0"
+      __archspec: "1 arm64"
+      __osx: "13.3"

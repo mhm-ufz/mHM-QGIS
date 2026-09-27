@@ -66,7 +66,8 @@ Repository = "https://github.com/SanjeevBashyal/mhm-qgis"
 "Bug Tracker" = "https://github.com/SanjeevBashyal/mhm-qgis/issues"
 
 [project.scripts]
-mhm-qgis = "mhm_qgis.qt.__main__:main"
+mhm-qgis = "mhm_qgis.runtime:launch"
+mhm-qgis-runtime = "mhm_qgis.runtime:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -85,6 +86,8 @@ mhm_qgis = [
     "settings.yaml",
     "nml-schemas/**/*.toml",
     "nml-schemas/**/*.yml",
+    "runtime/*.json",
+    "runtime/locks/*.lock",
     "**/*.png",
     "**/*.qm",
     "**/*.ui",

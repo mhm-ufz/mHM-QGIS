@@ -38,6 +38,7 @@ def test_qgis_zip_contains_only_the_plugin(tmp_path):
             "mhm_qgis/metadata.txt",
         } <= names
         assert all(name.startswith("mhm_qgis/") for name in names)
+        assert not any(name.startswith("mhm_qgis/runtime/") for name in names)
         assert not any(
             "__pycache__" in name
             or name.endswith((".ipynb", ".pyc", ".qrc"))

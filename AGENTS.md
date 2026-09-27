@@ -19,11 +19,14 @@ whether hosted by QGIS Desktop or launched directly.
 - `src/mhm_qgis/`: the QGIS plugin folder **and** the Python package. Both at once --
   QGIS loads this directory directly, and it is what the wheel ships.
 - `src/mhm_qgis/metadata.txt`, `__init__.py`, `mhm_qgis.py`: QGIS plugin entry points.
-- `src/mhm_qgis/qt/__main__.py`: `mhm-qgis` console entry point and
-  `python -m mhm_qgis.qt`; initializes a real `QgsApplication` without Desktop.
-  QGIS Python/runtime and Processing libraries must already be installed.
+- `src/mhm_qgis/qt/__main__.py`: `python -m mhm_qgis.qt`; initializes a real
+  `QgsApplication` without Desktop. QGIS Python/runtime and Processing libraries
+  must already be importable.
+- `src/mhm_qgis/runtime/`: the `mhm-qgis` and `mhm-qgis-runtime` console entry points.
+  Uses an importable QGIS, otherwise installs a private micromamba QGIS runtime and
+  relaunches `python -m mhm_qgis.qt` inside it. Excluded from the QGIS ZIP.
 - `src/mhm_qgis/nml-schemas/`: versioned by mHM version, currently `v5.13` and `v6`.
-- `setup.py`, `pyproject.toml`, `MANIFEST.in`: PyPI packaging metadata.
+- `pyproject.toml`, `MANIFEST.in`: PyPI packaging metadata.
 - `tests/`: core checks run in plain Python; GUI checks require real QGIS and
   are skipped when unavailable. `conftest.py` initializes an offscreen QGIS application.
 
@@ -752,6 +755,20 @@ Four JSON files live under each domain's `.temp/` directory.
 - If adding data files under `src/mhm_qgis/`, update `MANIFEST.in` and package-data
   patterns if the extension is new.
 - Do not add `qgis` as a PyPI dependency. QGIS is provided by QGIS itself.
+- The private runtime is `runtime/locks/<platform>.lock`, generated from
+  `tools/runtime/environment.yml` with `uvx conda-lock lock -f tools/runtime/environment.yml
+  --virtual-package-spec tools/runtime/virtual-packages.yml --kind explicit
+  --filename-template 'src/mhm_qgis/runtime/locks/{platform}.lock' -p <platform>`.
+  Lock one platform per run: a failing platform makes conda-lock write nothing, and a
+  solve needs ~4 GB RAM and ~10 min. Every compiled dependency of mhm-qgis, mhm-tools
+  and nml-tools belongs in `environment.yml`; pip may add only the pure/self-contained
+  `mhm`, `mhm-tools`, `nml-tools`, `easy_mpl` and `cdo` wheels. Otherwise PyPI wheels
+  bring their own GDAL/PROJ into the QGIS process. conda-forge `mhm` and `python-cdo`
+  are deliberately absent: the first pins an older libnetcdf than QGIS, the second
+  pulls the CDO binary, which has no Windows or current macOS build.
+- Runtime subprocesses get `PYTHONNOUSERSITE=1` and no `PYTHONPATH`/`PYTHONHOME`.
+  Without that, stale `~/.local/lib/python3.X` packages shadow the locked ones, and pip
+  uninstalls user-site packages while upgrading them.
 
 ## Verifying A Change
 

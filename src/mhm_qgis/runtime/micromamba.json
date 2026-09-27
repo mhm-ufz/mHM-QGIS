@@ -1,0 +1,25 @@
+{
+  "version": "2.8.1-0",
+  "platforms": {
+    "linux-64": {
+      "url": "https://github.com/mamba-org/micromamba-releases/releases/download/2.8.1-0/micromamba-linux-64",
+      "sha256": "9689782d863c05a1bf5d2d371ba527104e7a4eb4310c1637d8653b751aed9c82",
+      "size": 18054656
+    },
+    "win-64": {
+      "url": "https://github.com/mamba-org/micromamba-releases/releases/download/2.8.1-0/micromamba-win-64",
+      "sha256": "8a51f88ec02600488ea20c3acd93fbd4da6c0f03fc499aa53fd234c6749b94b0",
+      "size": 11311104
+    },
+    "osx-64": {
+      "url": "https://github.com/mamba-org/micromamba-releases/releases/download/2.8.1-0/micromamba-osx-64",
+      "sha256": "b2bd613791c0a524883d7cb66505d630bf15badd1f492bc93ba78550a3a1a94b",
+      "size": 16160416
+    },
+    "osx-arm64": {
+      "url": "https://github.com/mamba-org/micromamba-releases/releases/download/2.8.1-0/micromamba-osx-arm64",
+      "sha256": "de71a646b73af92dd663e6ddc78993a6a4d47ea28b5d8908c3cc2b9c3077e528",
+      "size": 14446512
+    }
+  }
+}

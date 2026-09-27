@@ -40,6 +40,8 @@ def runtime_files():
     for path in sorted(PACKAGE.rglob("*")):
         if not path.is_file() or path.is_symlink():
             continue
+        if path.relative_to(PACKAGE).parts[0] == "runtime":
+            continue
         if path.name in SKIP_NAMES or "__pycache__" in path.parts:
             continue
         if path.suffix.lower() in RUNTIME_SUFFIXES:
