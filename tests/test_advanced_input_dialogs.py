@@ -70,6 +70,13 @@ def test_land_use_dialog_reuses_first_row_and_extracts_periods(tmp_path):
     assert value.lookup_table == lookup
 
 
+def test_land_use_lookup_browse_accepts_qt_checked_argument(tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import land_use_historical
+
+    monkeypatch.setattr(land_use_historical, "open_file", lambda *args: ("", ""))
+    HistoricalLandUseDialog(tmp_path)._browse_lookup(False)
+
+
 def test_soil_dialog_adds_all_four_rows_and_extracts_unit(tmp_path):
     _app()
     paths = [_touch(tmp_path / f"layer_{index}.tif") for index in range(8)]

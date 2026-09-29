@@ -135,7 +135,7 @@ def _lookup_changed(dialog, *_args) -> None:
     dialog.comboBox_classFieldInput.setCurrentText(class_field)
 
 
-def _browse_lookup(dialog) -> None:
+def _browse_lookup(dialog, _checked=False) -> None:
     path, _ = open_file(
         dialog,
         "Select Land-use Lookup Table",

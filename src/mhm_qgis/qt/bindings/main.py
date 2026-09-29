@@ -279,9 +279,11 @@ def bind(dialog):
     dialog.groupBox_editCalibrationNamelists.setEnabled(
         main.selected_version(dialog).startswith("6"))
     run_mhm_button = dialog.pushButton_execute_mHM
-    dialog.pushButton_browseMHMExecutable.clicked.connect(
-        lambda checked=False: dialog.select_mhm_v6_executable()
-    )
+    browse_mhm = getattr(dialog, "pushButton_browseMHMExecutable", None)
+    if browse_mhm is not None:
+        browse_mhm.clicked.connect(
+            lambda checked=False: dialog.select_mhm_v6_executable()
+        )
     dialog.refresh_mhm_executable()
     if run_mhm_button is not None:
         run_mhm_button.setToolTip("Run mHM")
