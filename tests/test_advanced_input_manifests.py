@@ -70,8 +70,7 @@ def test_datetime_and_year_boundaries_are_continuous_and_simulation_bounded(tmp_
     assert value.periods[0].end_time == value.periods[1].start_time
     manifest = write_land_use_manifest(value, tmp_path / "dates.csv").read_text()
     assert "2000-06-01T12:00:00" in manifest
-    with pytest.raises(ValueError, match="year boundaries"):
-        validate_land_use_input(value, version="5.13")
+    validate_land_use_input(value, version="5.13")
     with pytest.raises(ValueError, match="before the simulation"):
         validate_land_use_input(value, simulation_start="2000-02-01")
     with pytest.raises(ValueError, match="after the simulation"):

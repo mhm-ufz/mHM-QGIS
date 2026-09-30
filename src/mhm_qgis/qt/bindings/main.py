@@ -74,6 +74,11 @@ def bind(dialog):
     # Project management
     dialog.pushButton_BrowseProjectFolder.clicked.connect(dialog.select_project_folder)
     dialog.pushButton_createProjectStructure.clicked.connect(lambda: main.create_project_structure(dialog))
+    dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(
+        lambda: dialog.comboBox_mHMversion.setEnabled(
+            dialog.comboBox_domainFolderSelector.currentData() is None
+        )
+    )
     dialog.comboBox_mhmWorkType.currentIndexChanged.connect(lambda: main.work_type_changed(dialog))
     dialog.pushButton_scanPrecipitationFiles.clicked.connect(lambda: main.scan_precipitation(dialog))
     dialog.pushButton_addMeteoInput.clicked.connect(lambda: main.edit_meteo_input(dialog))

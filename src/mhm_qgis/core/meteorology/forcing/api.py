@@ -850,6 +850,7 @@ def _attach_target_coordinates(ds, variable: str, target: TargetGrid):
     })
     ds["lon"].attrs = {"standard_name": "projection_x_coordinate", "axis": "X"}
     ds["lat"].attrs = {"standard_name": "projection_y_coordinate", "axis": "Y"}
+    ds[variable].encoding.pop("coordinates", None)
     ds[variable].attrs["coordinates"] = "lat2d lon2d"
     described = _crs_description(target.crs)
     if described is not None:

@@ -148,10 +148,6 @@ def validate_land_use_input(value: LandUseInput, *, simulation_start=None, simul
         raise ValueError("Land-use periods start before the simulation.")
     if simulation_end is not None and value.periods[-1].end_time > period_datetime(simulation_end):
         raise ValueError("Land-use periods end after the simulation.")
-    if str(version).startswith("5"):
-        for period in value.periods[1:]:
-            if period.start_time != datetime(period.start_time.year, 1, 1):
-                raise ValueError("mHM v5 supports land-use changes at year boundaries only; use v6 for datetime changes.")
     _require_file(value.lookup_table, "land-use lookup table")
     if not value.mapping_field.strip() or not value.class_field.strip():
         raise ValueError("Select both the land-use mapping and class fields.")

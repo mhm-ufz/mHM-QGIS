@@ -112,6 +112,7 @@ def create_project_structure(dialog):
         dialog.refresh_morphology_workflow_button_states()
         dialog.save_input_state()
         populate_domain_folders(dialog, path.name)
+        dialog.comboBox_mHMversion.setEnabled(False)
         set_workflow_status(dialog, "project_structure", "completed")
         from ..dialogs.project_folder_tree import ProjectFolderTreeDialog
         ProjectFolderTreeDialog(dialog.project_folder, dialog).exec()
@@ -166,6 +167,7 @@ def select_project_folder(dialog):
         dialog._domain_delineator_dialog = None
     dialog.project_directory = directory
     dialog.project_folder = None
+    dialog.comboBox_mHMversion.setEnabled(True)
     for key in dialog.morphology_workflow_specs():
         dialog.set_morphology_workflow_button_state(key, "")
     dialog.lineEdit_ProjectFolder.setText(directory)

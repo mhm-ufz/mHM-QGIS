@@ -134,6 +134,32 @@ def test_main_dialog_cancel_waits_for_workers_then_closes():
     assert not dialog.isVisible()
 
 
+def test_cancelled_dialog_is_replaced_when_plugin_reopens(monkeypatch):
+    from types import SimpleNamespace
+    from mhm_qgis.mhm_qgis import MhmQgis
+    from mhm_qgis import dependency_bootstrap
+    from mhm_qgis.qt.dialogs import mhm_qgis_main
+
+    old = SimpleNamespace(
+        _closing=True, isVisible=lambda: False, deleteLater=lambda: None)
+    fresh = SimpleNamespace(
+        show=lambda: None, raise_=lambda: None, activateWindow=lambda: None)
+    monkeypatch.setattr(
+        dependency_bootstrap, "ensure_qgis_runtime_dependencies",
+        lambda **_kwargs: SimpleNamespace(ok=True),
+    )
+    monkeypatch.setattr(
+        mhm_qgis_main, "MhmQgisDialog", lambda **_kwargs: fresh)
+    plugin = MhmQgis.__new__(MhmQgis)
+    plugin.iface = SimpleNamespace(mainWindow=lambda: None)
+    plugin.first_start = False
+    plugin.dlg = old
+
+    plugin.run()
+
+    assert plugin.dlg is fresh
+
+
 def test_meteo_qthread_stops_on_cancel(monkeypatch):
     import time
     from mhm_qgis.core.executions import meteo

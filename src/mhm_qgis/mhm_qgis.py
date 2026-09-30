@@ -231,6 +231,13 @@ class MhmQgis:
 
         from .qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
+        old_dialog = getattr(self, "dlg", None)
+        if old_dialog is not None and old_dialog._closing:
+            if old_dialog.isVisible():
+                return
+            old_dialog.deleteLater()
+            self.first_start = True
+
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
