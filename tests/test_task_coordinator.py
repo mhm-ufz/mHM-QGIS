@@ -37,7 +37,7 @@ def test_bounded_jobs_lock_controls_and_keep_per_slot_log():
     coordinator.submit(
         "one",
         "First",
-        lambda: 1,
+        lambda _task: 1,
         controls=(button,),
         on_success=lambda value: (
             results.append(value),
@@ -47,7 +47,7 @@ def test_bounded_jobs_lock_controls_and_keep_per_slot_log():
     coordinator.submit(
         "two",
         "Second",
-        lambda: 2,
+        lambda _task: 2,
         controls=(button,),
         on_success=lambda value: (results.append(value), loop.quit()),
     )
@@ -80,13 +80,13 @@ def test_jobs_run_off_the_qgstask_thread_and_still_report_failures():
     coordinator.submit(
         "thread-kind",
         "Thread kind",
-        lambda: threading.current_thread().__class__.__name__,
+        lambda _task: threading.current_thread().__class__.__name__,
         on_success=kinds.append,
     )
     coordinator.submit(
         "boom",
         "Failing job",
-        lambda: (_ for _ in ()).throw(ValueError("boom")),
+        lambda _task: (_ for _ in ()).throw(ValueError("boom")),
         on_error=lambda message: (errors.append(message), loop.quit()),
     )
     QtCore.QTimer.singleShot(5000, loop.quit)
@@ -99,19 +99,55 @@ def test_jobs_run_off_the_qgstask_thread_and_still_report_failures():
     assert errors and "boom" in errors[0]
 
 
+def _until_cancelled(task):
+    """Block like a long job; give up after 5 s so a failing test cannot hang."""
+    import time
+
+    deadline = time.monotonic() + 5
+    while not task.isCanceled() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return "stopped"
+
+
+def _wait(condition, seconds=5):
+    import time
+
+    deadline = time.monotonic() + seconds
+    while not condition() and time.monotonic() < deadline:
+        QtWidgets.QApplication.processEvents()
+        time.sleep(0.01)
+
+
 def test_finished_tasks_ignore_late_progress_and_cancel_stops_queued_work():
+    _app()
     coordinator = TaskCoordinator(max_threads=1)
-    cancelled = []
-    assert coordinator.start_external("running", "Running", cancel=lambda: cancelled.append(True))
+    errors = []
+    assert coordinator.submit("running", "Running", _until_cancelled, on_error=errors.append)
+    _wait(lambda: coordinator.snapshots()[0]["status"] == "running")
     coordinator.set_progress("running", 40)
-    assert coordinator.submit("queued", "Queued", lambda: None)
-    coordinator.cancel_all()
-    assert cancelled == [True]
-    assert coordinator.queued_count() == 0
-    coordinator.finish_external("running", False)
-    coordinator.set_progress("running", 80)
     assert coordinator.snapshots()[0]["progress"] == 40
-    assert not coordinator.submit("later", "Later", lambda: None)
+    assert coordinator.submit("queued", "Queued", lambda _task: None)
+    coordinator.cancel_all()
+    assert coordinator.queued_count() == 0
+    _wait(lambda: not coordinator.is_busy())
+    assert errors == ["Task cancelled."]
+    final = coordinator.snapshots()[0]["progress"]
+    coordinator.set_progress("running", 80)
+    assert coordinator.snapshots()[0]["progress"] == final
+    assert not coordinator.submit("later", "Later", lambda _task: None)
+
+
+def test_worker_log_reaches_the_monitor_from_its_thread():
+    _app()
+    coordinator = TaskCoordinator(max_threads=1)
+    done = []
+    coordinator.submit(
+        "logging", "Logging",
+        lambda _task: coordinator.log.emit("logging", "from the worker"),
+        on_success=done.append,
+    )
+    _wait(lambda: done)
+    assert "from the worker" in coordinator.snapshots()[0]["logs"]
 
 
 def test_main_dialog_cancel_waits_for_workers_then_closes():
@@ -119,18 +155,14 @@ def test_main_dialog_cancel_waits_for_workers_then_closes():
 
     dialog = MhmQgisDialog()
     loop = QtCore.QEventLoop()
-    cancelled = []
     dialog.finished.connect(loop.quit)
-    dialog.task_coordinator.start_external(
-        "running", "Running", cancel=lambda: (
-            cancelled.append(True),
-            dialog.task_coordinator.finish_external("running", False),
-        ))
+    assert dialog.task_coordinator.submit("running", "Running", _until_cancelled)
+    _wait(lambda: dialog.task_coordinator.snapshots()[0]["status"] == "running")
     dialog.show()
     dialog.reject()
-    QtCore.QTimer.singleShot(2000, loop.quit)
+    QtCore.QTimer.singleShot(5000, loop.quit)
     loop.exec()
-    assert cancelled == [True]
+    assert not dialog.task_coordinator.is_busy()
     assert not dialog.isVisible()
 
 
@@ -160,28 +192,51 @@ def test_cancelled_dialog_is_replaced_when_plugin_reopens(monkeypatch):
     assert plugin.dlg is fresh
 
 
-def test_meteo_qthread_stops_on_cancel(monkeypatch):
-    import time
+def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_path):
+    from types import SimpleNamespace
     from mhm_qgis.core.executions import meteo
-    from mhm_qgis.qt.threads.meteo_workflow import MeteorologyWorkflowWorker
+    from mhm_qgis.core.handlers.state import processing
+    from mhm_qgis.qt.controllers import forcing, grid, time, workflow_state
+    from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
+    from mhm_qgis.qt.workflows import lifecycle, meteorology
 
-    def prepare(_run, _state, *, cancelled, **_options):
-        while not cancelled():
-            time.sleep(0.01)
-        return False
+    progress = []
 
+    def prepare(_run, _state, *, cancelled, progress, log, **_options):
+        log("preparing")
+        progress(10)
+        _until_cancelled(SimpleNamespace(isCanceled=cancelled))
+        return True
+
+    def unexpected_box(*args):
+        raise AssertionError(f"Unexpected message box: {args[1:]}")
+
+    for name in ("warning", "information"):
+        monkeypatch.setattr(lifecycle.QMessageBox, name, unexpected_box)
+    failures = []
+    monkeypatch.setattr(workflow_state.QMessageBox, "critical",
+                        lambda _parent, _title, message: failures.append(message))
     monkeypatch.setattr(meteo, "prepare_forcing", prepare)
-    worker = MeteorologyWorkflowWorker("execute_all_meteo", "Meteo", None, None)
-    thread = QtCore.QThread()
-    worker.moveToThread(thread)
-    worker.finished.connect(lambda *_: thread.quit())
-    thread.started.connect(worker.run)
-    loop = QtCore.QEventLoop()
-    thread.finished.connect(loop.quit)
-    thread.start()
-    QtCore.QTimer.singleShot(50, lambda: worker.cancel())
-    QtCore.QTimer.singleShot(2000, loop.quit)
-    loop.exec()
-    assert not thread.isRunning()
-    worker.deleteLater()
-    thread.deleteLater()
+    monkeypatch.setattr(meteo, "MeteorologyRun", lambda **_kwargs: None)
+    monkeypatch.setattr(grid, "require_common_grid", lambda _dialog: {"l2_header": {}})
+    monkeypatch.setattr(meteorology, "target_grid_from_header",
+                        lambda *_args: SimpleNamespace(validate=lambda: None))
+    monkeypatch.setattr(forcing, "selected_meteo_specs", lambda _dialog: ())
+    monkeypatch.setattr(time, "values", lambda _dialog: {})
+    dialog = MhmQgisDialog()
+    dialog.project_folder = str(tmp_path)
+    dialog.check_prerequisites = lambda: True
+    dialog.task_coordinator.set_progress = lambda key, value: progress.append((key, value))
+
+    assert meteorology.start(dialog)
+    assert workflow_state.running_key(dialog) == "execute_all_meteo"
+    assert not dialog.tabWidget_steps.isEnabled()
+    _wait(lambda: progress)
+    dialog.task_coordinator.cancel_all()
+    _wait(lambda: failures)
+    assert failures == ["Task cancelled."]
+    assert processing.workflow(tmp_path, "execute_all_meteo")["status"] == "failed"
+    assert "preparing" in dialog.LogText.toPlainText()
+    assert workflow_state.running_key(dialog) is None
+    assert dialog.tabWidget_steps.isEnabled()
+    dialog.close()

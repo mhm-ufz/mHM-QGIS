@@ -11,20 +11,7 @@ from qgis.core import QgsMapLayer, QgsProject
 from qgis.PyQt import QtCore, QtWidgets
 from ...qgis_bridge import layers
 from ...core.handlers.store.paths import WORKSPACE_FOLDER_NAME
-from ...qt.controllers import single_layer_input as single_layer_controller
-from ...qt.controllers import single_layer_lookup as lookup_controller
-from ...qt.bindings.lai_netcdf_input import bind_lai_netcdf
-from ...qt.bindings.mhm_ready_morph_input import bind_mhm_ready
-from ...qt.bindings.netcdf_asc_additional_input import bind as bind_raster_details
-from ...qt.bindings.single_layer_input import bind_single_layer_lookup
-from ...qt.bindings.single_layer_lookup import bind_lookup_config
-from ..ui import load_form
 from .file_picker import open_file
-
-Ui_LaiNetcdfInputDialog = load_form("lai_netcdf_input_dialog.ui")
-Ui_MhmReadyInputDialog = load_form("mhm_ready_morph_input.ui")
-Ui_RasterDetailsDialog = load_form("netcdf_asc_additional_input.ui")
-Ui_SingleLayerLookupDialog = load_form("single_layer_input_with_lookup_config_dialog.ui")
 
 EXCLUDED_PROJECT_FOLDERS = {WORKSPACE_FOLDER_NAME}
 INPUT_EXTENSIONS = {
@@ -36,11 +23,7 @@ INPUT_EXTENSIONS = {
     "lai": {".asc", ".nc", ".shp", ".tif"},
     "lookup": {".csv", ".txt"},
 }
-_KIND_ALIASES = {
-    "pour_point": "pour_points",
-    "landcover": "land_cover",
-    "lc": "land_cover",
-}
+_KIND_ALIASES = {"lc": "land_cover"}
 
 
 @dataclass(frozen=True)
@@ -49,15 +32,6 @@ class InputItem:
 
     label: str
     data: dict
-
-
-@dataclass(frozen=True)
-class LookupConfig:
-    """Selected lookup table and its two required fields."""
-
-    lookup_table: str
-    mapping_field: str
-    class_field: str
 
 
 @dataclass(frozen=True)
@@ -257,7 +231,7 @@ def _file_layer(path: str, kind: str, variable: str = ""):
 
 
 class InputComboAdapter(QtCore.QObject):
-    """Present a plain QComboBox through the legacy layer-combo interface."""
+    """Present a plain QComboBox of QGIS layers and project files as one layer source."""
 
     layerChanged = QtCore.pyqtSignal(object)
 
@@ -265,55 +239,52 @@ class InputComboAdapter(QtCore.QObject):
         super().__init__(parent or combo_box)
         self.combo_box = combo_box
         self.kind = _kind(kind)
-        self.filters = None
-        self.allow_empty = True
         self._layers = {}  # Python owns unregistered layers; QVariant must not.
+        self._file_layer = ((), None)  # The current file selection, opened once.
         self.combo_box.currentIndexChanged.connect(self._emit_layer_changed)
-
-    @property
-    def currentIndexChanged(self):
-        return self.combo_box.currentIndexChanged
-
-    @property
-    def currentTextChanged(self):
-        return self.combo_box.currentTextChanged
 
     def _emit_layer_changed(self, _index=None):
         self.layerChanged.emit(self.currentLayer())
 
     def currentLayer(self):
         """Return the selected loaded layer or an unregistered file-backed layer."""
+        from qgis.PyQt import sip
+
         data = self.combo_box.currentData()
         if isinstance(data, dict):
             if data.get("origin") == "qgis":
-                from qgis.PyQt import sip
                 layer = _project_layer(data.get("layer_id")) or self._layers.get(data.get("layer_id"))
                 return layer if layer is not None and not sip.isdeleted(layer) else None
             if data.get("origin") == "file":
-                return _file_layer(
-                    data.get("path"), self.kind, str(data.get("variable", ""))
-                )
+                return self._opened(data.get("path"), str(data.get("variable", "")))
         if data is not None and hasattr(data, "type"):
             return data
         text = self.combo_box.currentText().strip()
-        if os.path.isfile(text):
-            return _file_layer(text, self.kind)
-        return None
+        return self._opened(text) if os.path.isfile(text) else None
+
+    def _opened(self, path, variable=""):
+        """Open a file layer once per file version rather than on every call."""
+        from qgis.PyQt import sip
+
+        try:
+            stat = os.stat(path)
+        except (OSError, TypeError, ValueError):
+            return None
+        key = (path, variable, stat.st_mtime_ns, stat.st_size)
+        cached_key, layer = self._file_layer
+        if cached_key != key or layer is None or sip.isdeleted(layer):
+            layer = _file_layer(path, self.kind, variable)
+            self._file_layer = (key, layer)
+        return layer
 
     def source_path(self):
         """Return the selected file path or loaded layer provider source."""
         data = self.combo_box.currentData()
-        if isinstance(data, dict):
-            if data.get("origin") == "file":
-                path = data.get("path")
-                return str(Path(path).expanduser().resolve()) if path else ""
-            if data.get("origin") == "qgis":
-                layer = self.currentLayer()
-                source = getattr(layer, "source", None)
-                return str(source() if callable(source) else source or "")
+        if isinstance(data, dict) and data.get("origin") == "file":
+            path = data.get("path")
+            return str(Path(path).expanduser().resolve()) if path else ""
         layer = self.currentLayer()
-        source = getattr(layer, "source", None)
-        return str(source() if callable(source) else source or "")
+        return str(layer.source() or "") if layer is not None else ""
 
     def source_uri(self):
         """Return a GDAL-addressable source, including a NetCDF variable."""
@@ -336,21 +307,16 @@ class InputComboAdapter(QtCore.QObject):
 
         target_id = _layer_id(layer)
         self._layers[target_id] = layer
-        try:
-            target_source = layer.source()
-        except Exception:
-            target_source = ""
+        target_source = layer.source()
         for index in range(self.combo_box.count()):
             data = self.combo_box.itemData(index)
             if not isinstance(data, dict):
                 continue
-            if data.get("layer") is layer:
-                self.combo_box.setCurrentIndex(index)
-                return
-            if target_id and data.get("layer_id") == target_id:
-                self.combo_box.setCurrentIndex(index)
-                return
-            if target_source and data.get("source") == target_source:
+            if (
+                data.get("layer") is layer
+                or (target_id and data.get("layer_id") == target_id)
+                or (target_source and data.get("source") == target_source)
+            ):
                 self.combo_box.setCurrentIndex(index)
                 return
 
@@ -359,60 +325,17 @@ class InputComboAdapter(QtCore.QObject):
             self.addItem(item.label, item.data)
             self.combo_box.setCurrentIndex(self.combo_box.count() - 1)
 
-    def setFilters(self, filters):
-        self.filters = filters
-
-    def setAllowEmptyLayer(self, allow_empty, text=""):
-        self.allow_empty = bool(allow_empty)
-        if self.allow_empty and text and self.combo_box.findText(text) < 0:
-            self.combo_box.insertItem(0, text, {"origin": "empty"})
-
-    def clear(self):
-        self.combo_box.clear()
-
     def addItem(self, text, userData=None):
         if isinstance(userData, dict) and "layer" in userData:
             userData = dict(userData)
             self._layers[userData["layer_id"]] = userData.pop("layer")
         self.combo_box.addItem(text, userData)
 
-    def addItems(self, texts):
-        self.combo_box.addItems(texts)
-
-    def count(self):
-        return self.combo_box.count()
-
-    def currentText(self):
-        return self.combo_box.currentText()
-
-    def setCurrentText(self, text):
-        self.combo_box.setCurrentText(text)
-
-    def currentIndex(self):
-        return self.combo_box.currentIndex()
-
-    def setCurrentIndex(self, index):
-        self.combo_box.setCurrentIndex(index)
-
     def currentData(self):
         return self.combo_box.currentData()
 
-    def findText(self, text):
-        return self.combo_box.findText(text)
-
-    def setEnabled(self, enabled):
-        self.combo_box.setEnabled(enabled)
-
-    def isEnabled(self):
-        return self.combo_box.isEnabled()
-
-    def setEditable(self, editable):
-        self.combo_box.setEditable(editable)
-
-    def setPlaceholderText(self, text):
-        line_edit = self.combo_box.lineEdit()
-        if line_edit is not None:
-            line_edit.setPlaceholderText(text)
+    def setCurrentIndex(self, index):
+        self.combo_box.setCurrentIndex(index)
 
 
 def _combo_path(combo_box) -> str:
@@ -489,9 +412,10 @@ def raster_details(parent, path):
         return RasterInputConfig(
             path, "", layers.crs_string(crs) if crs is not None else ""
         )
+    from .netcdf_asc_additional_input import RasterDetailsDialog
+
     prompt = RasterDetailsDialog(path, parent)
-    execute = getattr(prompt, "exec", None) or prompt.exec_
-    return prompt.selected_config() if execute() == QtWidgets.QDialog.DialogCode.Accepted else None
+    return prompt.selected_config() if prompt.exec() == QtWidgets.QDialog.DialogCode.Accepted else None
 
 
 def _ensure_raster_details(parent, combo_box):
@@ -557,290 +481,14 @@ def _combo_path_at(combo_box, index):
     return str(value or "")
 
 
-class LookupConfigDialog(QtWidgets.QDialog, Ui_SingleLayerLookupDialog):
-    """Select a project lookup table, mapping field, and class field."""
-
-    def __init__(self, project_folder, parent=None, initial=None):
-        super().__init__(parent)
-        self.setupUi(self)
-        self._initial = initial
-        self.groupBox_inputLayerType.hide()
-
-        for item in scan_project_inputs(project_folder, "lookup"):
-            self.lookup_table_combo.addItem(item.label, item.data["path"])
-
-        bind_lookup_config(self)
-        initial_path = self._initial_value("lookup_table")
-        if initial_path:
-            for index in range(self.lookup_table_combo.count()):
-                if self.lookup_table_combo.itemData(index) == str(initial_path):
-                    self.lookup_table_combo.setCurrentIndex(index)
-                    break
-        self._refresh_fields()
-
-    def _initial_value(self, name):
-        if isinstance(self._initial, dict):
-            return self._initial.get(name)
-        return getattr(self._initial, name, None)
-
-    def _refresh_fields(self, *args, **kwargs):
-        return lookup_controller._refresh_fields(self, *args, **kwargs)
-
-    def _update_ok(self, *args, **kwargs):
-        return lookup_controller._update_ok(self, *args, **kwargs)
-
-    def selected_config(self) -> LookupConfig | None:
-        path = self.lookup_table_combo.currentData()
-        mapping_field = self.mapping_field_combo.currentText().strip()
-        class_field = self.class_field_combo.currentText().strip()
-        if not path or not mapping_field or not class_field:
-            return None
-        return LookupConfig(str(path), mapping_field, class_field)
-
-    def accept(self):
-        if self.selected_config() is not None:
-            super().accept()
-
-
-class RasterDetailsDialog(QtWidgets.QDialog, Ui_RasterDetailsDialog):
-    """Select one raster variable and confirm its source CRS."""
-
-    def __init__(self, path, parent=None):
-        super().__init__(parent)
-        self.setupUi(self)
-        self.setWindowTitle(f"Raster input: {Path(path).name}")
-        bind_raster_details(self)
-        from ..controllers import netcdf_asc_additional_input as controller
-
-        controller.initialize(self, path)
-
-    def refresh_crs(self, *args):
-        from ..controllers import netcdf_asc_additional_input as controller
-
-        controller.refresh_crs(self, *args)
-
-    def selected_config(self):
-        variable = self.comboBox_varName.currentText().strip()
-        crs = self.mProjectionSelectionWidget_crsFileInput.crs()
-        if not variable or crs is None or not crs.isValid():
-            return None
-        return RasterInputConfig(
-            self.path,
-            variable,
-            layers.crs_string(crs),
-        )
-
-    def accept(self):
-        if self.selected_config() is None:
-            QtWidgets.QMessageBox.warning(
-                self, "Missing Raster Metadata", "Select a variable and a valid CRS."
-            )
-            return
-        super().accept()
-
-
-class MhmReadyInputDialog(QtWidgets.QDialog, Ui_MhmReadyInputDialog):
-    """Select an mHM-ready raster and its required support file."""
-
-    def __init__(self, project_folder, kind, parent=None, initial=None):
-        super().__init__(parent)
-        self.setupUi(self)
-        self.kind = str(kind)
-        title = {
-            "lc": "Land Use", "soil": "Soil", "geology": "Geology", "lai": "LAI"
-        }[self.kind]
-        self.groupBox_morphFileInput.setTitle(title)
-        initial = initial or {}
-        _populate_file_combo(
-            self.comboBox_inputFile,
-            project_folder,
-            "land_cover" if self.kind == "lc" else self.kind,
-            initial.get("input_path", "") if isinstance(initial, dict) else "",
-        )
-        _restore_raster_details(self.comboBox_inputFile, initial)
-        self.groupBox_classDefinitionInput.setChecked(
-            bool(initial.get("classdefinition_path"))
-        )
-        _populate_file_combo(
-            self.comboBox_classDefinitionInputFile,
-            project_folder,
-            "lookup",
-            initial.get("classdefinition_path", "") if isinstance(initial, dict) else "",
-        )
-        bind_mhm_ready(self, title)
-
-    def selected_config(self) -> ReadyInputConfig | None:
-        source = _combo_path(self.comboBox_inputFile)
-        definition = (
-            _combo_path(self.comboBox_classDefinitionInputFile)
-            if self.groupBox_classDefinitionInput.isChecked()
-            else ""
-        )
-        if not source or not Path(source).is_file():
-            return None
-        if definition and not Path(definition).is_file():
-            return None
-        details = _combo_raster_details(self.comboBox_inputFile)
-        return ReadyInputConfig(
-            source,
-            definition,
-            details.get("variable", ""),
-            details.get("source_crs", ""),
-        )
-
-    def accept(self):
-        if not _ensure_raster_details(self, self.comboBox_inputFile):
-            return
-        if self.selected_config() is None:
-            QtWidgets.QMessageBox.warning(self, "Missing Input", "Select all required input files.")
-            return
-        super().accept()
-
-
-class SingleLayerInputDialog(QtWidgets.QDialog, Ui_SingleLayerLookupDialog):
-    """Select one categorical layer and its lookup configuration."""
-
-    def __init__(
-        self, project_folder, kind, parent=None, initial=None, initial_layer=None
-    ):
-        super().__init__(parent)
-        self.setupUi(self)
-        self.kind = str(kind)
-        title = {
-            "lc": "Land Use",
-            "soil": "Soil",
-            "geology": "Geology",
-            "lai": "LAI",
-        }[self.kind]
-        self.groupBox_inputLayerType.setTitle(title)
-        initial = initial or {}
-        source_kind = "land_cover" if self.kind == "lc" else self.kind
-        self.input_adapter = InputComboAdapter(
-            self.comboBox_inputLayer, source_kind, self
-        )
-        _populate_layer_combo(
-            self.input_adapter,
-            project_folder,
-            source_kind,
-            initial.get("input_path", "") if isinstance(initial, dict) else "",
-        )
-        _restore_raster_details(self.comboBox_inputLayer, initial)
-        if initial_layer is not None:
-            self.input_adapter.setLayer(initial_layer)
-        _populate_file_combo(
-            self.lookup_table_combo,
-            project_folder,
-            "lookup",
-            initial.get("lookup_table", "") if isinstance(initial, dict) else "",
-        )
-        self._initial = initial
-        bind_single_layer_lookup(self, title)
-        self._refresh_fields()
-
-    def _browse_lookup(self, *args, **kwargs):
-        return single_layer_controller._browse_lookup(self, *args, **kwargs)
-
-    def _refresh_fields(self, *args, **kwargs):
-        return single_layer_controller._refresh_fields(self, *args, **kwargs)
-
-    def selected_config(self) -> SingleLayerLookupConfig | None:
-        source = self.input_adapter.source_path()
-        lookup = _combo_path(self.lookup_table_combo)
-        mapping = self.mapping_field_combo.currentText().strip()
-        class_field = self.class_field_combo.currentText().strip()
-        if not source or not lookup or not mapping or not class_field:
-            return None
-        data = self.comboBox_inputLayer.currentData()
-        qgis_source = isinstance(data, dict) and data.get("origin") == "qgis"
-        layer = self.input_adapter.currentLayer() if qgis_source else None
-        if not ((layer is not None and layer.isValid()) or Path(source).is_file()):
-            return None
-        if not Path(lookup).is_file():
-            return None
-        details = _combo_raster_details(self.comboBox_inputLayer)
-        return SingleLayerLookupConfig(
-            source,
-            lookup,
-            mapping,
-            class_field,
-            details.get("variable", ""),
-            details.get("source_crs", ""),
-        )
-
-    def accept(self):
-        source = self.input_adapter.source_path()
-        if Path(source).suffix.lower() in {".asc", ".nc"} and not _ensure_raster_details(
-            self, self.comboBox_inputLayer
-        ):
-            return
-        if self.selected_config() is None:
-            QtWidgets.QMessageBox.warning(self, "Missing Input", "Select an input layer and lookup fields.")
-            return
-        super().accept()
-
-
-class LaiNetcdfInputDialog(QtWidgets.QDialog, Ui_LaiNetcdfInputDialog):
-    """Select a NetCDF LAI source and temporal conversion."""
-
-    def __init__(self, project_folder, parent=None, initial=None):
-        super().__init__(parent)
-        self.setupUi(self)
-        initial = initial or {}
-        _populate_file_combo(
-            self.comboBox_laiNetCDFInput,
-            project_folder,
-            "lai",
-            initial.get("input_path", "") if isinstance(initial, dict) else "",
-        )
-        _restore_raster_details(self.comboBox_laiNetCDFInput, initial)
-        index = self.comboBox_timestepLAIInput.findText(
-            str(initial.get("target_timestep", ""))
-        )
-        self.comboBox_timestepLAIInput.setCurrentIndex(index)
-        bind_lai_netcdf(self)
-
-    def selected_config(self) -> LaiNetcdfConfig | None:
-        source = _combo_path(self.comboBox_laiNetCDFInput)
-        target = self.comboBox_timestepLAIInput.currentText().strip()
-        if not source or Path(source).suffix.lower() != ".nc" or not Path(source).is_file():
-            return None
-        if not target:
-            return None
-        details = _combo_raster_details(self.comboBox_laiNetCDFInput)
-        return LaiNetcdfConfig(
-            source,
-            target,
-            details.get("variable", ""),
-            details.get("source_crs", ""),
-        )
-
-    def accept(self):
-        if not _ensure_raster_details(self, self.comboBox_laiNetCDFInput):
-            return
-        if self.selected_config() is None:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Missing Input",
-                "Select a NetCDF file and output temporal resolution.",
-            )
-            return
-        super().accept()
-
-
 __all__ = [
     "EXCLUDED_PROJECT_FOLDERS",
     "INPUT_EXTENSIONS",
     "InputComboAdapter",
     "InputItem",
-    "LookupConfig",
-    "LookupConfigDialog",
     "LaiNetcdfConfig",
-    "LaiNetcdfInputDialog",
-    "MhmReadyInputDialog",
-    "RasterDetailsDialog",
     "RasterInputConfig",
     "ReadyInputConfig",
-    "SingleLayerInputDialog",
     "SingleLayerLookupConfig",
     "loaded_qgis_items",
     "qgis_layer_item",

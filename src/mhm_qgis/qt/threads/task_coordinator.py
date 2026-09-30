@@ -23,14 +23,18 @@ class TaskRecord:
     slot: int | None = None
     logs: list[str] = field(default_factory=list)
     task: object = None
-    task_aware: bool = False
-    cancel_callback: object = None
 
 
 class TaskCoordinator(QtCore.QObject):
-    """Queue file-only jobs and expose stable QGIS-task status to the UI."""
+    """Queue file-only jobs and expose stable QGIS-task status to the UI.
+
+    A runner is called as `runner(task)` on a plain worker thread. It reports
+    through `task.setProgress`, stops on `task.isCanceled()` and logs through
+    `log.emit(key, message)`, which is safe from any thread.
+    """
 
     changed = QtCore.pyqtSignal()
+    log = QtCore.pyqtSignal(str, str)
 
     def __init__(self, parent=None, max_threads=2):
         super().__init__(parent)
@@ -42,6 +46,7 @@ class TaskCoordinator(QtCore.QObject):
         self._control_owners: dict[int, set[str]] = {}
         self._control_states: dict[int, bool] = {}
         self._stopping = False
+        self.log.connect(self.append_log)
 
     @property
     def max_threads(self):
@@ -88,7 +93,6 @@ class TaskCoordinator(QtCore.QObject):
         on_success=None,
         on_error=None,
         resource="",
-        task_aware=False,
     ):
         key = str(key)
         if self._stopping or self.is_busy(key):
@@ -101,7 +105,6 @@ class TaskCoordinator(QtCore.QObject):
             on_success=on_success,
             on_error=on_error,
             resource=str(resource or ""),
-            task_aware=bool(task_aware),
         )
         self._records[key] = record
         self._pending.append(record)
@@ -161,45 +164,6 @@ class TaskCoordinator(QtCore.QObject):
     def queued_count(self):
         return len(self._pending)
 
-    def start_external(self, key, label, controls=(), resource="", cancel=None):
-        """Expose a separately managed QThread in the same task monitor."""
-        key = str(key)
-        if self._stopping or self.is_busy(key) or len(self._active) >= self._max_threads:
-            return False
-        record = TaskRecord(
-            key=key,
-            label=str(label),
-            runner=None,
-            controls=tuple(widget for widget in controls if widget is not None),
-            status="running",
-            slot=self._free_slot(),
-            resource=str(resource or ""),
-            cancel_callback=cancel,
-        )
-        record.logs.append(f"Started: {record.label}")
-        self._records[key] = record
-        self._active[key] = record
-        self._set_controls(record, False)
-        self.changed.emit()
-        return True
-
-    def finish_external(self, key, success, message=""):
-        record = self._active.pop(str(key), None)
-        if record is None:
-            return
-        record.status = "completed" if success else "failed"
-        record.progress = 100 if success else record.progress
-        record.logs.append(
-            str(message)
-            if message
-            else (f"Completed: {record.label}" if success else f"Failed: {record.label}")
-        )
-        self._set_controls(record, True)
-        if record.slot is not None:
-            self._history[record.slot] = record
-        self.changed.emit()
-        self._start_available()
-
     def cancel(self, key):
         """Cancel a queued or active task."""
         key = str(key)
@@ -211,14 +175,10 @@ class TaskCoordinator(QtCore.QObject):
         record = self._active.get(key)
         if record is None:
             return False
-        task = record.task
-        if task is not None and hasattr(task, "cancel"):
-            task.cancel()
-            return True
-        if record.cancel_callback is not None:
-            record.cancel_callback()
-            return True
-        return False
+        if record.task is None:
+            return False
+        record.task.cancel()
+        return True
 
     def cancel_all(self):
         """Stop queued work and request cancellation of every running worker."""
@@ -261,14 +221,11 @@ class TaskCoordinator(QtCore.QObject):
     def _start_qgis_task(self, record):
         """Submit a callable to QGIS's managed task pool."""
         runner = record.runner
-        task_aware = record.task_aware
 
         def run(task):
             if task.isCanceled():
                 return _CANCELLED
-            return _off_qthread(
-                (lambda: runner(task)) if task_aware else runner
-            )
+            return _off_qthread(lambda: runner(task))
 
         def finished(exception, result=None):
             if task.isCanceled():

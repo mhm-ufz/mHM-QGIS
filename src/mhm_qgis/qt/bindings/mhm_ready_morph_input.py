@@ -1,12 +1,12 @@
 """Widget wiring for ``mhm_ready_morph_input.ui``."""
+from ..dialogs.input_selection import _browse_into_combo, _browse_raster_into_combo
 
 RASTER_FILTER = "Raster files (*.asc *.nc *.tif *.tiff);;All files (*)"
 CLASS_DEFINITION_FILTER = "Class definition (*.txt *.csv);;All files (*)"
 
 
 def bind_mhm_ready(dialog, title):
-    from ..dialogs.input_selection import _browse_into_combo, _browse_raster_into_combo
-
+    # pushButton_browseMorphFile → _browse_raster_into_combo
     dialog.pushButton_browseMorphFile.clicked.connect(
         lambda: _browse_raster_into_combo(
             dialog,
@@ -15,6 +15,7 @@ def bind_mhm_ready(dialog, title):
             RASTER_FILTER,
         )
     )
+    # pushButton_browseclassDefinitionFile → _browse_into_combo
     dialog.pushButton_browseclassDefinitionFile.clicked.connect(
         lambda: _browse_into_combo(
             dialog,

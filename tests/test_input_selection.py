@@ -26,14 +26,12 @@ from qgis.PyQt import QtWidgets  # noqa: E402
 from mhm_qgis.qt.dialogs.input_selection import (  # noqa: E402
     EXCLUDED_PROJECT_FOLDERS,
     InputComboAdapter,
-    LaiNetcdfInputDialog,
-    LookupConfigDialog,
-    MhmReadyInputDialog,
-    SingleLayerInputDialog,
     loaded_qgis_items,
     scan_project_inputs,
 )
-from mhm_qgis.qt.controllers import main as main_controller  # noqa: E402
+from mhm_qgis.qt.dialogs.lai_netcdf_input import LaiNetcdfInputDialog  # noqa: E402
+from mhm_qgis.qt.dialogs.mhm_ready_morph_input import MhmReadyInputDialog  # noqa: E402
+from mhm_qgis.qt.dialogs.single_layer_input import SingleLayerInputDialog  # noqa: E402
 from mhm_qgis.qt.dialogs import file_picker, input_selection  # noqa: E402
 # isort: on
 
@@ -123,6 +121,22 @@ def test_adapter_returns_file_layer_without_adding_it_to_project(tmp_path):
     assert QgsProject.instance().mapLayers() == before
 
 
+def test_adapter_opens_a_file_layer_once_per_file_version(tmp_path):
+    import os
+
+    _app()
+    raster = _raster(tmp_path / "dem.tif")
+    adapter = InputComboAdapter(QtWidgets.QComboBox(), "dem")
+    item = scan_project_inputs(tmp_path, "dem")[0]
+    adapter.addItem(item.label, item.data)
+
+    first = adapter.currentLayer()
+    assert adapter.currentLayer() is first
+    stamp = raster.stat().st_mtime_ns + 1_000_000_000
+    os.utime(raster, ns=(stamp, stamp))
+    assert adapter.currentLayer() is not first
+
+
 def test_adapter_selects_loaded_layer_and_emits_layer(tmp_path):
     _app()
     vector_path = _points(tmp_path / "points.geojson")
@@ -155,37 +169,6 @@ def test_loaded_qgis_items_filter_type_and_include_crs(tmp_path):
 
     assert [item.label for item in items] == ["DEM [EPSG:3035]"]
     assert items[0].data["layer"] is raster
-
-
-def test_lookup_dialog_lists_tables_and_requires_both_fields(tmp_path):
-    _app()
-    table = tmp_path / "inputs" / "soil.txt"
-    table.parent.mkdir(parents=True)
-    table.write_text(
-        "map_code\tclass_id\tname\t*ignored\n"
-        "WR\t1\tRegosol\t10\nCM\t2\tCambisol\t20\n",
-        encoding="utf-8",
-    )
-    _touch(tmp_path / "mhm-qgis" / "ignored.csv")
-
-    dialog = LookupConfigDialog(tmp_path)
-
-    assert dialog.lookup_table_combo.count() == 1
-    assert dialog.lookup_table_combo.currentText() == "inputs/soil.txt"
-    assert {
-        dialog.mapping_field_combo.itemText(index)
-        for index in range(dialog.mapping_field_combo.count())
-    } == {"map_code", "class_id", "name"}
-    assert dialog.selected_config() is None
-
-    dialog.mapping_field_combo.setCurrentText("map_code")
-    dialog.class_field_combo.setCurrentText("class_id")
-    config = dialog.selected_config()
-
-    assert config is not None
-    assert config.lookup_table == str(table.resolve())
-    assert config.mapping_field == "map_code"
-    assert config.class_field == "class_id"
 
 
 def test_new_input_dialogs_set_titles_and_return_complete_paths(tmp_path):
@@ -244,21 +227,22 @@ def test_single_layer_dialog_uses_loaded_qgis_layer(tmp_path):
         assert config is not None
         assert config.input_path == str(source)
 
-        target = InputComboAdapter(QtWidgets.QComboBox(), "soil")
-        main_controller._adopt_single_layer_source(
-            SimpleNamespace(input_combo=lambda _kind: target), "soil", dialog
-        )
-        assert target.currentLayer() is layer
+        # The config's path is all the scheduler needs to recover the layer.
+        from mhm_qgis.qgis_bridge import layers
+
+        assert layers.find_by_source(config.input_path) is layer
     finally:
         project.removeMapLayer(layer.id())
 
 
 def test_lookup_browse_accepts_qt_clicked_boolean(tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import single_layer_input
+
     _app()
     dialog = SingleLayerInputDialog(tmp_path, "soil")
-    monkeypatch.setattr(input_selection, "_browse_into_combo", lambda *_args: None)
+    monkeypatch.setattr(single_layer_input, "_browse_into_combo", lambda *_args: None)
 
-    dialog._browse_lookup(False)
+    single_layer_input._browse_lookup(dialog, False)
 
 
 def test_file_picker_remembers_directory_per_dialog(tmp_path, monkeypatch):

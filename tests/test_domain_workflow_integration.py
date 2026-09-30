@@ -91,7 +91,10 @@ class _Layer:
         return self._count
 
 
-def test_saved_state_controls_gauge_and_domain_counts(tmp_path: Path) -> None:
+def test_saved_state_controls_gauge_and_domain_counts(tmp_path: Path, monkeypatch) -> None:
+    from mhm_qgis.qt.controllers import main
+
+    monkeypatch.setattr(main, "refresh_observation_stations", lambda _dialog: None)
     save_state(
         tmp_path,
         {

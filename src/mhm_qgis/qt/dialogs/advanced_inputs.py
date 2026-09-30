@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -171,18 +170,19 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
         self._lookup_error = ""
 
         self._rows.append(self._first_row())
-        self._populate_lookup()
+        land_use_controller._populate_lookup(self)
         bind_historical_land_use(self)
         self._replace_accept_handler(self.buttonBox)
-        self.set_layer_count(1)
+        land_use_controller.set_layer_count(self, 1)
         if initial:
-            self.set_input(initial)
+            land_use_controller.set_input(self, initial)
         if all_time:
-            self.set_all_time()
-        self._lookup_changed()
+            land_use_controller.set_all_time(self)
+        land_use_controller._lookup_changed(self)
 
     def _first_row(self) -> _LandUseRow:
         adapter = self._new_adapter(self.comboBox_inputLandUseLayer1, "land_cover")
+        # Row browse button → _browse_raster
         self.pushButton_browseLandUseLayer1.clicked.connect(
             lambda: self._browse_raster(adapter, "land_cover")
         )
@@ -208,16 +208,11 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
         for index, stretch in enumerate((2, 1, 2, 6, 1)):
             layout.setStretch(index, stretch)
         adapter = self._new_adapter(combo, "land_cover")
+        # Dynamic row browse button → _browse_raster
         browse.clicked.connect(lambda: self._browse_raster(adapter, "land_cover"))
         layout.setObjectName(f"horizontalLayout_inputLandUseLayer{number}")
         self.verticalLayout_4.insertLayout(self.verticalLayout_4.count() - 1, layout)
         return _LandUseRow(layout, start, end, combo, browse, adapter)
-
-    def set_layer_count(self, *args, **kwargs):
-        return land_use_controller.set_layer_count(self, *args, **kwargs)
-
-    def set_all_time(self, *args, **kwargs):
-        return land_use_controller.set_all_time(self, *args, **kwargs)
 
     def selected_input(self) -> LandUseInput:
         if self._lookup_error:
@@ -236,21 +231,6 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
         validate_land_use_input(value, simulation_start=self.simulation_start,
                                 simulation_end=self.simulation_end, version=self.version)
         return value
-
-    def set_input(self, *args, **kwargs):
-        return land_use_controller.set_input(self, *args, **kwargs)
-
-    def _update_bounds(self, *args, **kwargs):
-        return land_use_controller._update_bounds(self, *args, **kwargs)
-
-    def _populate_lookup(self, *args, **kwargs):
-        return land_use_controller._populate_lookup(self, *args, **kwargs)
-
-    def _lookup_changed(self, *args, **kwargs):
-        return land_use_controller._lookup_changed(self, *args, **kwargs)
-
-    def _browse_lookup(self, *args, **kwargs):
-        return land_use_controller._browse_lookup(self, *args, **kwargs)
 
     def _accept(self) -> None:
         try:
@@ -308,6 +288,7 @@ class MultiHorizonSoilDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_Soi
         for component, _, layout_name, combo_name, browse_name, _ in self._COMPONENTS:
             adapter = self._new_adapter(getattr(self, combo_name), "soil")
             browse = getattr(self, browse_name)
+            # First-horizon browse button → _browse_raster
             browse.clicked.connect(
                 lambda _checked=False, item=adapter: self._browse_raster(item, "soil")
             )
@@ -321,12 +302,9 @@ class MultiHorizonSoilDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_Soi
             ]
         bind_multi_horizon_soil(self)
         self._replace_accept_handler(self.buttonBox_cancelAndOK)
-        self.set_horizon_count(1)
+        soil_controller.set_horizon_count(self, 1)
         if initial:
-            self.set_input(initial)
-
-    def set_horizon_count(self, *args, **kwargs):
-        return soil_controller.set_horizon_count(self, *args, **kwargs)
+            soil_controller.set_input(self, initial)
 
     def _new_soil_row(self, component, number, parent_layout, parent_widget):
         layout = QtWidgets.QHBoxLayout()
@@ -338,6 +316,7 @@ class MultiHorizonSoilDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_Soi
         layout.addWidget(combo)
         layout.addWidget(browse)
         adapter = self._new_adapter(combo, "soil")
+        # Dynamic horizon browse button → _browse_raster
         browse.clicked.connect(lambda: self._browse_raster(adapter, "soil"))
         layout.setObjectName(
             f"horizontalLayout_input{component.title().replace('_', '')}Horizon{number}"
@@ -365,9 +344,6 @@ class MultiHorizonSoilDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_Soi
         )
         validate_soil_input(value)
         return value
-
-    def set_input(self, *args, **kwargs):
-        return soil_controller.set_input(self, *args, **kwargs)
 
     def _accept(self) -> None:
         try:

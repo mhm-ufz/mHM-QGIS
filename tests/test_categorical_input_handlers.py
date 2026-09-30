@@ -20,7 +20,7 @@ pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from qgis.PyQt.QtWidgets import QApplication, QDialog  # noqa: E402
 
-from mhm_qgis.qt.controllers import main as main_controller  # noqa: E402
+from mhm_qgis.qt.controllers import categorical  # noqa: E402
 from mhm_qgis.qt.dialogs import advanced_inputs  # noqa: E402
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog  # noqa: E402
 from mhm_qgis.core.handlers.lookup import (  # noqa: E402
@@ -47,7 +47,7 @@ def _stub(result):
         def __init__(self, *_args, **_kwargs):
             pass
 
-        def exec_(self):
+        def exec(self):
             return QDialog.DialogCode.Accepted
 
         def selected_config(self):
@@ -80,11 +80,11 @@ def test_lookup_selection_lands_on_the_main_dialog(tmp_path, monkeypatch):
     dialog = _dialog(tmp_path)
     config = _lookup_config(tmp_path)
     monkeypatch.setattr(
-        main_controller, "SingleLayerInputDialog", _stub(config)
+        categorical, "SingleLayerInputDialog", _stub(config)
     )
 
-    dialog.handle_categorical_type(
-        "geology", "Single Categorical Layer (with Lookup Table)"
+    categorical.handle_categorical_type(
+        dialog, "geology", "Single Categorical Layer (with Lookup Table)"
     )
 
     assert dialog.categorical_lookup_config("geology") == {
@@ -105,11 +105,11 @@ def test_single_categorical_land_use_lands_on_the_main_dialog(
     dialog = _dialog(tmp_path)
     config = _lookup_config(tmp_path)
     monkeypatch.setattr(
-        main_controller, "SingleLayerInputDialog", _stub(config)
+        categorical, "SingleLayerInputDialog", _stub(config)
     )
 
-    dialog.handle_categorical_type(
-        "lc", "Single Categorical Layer (with Lookup Table)"
+    categorical.handle_categorical_type(
+        dialog, "lc", "Single Categorical Layer (with Lookup Table)"
     )
 
     assert dialog.categorical_lookup_config("lc") is not None
@@ -132,8 +132,8 @@ def test_historical_land_use_lands_on_the_main_dialog(tmp_path, monkeypatch):
         advanced_inputs, "HistoricalLandUseDialog", _stub(value)
     )
 
-    dialog.handle_categorical_type(
-        "lc", "Multi Historical Layers (with Lookup Table)"
+    categorical.handle_categorical_type(
+        dialog, "lc", "Multi Historical Layers (with Lookup Table)"
     )
 
     assert dialog._advanced_inputs["land_cover"] is value
@@ -152,8 +152,8 @@ def test_multi_horizon_soil_lands_on_the_main_dialog(tmp_path, monkeypatch):
         advanced_inputs, "MultiHorizonSoilDialog", _stub(value)
     )
 
-    dialog.handle_categorical_type(
-        "soil", "Multi-horizon Multi-variate Layers"
+    categorical.handle_categorical_type(
+        dialog, "soil", "Multi-horizon Multi-variate Layers"
     )
 
     assert dialog._advanced_inputs["soil"] is value

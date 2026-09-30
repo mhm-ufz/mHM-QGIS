@@ -16,7 +16,6 @@ from mhm_qgis.qgis_bridge.layers.domain import snap_points_to_network, DomainWor
 from mhm_qgis.core.handlers.state import domain_state
 from mhm_qgis.core.executions.morphology import delineation
 from mhm_qgis.core.handlers.raster.tasks import dem_derivative_files, hydrology_files
-from mhm_qgis.qt.controllers.domain_delineator import colour_outlets
 
 
 def layer(kind, crs, field, features):
@@ -104,7 +103,7 @@ def navigation(folder):
         assert all(record.get("confidence") in (0, 1, 2) for record in dialog._draft_state["outlets"].values())
         for confidence, colour in ((0, "#f5a3a3"), (1, "#ffe794"), (2, "#a8e6a3")):
             dialog._draft_state["outlets"]["1"]["confidence"] = confidence
-            colour_outlets(dialog)
+            dialog._colour_outlets()
             assert dialog.listWidget_outlets.item(0).background().color().name() == colour
         dialog.checkBox_isDomainOutlet.setChecked(True)
         dialog.listWidget_outlets.setCurrentRow(1)
@@ -130,7 +129,7 @@ def navigation(folder):
         call = main.task_coordinator.submit.call_args
         assert call.args[0] == "domain-final-save"
         saved = call.args[2](None)
-        with patch("mhm_qgis.qt.controllers.domain_delineator.QMessageBox.information"):
+        with patch("mhm_qgis.qt.dialogs.domain_delineator.QMessageBox.information"):
             call.kwargs["on_success"](saved)
         state = domain_state.load_state(folder)
         assert len(domain_state.active_domain_records(state)) == 1

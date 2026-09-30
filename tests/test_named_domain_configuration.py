@@ -116,7 +116,7 @@ def test_v6_prepared_outputs_are_registered_for_namelists(tmp_path):
 
 def test_switching_domains_restores_only_the_selected_setup(tmp_path, monkeypatch):
     pytest.importorskip("qgis.core")
-    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt.controllers import main, project
     from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
     from mhm_qgis.qt.dialogs.domain_folder_name import DomainFolderNameDialog
     from mhm_qgis.qt.dialogs.project_folder_tree import ProjectFolderTreeDialog
@@ -128,19 +128,19 @@ def test_switching_domains_restores_only_the_selected_setup(tmp_path, monkeypatc
     monkeypatch.setattr(ProjectFolderTreeDialog, "exec", lambda self: 0)
     dialog = MhmQgisDialog()
     dialog.project_directory = str(tmp_path)
-    main.populate_domain_folders(dialog)
-    main.create_project_structure(dialog)
+    project.populate_domains(dialog)
+    project.create_structure(dialog)
     first = Path(dialog.project_folder)
     dialog.spinBox_L2ResolutionMultiplier.setValue(4)
     dialog._meteo_inputs = {"tavg": asdict(MeteoFolderSpec("tavg", str(tmp_path), unit="K"))}
     dialog.save_input_state()
     dialog.comboBox_domainFolderSelector.setCurrentIndex(dialog.comboBox_domainFolderSelector.count() - 1)
-    main.create_project_structure(dialog)
+    project.create_structure(dialog)
     assert Path(dialog.project_folder).name == "Valley"
     assert dialog._meteo_inputs == {}
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 1
     dialog.comboBox_domainFolderSelector.setCurrentIndex(dialog.comboBox_domainFolderSelector.findData("Alpine"))
-    main.create_project_structure(dialog)
+    project.create_structure(dialog)
     assert Path(dialog.project_folder) == first
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 4
     assert set(dialog._meteo_inputs) == {"tavg"}
@@ -151,7 +151,7 @@ def test_switching_domains_restores_only_the_selected_setup(tmp_path, monkeypatc
 
 def test_meteo_dialog_cancel_and_edit_do_not_prepare_data(tmp_path, monkeypatch):
     pytest.importorskip("qgis.core")
-    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt.controllers import forcing
     from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
     from mhm_qgis.qt.dialogs.meteo_var_details_input import MeteoVarDetailsDialog
     dialog = MhmQgisDialog()
@@ -166,7 +166,7 @@ def test_meteo_dialog_cancel_and_edit_do_not_prepare_data(tmp_path, monkeypatch)
         return prompt.DialogCode.Rejected
     monkeypatch.setattr(MeteoVarDetailsDialog, "exec", cancel)
     monkeypatch.setattr(dialog.task_coordinator, "submit", lambda *a, **k: pytest.fail("Cancel started scanning"))
-    main.populate_meteo_table(dialog)
+    forcing.populate_meteo_table(dialog)
     dialog.tableWidget_meteoInputs.cellWidget(0, 7).click()
     assert dialog._meteo_inputs["tavg"] == asdict(spec)
     assert not list(Path(dialog.project_folder).rglob("*.nc"))

@@ -144,3 +144,58 @@ def test_source_nodata_becomes_the_ascii_nodata(tmp_path):
     write_domain_dem_ascii(dem, output, L0, polygon, reference_path=dem)
 
     assert _rows(output)[0][0] == "-9999"
+
+
+def test_bulk_ascii_formatting_matches_the_per_cell_contract():
+    """The published text is a contract: every cell exactly as `_ascii_value`."""
+    from mhm_qgis.core.handlers.raster.tasks import _ascii_rows, _ascii_value
+
+    rng = np.random.default_rng(7)
+    block = rng.normal(0, 1, (40, 97)) * 10.0 ** rng.integers(-320, 300, (40, 97))
+    block[::3] = np.round(block[::3] * 1e3)                      # whole-number rows
+    block[5, :4] = (-0.0, 2.0 ** 63, 1e300, 5e-324)               # int64 edge, huge, subnormal
+    block[7, :3] = (0.1, 1e-5, 9007199254740993.0)
+    assert _ascii_rows(block) == [" ".join(_ascii_value(value) for value in row) for row in block]
+
+
+def test_an_unchanged_export_is_kept_and_a_changed_or_linked_one_rewritten(tmp_path):
+    from mhm_qgis.core.handlers.raster.tasks import TaskShare
+
+    dem = tmp_path / "dem.tif"
+    _cropped_dem(dem)
+    output = tmp_path / "data" / "dem.asc"
+    progress = []
+    task = type("Task", (), {"isCanceled": lambda self: False,
+                             "setProgress": lambda self, value: progress.append(value)})()
+
+    write_domain_dem_ascii(dem, output, L0, None, project_folder=tmp_path, task=TaskShare(task, 50, 100))
+    written = output.stat().st_mtime_ns
+    assert progress == [100.0]  # One 64-row block, reported inside its 50-100 % share.
+    os.utime(output, ns=(written - 10**9, written - 10**9))       # Would change on a rewrite.
+    kept = output.stat().st_mtime_ns
+    write_domain_dem_ascii(dem, output, L0, None, project_folder=tmp_path)
+    assert output.stat().st_mtime_ns == kept                        # unchanged input: skipped
+
+    os.utime(dem, ns=(written + 10**9, written + 10**9))
+    write_domain_dem_ascii(dem, output, L0, None, project_folder=tmp_path)
+    assert output.stat().st_mtime_ns != kept                        # changed input: rewritten
+
+    elsewhere = tmp_path / "source_domain.asc"
+    output.rename(elsewhere)
+    output.symlink_to(elsewhere)
+    write_domain_dem_ascii(dem, output, L0, None, project_folder=tmp_path)
+    assert not output.is_symlink()                                   # a clone's link is replaced
+    assert output.read_bytes() == elsewhere.read_bytes()
+
+
+def test_task_shares_fill_one_bar_in_order():
+    from mhm_qgis.core.handlers.raster.tasks import TaskShare
+
+    seen = []
+    task = type("Task", (), {"isCanceled": lambda self: False, "setProgress": lambda self, value: seen.append(value)})()
+    whole = TaskShare(task, 20, 80)
+    for index in range(3):
+        part = whole.part(index, 3)
+        part.setProgress(0)
+        part.setProgress(100)
+    assert seen == [20.0, 40.0, 40.0, 60.0, 60.0, 80.0]

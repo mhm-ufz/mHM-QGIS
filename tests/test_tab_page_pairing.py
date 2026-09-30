@@ -4,7 +4,7 @@ import pytest
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
-from mhm_qgis.qt.controllers import main
+from mhm_qgis.qt.controllers import grid
 
 
 def test_each_step_owns_its_controls():
@@ -25,7 +25,7 @@ def test_each_step_owns_its_controls():
 def test_resolution_fields_preserve_exact_positive_values_for_click_validation():
     dialog = MhmQgisDialog()
     exact = 1 / 1200
-    main._populate_resolution_input(dialog, "L1", [exact, 2 * exact], unit="°")
+    grid._populate_resolution_input(dialog, "L1", [exact, 2 * exact], unit="°")
     assert dialog.current_l1_resolution() == exact
     dialog.lineEdit_L1Resolution.setText(repr(2 * exact))
     assert dialog.current_l1_resolution() == 2 * exact

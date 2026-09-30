@@ -136,10 +136,12 @@ def test_the_bridge_sends_lookup_jobs_to_the_worker():
 
     from mhm_qgis.core.executions.morphology import commands
     pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
-    from mhm_qgis.qt.objects import morphology_tasks
+    from mhm_qgis.qt.workflows import morphology as morphology_tasks
 
     source = inspect.getsource(commands.lookup)
     assert "native_worker" in source
-    assert morphology_tasks._run_lookup is commands.lookup
+    assert "commands.lookup" in inspect.getsource(
+        morphology_tasks.MorphologyTaskBridge._lookup_task
+    )
     # The Qt scheduler must not expose the heavy formatter directly.
     assert not hasattr(morphology_tasks, "prepare_categorical_file")

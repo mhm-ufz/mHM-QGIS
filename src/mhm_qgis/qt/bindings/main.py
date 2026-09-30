@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 """Widget wiring for the main form (`mhm_qgis_main.ui`).
 
-`bind(dialog)` is called once from `MhmQgisDialog.__init__`. The
-`connect_processor_button` / `connect_optional_processor_button` helpers stay on
-the dialog: they reach its logger and task coordinator, so they are behaviour
-rather than wiring.
+`bind(dialog)` is called once from `MhmQgisDialog.__init__`. Each processing
+button names its controller or workflow entry point at the connection site.
 """
 from __future__ import annotations
 
@@ -13,7 +11,8 @@ from qgis.core import QgsProject
 from ...qgis_bridge.display import meteo as meteo_display
 from ...qgis_bridge.display import grid as grid_display
 from ...qgis_bridge.display import output as output_display
-from ..controllers import elevation_band, main
+from ..controllers import categorical, forcing, grid, main, model, project, time, version
+from ..workflows import meteorology, observations
 
 
 def _bind_input_sources(dialog):
@@ -24,181 +23,103 @@ def _bind_input_sources(dialog):
             dialog.save_input_state(),
         )
     )
-    for kind, button_name in (
-        ("dem", "pushButton_browseDEMInput"),
-        ("pour_points", "pushButton_browsePourPointInput"),
-        ("land_cover", "pushButton_browseLandUseInput"),
-        ("soil", "pushButton_soilInput"),
-        ("geology", "pushButton_geologyInput"),
-        ("lai", "pushButton_laiInput"),
+    for kind, button in (
+        ("dem", dialog.pushButton_browseDEMInput),
+        ("pour_points", dialog.pushButton_browsePourPointInput),
     ):
-        button = getattr(dialog, button_name, None)
-        if button is not None:
-            button.setToolTip(
-                f"Browse for {kind.replace('_', ' ')} input file"
+        button.setToolTip(f"Browse for {kind.replace('_', ' ')} input file")
+        # Input browse button → main.browse_input_file
+        button.clicked.connect(
+            lambda checked=False, input_kind=kind: main.browse_input_file(
+                dialog, input_kind
             )
-            button.clicked.connect(
-                lambda checked=False, input_kind=kind: dialog.browse_input_file(
-                    input_kind
+        )
+
+    for kind in categorical.KINDS:
+        combo = categorical.categorical_type_combo(dialog, kind)
+        combo.activated.connect(
+            lambda _index, input_kind=kind, widget=combo: (
+                categorical.handle_categorical_type(
+                    dialog, input_kind, widget.currentText()
                 )
             )
+        )
 
-    for kind, combo_name in (
-        ("lc", "comboBox_landUseInputType"),
-        ("soil", "comboBox_soil_inputType"),
-        ("geology", "comboBox_geology_inputType"),
-        ("lai", "comboBox_lai_inputType"),
-    ):
-        combo = getattr(dialog, combo_name, None)
-        if combo is not None:
-            combo.activated.connect(
-                lambda _index, input_kind=kind, widget=combo: (
-                    dialog.handle_categorical_type(
-                        input_kind, widget.currentText()
-                    )
-                )
-            )
+    # A bound slot, so the connection dies with the dialog on plugin reload.
+    qgis_project = QgsProject.instance()
+    qgis_project.layersAdded.connect(dialog.refresh_input_sources)
+    qgis_project.layersRemoved.connect(dialog.refresh_input_sources)
 
-    project = QgsProject.instance()
-    for signal_name in ("layersAdded", "layersRemoved"):
-        signal = getattr(project, signal_name, None)
-        if signal is not None:
-            try:
-                signal.connect(dialog.refresh_input_sources)
-            except Exception:
-                pass
 
 def bind(dialog):
     """Connect all UI element signals to appropriate slots."""
 
     # Project management
-    dialog.pushButton_BrowseProjectFolder.clicked.connect(dialog.select_project_folder)
-    dialog.pushButton_createProjectStructure.clicked.connect(lambda: main.create_project_structure(dialog))
+    # pushButton_BrowseProjectFolder → project.select_folder
+    dialog.pushButton_BrowseProjectFolder.clicked.connect(
+        lambda: project.select_folder(dialog)
+    )
+    # pushButton_createProjectStructure → project.create_structure
+    dialog.pushButton_createProjectStructure.clicked.connect(
+        lambda: project.create_structure(dialog)
+    )
     dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(
         lambda: dialog.comboBox_mHMversion.setEnabled(
             dialog.comboBox_domainFolderSelector.currentData() is None
         )
     )
-    dialog.comboBox_mhmWorkType.currentIndexChanged.connect(lambda: main.work_type_changed(dialog))
-    dialog.pushButton_scanPrecipitationFiles.clicked.connect(lambda: main.scan_precipitation(dialog))
-    dialog.pushButton_addMeteoInput.clicked.connect(lambda: main.edit_meteo_input(dialog))
+    dialog.comboBox_mhmWorkType.currentIndexChanged.connect(
+        lambda: project.work_type_changed(dialog)
+    )
+    # pushButton_scanPrecipitationFiles → forcing.scan_precipitation
+    dialog.pushButton_scanPrecipitationFiles.clicked.connect(lambda: forcing.scan_precipitation(dialog))
+    # pushButton_addMeteoInput → forcing.edit_meteo_input
+    dialog.pushButton_addMeteoInput.clicked.connect(lambda: forcing.edit_meteo_input(dialog))
+    # pushButton_addObservationVar → forcing.edit_observation_input
     dialog.pushButton_addObservationVar.clicked.connect(
-        lambda: main.edit_observation_input(dialog))
+        lambda: forcing.edit_observation_input(dialog))
+    # pushButton_executeAllObservation → observations.start
     dialog.pushButton_executeAllObservation.clicked.connect(
-        dialog.start_execute_all_observation_processing)
-    dialog.lineEdit_precipitationGlobDefinition.textChanged.connect(
-        lambda: main.handle_meteo_input_changed(dialog, "precipitation"))
+        lambda: observations.start(dialog))
     for name in ("simulationStart", "evaluationStart", "simulationEnd"):
         getattr(dialog, f"dateTimeEdit_{name}TimeInput").dateTimeChanged.connect(
-            lambda: main.save_simulation_times(dialog))
-    dialog.tabWidget_steps.currentChanged.connect(dialog.on_tab_changed)
+            lambda: time.save(dialog))
+    dialog.tabWidget_steps.currentChanged.connect(
+        lambda index: main.on_tab_changed(dialog, index)
+    )
     _bind_input_sources(dialog)
+    # pushButton_threads → dialog.open_thread_display
     dialog.pushButton_threads.clicked.connect(dialog.open_thread_display)
+    # pushButton_observationDisplay_discharge → main.display_observation_discharge
     dialog.pushButton_observationDisplay_discharge.clicked.connect(
         lambda checked=False: main.display_observation_discharge(dialog)
     )
 
-    # Morphology/Geometry processing is dispatched by the Qt task API. The
-    # callback is intentionally empty for background actions: the dispatcher
-    # selects the API command by its stable action name.
-    dialog.connect_optional_processor_button(
-        "pushButton_fillDem", "Fill DEM", lambda: None
+    pour_points = dialog.input_combo("pour_points")
+    pour_points.layerChanged.connect(
+        lambda layer=None: main.populate_pour_point_outlet_fields(dialog, layer)
     )
-    dialog.connect_optional_processor_button(
-        "pushButton_createNetwork",
-        "Create Channel Network",
-        lambda: None,
-    )
-    dialog.connect_optional_processor_button(
-        "pushButton_snapPoints",
-        "Snap Pour Points",
-        lambda: None,
-    )
-    dialog.connect_optional_processor_button(
-        "pushButton_elevation_bands",
-        "Elevation Bands",
-        lambda: elevation_band.process_elevation_bands(dialog),
-    )
-    dialog.connect_optional_processor_button(
-        "pushButton_bandDetails",
-        "Elevation Band Land Cover Details",
-        lambda: elevation_band.process_band_details(dialog),
-    )
-
-    # Hydrological processing
-    dialog.connect_optional_processor_button(
-        "pushButton_aspect", "Aspect", lambda: None
-    )
-    dialog.connect_optional_processor_button(
-        "pushButton_slope", "Slope", lambda: None
-    )
-    dialog.connect_optional_processor_button(
-        "pushButton_flowAccumulation",
-        "Flow Accumulation",
-        lambda: None,
-    )
-    dialog.connect_optional_processor_button(
-        "pushButton_flowDirection",
-        "Flow Direction",
-        lambda: None,
-    )
-    dialog.connect_optional_processor_button(
-        "pushButton_gaugePosition",
-        "Gauge Position",
-        lambda: None,
-    )
-    try:
-        dialog.input_combo("pour_points").layerChanged.connect(
-            dialog.populate_pour_point_outlet_fields
-        )
-        dialog.input_combo("pour_points").layerChanged.connect(
-            lambda layer=None: dialog.update_gauged_outlet_count(
-                layer
-            )
-        )
-    except Exception:
-        pass
-    dialog.update_gauged_outlet_count()
-
+    pour_points.layerChanged.connect(dialog.update_gauged_outlet_count)
     dialog.comboBox_pourPointOutletID.currentIndexChanged.connect(
-        dialog.handle_model_input_changed
+        lambda _index: main.handle_model_input_changed(dialog)
     )
     dialog.comboBox_domainDefinitionType.activated.connect(
-        dialog.handle_domain_definition_type
+        lambda index: main.handle_domain_definition_type(dialog, index)
     )
 
-    # Layer processing
-    dialog.connect_optional_processor_button(
-        "pushButton_landUse",
-        "Land Use",
-        lambda: None,
-    )
-    dialog.connect_optional_processor_button(
-        "pushButton_soil", "Soil", lambda: None
-    )
-    dialog.connect_optional_processor_button(
-        "pushButton_hydrogeology",
-        "Hydrogeology",
-        lambda: None,
-    )
-    if hasattr(dialog, "pushButton_LAI"):
-        dialog.connect_processor_button(
-            dialog.pushButton_LAI,
-            "LAI",
-            lambda: None,
-            background=True,
-        )
+    # pushButton_morphLayerDisplay → main.display_selected_morphology_layer
     dialog.pushButton_morphLayerDisplay.clicked.connect(
-        lambda checked=False: dialog.display_selected_morphology_layer()
+        lambda checked=False: main.display_selected_morphology_layer(dialog)
     )
     dialog.comboBox_morphVariableToDisplay.currentIndexChanged.connect(
-        lambda index=None: dialog.refresh_morphology_date_control()
+        lambda index=None: main.refresh_morphology_date_control(dialog)
     )
 
     # Meteorology display: the slider and the date editor drive one step index.
     dialog.comboBox_meteoVarDisplay.currentIndexChanged.connect(
         lambda index: meteo_display.refresh(dialog)
     )
+    # pushButton_meteoVarDisplay → meteo_display.display_selected_layer
     dialog.pushButton_meteoVarDisplay.clicked.connect(
         lambda checked=False: meteo_display.display_selected_layer(dialog)
     )
@@ -210,6 +131,7 @@ def bind(dialog):
     )
 
     # Model output display: same three controls over an irregular step list.
+    # pushButton_outputVarDisplay → output_display.display_selected_layer
     dialog.pushButton_outputVarDisplay.clicked.connect(
         lambda checked=False: output_display.display_selected_layer(dialog)
     )
@@ -221,166 +143,94 @@ def bind(dialog):
     )
 
     # Batch morphology workflows
+    # pushButton_executeAllMorphology → morphology.start_execute_all
     dialog.pushButton_executeAllMorphology.clicked.connect(
-        dialog.start_execute_all_morphology_processing
+        lambda: dialog.morphology_tasks.start_execute_all()
     )
+    # pushButton_executeAllMeteo → meteorology.start
     dialog.pushButton_executeAllMeteo.clicked.connect(
-        dialog.start_execute_all_meteo_processing
+        lambda: meteorology.start(dialog)
     )
 
-    # LAI file browser
-    if hasattr(dialog, "pushButton_browse_lai"):
-        dialog.pushButton_browse_lai.clicked.connect(dialog.browse_lai_file)
-
-    _bind_grid_resolution(dialog)
-
-    for kind, button in (
-        ("precipitation", dialog.pushButton_browsePrecipitationFile),
-    ):
-        button.clicked.connect(
-            lambda checked=False, meteo_kind=kind:
-            dialog.browse_meteo_input_folder(meteo_kind)
-        )
-    for kind, folder_combo, source_combo in dialog.meteo_input_widgets():
-        folder_combo.currentIndexChanged.connect(
-            lambda index=None, meteo_kind=kind:
-            dialog.handle_meteo_input_changed(meteo_kind)
-        )
-        if source_combo is not None:
-            source_combo.currentIndexChanged.connect(
-                lambda index=None, meteo_kind=kind:
-                dialog.handle_meteo_input_changed(meteo_kind)
-            )
+    _bind_grid(dialog)
 
     # Configuration/execution processing
-    dialog.connect_processor_button(
-        dialog.pushButton_createLatLon,
-        "Create LatLon",
-        dialog.process_lat_lon,
-        background=True,
-    )
-    dialog.update_latlon_button_state()
+    # pushButton_gridDisplay → grid_display.display_selected_grid
     dialog.pushButton_gridDisplay.clicked.connect(
         lambda checked=False: grid_display.display_selected_grid(dialog)
     )
     dialog.pushButton_gridDisplay.setToolTip("Display the selected model grid")
     dialog.pushButton_edit_nmls.setToolTip("Edit mHM namelists")
-    dialog.connect_processor_button(
-        dialog.pushButton_edit_nmls,
-        "Edit Namelists",
-        dialog.edit_namelists,
+    # pushButton_edit_nmls → model.edit_namelists
+    dialog.pushButton_edit_nmls.clicked.connect(
+        lambda: model.edit_namelists(dialog)
     )
-    for button, label, profiles, update in (
-        (dialog.pushButton_editNmlsFinal, "Edit Final Namelists", None, True),
-        (dialog.pushButton_editOptimizationOptions, "Edit Optimization Options",
-         {"main": ["config_optimize"]}, False),
-        (dialog.pushButton_editParameterOptions, "Edit Parameter Options",
-         {"parameter": []}, False),
+    for button, profiles, update in (
+        (dialog.pushButton_editNmlsFinal, None, True),
+        (dialog.pushButton_editOptimizationOptions, {"main": ["config_optimize"]}, False),
+        (dialog.pushButton_editParameterOptions, {"parameter": []}, False),
     ):
-        dialog.connect_processor_button(
-            button, label,
-            lambda p=profiles, u=update: main.edit_namelists(
-                dialog, p, update_inputs=u))
+        # Namelist option button → model.edit_namelists
+        button.clicked.connect(
+            lambda checked=False, p=profiles, u=update: model.edit_namelists(
+                dialog, p, update_inputs=u
+            )
+        )
     dialog.groupBox_editCalibrationNamelists.setEnabled(
-        main.selected_version(dialog).startswith("6"))
-    run_mhm_button = dialog.pushButton_execute_mHM
-    browse_mhm = getattr(dialog, "pushButton_browseMHMExecutable", None)
-    if browse_mhm is not None:
-        browse_mhm.clicked.connect(
-            lambda checked=False: dialog.select_mhm_v6_executable()
-        )
-    dialog.refresh_mhm_executable()
-    if run_mhm_button is not None:
-        run_mhm_button.setToolTip("Run mHM")
-        dialog.connect_processor_button(
-            run_mhm_button,
-            "Run mHM",
-            dialog.run_mhm,
-        )
+        version.selected(dialog).startswith("6"))
+    dialog.pushButton_execute_mHM.setToolTip("Run mHM")
+    # pushButton_execute_mHM → model.run
+    dialog.pushButton_execute_mHM.clicked.connect(lambda: model.run(dialog))
+    # pushButton_mapCanvas → dialog.open_map_canvas
     dialog.pushButton_mapCanvas.clicked.connect(dialog.open_map_canvas)
-    terminal_button = dialog.pushButton_terminal
-    if terminal_button is not None:
-        terminal_button.clicked.connect(dialog.open_project_terminal)
+    # pushButton_terminal → dialog.open_project_terminal
+    dialog.pushButton_terminal.clicked.connect(dialog.open_project_terminal)
     dialog.comboBox_mHMversion.currentIndexChanged.connect(
-        lambda index=None: dialog.handle_version_changed()
+        lambda index=None: model.version_changed(dialog)
     )
     _bind_input_state(dialog)
-    dialog.connect_input_state_teardown_guards()
-
-    # Initialize CRS widget with project CRS
-    project_crs = QgsProject.instance().crs()
-    if project_crs.isValid():
-        dialog.mProjectionSelectionWidget_crs.setCrs(project_crs)
 
 
-def _bind_grid_resolution(dialog):
-    """Refresh derived grid controls when DEM/L1/L11 selections change."""
-    try:
-        dialog.input_combo("dem").layerChanged.connect(
-            lambda layer=None: dialog.update_l0_resolution_from_dem(layer)
-        )
-        dialog.input_combo("dem").layerChanged.connect(
-            lambda layer=None: main.invalidate_grid(dialog)
-        )
-    except Exception:
-        pass
-
-    dialog.spinBox_L2ResolutionMultiplier.valueChanged.connect(
-        dialog.handle_l2_multiplier_changed
+def _bind_grid(dialog):
+    """Refresh or invalidate the common grid when one of its inputs changes."""
+    dem = dialog.input_combo("dem")
+    dem.layerChanged.connect(lambda layer=None: grid.update_l0_resolution_from_dem(dialog, layer))
+    dem.layerChanged.connect(lambda layer=None: grid.invalidate_grid(dialog))
+    dialog.mProjectionSelectionWidget_crs.crsChanged.connect(
+        lambda crs=None: grid.invalidate_grid(dialog)
     )
-    try:
-        dialog.mProjectionSelectionWidget_crs.crsChanged.connect(
-            lambda crs=None: main.invalidate_grid(dialog)
-        )
-    except Exception:
-        pass
-
+    dialog.spinBox_L2ResolutionMultiplier.valueChanged.connect(
+        lambda value: grid.handle_l2_multiplier_changed(dialog, value)
+    )
+    # pushButton_browsePrecipitationFile → grid.browse_precipitation_folder
+    dialog.pushButton_browsePrecipitationFile.clicked.connect(
+        lambda: grid.browse_precipitation_folder(dialog)
+    )
+    dialog.comboBox_precipitationFile.currentIndexChanged.connect(
+        lambda: grid.precipitation_changed(dialog)
+    )
+    dialog.lineEdit_precipitationGlobDefinition.textChanged.connect(
+        lambda: grid.precipitation_changed(dialog)
+    )
     dialog.lineEdit_L1Resolution.textChanged.connect(
         lambda _text: (
-            dialog.update_l1_resolution_label(),
-            dialog.update_l11_resolution_label(),
+            grid.update_l1_resolution_label(dialog),
+            grid.update_l11_resolution_label(dialog),
         )
     )
     dialog.lineEdit_L11Resolution.textChanged.connect(
-        lambda _text: dialog.update_l11_resolution_label()
+        lambda _text: grid.update_l11_resolution_label(dialog)
     )
+    # pushButton_createLatLon → grid.process_lat_lon
+    dialog.pushButton_createLatLon.clicked.connect(lambda: grid.process_lat_lon(dialog))
 
 
 def _bind_input_state(dialog):
     """Save input selections when editable inputs change."""
-
-    for _, combo_box in dialog.input_layer_widgets():
-        try:
-            combo_box.layerChanged.connect(
-                dialog.handle_model_input_changed
-            )
-        except Exception:
-            pass
-
-    for _, line_edit in dialog.input_text_widgets():
-        try:
-            line_edit.editingFinished.connect(dialog.handle_model_input_changed)
-        except Exception:
-            try:
-                line_edit.textChanged.connect(
-                    dialog.handle_model_input_changed
-                )
-            except Exception:
-                pass
-
-    try:
-        dialog.comboBox_lai_inputType.currentIndexChanged.connect(
-            dialog.handle_model_input_changed
-        )
-    except Exception:
-        pass
-
-    for field in (dialog.lineEdit_L1Resolution, dialog.lineEdit_L11Resolution):
-        field.editingFinished.connect(dialog.handle_model_input_changed)
-
-    try:
-        dialog.mProjectionSelectionWidget_crs.crsChanged.connect(
-            dialog.handle_model_input_changed
-        )
-    except Exception:
-        pass
+    changed = lambda *_args: main.handle_model_input_changed(dialog)  # noqa: E731
+    for _, combo_box in main.input_layer_widgets(dialog):
+        combo_box.layerChanged.connect(changed)
+    dialog.comboBox_lai_inputType.currentIndexChanged.connect(changed)
+    dialog.lineEdit_L1Resolution.editingFinished.connect(changed)
+    dialog.lineEdit_L11Resolution.editingFinished.connect(changed)
+    dialog.mProjectionSelectionWidget_crs.crsChanged.connect(changed)

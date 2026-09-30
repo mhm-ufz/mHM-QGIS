@@ -4,6 +4,7 @@ from ..controllers import meteo_var_details_input as controller
 
 def bind(dialog):
     """Connect the browser and resolution controls."""
+    # pushButton_browseMeteoFolder → controller.browse
     dialog.pushButton_browseMeteoFolder.clicked.connect(lambda: controller.browse(dialog))
     dialog.comboBox_temporalResolutionInput.currentTextChanged.connect(
         lambda: controller.populate_output_resolutions(dialog))

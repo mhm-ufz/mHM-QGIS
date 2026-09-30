@@ -345,3 +345,28 @@ def test_a_path_left_pointing_at_staging_is_repointed_to_master(tmp_path):
         "data/static/morph/geology_classdefinition.txt"
     )
     assert missing_model_inputs(tmp_path) == []
+
+
+def test_republishing_rewrites_nothing_unchanged_and_ignores_stale_staged_copies(tmp_path):
+    """Publication used to copy its own ASCII output back into staging and then
+    export every such grid twice, first from the stale copy."""
+    import shutil
+
+    _staged_soil_horizons(tmp_path)
+    update_section(tmp_path, "soil", {
+        "output_path": ".temp/Morphology/morph/soil_horizon_class.nc",
+        "horizons": [{"lower_depth": 100}, {"lower_depth": 300}],
+    })
+    publish_model_inputs(tmp_path, L0_TARGET)
+    staging = Path(morph_staging_folder(tmp_path))
+    horizon = Path(morph_folder(tmp_path)) / "soil_class_horizon_01.asc"
+    assert [path.name for path in staged_files(tmp_path)] == ["soil_horizon_class.nc"]
+
+    shutil.copy2(horizon, staging / horizon.name)  # What an older version left behind.
+    old = horizon.stat().st_mtime_ns - 10**9
+    os.utime(horizon, ns=(old, old))
+    messages = []
+    publish_model_inputs(tmp_path, L0_TARGET, log=messages.append)
+
+    assert horizon.stat().st_mtime_ns == old  # Unchanged: kept, not rewritten.
+    assert "Skipping soil_class_horizon_01.asc: a staged NetCDF produces it." in messages

@@ -15,6 +15,7 @@ from ..ui import load_form
 
 Ui_ElevationBandDialog = load_form("elevation_band_dialog.ui")
 from ..reporting import dialog_reporter
+from ..workflows import hydrology
 
 
 def ask_elevation_band_width(
@@ -52,7 +53,7 @@ def _local_raster_source(layer) -> str | None:
 def _ensure_elevation_prerequisites(dialog) -> tuple[str, tuple[Path, ...]] | None:
     """Return the API-owned prerequisites for elevation-band processing."""
     try:
-        filled_dem = dialog.morphology_tasks.prepare_filled_dem()
+        filled_dem = hydrology.prepare_filled_dem(dialog)
     except Exception as error:
         _report(dialog, WARNING, "Missing DEM", str(error))
         return None
@@ -161,8 +162,10 @@ def process_band_details(dialog) -> None:
         )
         return
 
-    layer = dialog.input_combo("land_cover").currentLayer()
-    land_cover_path = _local_raster_source(layer)
+    source = (dialog.categorical_lookup_config("lc") or {}).get("input_path", "")
+    land_cover_path = _local_raster_source(
+        qgis_layers.open_layer(source, "Land cover", is_raster=True)
+    )
     if not land_cover_path:
         _report(
             dialog,

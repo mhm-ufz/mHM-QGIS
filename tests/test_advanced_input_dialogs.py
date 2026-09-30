@@ -18,6 +18,8 @@ from mhm_qgis.qt.dialogs.advanced_inputs import (  # noqa: E402
     HistoricalLandUseDialog,
     MultiHorizonSoilDialog,
 )
+from mhm_qgis.qt.controllers import land_use_historical as land_use_controller  # noqa: E402
+from mhm_qgis.qt.controllers import soil_multi_horizon as soil_controller  # noqa: E402
 
 
 _APPLICATION = None
@@ -47,7 +49,7 @@ def test_land_use_dialog_reuses_first_row_and_extracts_periods(tmp_path):
     dialog = HistoricalLandUseDialog(tmp_path)
 
     assert dialog.spinBox_nLandUseLayers.maximum() == 50
-    dialog.set_layer_count(2)
+    land_use_controller.set_layer_count(dialog, 2)
     table = dialog.tableWidget_landUseTimeInputs
     table.cellWidget(0, 0).setDateTime(QDateTime.fromString("1990-01-01", "yyyy-MM-dd"))
     table.cellWidget(0, 1).setDateTime(QDateTime.fromString("2000-01-01", "yyyy-MM-dd"))
@@ -74,7 +76,7 @@ def test_land_use_lookup_browse_accepts_qt_checked_argument(tmp_path, monkeypatc
     from mhm_qgis.qt.controllers import land_use_historical
 
     monkeypatch.setattr(land_use_historical, "open_file", lambda *args: ("", ""))
-    HistoricalLandUseDialog(tmp_path)._browse_lookup(False)
+    land_use_controller._browse_lookup(HistoricalLandUseDialog(tmp_path), False)
 
 
 def test_soil_dialog_adds_all_four_rows_and_extracts_unit(tmp_path):
@@ -82,7 +84,7 @@ def test_soil_dialog_adds_all_four_rows_and_extracts_unit(tmp_path):
     paths = [_touch(tmp_path / f"layer_{index}.tif") for index in range(8)]
     dialog = MultiHorizonSoilDialog(tmp_path)
     assert dialog.spinBox_nSoilHorizons.maximum() == 10
-    dialog.set_horizon_count(2)
+    soil_controller.set_horizon_count(dialog, 2)
     dialog.comboBox_bulkDensityUnit.setCurrentText("cg/cm3")
     for row, bounds in enumerate(((0, 50), (50, 200))):
         dialog._set_cell(dialog.tableWidget_soilHorizonDepthInputs, row, 0, bounds[0])

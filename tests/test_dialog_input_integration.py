@@ -24,6 +24,7 @@ from mhm_qgis.core.handlers.state import processing  # noqa: E402
 from mhm_qgis.core.handlers.store.paths import data_folder
 from mhm_qgis.core.handlers.store.layout import input_state_path  # noqa: E402
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog  # noqa: E402
+from mhm_qgis.qt.controllers import main, workflow_state  # noqa: E402
 # isort: on
 
 _APPLICATION = None
@@ -88,13 +89,13 @@ def test_dialog_maps_new_combos_and_discovers_relative_project_files(tmp_path):
 
 
 def test_main_configuration_buttons_use_dialog_first_controller(monkeypatch):
-    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt.controllers import model
 
     _app()
     calls = []
-    for name in ("edit_namelists", "run_mhm", "handle_version_changed"):
+    for name in ("edit_namelists", "run", "version_changed"):
         monkeypatch.setattr(
-            main, name, lambda owner, action=name: calls.append((action, owner)),
+            model, name, lambda owner, action=name: calls.append((action, owner)),
         )
     dialog = MhmQgisDialog()
     calls.clear()
@@ -104,7 +105,7 @@ def test_main_configuration_buttons_use_dialog_first_controller(monkeypatch):
         (dialog.comboBox_mHMversion.currentIndex() + 1) % dialog.comboBox_mHMversion.count()
     )
     assert calls == [(name, dialog) for name in (
-        "edit_namelists", "run_mhm", "handle_version_changed",
+        "edit_namelists", "run", "version_changed",
     )]
     assert not hasattr(dialog, "configuration_processor")
     dialog.close()
@@ -166,16 +167,7 @@ def test_project_without_saved_state_clears_previous_project_inputs(tmp_path):
 
     dialog = MhmQgisDialog()
     dialog.project_folder = str(first_project)
-    dialog.comboBox_soilInput.addItem(
-        "soil.tif",
-        {
-            "origin": "file",
-            "kind": "soil",
-            "path": str(raster),
-            "manual": True,
-        },
-    )
-    dialog.comboBox_soilInput.setCurrentIndex(0)
+    dialog._categorical_ready_configs["soil"] = {"input_path": str(raster)}
     dialog.comboBox_soil_inputType.setCurrentIndex(1)
     dialog.comboBox_pourPointOutletID.addItem("old_id")
     dialog.comboBox_pourPointOutletID.setCurrentText("old_id")
@@ -190,11 +182,11 @@ def test_project_without_saved_state_clears_previous_project_inputs(tmp_path):
     dialog.project_folder = str(second_project)
     dialog.load_input_state()
 
-    assert dialog.comboBox_soilInput.currentIndex() == -1
+    assert dialog._categorical_ready_configs == {}
     assert dialog.comboBox_soil_inputType.currentIndex() == -1
     assert dialog.categorical_lookup_config("soil") is None
     assert not dialog.checkBox_enableFolderSearch.isChecked()
-    assert dialog.selected_outlet_id_field() == ""
+    assert main.selected_outlet_id_field(dialog) == ""
     assert dialog.comboBox_domainDefinitionType.currentIndex() == -1
     dialog.close()
 
@@ -217,8 +209,8 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
         for index in range(dialog.comboBox_pourPointOutletID.count())
     ]
     assert fields == ["", "station_id", "outlet_name"]
-    assert dialog.selected_outlet_id_field() == "station_id"
-    assert dialog.selected_outlet_ids() == ["1", "2"]
+    assert main.selected_outlet_id_field(dialog) == "station_id"
+    assert main.selected_outlet_ids(dialog) == ["1", "2"]
 
     dialog.comboBox_pourPointOutletID.setCurrentText("outlet_name")
     dialog.comboBox_domainDefinitionType.setCurrentIndex(0)
@@ -235,8 +227,8 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     restored.project_folder = str(tmp_path)
     restored.load_input_state()
 
-    assert restored.selected_outlet_id_field() == "outlet_name"
-    assert restored.selected_outlet_ids() == ["upper", "lower"]
+    assert main.selected_outlet_id_field(restored) == "outlet_name"
+    assert main.selected_outlet_ids(restored) == ["upper", "lower"]
     assert restored.comboBox_domainDefinitionType.currentIndex() == 0
     restored.close()
 
@@ -245,15 +237,14 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
 def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
     from dataclasses import asdict
     from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
-    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt.controllers import forcing, grid
     folder = tmp_path / "forcing"
     folder.mkdir()
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
     dialog._loading_input_state = True
-    dialog.refresh_meteo_folder_sources()
-    dialog._add_folder_combo_item(dialog.comboBox_precipitationFile, str(folder))
-    dialog.comboBox_precipitationFile.setCurrentIndex(dialog.comboBox_precipitationFile.count() - 1)
+    grid.refresh_precipitation_folder(dialog)
+    grid.select_precipitation_folder(dialog, str(folder))
     dialog._meteo_inputs = {v: asdict(MeteoFolderSpec(v, str(folder), unit=unit))
                             for v, unit in (("pre", "mm"), ("tavg", "K"))}
     dialog.spinBox_L2ResolutionMultiplier.setValue(4)
@@ -265,7 +256,7 @@ def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
     restored.load_input_state()
     assert restored.spinBox_L2ResolutionMultiplier.value() == 4
     assert restored.tableWidget_meteoInputs.rowCount() == 2
-    assert [s.kind for s in restored.selected_meteo_specs()] == ["pre", "tavg"]
+    assert [s.kind for s in forcing.selected_meteo_specs(restored)] == ["pre", "tavg"]
     assert restored._meteo_inspections == {}
     restored.close()
 
@@ -273,12 +264,13 @@ def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
 def test_meteo_requires_pre_but_not_unconfigured_variables(tmp_path):
     from dataclasses import asdict
     from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+    from mhm_qgis.qt.controllers import forcing
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
     with pytest.raises(ValueError, match="precipitation"):
-        dialog.selected_meteo_specs()
+        forcing.selected_meteo_specs(dialog)
     dialog._meteo_inputs = {"pre": asdict(MeteoFolderSpec("pre", str(tmp_path), unit="mm"))}
-    assert tuple(s.kind for s in dialog.selected_meteo_specs()) == ("pre",)
+    assert tuple(s.kind for s in forcing.selected_meteo_specs(dialog)) == ("pre",)
     dialog.close()
 
 
@@ -298,7 +290,7 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
 
     restored = MhmQgisDialog()
     restored.project_folder = str(tmp_path)
-    restored.refresh_morphology_workflow_button_states()
+    workflow_state.refresh_all(restored)
 
     assert "#2e7d32" in restored.pushButton_executeAllMeteo.styleSheet()
     restored.close()
@@ -316,7 +308,7 @@ def test_additional_workflow_green_state_restores(
     processing.mark_workflow(tmp_path, workflow, "completed")
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
-    dialog.refresh_morphology_workflow_button_states()
+    workflow_state.refresh_all(dialog)
 
     assert "#2e7d32" in getattr(dialog, button).styleSheet()
     dialog.close()
@@ -335,7 +327,7 @@ def test_meteorology_completion_is_independent_of_latlon(tmp_path):
 
     restored = MhmQgisDialog()
     restored.project_folder = str(tmp_path)
-    restored.refresh_morphology_workflow_button_states()
+    workflow_state.refresh_all(restored)
 
     assert "#2e7d32" in (
         restored.pushButton_executeAllMeteo.styleSheet()

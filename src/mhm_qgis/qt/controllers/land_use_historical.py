@@ -6,7 +6,6 @@ combo adapter built with it, so it can only be wired where the row is made.
 """
 from __future__ import annotations
 
-from pathlib import Path
 
 from qgis.PyQt.QtCore import QDateTime, QSignalBlocker
 
@@ -47,16 +46,16 @@ def set_layer_count(dialog, count: int) -> None:
             dialog.tableWidget_landUseTimeInputs.setCellWidget(index, column, editor)
             editor.dateTimeChanged.connect(
                 lambda value, row=index, col=column: boundary_changed(dialog, row, col, value))
-    dialog._update_bounds()
+    _update_bounds(dialog)
 
 
 def set_all_time(dialog) -> None:
     """Configure the same form for one all-time land-use layer."""
-    dialog.set_layer_count(1)
+    set_layer_count(dialog, 1)
     dialog.spinBox_nLandUseLayers.setEnabled(False)
     dialog.pushButton_addLandUseInputWidgets.setEnabled(False)
     dialog.tableWidget_landUseTimeInputs.setEnabled(False)
-    dialog._update_bounds()
+    _update_bounds(dialog)
 
 
 def set_input(dialog, value) -> None:
@@ -66,7 +65,7 @@ def set_input(dialog, value) -> None:
         raise ValueError(
             f"Land use supports at most {MAX_LAND_USE_PERIODS} periods."
         )
-    dialog.set_layer_count(len(periods) or 1)
+    set_layer_count(dialog, len(periods) or 1)
     from ...core.handlers.lookup import LandUsePeriod
     from ...core.handlers.lookup.manifests import period_datetime
     for index, period in enumerate(periods):
@@ -81,14 +80,14 @@ def set_input(dialog, value) -> None:
     lookup = str(data.get("lookup_table", "") or "")
     if lookup:
         dialog._select_combo_path(dialog.comboBox_lookupTableInput, lookup)
-    dialog._lookup_changed()
+    _lookup_changed(dialog)
     dialog.comboBox_mappingFieldInput.setCurrentText(
         str(data.get("mapping_field", "") or "")
     )
     dialog.comboBox_classFieldInput.setCurrentText(
         str(data.get("class_field", "") or "")
     )
-    dialog._update_bounds()
+    _update_bounds(dialog)
 
 
 def boundary_changed(dialog, row, column, value):
@@ -98,7 +97,7 @@ def boundary_changed(dialog, row, column, value):
     if other is not None:
         with QSignalBlocker(other):
             other.setDateTime(value)
-    dialog._update_bounds()
+    _update_bounds(dialog)
 
 
 def _update_bounds(dialog, *_args) -> None:

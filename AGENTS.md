@@ -87,9 +87,16 @@ decision.
 - `vSpecific/`: version-specific initial values handed to the namelist editor.
 
 Top-level modules that remain include `mhm_qgis.py` (plugin lifecycle, reload-safe
-imports) and `dependency_bootstrap.py`. Main-form configuration actions live in
-`qt/controllers/main.py`; morphology task scheduling lives in
-`qt/objects/morphology_tasks.py`.
+imports) and `dependency_bootstrap.py`. The main form's controllers are split by
+concern -- `main` (input sources, outlets, domain definition, result display),
+`grid` (L0/L1/L11/L2, precipitation reference, common grid), `forcing` (meteorology
+and observation variables), `categorical` (land cover, soil, geology, LAI input
+types), `input_state` (save/restore), plus `project`, `model`, `time`, `version` and
+`workflow_state`. Workflow scheduling lives in `qt/workflows/`.
+`qt/controllers/elevation_band.py` is kept deliberately for a future Elevation Bands
+feature. The form has no `pushButton_elevation_bands` / `pushButton_bandDetails` now,
+so it is unwired; connect `process_elevation_bands` and `process_band_details` in
+`qt/bindings/main.py` when those buttons return. Do not delete it as dead code.
 
 ## Qt Layering
 
@@ -105,25 +112,60 @@ A module belongs to exactly one layer.
 - `qt/bindings/`: connects a signal to a slot and nothing else.
 - `qt/controllers/`: what a widget shows and whether it is enabled -- reads and writes
   widget values, populates combos, validates and warns.
+- `qt/workflows/`: the direct UI entry points for morphology, meteorology and
+  observation execution. They build requests and schedule work; core owns computation.
+  - `lifecycle.start(dialog, key, build, submit)` is the one path every Execute button
+    takes: refuse while a workflow runs, check prerequisites, `build()` the request
+    (`ValueError`/`OSError` become the user's message), `workflow_state.begin`, submit,
+    and `workflow_state.finish` on the first reported outcome. At most one Execute
+    workflow runs; `workflow_state.running_key` reads it, and `finish` ignores a second
+    outcome from the same pipeline.
+  - `morphology.py`: Execute All's stages, plus `start_ready_input` for a newly chosen
+    mHM-ready input. `hydrology.py`: DEM derivatives and flow/channel files on demand,
+    for Execute All's first stage and for the Domain Delineator, domain assignment and
+    elevation bands.
+  - A stage reports failure only through its `failed` callback (`lifecycle.fail`); the
+    caller decides whether to show it. A prerequisite is scheduled first, explicitly
+    (`start_domain_preflight`, `start_ready_input`), never by a stage re-calling itself
+    after running what it lacks.
+  - Workflows read form state through controllers and the dialog's public methods
+    (`grid.common_l0_header`, `forcing.observation_specs`, `categorical.advanced_input`),
+    not through the dialog's private attributes.
 - `qt/dialogs/`: the dialog classes themselves, one module per form.
   `MhmQgisDialog` owns its logging and prerequisite checks directly.
-- `qt/threads/`: `QThread` workers, `task_coordinator.py` (real QgsTask scheduling). The native raster subprocess entry point belongs to `core/`,
-  not this Qt package.
+- `qt/threads/`: `task_coordinator.py`, the one background mechanism (real QgsTask
+  scheduling). The native raster subprocess entry point belongs to `core/`, not this
+  Qt package.
 - `qt/objects/`: a long-lived `QObject` attached to a widget rather than defined by one
   -- `viewport_raster_range.py` watches a map canvas and keeps a renderer in step. Not
   keyed to a single form, so it belongs in none of the three layers above.
 
 Rules that follow from it:
 
-- **One `bindings` and one `controllers` module per form, named after the form.** Two
-  exceptions, both because two forms share one implementation class rather than because
-  the rule bends: `discharge_assignment.py` covers the two discharge forms, and the
+- **One `bindings` module per form, named after the form; a `controllers` module only
+  where it earns its keep.** The large main form splits controllers by concern (see
+  Package Layout). Dialogs whose behaviour is small, or tied to a widget they build
+  (Domain Delineator's canvas, discharge-assignment rows, the task monitor, the
+  terminal), keep it as their own methods: a controller that only the dialog calls,
+  through a forwarder that calls straight back, is two hops for one. The
   land-use/soil dialogs share `_DynamicInputDialogMixin` for row construction.
+- Fixed form buttons connect directly to their controller or workflow in `bindings/`.
+  Put a one-line `button → target` comment at that transition. Do not restore string
+  dispatch through the dialog. Runtime-built row buttons stay beside row construction.
 - **Controllers take the dialog as their first argument**, so behaviour can be exercised
   without building the dialog's whole collaborator graph.
-- **A dialog keeps a one-line method for any name another package calls.** Task and
-  display bridges hold the dialog reference, so moving a body into a controller must
-  not move its externally used name off the dialog.
+- **A dialog keeps a one-line method only for a name another package calls** --
+  `qt/workflows`, `qgis_bridge/display`, `vSpecific`, another dialog, or a test that
+  stubs it. Controllers and `bindings/` call each other's functions directly, never
+  back through the dialog: `MhmQgisDialog` used to carry 73 forwarders, most of them
+  loops from its own controller back into that controller. Real signatures only, no
+  `*args, **kwargs`.
+- **Access form widgets directly.** Forms are loaded at runtime, so a missing widget is
+  a bug; `getattr(dialog, "pushButton_x", None)` guards hid 17 widgets that had left
+  the form, and the code wired to them.
+- A bound QObject slot, not a lambda, goes on a `QgsProject` or application signal
+  (`refresh_input_sources`, the teardown guards), so the connection dies with the
+  dialog on plugin reload.
 - **Wiring made against a runtime-built object stays where that object is built** -- a
   per-row browse button, a `QProcess`, the task coordinator, a `QgsMapToolEmitPoint`.
   Only wiring fixed by the form belongs in `qt/bindings/`.
@@ -431,6 +473,26 @@ Four JSON files live under each domain's `.temp/` directory.
   after successful publication.
 - The final derivative write follows category publication; v6 can therefore bundle
   the published soil/geology classes into `input.nc`.
+- Publication never copies a published file back into staging. It used to, which
+  left a stale ASCII copy of every class grid in `.temp/Morphology/morph`, and every
+  run then exported those grids twice: first from the copy, then from the NetCDF.
+  A staged non-NetCDF raster whose ASCII name a staged NetCDF also produces is
+  skipped with a log line; the NetCDF is the product.
+- Every ASCII export (`write_domain_dem_ascii`) is reused when its source, reference,
+  mask and options are unchanged: publication passes `project_folder`, and the
+  fingerprint is recorded per output path in the `exports` section. An output that is
+  a symlink (a cloned domain's link into its source) is always rewritten. On
+  Karnali-v5 an unchanged re-publication fell from about 57 s to 0.1 s.
+- The ASCII text is a contract: each cell is `str(int(v))` when whole, else Python's
+  shortest `repr`. `_ascii_rows` formats a whole-number row through int64, about 2x
+  faster, and any other row per cell with `repr`. Converting a double to its shortest
+  text costs about 0.5 us whatever does it: numpy's `astype(str)` is identical but
+  slower than `repr`, so do not vectorize that part. `cmp` the bytes of every export
+  before and after touching this writer.
+- A job made of several steps reports through `TaskShare` (`handlers/raster/tasks.py`),
+  so each step fills its own share of one progress bar instead of restarting it:
+  publication's class grids, LAI and morphology grids share one bar, and the ASCII
+  writer reports once per 64-row block, not once per row.
 
 ## Fingerprinted Reuse
 
@@ -440,7 +502,8 @@ Four JSON files live under each domain's `.temp/` directory.
   its recorded outputs is gone. Content is never hashed, so the check stays cheap on
   multi-gigabyte inputs.
 - Sections in use: `stages` (per Execute All stage, from
-  `qt/objects/morphology_tasks.py`) and `meteo_inspection` (per meteorology folder, from
+  `qt/workflows/morphology.py`), `exports` (per published ASCII file, from
+  `write_domain_dem_ascii`) and `meteo_inspection` (per meteorology folder, from
   `core/meteorology/forcing/cache.py`). Keep
   entries additive; `store_payload` merges into the existing state rather than replacing.
 - The categorical lookup stages and the LAI stage are gated on it. Geology used to rerun
@@ -486,18 +549,27 @@ Four JSON files live under each domain's `.temp/` directory.
   build and one file append per day, and the append cost grew with the unlimited
   time dimension. `_crs_description` is memoized for the same reason: pyproj was
   rebuilding a constant CF grid mapping on a Qt worker thread per block.
-- `process_meteo_inputs` takes `progress=`, ticked once per input file and wired
-  through `MeteorologyWorkflowWorker.progress` to
-  `TaskCoordinator.set_progress`. The workflow runs on a plain `QThread`
-  registered with `start_external`, which has no `QgsTask` to report through, so
-  without that signal the monitor sits at 0% for the entire run.
+- `process_meteo_inputs` takes `progress=`, ticked once per input file. Execute All
+  Meteo is an ordinary `TaskCoordinator` job (`qt/workflows/meteorology.py`): it
+  passes `task.setProgress` as `progress`, `task.isCanceled` as `cancelled`, and logs
+  through `coordinator.log`. It used to run on its own `QThread` beside the
+  coordinator, which needed a second cancel/close path and appended to the log
+  widget from the worker thread.
 
 ## Categorical Morphology Inputs
 
-- Plain input combo boxes are exposed through compatibility adapters under the former
-  `mMapLayerComboBox_*` names. Loaded QGIS layers are always listed; folder searching
-  (disabled in the form) would add relative project paths. The precipitation folder combo
-  never scans the project: it holds a blank entry plus the browsed or saved folder.
+- The DEM and pour-point combos are wrapped in `InputComboAdapter`
+  (`qt/dialogs/input_selection.py`). Loaded QGIS layers are always listed; folder
+  searching (disabled in the form) would add relative project paths. The adapter opens a
+  file-backed layer once per file version, not on every `currentLayer()` call. The
+  precipitation folder combo never scans the project: it holds a blank entry plus the
+  browsed or saved folder.
+- A categorical source lives only in the dialog's config dicts
+  (`_categorical_lookup_configs`, `_categorical_ready_configs`, `_lai_input_config`,
+  `_advanced_inputs`), written when its child dialog is accepted. The main form has no
+  land cover, soil, geology or LAI layer combo; four hidden stand-in combos used to
+  duplicate that record. A lookup job recovers a loaded QGIS layer with
+  `qgis_bridge.layers.find_by_source(input_path)` when it must materialize one.
 - Land cover, soil and geology use either `mHM_ready` or `Lookup Table` mode. Lookup mode
   stores an explicit CSV or delimited TXT lookup file, mapping field and class field.
 - **All lookup-table reading goes through `core/handlers/lookup`.** `table.read` reads
@@ -676,9 +748,8 @@ Four JSON files live under each domain's `.temp/` directory.
   the editor replace originals; keep `.nml.before-single-domain` backups.
 - v6 geological-unit parameters map to `parameter_baseflow_1.yml`'s structured
   `baseflow_recession` array; v5 keeps `geoparameter.GeoParam`.
-- `qt/controllers/main.py` owns version changes, Edit Namelists and Run mHM; the
-  main dialog exposes thin methods wired by `qt/bindings/main.py`. There is no
-  configuration processor object.
+- `qt/controllers/model.py` owns version changes, Edit Namelists and Run mHM, wired
+  directly by `qt/bindings/main.py`. There is no configuration processor object.
 - The editor runs modally on the QGIS event loop; its return code does not indicate Save.
   Scratch-file modification stamps distinguish saved files from Cancel.
 - nml-tools' modal dialogs became tabs (`ProfileDialog` -> `ProfileTab`); check the
@@ -697,7 +768,13 @@ Four JSON files live under each domain's `.temp/` directory.
   Snapshot paths, CRS text, numbers and plain containers before starting work.
 - Use `TaskCoordinator`/`QgsTask` for path-only computation and return paths or
   serializable results to a main-thread completion callback. `QgsTask` jobs receive only
-  copied primitive values and filesystem paths.
+  copied primitive values and filesystem paths. Every runner is called as
+  `runner(task)`; it reports with `task.setProgress`, stops on `task.isCanceled()`, and
+  logs with `coordinator.log.emit(key, message)`, which reaches both the dialog log and
+  the task monitor from any thread. Never call a widget, including `log_message`, from
+  a runner.
+- `log_message` does not pump the event loop. It used to call `processEvents()` per
+  line, so a click could run half-way through another handler.
 - **All heavy categorical formatting runs in `mhm_qgis.core.native_worker`**,
   a child process dispatched through `core/executions/morphology/commands.native_worker`:
   advanced land cover and soil, and the lookup mode used by geology. The lookup path
@@ -818,7 +895,7 @@ Four JSON files live under each domain's `.temp/` directory.
   `/usr/share/qgis/python/plugins` to `sys.path`, call `QgsApplication.setPrefixPath` and
   `initQgis()`. Set `locale/userLocale` in `QSettings` **after** `initQgis()` or
   `classFactory` fails on a headless machine. Useful assertions: the main dialog
-  constructs with 6 input adapters and 6 tabs.
+  constructs with 2 input adapters (DEM, pour points) and 6 tabs.
 - A shell Python may not have `PyYAML`; QGIS Python may. If schema loading
   fails only because `yaml` is missing in shell Python, note it rather than treating it as
   a plugin failure.
@@ -870,11 +947,19 @@ is not found, this is why.
 | `geology_metadata.py` | `core/handlers/lookup/geology.py` |
 | `categorical_lookup.py` | `core/handlers/lookup/job.py` |
 | `read_categorical_lookup_table`, `read_lookup_fields` | `core/handlers/lookup/table.py` (`read`, `columns`) |
-| `qgis_bridge/morphology/` mixin hierarchy | `core/morphology/`, `core/executions/morphology/`, `qgis_bridge/layers/`, `qt/objects/morphology_tasks.py` |
+| `qgis_bridge/morphology/` mixin hierarchy | `core/morphology/`, `core/executions/morphology/`, `qgis_bridge/layers/`, `qt/workflows/morphology.py` |
 | `core/session/` and `store/state_link.py` | explicit arguments plus `core/handlers/state/processing.py` |
 | `others/elevation_bands/` mixins | `core/morphology/elevation_bands/` plus `qt/controllers/elevation_band.py` |
 | `core/meteorology/forcing.py`, `inspection_cache.py` | `core/meteorology/forcing/{api,cache,types}.py` |
 | `grid_resolution.py`, `core/meteorology/l2_grid.py`, `ERA5Land/mhm/grid.py` | `core/grid/{model,arrays}.py` plus `qgis_bridge/layers/grid.py` |
+| `MhmQgisDialog` forwarders, input-state save/restore, grid methods | `qt/controllers/{input_state,grid,categorical,forcing}.py`; the dialog keeps only names other packages call |
+| grid, meteorology inputs and categorical handlers in `qt/controllers/main.py` | `qt/controllers/grid.py`, `forcing.py`, `categorical.py` |
+| `qt/threads/meteo_workflow.py`, `TaskCoordinator.start_external` | `qt/workflows/meteorology.py` submitting an ordinary coordinator task |
+| `qt/controllers/{domain_delineator,discharge_assignment,thread_display,project_terminal}.py` | methods on their dialogs |
+| `MorphologyTaskBridge.run_*`, per-step morphology buttons | removed with the buttons; Execute All's stage map in `start_execute_all` |
+| `LookupConfigDialog` (`qt/dialogs/single_layer_lookup.py`) | removed; unused outside tests |
+| `MorphologyTaskBridge.start_hydrology`, `start_domain_preflight`, `prepare_filled_dem` | `qt/workflows/hydrology.py` functions taking the dialog |
+| `execute_all_active`, `finish_morphology_workflow`, `set_meteo_setup_controls_enabled` | `workflow_state.begin` / `finish` / `running_key`, driven by `qt/workflows/lifecycle.py` |
 
 One known boundary exception remains: `core/handlers/lookup/job.py` calls
 `prepare_categorical_file` from `externals/` at call time. Keep the import lazy so

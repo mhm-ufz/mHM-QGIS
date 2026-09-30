@@ -32,6 +32,28 @@ def _progress(task, value):
         task.setProgress(float(value))
 
 
+class TaskShare:
+    """A task seen by one step of a longer job: its 0-100 % fills `start`-`end`.
+
+    Several steps each reporting 0-100 % would otherwise restart the bar.
+    """
+
+    def __init__(self, task, start=0.0, end=100.0):
+        self.task, self.start, self.end = task, float(start), float(end)
+
+    def isCanceled(self):
+        return self.task is not None and self.task.isCanceled()
+
+    def setProgress(self, value):
+        if self.task is not None:
+            self.task.setProgress(self.start + (self.end - self.start) * float(value) / 100.0)
+
+    def part(self, index, count):
+        """Return the `index`-th of `count` equal consecutive shares of this one."""
+        span = (self.end - self.start) / max(1, count)
+        return TaskShare(self.task, self.start + span * index, self.start + span * (index + 1))
+
+
 def _read_raster(path, *, as_float=False):
     import numpy as np
     from osgeo import gdal
@@ -406,6 +428,10 @@ def mask_aligned_l0_raster(
     )
 
 
+ASCII_FORMAT = "ascii-grid-1"
+_ASCII_BLOCK_ROWS = 64
+
+
 def write_domain_dem_ascii(
         source_path,
         output_path,
@@ -416,14 +442,33 @@ def write_domain_dem_ascii(
         nodata=-9999,
         fill_value=None,
         band_index=1,
-        task=None):
+        task=None,
+        project_folder=None):
     """Write one domain DEM as Arc/Info ASCII on the common L0 grid.
 
     The source is the cropped L0 DEM, so every domain shares the model extent and
     matches the other inputs cell for cell; only the cells inside the domain
-    mask keep their value. Rows stream straight to text, so memory stays flat
-    whatever the grid size.
+    mask keep their value. Rows stream to text a block at a time, so memory stays
+    flat whatever the grid size. With `project_folder`, an output whose inputs
+    and options are unchanged since it was written is kept as it is.
     """
+    output = Path(output_path)
+    digest = None
+    if project_folder:
+        from ..file.netcdf.raster import file_path
+        from ..state.cache import cached_payload, fingerprint, outputs_present
+
+        digest = fingerprint(
+            [file_path(source_path), *(str(path) for path in (mask_path, reference_path) if path)],
+            {"source": str(source_path), "header": dict(target_header), "nodata": nodata,
+             "fill_value": fill_value, "band": band_index, "format": ASCII_FORMAT},
+        )
+        # A cloned domain's output is a link into its source domain: rewrite it.
+        if not output.is_symlink() and outputs_present(
+                cached_payload(project_folder, "exports", str(output), digest)):
+            _progress(task, 100)
+            return str(output)
+
     np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
     source = gdal.Open(str(source_path), gdal.GA_ReadOnly)
     if source is None:
@@ -441,13 +486,14 @@ def write_domain_dem_ascii(
     cellsize = float(target_header["cellsize"])
     rows = int(target_header["nrows"])
     columns = int(target_header["ncols"])
-    output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.tmp")
     temporary.unlink(missing_ok=True)
 
     blank = np.full(columns, float(nodata if fill_value is None else fill_value), dtype="float64")
     source_nodata = band.GetNoDataValue()
+    copy_first = window["target_y"]
+    copy_last = window["target_y"] + window["copy_rows"] if window["copy_rows"] > 0 else copy_first
     try:
         with open(temporary, "w", encoding="utf-8") as stream:
             stream.write(
@@ -458,37 +504,30 @@ def write_domain_dem_ascii(
                 f"cellsize      {cellsize}\n"
                 f"NODATA_value  {nodata}\n"
             )
-            for row in range(rows):
+            for start in range(0, rows, _ASCII_BLOCK_ROWS):
                 _cancelled(task)
-                values = blank
-                source_row = row - window["target_y"] + window["source_y"]
-                if (
-                        window["copy_rows"] > 0
-                        and window["target_y"] <= row
-                        < window["target_y"] + window["copy_rows"]):
+                stop = min(rows, start + _ASCII_BLOCK_ROWS)
+                values = np.tile(blank, (stop - start, 1))
+                first, last = max(start, copy_first), min(stop, copy_last)
+                if first < last:
                     read = band.ReadAsArray(
-                        window["source_x"], source_row, window["copy_cols"], 1)
+                        window["source_x"], first - copy_first + window["source_y"],
+                        window["copy_cols"], last - first)
                     if read is None:
                         raise RuntimeError(
-                            f"Could not read the L0 DEM row {row}: {source_path}")
-                    values = blank.copy()
-                    values[
-                        window["target_x"]:
-                        window["target_x"] + window["copy_cols"]
-                    ] = read[0]
+                            f"Could not read the L0 DEM rows {first}-{last - 1}: {source_path}")
+                    copied = values[first - start:last - start]
+                    copied[:, window["target_x"]:window["target_x"] + window["copy_cols"]] = read
                     if source_nodata is not None:
-                        values = np.where(
-                            values == source_nodata, float(nodata), values)
+                        copied[copied == source_nodata] = float(nodata)
                 if fill_value is not None:
                     values = np.where(np.isfinite(values) & (values != nodata), values, fill_value)
                 else:
                     values = np.where(np.isfinite(values), values, float(nodata))
                 if keep is not None:
-                    values = np.where(keep[row], values, float(nodata))
-                stream.write(" ".join(_ascii_value(value) for value in values))
-                stream.write("\n")
-                if task is not None and rows:
-                    _progress(task, 100.0 * (row + 1) / rows)
+                    values = np.where(keep[start:stop], values, float(nodata))
+                stream.writelines(f"{line}\n" for line in _ascii_rows(values))
+                _progress(task, 100.0 * stop / rows)
     except BaseException:
         temporary.unlink(missing_ok=True)
         raise
@@ -502,6 +541,10 @@ def write_domain_dem_ascii(
             os.replace(temporary, output.with_suffix(".prj"))
         finally:
             temporary.unlink(missing_ok=True)
+    if digest:
+        from ..state.cache import store_payload
+
+        store_payload(project_folder, "exports", str(output), digest, {"outputs": [str(output)]})
     return str(output)
 
 
@@ -510,6 +553,24 @@ def _ascii_value(value) -> str:
     if value == int(value):
         return str(int(value))
     return repr(float(value))
+
+
+def _ascii_rows(block) -> list[str]:
+    """Format every row of `block` exactly as `_ascii_value` would.
+
+    Turning a double into its shortest decimal text costs about half a
+    microsecond per cell whatever does it (numpy's is slower than `repr`), so
+    only rows of whole numbers -- most of a DEM, every class grid -- go faster,
+    through int64.
+    """
+    import numpy as np
+
+    whole = ((block == np.trunc(block)) & (np.abs(block) < 2.0 ** 63)).all(axis=1)
+    return [
+        " ".join(map(str, row.astype(np.int64).tolist())) if row_is_whole
+        else " ".join([str(int(value)) if value == int(value) else repr(value) for value in row.tolist()])
+        for row, row_is_whole in zip(block, whole.tolist())
+    ]
 
 
 def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):

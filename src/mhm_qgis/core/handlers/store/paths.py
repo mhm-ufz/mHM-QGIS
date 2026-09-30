@@ -110,6 +110,21 @@ def restart_folder(project_folder) -> str:
     return os.path.join(workspace_folder(project_folder), "restart")
 
 
-def relative_project_path(project_folder, path) -> str:
-    """Return a forward-slash path relative to the selected project root."""
-    return os.path.relpath(str(path), str(project_folder)).replace("\\", "/")
+def portable_path(project_folder, path) -> str:
+    """Return `path` relative to the project when it lies inside it, else as is."""
+    if not path or not project_folder:
+        return str(path or "")
+    try:
+        relative = os.path.relpath(str(path), str(project_folder))
+    except ValueError:  # Another Windows drive.
+        return str(path)
+    if relative == ".." or relative.startswith(f"..{os.sep}"):
+        return str(path)
+    return relative.replace("\\", "/")
+
+
+def project_path(project_folder, path) -> str:
+    """Resolve a path saved by `portable_path` against the project folder."""
+    if not path or os.path.isabs(path):
+        return str(path or "")
+    return os.path.abspath(os.path.join(str(project_folder), path))

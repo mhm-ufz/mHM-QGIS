@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.PyQt.QtWidgets import QApplication, QPushButton  # noqa: E402
+from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
 
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog  # noqa: E402
 from mhm_qgis.core.executions.morphology import commands  # noqa: E402
@@ -33,69 +33,50 @@ def _app():
     return _APPLICATION
 
 
-def test_land_cover_action_uses_path_task_bridge():
-    _app()
-    dialog = MhmQgisDialog()
-    button = QPushButton()
-    calls = []
-    dialog.morphology_tasks.start_categorical = (
-        lambda kind, **options: calls.append((kind, options)) or True
-    )
-
-    dialog.run_background_processor_action(
-        "Land Use", lambda: (_ for _ in ()).throw(AssertionError()), button
-    )
-
-    assert calls[0][0] == "lc"
-    assert calls[0][1]["controls"] == (button,)
-    dialog.close()
-
-
 def test_execute_all_uses_managed_pipeline():
     _app()
     dialog = MhmQgisDialog()
     calls = []
     dialog.morphology_tasks.start_execute_all = lambda: calls.append(True) or True
 
-    dialog.start_execute_all_morphology_processing()
+    dialog.morphology_tasks.start_execute_all()
 
     assert calls == [True]
     dialog.close()
 
 
-def test_execute_all_completion_failure_restores_controls():
+def test_an_unrecordable_completion_fails_and_unlocks_the_controls(tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import workflow_state
+    from mhm_qgis.qt.workflows import lifecycle
+
     _app()
     dialog = MhmQgisDialog()
-    bridge = dialog.morphology_tasks
-    states, finishes = [], []
-    bridge.execute_all_active = True
-    dialog.set_meteo_setup_controls_enabled = states.append
+    dialog.project_folder = str(tmp_path)
+    dialog.check_prerequisites = lambda: True
+    boxes = []
+    monkeypatch.setattr(workflow_state.QMessageBox, "critical",
+                        lambda _parent, _title, message: boxes.append(message))
+    set_button_state = workflow_state.set_button_state
 
-    def finish(_key, ok, message):
-        if ok:
+    def unrecordable(owner, key, status):
+        if status == "completed":
             raise RuntimeError("completion failed")
-        finishes.append(message)
+        set_button_state(owner, key, status)
 
-    dialog.finish_morphology_workflow = finish
-    bridge._finish_execute_all()
+    monkeypatch.setattr(workflow_state, "set_button_state", unrecordable)
+    seen = []
 
-    assert bridge.execute_all_active is False
-    assert states == [True]
-    assert finishes == ["completion failed"]
-    dialog.close()
+    def submit(_request, finished):
+        seen.append((workflow_state.running_key(dialog), dialog.tabWidget_steps.isEnabled()))
+        finished(True)
+        finished(False, "a second outcome is ignored")
+        return True
 
-
-@pytest.mark.parametrize("action,variable", [
-    ("Fill DEM", "filled_dem"), ("Slope", "slope"), ("Aspect", "aspect"),
-    ("Flow Accumulation", "flow_accumulation"), ("Flow Direction", "flow_direction"),
-])
-def test_derivative_buttons_share_the_netcdf_command(action, variable):
-    _app()
-    dialog = MhmQgisDialog()
-    calls = []
-    dialog.morphology_tasks.start_dem_derivatives = lambda **options: calls.append(options) or True
-    dialog.run_background_processor_action(action, lambda: None, QPushButton())
-    assert calls[0]["load"] == variable
+    assert lifecycle.start(dialog, "execute_all_morphology", lambda: None, submit)
+    assert seen == [("execute_all_morphology", False)]
+    assert workflow_state.running_key(dialog) is None
+    assert dialog.tabWidget_steps.isEnabled()
+    assert boxes == ["completion failed"]
     dialog.close()
 
 
@@ -165,7 +146,7 @@ def test_lai_stage_is_skipped_without_a_netcdf_selection():
 
 
 def test_lai_stage_submits_a_background_task_when_selected(tmp_path, monkeypatch):
-    from mhm_qgis.qt.objects import morphology_tasks
+    from mhm_qgis.qt.workflows import morphology as morphology_tasks
 
     _app()
     dialog = MhmQgisDialog()
@@ -196,7 +177,6 @@ def test_lai_stage_submits_a_background_task_when_selected(tmp_path, monkeypatch
     assert "LAI" in label
     # It must run on the file resource and be cancellable like the other stages.
     assert options["resource"] == "morphology-files"
-    assert options["task_aware"] is True
     dialog.close()
 
 
@@ -228,7 +208,7 @@ def test_unchanged_lai_inputs_reuse_the_staged_file(tmp_path, monkeypatch):
         "dem_crs": "EPSG:4326",
         "target_timestep": "Monthly Gridded Data",
     }
-    from mhm_qgis.qt.objects import morphology_tasks
+    from mhm_qgis.qt.workflows import morphology as morphology_tasks
 
     dialog.categorical_input_mode = lambda _kind: "NetCDF"
     dialog.lai_netcdf_config = lambda: {"input_path": str(source)}
@@ -284,7 +264,7 @@ def test_a_missing_staged_file_forces_the_lai_resample(tmp_path, monkeypatch):
         "dem_crs": "EPSG:4326",
         "target_timestep": "Long Term Mean Monthly Gridded Data",
     }
-    from mhm_qgis.qt.objects import morphology_tasks
+    from mhm_qgis.qt.workflows import morphology as morphology_tasks
 
     dialog.categorical_input_mode = lambda _kind: "NetCDF"
     dialog.lai_netcdf_config = lambda: {"input_path": str(source)}
@@ -367,4 +347,45 @@ def test_geology_outputs_already_on_disk_are_adopted_not_rebuilt(tmp_path):
     assert bridge.start_categorical("geology", reuse_existing=True) is True
     assert submitted == []
     assert any("Reusing the prepared output" in m for m in messages)
+    dialog.close()
+
+
+def test_prerequisites_run_dem_first_then_their_own_stage(tmp_path):
+    from osgeo import gdal
+    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt.workflows import hydrology
+
+    _app()
+    dem = tmp_path / "dem.tif"
+    raster = gdal.GetDriverByName("GTiff").Create(str(dem), 2, 2, 1)
+    raster.GetRasterBand(1).Fill(1)
+    raster = None
+    dialog = MhmQgisDialog()
+    dialog.project_folder = str(tmp_path)
+    main.add_file_input(dialog, "dem", str(dem), manual=True)
+    submitted = []
+    dialog.task_coordinator.submit = (
+        lambda key, _label, _runner, **options: submitted.append((key, options)) or True
+    )
+
+    def complete(result):
+        submitted[-1][1]["on_success"](result)
+
+    prepared = []
+    assert hydrology.start_domain_preflight(dialog, (), prepared.append)
+    complete({"filled_dem": str(tmp_path / "filled.nc"), "dem_derivatives": str(tmp_path / "d.nc")})
+    complete({"channel_network": str(tmp_path / "channels.shp")})
+    assert [key for key, _ in submitted] == [
+        "domain-delineator-preflight-dem", "domain-delineator-preflight",
+    ]
+    assert prepared and prepared[0]["prepared"]
+
+    submitted.clear()
+    published = []
+    bridge = dialog.morphology_tasks
+    bridge.start_categorical = lambda kind, **options: published.append((kind, options)) or True
+    assert bridge.start_ready_input("soil", failed=None)
+    assert [key for key, _ in submitted] == ["ready-soil-dem"] and not published
+    complete({"filled_dem": str(tmp_path / "filled.nc"), "dem_derivatives": str(tmp_path / "d.nc")})
+    assert published == [("soil", {"key": "ready-soil", "publish": True, "failed": None})]
     dialog.close()

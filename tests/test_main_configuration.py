@@ -10,7 +10,7 @@ pytest.importorskip("qgis.core")
 from qgis.core import QgsApplication, QgsCoordinateReferenceSystem, QgsRasterLayer
 from osgeo import gdal, osr
 
-from mhm_qgis.qt.controllers import main
+from mhm_qgis.qt.controllers import grid, main, project
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 from mhm_qgis.core.handlers.state import nml_settings, processing
 from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
@@ -39,9 +39,8 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     dialog._loading_input_state = True
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
     dialog.input_combo("dem").setLayer(QgsRasterLayer(str(dem), "DEM"))
-    dialog.refresh_meteo_folder_sources()
-    dialog._add_folder_combo_item(dialog.comboBox_precipitationFile, str(folder))
-    dialog.comboBox_precipitationFile.setCurrentIndex(dialog.comboBox_precipitationFile.count() - 1)
+    grid.refresh_precipitation_folder(dialog)
+    grid.select_precipitation_folder(dialog, str(folder))
     dialog.lineEdit_precipitationGlobDefinition.setText("wanted*.nc")
     dialog._loading_input_state = False
     assert dialog._meteo_inspections.get("precipitation") is None
@@ -63,14 +62,14 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 2
     assert dialog.label_precipitationResolutionValue.text() == "1"
     assert dialog.label_precipitationStartTimeValue.text().startswith("2001-01-01")
-    grid = main.require_common_grid(dialog)
-    assert grid["l0_header"]["ncols"] == 4
-    assert grid["l2_header"]["ncols"] == 2
+    common = grid.require_common_grid(dialog)
+    assert common["l0_header"]["ncols"] == 4
+    assert common["l2_header"]["ncols"] == 2
     assert not list(tmp_path.rglob("dem_derivatives.nc"))
     assert nml_settings.load_settings(tmp_path)["time"]["sim_end"] == "2001-01-03T00:00"
     dialog.spinBox_L2ResolutionMultiplier.setValue(3)
-    assert main.require_common_grid(dialog)["l2_ratio_to_l0"] == 3
-    main.precipitation_scanned(dialog, dialog._meteo_inspections["pre"])
+    assert grid.require_common_grid(dialog)["l2_ratio_to_l0"] == 3
+    grid.precipitation_scanned(dialog, dialog._meteo_inspections["pre"])
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 3
     dialog.save_input_state()
     restored = MhmQgisDialog()
@@ -78,14 +77,14 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     restored.load_input_state()
     assert restored.lineEdit_precipitationGlobDefinition.text() == "wanted*.nc"
     assert restored.spinBox_L2ResolutionMultiplier.value() == 3
-    assert main.require_common_grid(restored)["l2_ratio_to_l0"] == 3
+    assert grid.require_common_grid(restored)["l2_ratio_to_l0"] == 3
     assert restored._meteo_inspections == {}  # Reload never scans the folders.
     restored.lineEdit_precipitationGlobDefinition.setText("none*.nc")
     assert not processing.section(tmp_path, "grid")
     assert processing.workflow(tmp_path, "scan_precipitation")["status"] == "pending"
     assert "#2e7d32" not in restored.pushButton_scanPrecipitationFiles.styleSheet()
     with pytest.raises(ValueError, match="Scan precipitation"):
-        main.require_common_grid(restored)
+        grid.require_common_grid(restored)
     restored.close()
     dialog.close()
 
@@ -101,7 +100,7 @@ def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
     from mhm_qgis.qt.dialogs.domain_folder_name import DomainFolderNameDialog
     from mhm_qgis.core.handlers.store.paths import domain_folder
     dialog.project_directory = str(tmp_path)
-    main.populate_domain_folders(dialog)
+    project.populate_domains(dialog)
     def name(prompt):
         prompt.path = domain_folder(tmp_path, "Alpine")
         return prompt.DialogCode.Accepted

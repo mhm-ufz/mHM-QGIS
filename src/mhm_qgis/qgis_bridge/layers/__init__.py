@@ -10,7 +10,7 @@ live once.
 QGIS is imported inside the functions, never at module scope, so `qgis_bridge`
 stays importable before a QGIS application is initialized.
 """
-from .compat import create_vector_file_writer, map_layer_filters, qgs_field
+from .compat import create_vector_file_writer, qgs_field
 from .crs import crs_of, transform_between, transform_to_raster
 from .gauges import gauge_coordinates
 from .grid import (
@@ -48,7 +48,6 @@ __all__ = [
     "gauge_coordinates",
     "load",
     "local_layer_source",
-    "map_layer_filters",
     "normalized_source",
     "materialize_vector_layer",
     "materialize_raster_layer",

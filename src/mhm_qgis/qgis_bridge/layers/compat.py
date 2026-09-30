@@ -8,26 +8,6 @@ place to delete from once a minimum version is agreed.
 from __future__ import annotations
 
 
-def map_layer_filters(*filter_names):
-    """Return map layer filter flags, preferring the modern `Qgis.LayerFilter`."""
-    from qgis.core import Qgis, QgsMapLayerProxyModel
-
-    layer_filter_enum = getattr(Qgis, "LayerFilter", None)
-    if layer_filter_enum is not None:
-        filters = None
-        for filter_name in filter_names:
-            value = getattr(layer_filter_enum, filter_name)
-            filters = value if filters is None else filters | value
-        if filters is not None:
-            return filters
-
-    legacy_filters = None
-    for filter_name in filter_names:
-        value = getattr(QgsMapLayerProxyModel, filter_name)
-        legacy_filters = value if legacy_filters is None else legacy_filters | value
-    return legacy_filters
-
-
 def _qmeta_type(type_name):
     """Return a QMetaType enum value across Qt/QGIS bindings."""
     from qgis.PyQt.QtCore import QMetaType
@@ -114,6 +94,5 @@ def create_vector_file_writer(path, fields, geometry_type, crs,
 
 __all__ = [
     "create_vector_file_writer",
-    "map_layer_filters",
     "qgs_field",
 ]

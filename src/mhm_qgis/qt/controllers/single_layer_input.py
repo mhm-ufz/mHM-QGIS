@@ -2,28 +2,23 @@
 """Widget state for the input-plus-lookup half of the single-layer form."""
 from __future__ import annotations
 from ...core.handlers import lookup
+from ..dialogs.input_selection import _browse_into_combo, _combo_path
 
-
-def _selection():
-    """Import lazily: `input_selection` imports this module at load time."""
-    from ..dialogs import input_selection
-
-    return input_selection
 
 def _browse_lookup(dialog, _checked=False):
-    _selection()._browse_into_combo(
+    _browse_into_combo(
         dialog,
         dialog.lookup_table_combo,
         "Select lookup table",
         "Lookup tables (*.csv *.txt);;All files (*)",
     )
-    dialog._refresh_fields()
+    _refresh_fields(dialog)
 
 
 def _refresh_fields(dialog, _index=None):
     dialog.mapping_field_combo.clear()
     dialog.class_field_combo.clear()
-    path = _selection()._combo_path(dialog.lookup_table_combo)
+    path = _combo_path(dialog.lookup_table_combo)
     if not path:
         return
     try:

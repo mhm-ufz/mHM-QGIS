@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import math
-from functools import partial
 
 from qgis.PyQt import QtCore
 
@@ -87,7 +86,7 @@ class ViewportRasterRangeController(QtCore.QObject):
         )
         self._pending = request
         generation, bounds, authid = request
-        runner = partial(raster_window_range, self.path, bounds, authid)
+        runner = lambda _task: raster_window_range(self.path, bounds, authid)
         started = self.coordinator.submit(
             "flow-accumulation-visible-range",
             "Flow accumulation visible range",

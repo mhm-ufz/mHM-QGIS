@@ -7,7 +7,7 @@ from typing import Callable, Mapping
 
 from ....externals.mhm_tools_handler import create_latlon_file
 from ...handlers.file.netcdf.raster import copy_rasters, source, variables
-from ...handlers.raster.tasks import _cancelled, _target_mask, write_domain_dem_ascii
+from ...handlers.raster.tasks import TaskShare, _cancelled, _progress, _target_mask, write_domain_dem_ascii
 from ...handlers.state import processing
 from ...handlers.state.domain_state import load_state as load_domain_state, resolve_output_path
 from ...handlers.store import registry
@@ -19,7 +19,9 @@ from ...handlers.store.paths import (
     workspace_folder,
 )
 from ...morphology.layers import lai
-from ...morphology.layers.advanced_l0 import missing_model_inputs, publish_model_inputs
+from ...morphology.layers.advanced_l0 import (
+    RASTER_SUFFIXES, missing_model_inputs, publish_model_inputs, staged_files,
+)
 from ...morphology.layers.morph_input_nc import write_morph_input_nc
 from ...morphology.layers.mask import write_morph_mask
 from . import PUBLICATION_STAGES
@@ -77,6 +79,7 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     if "dem" not in derivatives:
         raise FileNotFoundError("Prepare the NetCDF DEM derivatives before masking.")
     keep = _target_mask(watershed, l0, request.crs, filled)
+    _progress(task, 30)
     masked = copy_rasters(
         folder / "dem_derivatives_masked.nc",
         {"dem": derivatives["dem"]},
@@ -86,6 +89,7 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         task=task,
     )
     _record(request.project_folder, masked, "aligned L0 NetCDF mask")
+    _progress(task, 60)
     latlon_path = Path(data_folder(request.project_folder)) / "latlon.nc"
     if not latlon_path.is_file():
         raise FileNotFoundError("Create latlon.nc before Execute All Morphology.")
@@ -95,6 +99,7 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         latlon_path,
     )
     _record(request.project_folder, morph_mask)
+    _progress(task, 90)
     from ...handlers.state import nml_settings
 
     nml_settings.sync_domain_settings(request.project_folder)
@@ -164,9 +169,11 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
             log=log,
         )
         _record(request.project_folder, output)
+        _progress(task, 50)
         # v6 keeps the common-extent DEM whole; morph_mask.nc defines the domain.
         dem = copy_rasters(destination / "dem.nc", {"dem": layers["dem"]},
                            request.headers["L0"], reference_path=folder / "filled_dem.nc", task=task)
+        _progress(task, 80)
         _record(request.project_folder, dem)
         latlon_path = Path(data_folder(request.project_folder)) / "latlon.nc"
         morph_mask = destination / "morph_mask.nc"
@@ -181,7 +188,8 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
                 request.headers["L0"],
                 None,
                 reference_path=folder / "filled_dem.nc",
-                task=task,
+                task=TaskShare(task, 80, 100),
+                project_folder=request.project_folder,
             )
             outputs.append(Path(idgauges))
             _record(request.project_folder, idgauges)
@@ -192,9 +200,14 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         return tuple(outputs)
 
     outputs = []
-    for name, uri in _model_sources(folder).items():
-        output = write_domain_dem_ascii(uri, destination / f"{name}.asc",
-                                        request.headers["L0"], None, reference_path=folder / "filled_dem.nc", task=task)
+    sources = _model_sources(folder)
+    for index, (name, uri) in enumerate(sources.items()):
+        output = write_domain_dem_ascii(
+            uri, destination / f"{name}.asc", request.headers["L0"], None,
+            reference_path=folder / "filled_dem.nc",
+            task=TaskShare(task).part(index, len(sources)),
+            project_folder=request.project_folder,
+        )
         outputs.append(Path(output))
     if not outputs:
         raise ValueError("No morphology rasters were found to export.")
@@ -204,13 +217,20 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
 
 
 def publish(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
+    """Publish class grids, LAI and morphology grids, one progress bar across all."""
+    staged_lai = Path(lai_dem_staging_path(request.project_folder))
+    classes = sum(path.suffix.lower() in RASTER_SUFFIXES for path in staged_files(request.project_folder))
+    grids = 1 if is_v6(request.project_folder) else len(
+        _model_sources(Path(temp_morphology_folder(request.project_folder))))
+    units = max(1, classes + staged_lai.is_file() + grids)
+    before_grids = 100 * (classes + staged_lai.is_file()) / units
     outputs = list(
         Path(path)
         for path in publish_model_inputs(
-            request.project_folder, request.headers["L0"], log=log
+            request.project_folder, request.headers["L0"], log=log,
+            task=TaskShare(task, 0, 100 * classes / units),
         )
     )
-    staged_lai = Path(lai_dem_staging_path(request.project_folder))
     if staged_lai.is_file():
         from ...handlers.state.nml_settings import load_settings
 
@@ -224,7 +244,8 @@ def publish(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
             log=log,
         )
         outputs.append(Path(output))
-    outputs.extend(write(request, log=log, task=task))
+    _progress(task, before_grids)
+    outputs.extend(write(request, log=log, task=TaskShare(task, before_grids, 100)))
     for output in outputs:
         _record(request.project_folder, output)
     missing = missing_model_inputs(request.project_folder)
@@ -255,7 +276,7 @@ def run(request: SetupRequest, *, log=None, task=None) -> bool:
             _cancelled(task)
             _say(log, f"Morphology publication {index}/{len(active)}: {stage.label}")
             processing.mark_workflow(request.project_folder, key, "running")
-            _COMMANDS[stage.command](request, log=log, task=task)
+            _COMMANDS[stage.command](request, log=log, task=TaskShare(task).part(index - 1, len(active)))
             _cancelled(task)
             processing.mark_workflow(request.project_folder, key, "completed")
     except Exception as error:

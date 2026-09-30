@@ -38,7 +38,7 @@ def set_input(dialog, value) -> None:
     horizons = list(data.get("horizons", ()))
     if len(horizons) > MAX_SOIL_HORIZONS:
         raise ValueError(f"Soil supports at most {MAX_SOIL_HORIZONS} horizons.")
-    dialog.set_horizon_count(len(horizons) or 1)
+    set_horizon_count(dialog, len(horizons) or 1)
     dialog.comboBox_bulkDensityUnit.setCurrentText(
         str(data.get("bulk_density_unit", "") or "")
     )
