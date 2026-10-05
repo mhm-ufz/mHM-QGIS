@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import math
 import os
 import tempfile
 from dataclasses import dataclass
@@ -117,6 +118,8 @@ class SoilHorizon:
 class SoilInput:
     horizons: tuple[SoilHorizon, ...]
     bulk_density_unit: str
+    composition_step: float = 5.0
+    bulk_density_step: float = 0.1
 
     @property
     def lower_depths(self) -> tuple[float, ...]:
@@ -125,6 +128,8 @@ class SoilInput:
     def as_dict(self) -> dict:
         return {
             "bulk_density_unit": self.bulk_density_unit,
+            "composition_step": self.composition_step,
+            "bulk_density_step": self.bulk_density_step,
             "lower_depths": list(self.lower_depths),
             "horizons": [horizon.as_dict() for horizon in self.horizons],
         }
@@ -157,6 +162,10 @@ def validate_soil_input(value: SoilInput) -> None:
     """Validate contiguous soil horizons and their four source layers."""
     if value.bulk_density_unit not in BULK_DENSITY_UNITS:
         raise ValueError("Select the bulk-density unit.")
+    for label, step in (("Composition", value.composition_step),
+                        ("Bulk density", value.bulk_density_step)):
+        if not math.isfinite(step) or step <= 0:
+            raise ValueError(f"{label} step must be a positive finite number.")
     if not value.horizons:
         raise ValueError("Add at least one soil horizon.")
     if len(value.horizons) > MAX_SOIL_HORIZONS:

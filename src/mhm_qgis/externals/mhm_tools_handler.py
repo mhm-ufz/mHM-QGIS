@@ -322,7 +322,7 @@ def prepare_soil_horizons(
         "output_type": output_type,
         "resampling": resampling,
         "composition_step": composition_step,
-        "bulk_density_step": bulk_density_step,
+        "bulkdensity_step": bulk_density_step,
     }
     if input_crs is not None:
         kwargs["input_crs"] = input_crs
@@ -534,7 +534,7 @@ def create_latlon_file(
     write_header_l2: str | Path | None = None,
     crs: str | None = None,
     dtype: str = "f4",
-    compression: int = 9,
+    compression=None,
     add_bounds: bool = False,
     log: LogCallback | None = None,
 ) -> Path:

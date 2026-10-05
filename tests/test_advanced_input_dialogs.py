@@ -80,10 +80,16 @@ def test_land_use_lookup_browse_accepts_qt_checked_argument(tmp_path, monkeypatc
 
 
 def test_soil_dialog_adds_all_four_rows_and_extracts_unit(tmp_path):
+    from mhm_qgis.qt.controllers.categorical import soil_input_value
+
     _app()
     paths = [_touch(tmp_path / f"layer_{index}.tif") for index in range(8)]
     dialog = MultiHorizonSoilDialog(tmp_path)
     assert dialog.spinBox_nSoilHorizons.maximum() == 10
+    assert dialog.doubleSpinBox_compositionStepValue.value() == 5.0
+    assert dialog.doubleSpinBox_bulkDensityStepValue.value() == 0.1
+    dialog.doubleSpinBox_compositionStepValue.setValue(2.5)
+    dialog.doubleSpinBox_bulkDensityStepValue.setValue(0.05)
     soil_controller.set_horizon_count(dialog, 2)
     dialog.comboBox_bulkDensityUnit.setCurrentText("cg/cm3")
     for row, bounds in enumerate(((0, 50), (50, 200))):
@@ -101,10 +107,23 @@ def test_soil_dialog_adds_all_four_rows_and_extracts_unit(tmp_path):
 
     assert all(len(rows) == 2 for rows in dialog._soil_rows.values())
     assert value.bulk_density_unit == "cg/cm3"
+    assert value.composition_step == 2.5
+    assert value.bulk_density_step == 0.05
     assert [(item.upper_depth, item.lower_depth) for item in value.horizons] == [
         (0, 50),
         (50, 200),
     ]
+    saved = value.as_dict()
+    assert soil_input_value(saved) == value
+    restored = MultiHorizonSoilDialog(tmp_path, initial=saved)
+    assert restored.selected_input() == value
+    del saved["composition_step"], saved["bulk_density_step"]
+    soil_controller.set_input(restored, saved)
+    assert restored.selected_input() == soil_input_value(saved)
+    assert restored.doubleSpinBox_compositionStepValue.value() == 5.0
+    assert restored.doubleSpinBox_bulkDensityStepValue.value() == 0.1
+    dialog.close()
+    restored.close()
 
 
 def test_land_use_datetime_widgets_share_boundaries_and_clamp_to_simulation(tmp_path):

@@ -51,6 +51,8 @@ def _soil(value):
             for item in value["horizons"]
         ),
         bulk_density_unit=str(value["bulk_density_unit"]),
+        composition_step=float(value.get("composition_step", 5.0)),
+        bulk_density_step=float(value.get("bulk_density_step", 0.1)),
     )
 
 

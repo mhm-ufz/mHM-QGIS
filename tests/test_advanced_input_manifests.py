@@ -116,8 +116,22 @@ def test_soil_horizons_must_start_at_zero_and_be_contiguous(tmp_path):
 
 
 def test_soil_state_exposes_lower_depths(tmp_path):
+    from mhm_qgis.core.native_worker import _soil
+
     files = [_touch(tmp_path / f"layer_{index}.tif") for index in range(4)]
     value = SoilInput((SoilHorizon(1, 0, 300, *files),), "g/cm3")
 
     assert value.lower_depths == (300,)
     assert value.as_dict()["lower_depths"] == [300]
+    saved = value.as_dict()
+    del saved["composition_step"], saved["bulk_density_step"]
+    assert _soil(saved) == value
+
+
+@pytest.mark.parametrize("field", ["composition_step", "bulk_density_step"])
+@pytest.mark.parametrize("step", [0, -1, float("nan"), float("inf")])
+def test_soil_grouping_steps_must_be_positive_and_finite(field, step):
+    from mhm_qgis.core.handlers.lookup import validate_soil_input
+
+    with pytest.raises(ValueError, match="step must be a positive finite number"):
+        validate_soil_input(SoilInput((), "g/cm3", **{field: step}))

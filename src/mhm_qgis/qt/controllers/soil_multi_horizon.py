@@ -42,6 +42,12 @@ def set_input(dialog, value) -> None:
     dialog.comboBox_bulkDensityUnit.setCurrentText(
         str(data.get("bulk_density_unit", "") or "")
     )
+    dialog.doubleSpinBox_compositionStepValue.setValue(
+        float(data.get("composition_step", 5.0))
+    )
+    dialog.doubleSpinBox_bulkDensityStepValue.setValue(
+        float(data.get("bulk_density_step", 0.1))
+    )
     path_keys = {
         "clay": "clay_layer",
         "sand": "sand_layer",

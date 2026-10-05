@@ -4,12 +4,33 @@ from __future__ import annotations
 import sys
 from types import ModuleType
 
+import pytest
+
 from mhm_qgis.externals.mhm_tools_handler import (
+    create_latlon_file,
     lai_time_step,
     prepare_land_cover_periods,
     prepare_lai_file,
     prepare_soil_horizons,
 )
+
+
+def test_latlon_adapter_writes_netcdf_without_compression_argument(tmp_path):
+    pytest.importorskip("mhm_tools.pre.latlon")
+    xr = pytest.importorskip("xarray")
+    output = create_latlon_file(
+        tmp_path / "latlon.nc",
+        {"ncols": 4, "nrows": 4, "xllcorner": 80.0, "yllcorner": 25.0,
+         "cellsize": 0.5, "NODATA_value": -9999},
+        level1=1.0,
+        level11=1.0,
+        level2=2.0,
+        crs="EPSG:4326",
+    )
+    with xr.open_dataset(output) as dataset:
+        for name, size in (("lat_l0", 4), ("lat", 2), ("lat_l11", 2), ("lat_l2", 1)):
+            assert dataset[name].shape == (size, size)
+            assert dataset[name].notnull().all().item()
 
 
 def _install_fake(monkeypatch, **functions):
@@ -58,14 +79,19 @@ def test_land_cover_period_adapter_uses_public_api(tmp_path, monkeypatch):
     assert calls[0]["resampling"] == "auto"
 
 
-def test_soil_horizon_adapter_returns_data_and_definition(tmp_path, monkeypatch):
+@pytest.mark.parametrize("options, expected", [
+    ({}, (5.0, 0.1)),
+    ({"composition_step": 2.5, "bulk_density_step": 0.05}, (2.5, 0.05)),
+])
+def test_soil_horizon_adapter_returns_data_and_definition(tmp_path, monkeypatch, options, expected):
     calls = []
 
     # Signature copied from mhm_tools.pre.format_soil_horizons.
     def format_soil_horizons(
-        input_file, dem_file, output_path, output_type="nc", **kwargs
+        input_file, dem_file, output_path, output_type="nc", *,
+        resampling="auto", composition_step=5.0, bulkdensity_step=0.1,
     ):
-        calls.append(dict(kwargs, input_file=input_file, output_path=output_path))
+        calls.append((input_file, composition_step, bulkdensity_step))
         data = output_path / "soil_class.asc"
         definition = output_path / "soil_classdefinition.txt"
         data.write_bytes(b"asc")
@@ -78,13 +104,12 @@ def test_soil_horizon_adapter_returns_data_and_definition(tmp_path, monkeypatch)
         tmp_path / "dem.tif",
         tmp_path / "output",
         output_type="asc",
+        **options,
     )
 
     assert data.name == "soil_class.asc"
     assert definition.name == "soil_classdefinition.txt"
-    assert calls[0]["input_file"] == tmp_path / "format-data.csv"
-    assert calls[0]["composition_step"] == 5.0
-    assert calls[0]["bulk_density_step"] == 0.1
+    assert calls == [(tmp_path / "format-data.csv", *expected)]
 
 
 def test_lai_adapter_uses_the_mhm_tools_api(tmp_path, monkeypatch):

@@ -121,6 +121,8 @@ def process_soil_input(
             dem_file,
             temporary,
             output_type="nc",
+            composition_step=value.composition_step,
+            bulk_density_step=value.bulk_density_step,
             log=log,
         )
         published = _publish_directory(temporary, morph_staging_folder(project_folder))
@@ -153,6 +155,8 @@ def process_soil_input(
             ),
             "source_bulk_density_unit": value.bulk_density_unit,
             "bulk_density_unit": "g/cm3",
+            "composition_step": value.composition_step,
+            "bulk_density_step": value.bulk_density_step,
             "composition_normalization": "component_sum_percent",
             "lower_depths": list(value.lower_depths),
             "horizons": horizons,

@@ -350,4 +350,6 @@ def soil_input_value(value):
             for item in value.get("horizons", [])
         ),
         str(value.get("bulk_density_unit", "")),
+        composition_step=float(value.get("composition_step", 5.0)),
+        bulk_density_step=float(value.get("bulk_density_step", 0.1)),
     )

@@ -340,7 +340,9 @@ class MultiHorizonSoilDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_Soi
                 )
             )
         value = SoilInput(
-            tuple(horizons), self.comboBox_bulkDensityUnit.currentText().strip()
+            tuple(horizons), self.comboBox_bulkDensityUnit.currentText().strip(),
+            composition_step=self.doubleSpinBox_compositionStepValue.value(),
+            bulk_density_step=self.doubleSpinBox_bulkDensityStepValue.value(),
         )
         validate_soil_input(value)
         return value

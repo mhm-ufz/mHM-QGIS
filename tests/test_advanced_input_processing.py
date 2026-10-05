@@ -81,14 +81,24 @@ def test_land_cover_processing_writes_period_state(tmp_path, monkeypatch):
 
 
 def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from mhm_qgis.core.native_worker import run
+
     ensure_project_structure(tmp_path, "6.0")
     sources = [_touch(tmp_path / f"soil_{index}.tif") for index in range(4)]
     dem = _touch(tmp_path / "dem.tif")
-    value = SoilInput((SoilHorizon(1, 0, 300, *sources),), "kg/m3")
+    value = SoilInput((SoilHorizon(1, 0, 300, *sources),), "kg/m3",
+                      composition_step=2.5, bulk_density_step=0.05)
+    digest = processing.input_fingerprint(value, dem, "6.0")
+    for changed in (replace(value, composition_step=5.0),
+                    replace(value, bulk_density_step=0.1)):
+        assert processing.input_fingerprint(changed, dem, "6.0") != digest
 
     manifests = []
 
     def fake_formatter(input_file, dem_file, output_path, **kwargs):
+        assert kwargs["composition_step"] == 2.5
+        assert kwargs["bulk_density_step"] == 0.05
         manifests.append(Path(input_file))
         output = Path(output_path)
         return (
@@ -100,9 +110,9 @@ def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch)
         )
 
     monkeypatch.setattr(processing, "prepare_soil_horizons", fake_formatter)
-    data, definition = processing.process_soil_input(
-        tmp_path, "6.0", value, dem
-    )
+    result = run({"kind": "soil", "project_folder": str(tmp_path),
+                  "version": "6.0", "value": value.as_dict(), "filled_dem": str(dem)})
+    data, definition = map(Path, result["outputs"])
 
     assert manifests[0].is_file() and manifests[0].suffix == ".csv"
 
@@ -111,6 +121,8 @@ def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch)
     assert definition.name == "soil_classdefinition_iFlag_soilDB_1.txt"
     assert state["source_bulk_density_unit"] == "kg/m3"
     assert state["bulk_density_unit"] == "g/cm3"
+    assert state["composition_step"] == 2.5
+    assert state["bulk_density_step"] == 0.05
     assert state["composition_normalization"] == "component_sum_percent"
     assert state["horizons"][0]["lower_depth"] == 300
 
