@@ -1,9 +1,8 @@
-# publish resources
-.publish/
+# development resources
+.development/
 
 # Temporary files
 .codex/
-.scripts/
 .vscode/
 .ruff_cache/
 graphify-out/
