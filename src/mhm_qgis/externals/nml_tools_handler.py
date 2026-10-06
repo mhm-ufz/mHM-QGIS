@@ -6,11 +6,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 
-def read_namelists(folder, schemas_dir) -> dict:
+def read_namelists(folder, schemas_dir, *, lower=True) -> dict:
     """Read every profile file present in *folder* as ``{group: {key: value}}``.
 
-    Values are typed by the schemas (arrays as lists); group and key names are lower
-    case, since Fortran namelist names are case-insensitive.
+    Values are typed by the schemas (arrays as lists). Group and key names are lower
+    case, since Fortran namelist names are case-insensitive; ``lower=False`` keeps the
+    schema's spelling, which initial values for the editor need.
     """
     from nml_tools.gui.model import load_profile, load_project, recover_dimensions
 
@@ -20,7 +21,10 @@ def read_namelists(folder, schemas_dir) -> dict:
         values = {}
         for profile in project.profiles:
             for group, fields in load_profile(project, profile, dimensions).items():
-                values[group.lower()] = {key.lower(): value for key, value in fields.items()}
+                if lower:
+                    values[group.lower()] = {key.lower(): value for key, value in fields.items()}
+                else:
+                    values[group] = fields
     except (OSError, RuntimeError, ValueError) as error:
         raise ValueError(f"Could not read the namelists in {folder}: {error}") from error
     return values

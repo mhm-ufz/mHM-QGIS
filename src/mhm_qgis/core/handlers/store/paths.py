@@ -10,8 +10,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-#: The plugin owns exactly one directory inside a user's project.
+#: The plugin owns these directories inside a user's project: single-domain
+#: setups, and multi-domain setups that combine them.
 WORKSPACE_FOLDER_NAME = "mhm-qgis"
+MULTI_FOLDER_NAME = "mhm-qgis-multi"
 
 
 def plugin_root() -> str:
@@ -34,15 +36,15 @@ def workspace_folder(project_folder) -> str:
     return str(project_folder)
 
 
-def domain_folder(project_folder, name) -> Path:
-    """Resolve a safe, non-symlink domain name without creating anything."""
+def domain_folder(project_folder, name, workspace=WORKSPACE_FOLDER_NAME) -> Path:
+    """Resolve a safe, non-symlink setup name without creating anything."""
     name = str(name).strip()
     reserved = {"data", "output", "restart", "<new>"}
     if (not name or name in {".", ".."} or name.casefold() in reserved
             or name.startswith(".") or any(c in name for c in '/\\\0<>:"|?*')
             or name.endswith((".", " "))):
         raise ValueError("Enter a domain folder name without path separators or reserved characters.")
-    path = Path(project_folder) / WORKSPACE_FOLDER_NAME / name
+    path = Path(project_folder) / workspace / name
     if path.is_symlink() or (path.exists() and not path.is_dir()):
         raise ValueError("The domain must be a real directory, not a file or symlink.")
     return path
