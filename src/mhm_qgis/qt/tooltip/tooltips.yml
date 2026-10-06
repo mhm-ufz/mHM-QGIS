@@ -1,0 +1,184 @@
+# Guided tour for the Help button. `pages` keys are object names: a tabWidget_steps
+# page or a visible stacked page inside it. List order is the tour order. A step
+# without `text` shows the widget's own toolTip; `help` is appended to help_url.
+version: 1
+help_url: ""
+
+pages:
+  tab:
+    - widget: pushButton_launchIntroductionWizard
+      title: New here?
+      text: Answer a few questions about your study and data; the wizard suggests the work type, resolutions and forcing variables.
+    - widget: comboBox_mHMversion
+      title: mHM version
+      text: Choose mHM 5.13 or 6 before creating a setup. The version decides the input layout and the namelists, and is fixed once a setup exists.
+    - widget: comboBox_mhmWorkType
+      title: Work type
+      text: Prepare and run a single domain, or combine domains that are already prepared into one multi-domain run.
+    - widget: lineEdit_ProjectFolder
+      title: Project folder
+      text: The outer project folder. Setups live inside it under <code>mhm-qgis/&lt;name&gt;</code>.
+    - widget: checkBox_enableFolderSearch
+      title: Search the project folder
+      text: Also list rasters and vectors found inside the project folder, not only layers loaded in QGIS.
+    - widget: mProjectionSelectionWidget_crs
+      title: Model CRS
+      text: All grids are prepared in this CRS. EPSG:4326 or a projected CRS in metres (e.g. UTM) both work; L1 and L11 resolutions are entered in its unit.
+
+  page_singleDomain:
+    - widget: comboBox_domainFolderSelector
+      title: Domain setup
+      text: Pick an existing setup to reopen it, or <code>&lt;new&gt;</code> to create one.
+    - widget: pushButton_createOrLoadDomainStructure
+      title: Create or open the setup
+      text: Opens the selected setup, or asks for a name and creates its folders and state files.
+    - widget: comboBox_demInput
+      title: DEM
+      text: The elevation model. Its extent and cell size define the L0 grid every other input is aligned to.
+    - widget: comboBox_precipitationFile
+      title: Precipitation folder
+      text: Folder with the precipitation NetCDF files. Together with the glob below it fixes the file set; nothing else is searched.
+    - widget: lineEdit_precipitationGlobDefinition
+      title: Precipitation files
+      text: Glob pattern relative to the folder, e.g. <code>pre*.nc</code> or <code>*/pre_*.nc</code>.
+    - widget: pushButton_scanPrecipitationFiles
+      title: Scan precipitation
+      text: Reads the precipitation metadata (time span, grid, units) and sets up the common L2 grid. Run it before Execute All.
+    - widget: spinBox_L2ResolutionMultiplier
+      title: L2 / L0 factor
+      text: How many L0 cells fit along one L2 (forcing) cell. Defaults to the exact ratio found by the scan; your choice wins after that.
+    - widget: dateTimeEdit_simulationStartTimeInput
+      title: Simulation start
+      text: First model time step, including the warm-up. mHM 5.13 needs whole days, mHM 6 whole hours.
+    - widget: dateTimeEdit_evaluationStartTimeInput
+      title: Evaluation start
+      text: End of the warm-up; results are evaluated from here on. Must lie between the start and the end.
+    - widget: dateTimeEdit_simulationEndTimeInput
+      title: Simulation end
+      text: Last model time step. The meteorology must cover the whole simulation period.
+    - widget: lineEdit_L1Resolution
+      title: L1 (hydrology) resolution
+      text: Cell size mHM runs its hydrology on. Only multiples of L0 that fit the common grid are accepted.
+    - widget: lineEdit_L11Resolution
+      title: L11 (routing) resolution
+      text: Cell size of the river routing grid; usually equal to or coarser than L1.
+    - widget: pushButton_createLatLon
+      title: Lat/lon file
+      text: Writes <code>data/latlon.nc</code> with coordinates for all model levels.
+    - widget: comboBox_gridVariableToDisplay
+      title: Show a grid
+      text: Displays the prepared grid levels on the map to check their extent and alignment.
+
+  page_multiDomain:
+    - widget: comboBox_multiDomainFolderSelector
+      title: Multi-domain setup
+      text: Pick an existing combined setup or <code>&lt;new&gt;</code>.
+    - widget: pushButton_createorLoadMultiDomainStructure
+      title: Create or open the combined setup
+      text: Opens the selected combined setup or creates a new one.
+    - widget: lineEdit_domainFolder
+      title: Domain to add
+      text: Folder of a single-domain setup that is already prepared and runs on its own.
+    - widget: pushButton_addDomainFolder
+      title: Add the domain
+      text: Checks that the folder is a setup of the same mHM version, then adds it to the list.
+    - widget: tableWidget_domainInputs
+      title: Domains
+      text: The domains combined into this run, in order. Use the cross to remove one.
+    - widget: pushButton_prepareMultiDomainSetup
+      title: Prepare the combined run
+      text: Checks that the domains agree on processes, land-cover scenes, soil horizons and geology, then writes the namelist handoff.
+    - widget: pushButton_edit_nmls
+      title: Edit namelists
+      text: Opens the namelist editor for the combined run.
+
+  tab_geometry:
+    - widget: comboBox_pourPointInput
+      title: Outlets
+      text: Point layer with the catchment outlets or gauges.
+    - widget: comboBox_pourPointOutletID
+      title: Outlet ID
+      text: Attribute holding each outlet's unique ID; gauges keep it in the model.
+    - widget: comboBox_domainDefinitionType
+      title: Domain definition
+      text: How the model domain is defined; the Domain Delineator snaps outlets and saves the catchments.
+    - widget: comboBox_landUseInputType
+      title: Land cover
+      text: Land cover as an mHM-ready raster or as a dataset with a lookup table.
+    - widget: comboBox_soil_inputType
+      title: Soil
+      text: Soil classes as an mHM-ready raster or through a lookup table, with one or several horizons.
+    - widget: comboBox_geology_inputType
+      title: Geology
+      text: Geology classes as an mHM-ready raster or through a lookup table.
+    - widget: comboBox_lai_inputType
+      title: LAI
+      text: Leaf-area index, e.g. a long-term monthly NetCDF. Needed by interception and by PET cases -1, 2 and 3.
+    - widget: pushButton_executeAllMorphology
+      title: Execute All
+      text: Prepares DEM derivatives, gauges, the mask and all categorical inputs on the common grid, then publishes them for the chosen mHM version.
+    - widget: comboBox_morphVariableToDisplay
+      title: Show a morphology layer
+      text: Displays a prepared morphology layer on the map.
+    - widget: dateTimeEdit_forHistoricalInputs
+      title: Date for historical layers
+      text: Which land-cover period to display when land cover changes over time.
+
+  tab_meteo:
+    - widget: comboBox_meteoVar
+      title: Forcing variable
+      text: Pick the variable to add. Your PET choice decides what you need, e.g. tmin and tmax for Hargreaves-Samani, netrad for Priestley-Taylor, plus eabs and windspeed for Penman-Monteith.
+    - widget: pushButton_addMeteoInput
+      title: Add the variable
+      text: Opens the details for its files, unit and time step; OK inspects the files.
+    - widget: tableWidget_meteoInputs
+      title: Forcing inputs
+      text: The variables that will be prepared, with their source and time step.
+    - widget: pushButton_executeAllMeteo
+      title: Execute All Meteorology
+      text: Prepares every forcing variable on the common L2 grid for the simulation period.
+    - widget: comboBox_meteoVarDisplay
+      title: Show a forcing
+      text: Displays a prepared forcing variable at a chosen time.
+
+  tab_hydro:
+    - widget: comboBox_observationVar
+      title: Observation
+      text: Gridded observations for evaluation, e.g. evapotranspiration, soil moisture or TWS anomalies.
+    - widget: pushButton_addObservationVar
+      title: Add the observation
+      text: Opens the details for its files, unit and time step.
+    - widget: tableWidget_observationVarInputs
+      title: Observations
+      text: The observations that will be prepared on the L2 grid.
+    - widget: pushButton_executeAllObservation
+      title: Execute All Observations
+      text: Prepares every observation on the common L2 grid.
+    - widget: comboBox_displayOutletStation
+      title: Gauge discharge
+      text: Plots the observed discharge of a saved gauge.
+
+  tab_execution:
+    - widget: pushButton_editNmlsFinal
+      title: Edit namelists
+      text: Opens the namelist editor with everything the plugin prepared filled in; review process cases and outputs before running.
+    - widget: pushButton_editParameterOptions
+      title: Parameters
+      text: Edits the calibration parameters and their ranges.
+    - widget: pushButton_editOptimizationOptions
+      title: Optimization
+      text: Edits the calibration settings.
+    - widget: pushButton_execute_mHM
+      title: Run mHM
+      text: Runs mHM in the setup folder and shows its output in the terminal.
+
+  tab_outputs:
+    - widget: comboBox_outputVarDisplay
+      title: Output variable
+      text: Pick a variable mHM wrote.
+    - widget: dateTimeEdit_outputVarDisplay
+      title: Output time
+      text: The time step to show.
+    - widget: pushButton_outputVarDisplay
+      title: Show the output
+      text: Displays the chosen variable and time on the map.

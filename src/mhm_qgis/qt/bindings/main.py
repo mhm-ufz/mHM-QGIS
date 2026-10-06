@@ -10,6 +10,7 @@ from qgis.core import QgsProject
 from ...qgis_bridge.display import grid as grid_display
 from ...qgis_bridge.display import meteo as meteo_display
 from ...qgis_bridge.display import output as output_display
+from .. import tooltip
 from ..controllers import (
     categorical,
     forcing,
@@ -61,6 +62,9 @@ def _bind_input_sources(dialog):
 
 def bind(dialog):
     """Connect all UI element signals to appropriate slots."""
+
+    # Closure Help → tooltip.start (a guided tour of the visible page)
+    dialog.Closure.helpRequested.connect(lambda: tooltip.start(dialog))
 
     # Project management
     # pushButton_BrowseProjectFolder → project.select_folder
