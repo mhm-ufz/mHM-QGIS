@@ -1,0 +1,121 @@
+# The introduction wizard: one entry per page, in order. kind: info (text only),
+# choice (one answer) or multiple (checkboxes). Effects use a closed set of keys:
+#   processes.<process>    a process case (core/datamodel/rules.yml ids)
+#   defaults.work_type     comboBox_mhmWorkType index (disabled entries are skipped)
+#   defaults.l1_factor     L1 cell size as a multiple of L0; defaults.l11_factor alike
+#   analyses.<analysis>    switch on the outputs the analysis needs (outputs.yml)
+#   available.<input>      data the user has; only read by `derive`
+version: 1
+
+pages:
+  - id: welcome
+    kind: info
+    title: Welcome to mHM
+    text: >-
+      mHM simulates the water cycle on nested grids: the DEM and soil, land-cover and
+      geology maps on L0; the hydrology on the coarser L1; river routing on L11; and the
+      meteorological forcing on L2. Multiscale Parameter Regionalization (MPR) carries the
+      L0 detail up to L1. This wizard suggests settings for your study; you can change
+      every one of them later.
+
+  - id: setup_type
+    kind: choice
+    title: Single domain or several?
+    text: Start with one domain. Domains that are each prepared and run on their own can later be combined into one run.
+    choices:
+      - id: single
+        label: One domain (recommended to start)
+        effects: {defaults.work_type: 0}
+        tips: ["Configuration tab: choose <new> in Domain Setup and create the setup."]
+      - id: combine
+        label: Combine domains that are already prepared
+        effects: {defaults.work_type: 1}
+        tips: ["Prepare and run each domain on its own first; the combined run reuses them."]
+
+  - id: crs
+    kind: info
+    title: Coordinate reference system
+    text: >-
+      All inputs are brought onto one CRS. EPSG:4326 (latitude/longitude) or a projected
+      CRS in metres, such as the UTM zone of your basin, both work. The L1 and L11
+      resolutions are entered in the unit of that CRS.
+
+  - id: dem_pre
+    kind: info
+    title: DEM and precipitation
+    text: >-
+      The DEM defines the L0 grid; cover the whole basin with some margin and keep NoData
+      outside it. Precipitation is read from a folder of NetCDF files selected with a glob
+      such as pre_*.nc; Scan Precipitation reads its grid and time span and sets up the
+      common L2 grid. Run the scan before Execute All.
+
+  - id: resolution
+    kind: choice
+    title: Hydrological resolution
+    text: >-
+      L1 is the grid mHM runs its hydrology on, a multiple of the DEM cell size (L0). Finer
+      is more detailed but slower. Only multiples that fit the forcing grid are accepted;
+      the closest one is chosen.
+    choices:
+      - id: fine
+        label: Detailed, about 10 DEM cells per L1 cell
+        effects: {defaults.l1_factor: 10, defaults.l11_factor: 10}
+      - id: standard
+        label: Standard, about 40 DEM cells per L1 cell
+        effects: {defaults.l1_factor: 40, defaults.l11_factor: 40}
+      - id: coarse
+        label: Large basin, about 100 DEM cells per L1 cell
+        effects: {defaults.l1_factor: 100, defaults.l11_factor: 100}
+
+  - id: gauges
+    kind: choice
+    title: Discharge gauges
+    text: >-
+      With gauges, mHM routes runoff through the river network and compares simulated with
+      observed discharge. Gauge files are mHM text tables: a header with the station id,
+      nodata value and start/end dates, then one line per day.
+    choices:
+      - id: with_gauges
+        label: Yes, I have observed discharge
+        effects: {processes.routing: 3, analyses.gauge_validation: true, analyses.water_balance: true}
+        tips: ["Morphology tab: load the outlets, snap them in the Domain Delineator and save."]
+      - id: no_gauges
+        label: No, the water balance only
+        effects: {processes.routing: 0, analyses.water_balance: true}
+
+  - id: meteo
+    kind: multiple
+    title: Your meteorological data
+    text: Tick everything you have as gridded data. The evapotranspiration (PET) method is chosen from it.
+    choices:
+      - {id: pre, label: Precipitation, effects: {available.pre: true}, default: true}
+      - {id: pet, label: Potential evapotranspiration (PET), effects: {available.pet: true}}
+      - {id: tavg, label: Mean air temperature, effects: {available.tavg: true}}
+      - {id: tmin, label: Minimum air temperature, effects: {available.tmin: true}}
+      - {id: tmax, label: Maximum air temperature, effects: {available.tmax: true}}
+      - {id: netrad, label: Net radiation, effects: {available.netrad: true}}
+      - {id: eabs, label: Vapour pressure, effects: {available.eabs: true}}
+      - {id: wind, label: Wind speed, effects: {available.wind: true}}
+      - {id: lai, label: Leaf-area index (LAI), effects: {available.lai_gridded: true}}
+
+  - id: run
+    kind: info
+    title: Running mHM
+    text: >-
+      Work through the tabs: Configuration, Morphology (Execute All), Meteorology (Execute
+      All), then Execution. Run mHM checks first that every input the chosen processes
+      read is prepared and lists anything missing, with what needs it. Press Help on any
+      tab for a tour of its inputs.
+
+derive:
+  # The first case in `prefer` whose inputs are all available (with mHM's always-read
+  # inputs) is chosen. PET ids differ by version (rules.yml).
+  processes.pet:
+    from: available
+    prefer: {v6: [-1, 3, 2, 1, -2], v5.13: [-1, 3, 2, 1, 0]}
+    none: "No PET method fits the data you ticked: add PET, or minimum and maximum temperature."
+  processes.snow:
+    from: available
+    prefer: {v6: [1], v5.13: [1]}
+    fallback: {v6: 0}
+    none: "Snow is switched off: it needs mean air temperature."

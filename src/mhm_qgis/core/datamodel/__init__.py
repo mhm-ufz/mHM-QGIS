@@ -60,10 +60,19 @@ def _case(rules, process, case):
     return cases.get(int(case)) if case is not None else None
 
 
+def _name(process) -> str:
+    return "PET" if process == "pet" else process.replace("_", " ")
+
+
 def _label(rules, process, case):
     spec = _case(rules, process, case) or {}
     suffix = f" ({spec['label']})" if spec.get("label") else ""
-    return f"{process.replace('_', ' ')} case {case}{suffix}"
+    return f"{_name(process)} case {case}{suffix}"
+
+
+def case_label(version, process, case) -> str:
+    """e.g. 'pet case 1 (Hargreaves-Samani)'."""
+    return _label(load_rules(version), process, case)
 
 
 def _key(item) -> str:
@@ -92,11 +101,11 @@ def unmet_needs(version, processes) -> list[str]:
         known = rules["processes"].get(process)
         if known is not None and _case(rules, process, case) is None:
             valid = ", ".join(map(str, known.get("cases") or {}))
-            messages.append(f"{process.replace('_', ' ')} case {case} is not available in mHM "
+            messages.append(f"{_name(process)} case {case} is not available in mHM "
                             f"{version_key(version).removeprefix('v')} (valid: {valid}).")
         for other, cases in ((_case(rules, process, case) or {}).get("needs") or {}).items():
             if int((processes or {}).get(other, 0)) not in cases:
-                messages.append(f"{_label(rules, process, case)} needs {other.replace('_', ' ')} case {' or '.join(map(str, cases))}.")
+                messages.append(f"{_label(rules, process, case)} needs {_name(other)} case {' or '.join(map(str, cases))}.")
     return messages
 
 
@@ -267,7 +276,7 @@ def _output_problems(version, values, processes, output) -> list[str]:
     if _switch_on(version, values, output) is False:
         problems.append(f"enable output `{output}` ({switch_key(version, output)})")
     if spec.get("needs") and not _process_ok(processes, spec["needs"]):
-        problems.extend(f"{name.replace('_', ' ')} must be case {' or '.join(map(str, cases))}"
+        problems.extend(f"{_name(name)} must be case {' or '.join(map(str, cases))}"
                         for name, cases in spec["needs"].items())
     return problems
 
