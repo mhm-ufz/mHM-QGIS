@@ -56,6 +56,11 @@ def version_key(version_text: str | None) -> str:
     return "v6"
 
 
+def schemas_folder(version_text: str | None) -> Path:
+    """Return the packaged nml-tools schema folder for an mHM version."""
+    return Path(plugin_root()) / "nml-schemas" / version_key(version_text)
+
+
 def temp_folder(project_folder) -> str:
     """Return the hidden folder for temporary artifacts and plugin state."""
     return os.path.join(workspace_folder(project_folder), ".temp")
