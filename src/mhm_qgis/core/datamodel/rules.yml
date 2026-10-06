@@ -1,0 +1,124 @@
+# External inputs each mHM process case reads. Canonical process ids are the v6
+# `config_processes` keys; v5.13 differs enough to carry its own `processes`.
+# Values mHM computes itself (throughfall, recharge, ...) are not inputs. `needs`
+# names other processes that must be active, with the cases that satisfy them.
+version: 1
+
+inputs:
+  pre:         {label: Precipitation, locate: {meteo: pre}, add: "Meteorology tab: Scan Precipitation"}
+  pet:         {label: Potential evapotranspiration, locate: {meteo: pet}, add: "Meteorology tab: add variable pet"}
+  tavg:        {label: Mean air temperature, locate: {meteo: tavg}, add: "Meteorology tab: add variable tavg"}
+  tmin:        {label: Minimum air temperature, locate: {meteo: tmin}, add: "Meteorology tab: add variable tmin"}
+  tmax:        {label: Maximum air temperature, locate: {meteo: tmax}, add: "Meteorology tab: add variable tmax"}
+  netrad:      {label: Net radiation, locate: {meteo: netrad}, add: "Meteorology tab: add variable netrad"}
+  eabs:        {label: Vapour pressure, locate: {meteo: eabs}, add: "Meteorology tab: add variable eabs"}
+  wind:        {label: Wind speed, locate: {meteo: windspeed}, add: "Meteorology tab: add variable windspeed"}
+  ssrd:        {label: Shortwave radiation, locate: {meteo: ssrd}, add: "Meteorology tab: add variable ssrd"}
+  strd:        {label: Longwave radiation, locate: {meteo: strd}, add: "Meteorology tab: add variable strd"}
+  tann:        {label: Annual mean air temperature, locate: {meteo: tann}, add: "Meteorology tab: add variable tann"}
+  dem:         {label: DEM, locate: {morph: dem}, add: "Morphology tab: Execute All"}
+  slope:       {label: Slope, locate: {morph: slope}, add: "Morphology tab: Execute All"}
+  aspect:      {label: Aspect, locate: {morph: aspect}, add: "Morphology tab: Execute All"}
+  fdir:        {label: Flow direction, locate: {morph: fdir}, add: "Morphology tab: Execute All"}
+  facc:        {label: Flow accumulation, locate: {morph: facc}, add: "Morphology tab: Execute All"}
+  soil_class:  {label: Soil classes, locate: {morph: [soil_class, soil_class_horizon_01]}, add: "Morphology tab: choose soil, then Execute All"}
+  geo_class:   {label: Geology classes, locate: {morph: geology_class}, add: "Morphology tab: choose geology, then Execute All"}
+  lai_class:   {label: LAI classes, locate: {morph: LAI_class}, add: "Morphology tab: choose LAI, then Execute All"}
+  lai_gridded: {label: Gridded LAI, locate: {lai: lai}, add: "Morphology tab: choose LAI, then Execute All"}
+  latlon:      {label: Latitude/longitude file, locate: {latlon: true}, add: "Morphology tab: Execute All"}
+
+# v6 app: MPR reads these whenever a land process is on (exchange/mo_mpr_container.F90:789-792);
+# precipitation drives every land process (mo_meteo_container.F90:330).
+always: [pre, slope, aspect, soil_class, geo_class]
+
+processes:
+  interception:
+    cases:
+      -1: {label: pass-through}
+      0: {}
+      1: {inputs: [{any_of: [lai_class, lai_gridded]}], needs: {pet: [-2, -1, 1, 2, 3]}}
+  snow:
+    cases:
+      -1: {label: pass-through}
+      0: {}
+      1: {inputs: [tavg], label: degree-day}
+  soil_moisture:
+    cases:
+      0: {}
+      1: {needs: {pet: [-2, -1, 1, 2, 3]}}
+      2: {needs: {pet: [-2, -1, 1, 2, 3]}}
+      3: {needs: {pet: [-2, -1, 1, 2, 3]}}
+      4: {needs: {pet: [-2, -1, 1, 2, 3]}}
+  direct_runoff:
+    cases:
+      0: {}
+      1: {needs: {pet: [-2, -1, 1, 2, 3]}}
+  pet:
+    cases:
+      -2: {inputs: [pet, aspect], label: input with aspect correction}
+      -1: {inputs: [pet, {any_of: [lai_class, lai_gridded]}], label: input with LAI correction}
+      0: {label: off}
+      1: {inputs: [tavg, tmin, tmax, aspect], label: Hargreaves-Samani}
+      2: {inputs: [tavg, netrad, {any_of: [lai_class, lai_gridded]}], label: Priestley-Taylor}
+      3: {inputs: [tavg, netrad, eabs, wind, {any_of: [lai_class, lai_gridded]}], label: Penman-Monteith}
+  interflow:
+    cases: {0: {}, 1: {needs: {percolation: [1]}}}
+  percolation:
+    cases: {0: {}, 1: {needs: {interflow: [1]}}}
+  baseflow:
+    cases: {0: {}, 1: {}}
+  neutrons:
+    cases:
+      0: {}
+      1: {needs: {soil_moisture: [1, 2, 3, 4]}}
+      2: {needs: {soil_moisture: [1, 2, 3, 4]}}
+  routing:
+    # Case 1 (Muskingum) is "not implemented" in the v6 app (mo_mrm_container.F90:320-331).
+    # Flow accumulation is derived from fdir; a provided facc only draws a warning.
+    cases:
+      0: {}
+      2: {inputs: [fdir], label: constant celerity}
+      3: {inputs: [fdir, slope], label: varying celerity}
+  temperature_routing:
+    cases:
+      0: {}
+      1: {inputs: [ssrd, strd, tann], needs: {routing: [2, 3]}}
+
+overrides:
+  v5.13:
+    # mHM 5.13 reads these every run (MPR/mo_read_wrapper.f90:125-292,
+    # meteo/mo_meteo_handler.f90:669,679); LAI as classes or a grid by timeStep_LAI_input.
+    always: [pre, tavg, dem, slope, aspect, soil_class, geo_class, latlon, {any_of: [lai_class, lai_gridded]}]
+    processes:
+      interception:  {v5_13_index: 1, cases: {1: {}}}
+      snow:          {v5_13_index: 2, cases: {1: {label: degree-day}}}
+      soil_moisture: {v5_13_index: 3, cases: {1: {}, 2: {}, 3: {}, 4: {}}}
+      direct_runoff: {v5_13_index: 4, cases: {1: {}}}
+      pet:
+        v5_13_index: 5
+        cases:
+          -1: {inputs: [pet], label: input with LAI correction}
+          0: {inputs: [pet], label: input with aspect correction}
+          1: {inputs: [tmin, tmax], label: Hargreaves-Samani}
+          2: {inputs: [netrad], label: Priestley-Taylor}
+          3: {inputs: [netrad, eabs, wind], label: Penman-Monteith}
+      interflow:     {v5_13_index: 6, cases: {1: {}}}
+      percolation:   {v5_13_index: 7, cases: {1: {}}}
+      routing:
+        v5_13_index: 8
+        cases:
+          0: {}
+          1: {inputs: [fdir, facc], label: Muskingum}
+          2: {inputs: [fdir, facc], label: constant celerity}
+          3: {inputs: [fdir, facc], label: varying celerity}
+      baseflow:      {v5_13_index: 9, cases: {1: {}}}
+      neutrons:      {v5_13_index: 10, cases: {0: {}, 1: {}, 2: {}}}
+      temperature_routing:
+        # Also reads a river-widths file (mRM/mo_mrm_riv_temp_class.f90:189-191),
+        # which the plugin does not prepare.
+        v5_13_index: 11
+        cases: {0: {}, 1: {inputs: [ssrd, strd, tann], needs: {routing: [1, 2, 3]}}}
+
+sources:
+  v6: "/home/bashyal/Codes/mhm/src: exchange/mo_mpr_container.F90, mo_meteo_container.F90, mo_mhm_container.F90, mo_mrm_container.F90, mo_input_container.F90; nml/nml_config_processes.f90"
+  v5.13: "/home/bashyal/Works/mhm-debug/src: MPR/mo_read_wrapper.f90, meteo/mo_meteo_handler.f90, mRM/mo_mrm_read_data.f90, mRM/mo_mrm_riv_temp_class.f90, common/mo_common_variables.F90"
