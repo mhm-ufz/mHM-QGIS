@@ -24,3 +24,6 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
 
 ### Changed
 - PyYAML is a declared dependency; the plugin reads its own YAML schemas.
+- GitLab CI runs isort, ruff, the test suite (Python 3.11 and 3.13) and the build on
+  every push; the QGIS suite inside the private runtime runs on a schedule, on tags or by
+  hand.

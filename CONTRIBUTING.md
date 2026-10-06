@@ -30,8 +30,9 @@ Thank you for your interest in contributing to mHM QGIS! This document provides 
    - Follow the coding style guidelines
    - Add tests for new functionality
    - Update documentation as needed
-4. **Test your changes**
+4. **Lint and test your changes**
    ```bash
+   isort . && ruff check src tests tools
    pytest
    ```
 5. **Commit your changes**
@@ -62,8 +63,6 @@ cd mhm-qgis
 # Install in development mode
 pip install -e .[dev]
 
-# Install pre-commit hooks (optional)
-pre-commit install
 ```
 
 ### Running Tests
@@ -90,22 +89,22 @@ pytest tests/test_specific.py
 
 ### Code Style
 
-We use the following tools for code quality:
+GitLab CI runs the same checks on every push (`.gitlab-ci.yml`):
 
-- **Black**: Code formatting
-- **Flake8**: Linting
-- **MyPy**: Type checking
+- **isort** (profile `black`) sorts imports; it is the only import sorter.
+- **ruff** lints with mhm-tools' rule set. `D`, `EM`, `PTH` and `ARG` are
+  deferred (listed in `pyproject.toml`'s `ignore`); don't add new violations of
+  them in new code.
 
 ```bash
-# Format code
-black src/mhm_qgis/
-
-# Check linting
-flake8 src/mhm_qgis/
-
-# Type checking
-mypy src/mhm_qgis/
+pip install -e .[check]
+isort .
+ruff check src tests tools
 ```
+
+`.git-blame-ignore-revs` lists the mechanical lint commit; run
+`git config blame.ignoreRevsFile .git-blame-ignore-revs` once so `git blame`
+skips it.
 
 ## Pull Request Guidelines
 
