@@ -18,6 +18,7 @@ from ..controllers import (
     intro,
     main,
     model,
+    multi_domain,
     project,
     time,
     version,
@@ -84,6 +85,22 @@ def bind(dialog):
             dialog.comboBox_domainFolderSelector.currentData() is None
         )
     )
+    # Multi-domain setup
+    dialog.comboBox_multiDomainFolderSelector.currentIndexChanged.connect(
+        lambda: dialog.comboBox_mHMversion.setEnabled(
+            dialog.comboBox_multiDomainFolderSelector.currentData() is None
+        )
+    )
+    # pushButton_createorLoadMultiDomainStructure → multi_domain.create_or_load
+    dialog.pushButton_createorLoadMultiDomainStructure.clicked.connect(
+        lambda: multi_domain.create_or_load(dialog)
+    )
+    # pushButton_browseDomainFolder → multi_domain.browse_domain
+    dialog.pushButton_browseDomainFolder.clicked.connect(lambda: multi_domain.browse_domain(dialog))
+    # pushButton_addDomainFolder → multi_domain.add_domain
+    dialog.pushButton_addDomainFolder.clicked.connect(lambda: multi_domain.add_domain(dialog))
+    # pushButton_prepareMultiDomainSetup → multi_domain.prepare
+    dialog.pushButton_prepareMultiDomainSetup.clicked.connect(lambda: multi_domain.prepare(dialog))
     dialog.comboBox_mhmWorkType.currentIndexChanged.connect(
         lambda: project.work_type_changed(dialog)
     )

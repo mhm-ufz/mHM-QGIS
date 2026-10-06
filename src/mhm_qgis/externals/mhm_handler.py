@@ -70,13 +70,17 @@ def executable(version: str, v6_path=None) -> Path:
     return _require_executable(selected, r"\b6(?:\.\d+)+\b", "v6")
 
 
-def run(version: str, cwd, run_command, on_finished=None, v6_path=None) -> bool:
-    """Launch the selected executable through the caller's terminal runner."""
+def run(version: str, cwd, run_command, on_finished=None, v6_path=None, namelist=None) -> bool:
+    """Launch the selected executable through the caller's terminal runner.
+
+    `namelist` is passed as `-n <file>`: a v6 combined run reads `combine.nml`.
+    """
     options = {"cwd": str(cwd), "show": True}
     if on_finished is not None:
         options["on_finished"] = on_finished
     path = executable(version, v6_path=v6_path)
-    command = subprocess.list2cmdline([str(path)]) if os.name == "nt" else shlex.quote(str(path))
+    arguments = [str(path), *(["-n", str(namelist)] if namelist else [])]
+    command = subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
     return bool(run_command(command, **options))
 
 

@@ -56,6 +56,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._grid_l2_header = None
         self._l2_multiplier_user_selected = False
         self._intro_answers = {}
+        self._multi_domains = None
         self._intro_pending = False
         self._preferred_l1_resolution = None
         self._preferred_l11_resolution = None
@@ -86,8 +87,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         )
         self.lineEdit_precipitationGlobDefinition.setText("*.nc")
         self.comboBox_mhmWorkType.setCurrentIndex(0)
-        for index in (1, 2):
-            self.comboBox_mhmWorkType.model().item(index).setEnabled(False)
+        self.comboBox_mhmWorkType.model().item(2).setEnabled(False)  # mRM only: not yet
         self.stackedWidget_configuration.setCurrentWidget(self.page_singleDomain)
         self.tabWidget_steps.setCurrentIndex(0)
         workflow_state.capture_button_styles(self)

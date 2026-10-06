@@ -45,6 +45,14 @@ def save(dialog):
         return
     root = dialog.project_folder
     path = _state_path(dialog)
+    if dialog._multi_domains is not None:
+        # A combined setup holds no inputs of its own, only its domains.
+        jsonio.write(path, {
+            "version": 4, "setup": "multi",
+            "mhm_version": dialog.comboBox_mHMversion.currentText().strip(),
+            "domains": list(dialog._multi_domains), "intro": dialog._intro_answers,
+        })
+        return
     existing_layers = jsonio.read_mapping(path).get("layers", {})
     if not isinstance(existing_layers, dict):
         existing_layers = {}
@@ -148,6 +156,15 @@ def load(dialog):
         _restore_combo_text(dialog.comboBox_mHMversion, state.get("mhm_version", ""))
         # A setup without saved answers keeps the ones given before it was opened.
         dialog._intro_answers = state.get("intro") or dialog._intro_answers
+        if state.get("setup") == "multi":
+            from . import multi_domain, project
+
+            dialog._multi_domains = list(state.get("domains", []))
+            with QSignalBlocker(dialog.comboBox_mhmWorkType):
+                dialog.comboBox_mhmWorkType.setCurrentIndex(1)
+            project.show_work_type(dialog)
+            multi_domain.refresh_table(dialog)
+            return
         _restore_resolution_preferences(dialog, state.get("grid_resolutions", {}))
         _restore_combo_text(dialog.comboBox_lai_inputType, state.get("lai_input_type", ""))
         crs = QgsCoordinateReferenceSystem(state.get("crs_authid", "") or "")
@@ -173,6 +190,7 @@ def load(dialog):
 
 def clear(dialog):
     """Prevent selections from leaking between project folders."""
+    dialog._multi_domains = None
     for _, combo in main.input_layer_widgets(dialog):
         combo.setCurrentIndex(-1)
     for widget in (
