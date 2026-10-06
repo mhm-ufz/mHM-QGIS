@@ -218,10 +218,10 @@ def _repoint_settings(project_folder, published, log=None) -> None:
                 if updated != value:
                     scene["output_path"] = updated
                     changed = True
-        if not is_v6(project_folder) and section == "land_cover" and record.get("scenes"):
-            if record.get("output_path"):
-                record["output_path"] = ""
-                changed = True
+        if (not is_v6(project_folder) and section == "land_cover" and record.get("scenes")
+                and record.get("output_path")):
+            record["output_path"] = ""
+            changed = True
     if changed:
         save_settings(project_folder, settings)
         if log:
@@ -255,7 +255,7 @@ def missing_model_inputs(project_folder) -> list[str]:
         if not path.is_file():
             missing.append(text)
 
-    for section in SECTIONS + ("lai",):
+    for section in (*SECTIONS, "lai"):
         record = settings.get(section)
         if not isinstance(record, dict):
             continue

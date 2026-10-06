@@ -76,7 +76,7 @@ class Extent:
             raise ValueError("Grid extent values must be finite.")
         if self.xmax < self.xmin or self.ymax < self.ymin:
             raise ValueError("Grid extent maximums must not be below minimums.")
-        for name, value in zip(("xmin", "xmax", "ymin", "ymax"), values):
+        for name, value in zip(("xmin", "xmax", "ymin", "ymax"), values, strict=True):
             object.__setattr__(self, name, value)
 
     @property
@@ -569,7 +569,7 @@ def raster_grids_match(
         return False
     if not all(
         math.isclose(float(left), float(right), rel_tol=tolerance, abs_tol=tolerance)
-        for left, right in zip(first["geotransform"], second["geotransform"])
+        for left, right in zip(first["geotransform"], second["geotransform"], strict=True)
     ):
         return False
     left_projection = first.get("projection") or ""
@@ -735,7 +735,7 @@ def validate_l0_l2_alignment(l0_header, l2_header, multiplier) -> None:
         raise ValueError("L0 dimensions must equal L2 dimensions x multiplier.")
     if any(not math.isclose(l0[key], l2[key], rel_tol=0, abs_tol=tolerance) for key in ("xllcorner", "yllcorner")):
         raise ValueError("L0 and L2 must share the same lower-left boundary.")
-    if any(not math.isclose(left, right, rel_tol=0, abs_tol=tolerance) for left, right in zip(header_bounds(l0), header_bounds(l2))):
+    if any(not math.isclose(left, right, rel_tol=0, abs_tol=tolerance) for left, right in zip(header_bounds(l0), header_bounds(l2), strict=True)):
         raise ValueError("L0 and L2 must share the same outer extent.")
 
 
@@ -750,7 +750,7 @@ def validate_grid_headers(headers: Mapping[str, Mapping]):
     tolerance = max(item["cellsize"] for item in standardized.values()) * 1e-6
     for level, header in standardized.items():
         bounds = header_bounds(header)
-        if any(abs(left - right) > tolerance for left, right in zip(reference, bounds)):
+        if any(abs(left - right) > tolerance for left, right in zip(reference, bounds, strict=True)):
             raise ValueError(f"{level} extent {bounds} does not match L0 extent {reference}.")
 
     l0_cellsize = standardized["L0"]["cellsize"]

@@ -45,9 +45,9 @@ def domain_mask(task, project_folder, filled_dem, crs):
     nml_settings.sync_domain_settings(project_folder)
     from ...handlers.state import processing
     from ...handlers.store.layout import morph_folder
-    processing.save_domains(project_folder, [dict(
-        domain_id=1, outlet_id="", name="master", mask=result["merged_path"],
-        directory=morph_folder(project_folder), dem_path=domain_dem_path(project_folder, "master"))])
+    processing.save_domains(project_folder, [{
+        "domain_id": 1, "outlet_id": "", "name": "master", "mask": result["merged_path"],
+        "directory": morph_folder(project_folder), "dem_path": domain_dem_path(project_folder, "master")}])
     return result["merged_path"]
 
 

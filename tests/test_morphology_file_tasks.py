@@ -320,7 +320,8 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
                               outlets=[first, second], merged_path=folder / "merged.tif",
                               dem_domain=(2, str(folder / "dem-mask.tif"), str(folder / "dem.asc")))
     assert result["outlets"]["2"]["mask_value"] == 8
-    assert result["dem_mask_path"] and not Path(result["dem_domain_path"]).exists()
+    assert result["dem_mask_path"]
+    assert not Path(result["dem_domain_path"]).exists()
     assert set(np.unique(_band(result["merged_path"]))) <= {1, 2}
     status = source.stat()
     os.utime(source, ns=(status.st_atime_ns, status.st_mtime_ns + 1000000000))

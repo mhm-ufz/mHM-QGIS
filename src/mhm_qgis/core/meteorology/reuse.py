@@ -20,7 +20,7 @@ BASE_VARIABLES = ("pre", "tavg", "tmin", "tmax")
 def required_meteo_variables(include_pet: bool) -> tuple[str, ...]:
     """Return the forcing variables one run has to produce."""
     if include_pet:
-        return BASE_VARIABLES + ("pet",)
+        return (*BASE_VARIABLES, "pet")
     return BASE_VARIABLES
 
 

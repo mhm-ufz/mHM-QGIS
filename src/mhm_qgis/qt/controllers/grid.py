@@ -571,7 +571,7 @@ def update_extent_labels(dialog, metadata=None):
         or current_grid_unit(dialog)
     )
     precision = display_precision_for_unit(unit)
-    for label, value in zip(labels, header_bounds(header)):
+    for label, value in zip(labels, header_bounds(header), strict=True):
         label.setText(format_resolution(value, unit, precision=precision))
 
 

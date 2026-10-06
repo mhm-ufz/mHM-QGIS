@@ -67,7 +67,8 @@ def test_unrelated_sections_written_by_anyone_else_survive(project):
     state = jsonio.read_mapping(path)
     assert state["workflows"] == {"execute_all_morphology": "done"}
     assert state["grid"] == {"ncols": 10}
-    assert "stages" in state and "outputs" in state
+    assert "stages" in state
+    assert "outputs" in state
 
 
 def test_parallel_updates_to_one_section_do_not_lose_entries(project):

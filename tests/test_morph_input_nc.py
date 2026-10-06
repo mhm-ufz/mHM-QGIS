@@ -149,8 +149,10 @@ def test_missing_layers_are_simply_omitted(tmp_path):
         crs_string="EPSG:32632")
 
     with xr.open_dataset(output) as result:
-        assert "dem" in result and "facc" in result
-        assert "slope" not in result and "soil_class" not in result
+        assert "dem" in result
+        assert "facc" in result
+        assert "slope" not in result
+        assert "soil_class" not in result
 
 
 def test_morph_mask_uses_selected_dem_cells_and_l0_coordinates(tmp_path):

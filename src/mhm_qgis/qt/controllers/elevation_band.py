@@ -10,11 +10,11 @@ from ...core.handlers.store.paths import temp_morphology_folder
 from ...core.morphology import elevation_bands
 from ...core.utils.report import CRITICAL, INFORMATION, WARNING
 from ...qgis_bridge import layers as qgis_layers
+from ..reporting import dialog_reporter
 from ..ui import load_form
+from ..workflows import hydrology
 
 Ui_ElevationBandDialog = load_form("elevation_band_dialog.ui")
-from ..reporting import dialog_reporter
-from ..workflows import hydrology
 
 
 def ask_elevation_band_width(

@@ -1,6 +1,7 @@
 """mHM morphology ASCII preparation through mhm_tools file handlers."""
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -384,10 +385,8 @@ def _drop_singleton_non_spatial_dims(da, x_key: str, y_key: str):
 def _apply_nodata(da, nodata_value: float | int, integer: bool):
     source_nodata = da.attrs.get("_FillValue", da.attrs.get("nodata_value"))
     if source_nodata is not None:
-        try:
+        with contextlib.suppress(Exception):
             da = da.where(da != source_nodata, nodata_value)
-        except Exception:
-            pass
     da = da.fillna(nodata_value)
     if integer:
         da = da.round().astype("int32")

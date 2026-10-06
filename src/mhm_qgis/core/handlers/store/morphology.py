@@ -29,7 +29,7 @@ def land_cover_periods(project_folder: str | Path) -> list[dict]:
     return [scene for scene in scenes if isinstance(scene, dict)]
 
 
-def resolve_display_output(
+def resolve_display_output(  # noqa: PLR0911
     project_folder: str | Path,
     key: str,
     *,

@@ -79,16 +79,16 @@ def test_alignment_gap_limit_comes_from_settings_and_material_gap_resamples(tmp_
     settings.write_text("grid_alignment_gap_limit: 0.02\n", encoding="utf-8")
     assert alignment_gap_limit_fraction(settings) == 0.02
 
-    base = dict(
-        l0_header={**L0_ANCHOR, "ncols": 100, "nrows": 100},
-        domain_extents=((115, 985, 218, 812),),
-        multiplier=3,
-        crs="EPSG:32632",
-        unit="m",
-        raw_l2_resolution=(30, 30),
-        raw_l2_crs="EPSG:32632",
-        gap_limit_fraction=0.02,
-    )
+    base = {
+        "l0_header": {**L0_ANCHOR, "ncols": 100, "nrows": 100},
+        "domain_extents": ((115, 985, 218, 812),),
+        "multiplier": 3,
+        "crs": "EPSG:32632",
+        "unit": "m",
+        "raw_l2_resolution": (30, 30),
+        "raw_l2_crs": "EPSG:32632",
+        "gap_limit_fraction": 0.02,
+    }
     within = Grid.for_meteorology(
         **base, raw_l2_extent=Extent(100.1, 1000.1, 200, 830)
     )
@@ -148,7 +148,7 @@ def test_paired_headers_expand_outward_and_are_exact_by_construction():
 
 
 @pytest.mark.parametrize(
-    "bounds, expected",
+    ("bounds", "expected"),
     [
         # Exactly on the L2 grid: never expanded.
         ((100.0, 190.0, 200.0, 290.0), (100.0, 190.0, 200.0, 290.0)),
@@ -217,7 +217,7 @@ def test_l0_header_from_l2_rejects_a_non_integer_multiple():
         (99.0, 191.0, 199.0, 291.0), L0_ANCHOR, multiplier=3, unit="m"
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not an exact multiple of L0"):
         l0_header_from_l2(l2, 7.0, 3)
 
 

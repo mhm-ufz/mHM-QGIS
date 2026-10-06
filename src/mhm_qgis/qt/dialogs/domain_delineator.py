@@ -1,6 +1,7 @@
 """Interactive per-outlet watershed delineation dialog."""
 from __future__ import annotations
 
+import contextlib
 import copy
 import os
 from functools import partial
@@ -42,14 +43,14 @@ from ...core.morphology.hydrology.outlets import (
 )
 from ...qgis_bridge.layers.domain import DomainWorkflow
 from ..bindings.domain_delineator import bind as bind_domain_delineator
+from ..objects.viewport_raster_range import ViewportRasterRangeController
+from ..reporting import error_detail
 from ..ui import load_form
+from ..workflows import hydrology
 from .file_picker import open_file
 from .input_selection import scan_project_inputs
 
 Ui_DomainDelineatorDialog = load_form("domain_delineator_dialog.ui")
-from ..objects.viewport_raster_range import ViewportRasterRangeController
-from ..reporting import error_detail
-from ..workflows import hydrology
 
 MASK_COLOR = QColor(255, 105, 180)
 MASK_OPACITY = 0.5
@@ -468,10 +469,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         if application is not None:
             application.removeEventFilter(self)
         if self._map_tool is not None:
-            try:
+            with contextlib.suppress(TypeError, RuntimeError):
                 self._map_tool.canvasClicked.disconnect(self._point_picked)
-            except (TypeError, RuntimeError):
-                pass
             self.canvas.unsetMapTool(self._map_tool)
         self._map_tool = None
         self.canvas.unsetCursor()
@@ -851,10 +850,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
             self._viewport_range = None
         if self._outlet_marker is not None:
             self._outlet_marker.hide()
-            try:
+            with contextlib.suppress(RuntimeError):
                 self.canvas.scene().removeItem(self._outlet_marker)
-            except RuntimeError:
-                pass
             self._outlet_marker = None
         self.canvas.setLayers([])
 

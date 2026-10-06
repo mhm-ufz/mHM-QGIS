@@ -337,7 +337,8 @@ def test_geoparameter_orientation_is_version_specific(tmp_path: Path) -> None:
     geo = values["parameter"]["baseflow_1"]["baseflow_recession"]
     assert [row["value"] for row in geo] == [42.0, 84.0]
     rendered = render_profile(v6, v6.profile("parameter"), values["parameter"], dims)
-    assert "&baseflow_1" in rendered and "%value" in rendered
+    assert "&baseflow_1" in rendered
+    assert "%value" in rendered
 
 
 def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
@@ -438,6 +439,9 @@ def test_v513_arrays_are_sized_to_the_project_not_to_a_maximum(tmp_path: Path) -
 
     # The padding these dimensions replaced wrote 50 land-cover entries and ten
     # soil depths for a project that has one scene and three horizons.
-    assert "LCoverfName(1)" in rendered and "LCoverfName(2)" not in rendered
-    assert "soil_Depth(3)" in rendered and "soil_Depth(4)" not in rendered
-    assert "Gauge_id(1,2)" in rendered and "Gauge_id(1,3)" not in rendered
+    assert "LCoverfName(1)" in rendered
+    assert "LCoverfName(2)" not in rendered
+    assert "soil_Depth(3)" in rendered
+    assert "soil_Depth(4)" not in rendered
+    assert "Gauge_id(1,2)" in rendered
+    assert "Gauge_id(1,3)" not in rendered

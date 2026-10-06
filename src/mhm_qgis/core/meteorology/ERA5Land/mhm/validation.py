@@ -20,7 +20,7 @@ EXPECTED_COORDINATE_ATTRS = {
 }
 
 
-def existing_output_is_valid(
+def existing_output_is_valid(  # noqa: PLR0911
     output_file: Path,
     variable: str,
     np,

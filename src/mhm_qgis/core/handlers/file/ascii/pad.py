@@ -39,8 +39,8 @@ def read_ascii_header(path) -> dict:
                 break
     try:
         return standardize_header(header)
-    except ValueError:
-        raise ValueError(f"Not a readable Arc/Info ASCII header: {path}")
+    except ValueError as error:
+        raise ValueError(f"Not a readable Arc/Info ASCII header: {path}") from error
 
 
 def ascii_window_offsets(source: Mapping[str, Any],

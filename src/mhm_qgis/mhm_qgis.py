@@ -46,7 +46,7 @@ def classFactory(iface):  # pylint: disable=invalid-name
                 f"mHM QGIS dependency check could not run.\n\n{exc}",
             )
         except Exception:
-            print(f"mHM QGIS dependency check could not run: {exc}")
+            print(f"mHM QGIS dependency check could not run: {exc}")  # noqa: T201 -- no GUI yet
     return MhmQgis(iface)
 
 
@@ -240,7 +240,7 @@ class MhmQgis:
 
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
+        if self.first_start:
             self.first_start = False
             self.dlg = MhmQgisDialog(iface=self.iface)
 

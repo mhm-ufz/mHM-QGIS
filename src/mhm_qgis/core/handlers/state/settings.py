@@ -32,7 +32,7 @@ def read(project_folder=None, *, path=None):
         content = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return values
-    for key in values:
+    for key in DEFAULTS:
         match = re.search(rf"(?m)^\s*{key}\s*:\s*([^#\n]*)", content)
         if match:
             try:

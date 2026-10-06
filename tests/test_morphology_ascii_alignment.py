@@ -73,7 +73,7 @@ def _aligned(path, *, header=None, integer=False):
         )
     finally:
         dataset.close()
-    name = list(result.data_vars)[0]
+    name = next(iter(result.data_vars))
     return result[name]
 
 

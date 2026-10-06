@@ -75,7 +75,7 @@ def inspect_meteo_folder_cached(project_folder, spec, log=None, cancelled=None):
     spec = spec.normalized()
     if not project_folder:
         return inspect_meteo_folder(spec, cancelled=cancelled)
-    digest, files = inspection_fingerprint(spec)
+    digest, _files = inspection_fingerprint(spec)
     metadata = _from_payload(cached_payload(project_folder, SECTION, spec.kind, digest))
     if metadata is not None:
         return metadata

@@ -213,7 +213,8 @@ def test_exact_netcdf_is_converted_and_definitions_are_carried(tmp_path):
     assert [path.name for path in staged_files(tmp_path)] == ["soil_class.nc", "soil_classdefinition.txt"]
     assert (master / "soil_classdefinition.txt").read_text(encoding="utf-8") == "1 sand\n"
     header = (master / "soil_class.asc").read_text(encoding="utf-8").splitlines()
-    assert header[0].split()[1] == "4" and header[1].split()[1] == "4"
+    assert header[0].split()[1] == "4"
+    assert header[1].split()[1] == "4"
 
 
 def test_v5_soil_horizons_are_published_as_ascii_layers(tmp_path):

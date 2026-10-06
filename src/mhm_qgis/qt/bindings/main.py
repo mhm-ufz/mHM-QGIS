@@ -153,7 +153,7 @@ def bind(dialog):
     # Batch morphology workflows
     # pushButton_executeAllMorphology → morphology.start_execute_all
     dialog.pushButton_executeAllMorphology.clicked.connect(
-        lambda: dialog.morphology_tasks.start_execute_all()
+        lambda: dialog.morphology_tasks.start_execute_all()  # noqa: PLW0108 -- drop `checked`
     )
     # pushButton_executeAllMeteo → meteorology.start
     dialog.pushButton_executeAllMeteo.clicked.connect(

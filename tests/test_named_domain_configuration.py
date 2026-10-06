@@ -42,7 +42,7 @@ def test_domain_paths_states_and_namelists_are_isolated(tmp_path, version):
 
 @pytest.mark.parametrize("name", ["", "..", "../outside", "a/b", "a\\b", "data", ".temp", "<new>"])
 def test_domain_names_cannot_escape_or_replace_reserved_folders(tmp_path, name):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="without path separators or reserved"):
         paths.domain_folder(tmp_path, name)
 
 

@@ -6,7 +6,7 @@ import os
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 from ....core.handlers.store.paths import temp_folder, workspace_folder
 
@@ -19,7 +19,7 @@ DOMAIN_MODES = {
     DOMAIN_MODE_DEM_EXTENT,
     DOMAIN_MODE_DELINEATOR,
 }
-PathInput = Union[str, Path]
+PathInput = str | Path
 
 
 def default_state() -> dict[str, Any]:

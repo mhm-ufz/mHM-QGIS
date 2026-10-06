@@ -148,7 +148,16 @@ ignore = [
     "E501", "PLR2004", "PLC0415", "PLR0917",
     # Deferred families (ratchet): remove one per lint-<family> branch.
     "D", "EM", "PTH", "ARG",
+    # NumPy 1.x round() of a float32 returns float32; int(round(x)) stays explicit.
+    "RUF046",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/mhm_qgis/mhm_qgis.py" = ["E402"]           # sys.path is cleaned before the imports
+"src/mhm_qgis/core/grid/__init__.py" = ["F401"] # facade re-exporting core/grid
+"src/mhm_qgis/runtime/*" = ["T201"]             # console entry points
+"tools/*" = ["T201"]
+"tests/*" = ["T201", "PLW0603"]                 # subprocess scripts; QApplication singletons
 
 [tool.ruff.lint.pylint]
 max-args = 15

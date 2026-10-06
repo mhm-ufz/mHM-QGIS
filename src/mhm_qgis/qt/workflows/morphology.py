@@ -360,7 +360,7 @@ class MorphologyTaskBridge:
         digest = input_fingerprint(value, self.filled_dem_path, job["version"])
         reusable = self._reusable_stage(kind, digest) if reuse_existing else None
         if reusable:
-            result = dict(kind=kind, outputs=reusable["outputs"])
+            result = {"kind": kind, "outputs": reusable["outputs"]}
             QtCore.QTimer.singleShot(0, lambda: self._advanced_ready(result, done))
             return True
         return (

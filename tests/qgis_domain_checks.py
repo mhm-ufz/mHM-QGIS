@@ -62,10 +62,11 @@ def snapping(folder):
     path = snap_points_to_network(points, empty, folder / "empty.shp")
     result = QgsVectorLayer(path, "empty", "ogr")
     feature = next(result.getFeatures())
-    assert feature["confidence"] == 0 and feature["snap_state"] == "failed"
+    assert feature["confidence"] == 0
+    assert feature["snap_state"] == "failed"
 
 
-def navigation(folder):
+def navigation(folder):  # noqa: PLR0915
     import numpy as np
     from osgeo import gdal, osr
 
@@ -77,7 +78,8 @@ def navigation(folder):
     original = folder / "source.tif"
     dem = gdal.GetDriverByName("GTiff").Create(str(original), 10, 10, 1, gdal.GDT_Float32)
     dem.SetGeoTransform((0, 100, 0, 1000, 0, -100))
-    crs = osr.SpatialReference(); crs.ImportFromEPSG(32632)
+    crs = osr.SpatialReference()
+    crs.ImportFromEPSG(32632)
     dem.SetProjection(crs.ExportToWkt())
     dem.GetRasterBand(1).WriteArray(np.add.outer(np.arange(10, 0, -1), np.arange(10, 0, -1)))
     dem.GetRasterBand(1).SetNoDataValue(-9999)

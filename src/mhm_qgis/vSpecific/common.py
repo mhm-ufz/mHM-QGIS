@@ -15,7 +15,6 @@ from ..core.handlers.store.paths import morph_staging_folder, temp_morphology_fo
 
 def model_data_path(dialog: Any) -> str:
     """Return the model-input root relative to this setup's namelists."""
-    project = getattr(dialog, "project_folder", None)
     return "data"
 
 
@@ -59,7 +58,7 @@ def geology_rows(dialog: Any) -> list[dict[str, Any]]:
 def geology_count(dialog: Any) -> int:
     rows = geology_rows(dialog)
     if rows:
-        return max(len(rows), max(row["index"] for row in rows))
+        return max(len(rows), *(row["index"] for row in rows))
     project = getattr(dialog, "project_folder", None)
     # Published first, then the Execute All staging copy, so the count is
     # available before Morphology Setup has published anything.

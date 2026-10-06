@@ -113,9 +113,9 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
                                   for key in ("sim_start", "eval_start", "sim_end"))
         values["main"]["time_periods"] = {
             "warming_Days": repeat((evaluation - start).days, count),
-            "eval_Per": repeat(dict(yStart=evaluation.year, mStart=evaluation.month,
-                                    dStart=evaluation.day, yEnd=end.year,
-                                    mEnd=end.month, dEnd=end.day), count),
+            "eval_Per": repeat({"yStart": evaluation.year, "mStart": evaluation.month,
+                                "dStart": evaluation.day, "yEnd": end.year,
+                                "mEnd": end.month, "dEnd": end.day}, count),
         }
     return values
 

@@ -73,11 +73,13 @@ def test_the_domain_dem_keeps_the_common_extent_not_the_domain_bounding_box(tmp_
 
     header = read_ascii_header(output)
     assert (int(header["ncols"]), int(header["nrows"])) == (6, 5)
-    assert header["xllcorner"] == 0.0 and header["yllcorner"] == 0.0
+    assert header["xllcorner"] == 0.0
+    assert header["yllcorner"] == 0.0
     assert header["cellsize"] == 100.0
 
     rows = _rows(output)
-    assert len(rows) == 5 and all(len(row) == 6 for row in rows)
+    assert len(rows) == 5
+    assert all(len(row) == 6 for row in rows)
     kept = np.zeros((5, 6), dtype=bool)
     kept[1:3, 2:4] = True
     written = np.array([[float(cell) for cell in row] for row in rows])

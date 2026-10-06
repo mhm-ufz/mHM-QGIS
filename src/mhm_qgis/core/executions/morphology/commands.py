@@ -165,8 +165,8 @@ def native_worker(task, payload, working_folder):
         task.setProgress(5)
     with TemporaryDirectory(
         prefix="mhm_qgis_native_", dir=str(working_folder)
-    ) as temporary:
-        temporary = Path(temporary)
+    ) as temporary_name:
+        temporary = Path(temporary_name)
         job_file = temporary / "job.json"
         result_file = temporary / "result.json"
         job_file.write_text(json.dumps(payload), encoding="utf-8")

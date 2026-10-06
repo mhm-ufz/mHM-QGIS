@@ -13,12 +13,12 @@ def launch_profile_editor(schemas_dir, output_dir, initial_values=None,
     from .mhm_tools_handler import capture_messages
 
     profiles = file_profiles or {"main": [], "parameter": [], "output": []}
-    with capture_messages(log, logger_names=("nml_tools",)):
-        with _editor_folder(schemas_dir, output_dir, profiles, initial_values or {},
-                            initial_dimensions or {}, log) as folder:
-            return gui.launch_gui(schemas_dir, folder, profiles,
-                                  initial_values=initial_values,
-                                  initial_dimensions=initial_dimensions)
+    with capture_messages(log, logger_names=("nml_tools",)), _editor_folder(
+        schemas_dir, output_dir, profiles, initial_values or {}, initial_dimensions or {}, log
+    ) as folder:
+        return gui.launch_gui(schemas_dir, folder, profiles,
+                              initial_values=initial_values,
+                              initial_dimensions=initial_dimensions)
 
 
 @contextmanager

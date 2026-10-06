@@ -6,6 +6,8 @@ place to delete from once a minimum version is agreed.
 """
 from __future__ import annotations
 
+import contextlib
+
 
 def _qmeta_type(type_name):
     """Return a QMetaType enum value across Qt/QGIS bindings."""
@@ -38,10 +40,8 @@ def qgs_field(name, field_type):
         }
     qmeta_name = qmeta_name_by_qvariant_name.get(field_type, field_type)
     candidates = [_qmeta_type(qmeta_name)]
-    try:
+    with contextlib.suppress(TypeError, ValueError):
         candidates.append(int(candidates[0]))
-    except (TypeError, ValueError):
-        pass
     if field_type in qvariant_type_by_name:
         candidates.append(qvariant_type_by_name[field_type])
 

@@ -41,7 +41,7 @@ def _raster(path, values=None, *, epsg=32632, cell=100, origin=(0, 1000)):
     return path
 
 
-@pytest.mark.parametrize("epsg,cell,origin", [(32632, 100, (0, 1000)), (4326, 1 / 1200, (80, 30))])
+@pytest.mark.parametrize(("epsg", "cell", "origin"), [(32632, 100, (0, 1000)), (4326, 1 / 1200, (80, 30))])
 def test_single_variable_filled_dem_is_readable_without_selection(tmp_path, epsg, cell, origin):
     import rasterio
 
@@ -143,9 +143,9 @@ def test_hydrology_reuses_saved_direction_without_recomputing_dem(tmp_path, monk
 
 
 
-@pytest.mark.parametrize("version,category_format", [("5.13", "nc"), ("6", "nc")])
+@pytest.mark.parametrize(("version", "category_format"), [("5.13", "nc"), ("6", "nc")])
 @pytest.mark.parametrize("catchments", [False, True])
-def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, category_format, catchments):
+def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, category_format, catchments):  # noqa: PLR0915
     from mhm_qgis.core.handlers.state import nml_settings
 
     ensure_project_structure(tmp_path, version)
@@ -170,11 +170,11 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
             cells[2:10, columns[0]:columns[1]] = index
             keep |= cells != 0
             path = _raster(folder / f"catchment{index}.tif", cells, origin=(-100, 1100))
-            picked = dict(x=50, y=50, crs="EPSG:32632")
-            state["outlets"][str(index)] = dict(is_domain=True, picked=picked, confidence=2,
-                delineation=dict(raster_path=str(path), mask_value=index, cell_center=[50, 50],
-                    catchment_area_m2=160000, picked=picked,
-                    fingerprint=domain_state.delineation_fingerprint(result["filled_dem"], 50, 50)))
+            picked = {"x": 50, "y": 50, "crs": "EPSG:32632"}
+            state["outlets"][str(index)] = {"is_domain": True, "picked": picked, "confidence": 2,
+                "delineation": {"raster_path": str(path), "mask_value": index, "cell_center": [50, 50],
+                    "catchment_area_m2": 160000, "picked": picked,
+                    "fingerprint": domain_state.delineation_fingerprint(result["filled_dem"], 50, 50)}}
         domain_state.save_state(tmp_path, state)
 
     watershed = _raster(
@@ -247,7 +247,8 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
     expected_suffix = "soil_class.asc" if version == "5.13" else "soil_class.nc"
     assert nml_settings.load_settings(tmp_path)["soil"]["output_path"].endswith(expected_suffix)
     domains = nml_settings.load_settings(tmp_path)["domains"]
-    assert len(domains) == 1 and domains[0]["name"] == "master"
+    assert len(domains) == 1
+    assert domains[0]["name"] == "master"
     assert len(processing.section(tmp_path, "domains", [])) == 1
     assert set(processing.section(tmp_path, "workflows", {})).isdisjoint(
         {"execute_all_link_domains", "execute_all_crop", "execute_all_domain_dems"})

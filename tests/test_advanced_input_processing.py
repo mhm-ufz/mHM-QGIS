@@ -64,7 +64,8 @@ def test_land_cover_processing_writes_period_state(tmp_path, monkeypatch):
 
     assert [path.name for path in outputs] == ["lc_periods.nc"]
     # mHM-tools reads the manifest itself, so it must receive the CSV.
-    assert manifests[0].is_file() and manifests[0].suffix == ".csv"
+    assert manifests[0].is_file()
+    assert manifests[0].suffix == ".csv"
 
     state = load_settings(tmp_path)["land_cover"]
     assert state["variable"] == "land_cover"
@@ -115,7 +116,8 @@ def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch)
                   "version": "6.0", "value": value.as_dict(), "filled_dem": str(dem)})
     data, definition = map(Path, result["outputs"])
 
-    assert manifests[0].is_file() and manifests[0].suffix == ".csv"
+    assert manifests[0].is_file()
+    assert manifests[0].suffix == ".csv"
 
     state = load_settings(tmp_path)["soil"]
     assert data.name == "soil_horizon_class.nc"

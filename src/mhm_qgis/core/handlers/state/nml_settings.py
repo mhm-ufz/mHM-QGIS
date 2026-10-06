@@ -48,7 +48,7 @@ def validate_times(values, version="v6") -> dict[str, str]:
         raise ValueError("mHM 5 simulation periods require whole dates (00:00).")
     if not dates[0] <= dates[1] <= dates[2]:
         raise ValueError("Dates must satisfy simulation start ≤ evaluation start ≤ simulation end.")
-    return {name: date.isoformat(timespec="minutes") for name, date in zip(names, dates)}
+    return {name: date.isoformat(timespec="minutes") for name, date in zip(names, dates, strict=True)}
 
 
 def save_settings(

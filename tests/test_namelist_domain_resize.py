@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 model = pytest.importorskip("nml_tools.gui.model")
-from mhm_qgis.externals.nml_tools_handler import _editor_folder
+from mhm_qgis.externals.nml_tools_handler import _editor_folder  # noqa: E402
 
 SCHEMAS = Path(__file__).parents[1] / "src/mhm_qgis/nml-schemas/v6"
 

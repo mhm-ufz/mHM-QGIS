@@ -18,7 +18,7 @@ def precipitation(path, *, variable="pre", units="mm", hours=24, start="2001-01-
     ds.to_netcdf(path)
 
 
-@pytest.mark.parametrize("variable,units,hours,expected", [
+@pytest.mark.parametrize(("variable", "units", "hours", "expected"), [
     ("pre", "mm", 24, "mHM ready"), ("tp", "m", 1, "ERA5Land")])
 def test_glob_scan_detects_metadata_and_ignores_unmatched_files(tmp_path, variable, units, hours, expected):
     precipitation(tmp_path / "wanted.nc", variable=variable, units=units, hours=hours)
@@ -30,10 +30,10 @@ def test_glob_scan_detects_metadata_and_ignores_unmatched_files(tmp_path, variab
     assert metadata.resolution == 1
 
 
-@pytest.mark.parametrize("units,hours", [("kg", 24), ("m", 24), ("mm", 1)])
+@pytest.mark.parametrize(("units", "hours"), [("kg", 24), ("m", 24), ("mm", 1)])
 def test_ambiguous_or_unsupported_metadata_is_not_guessed(tmp_path, units, hours):
     precipitation(tmp_path / "pre.nc", units=units, hours=hours)
-    with pytest.raises(ValueError, match="supported unit|metadata unit|continuous"):
+    with pytest.raises(ValueError, match=r"supported unit|metadata unit|continuous"):
         inspect_meteo_folder(MeteoFolderSpec("pre", tmp_path, unit="mm"))
 
 
@@ -51,7 +51,7 @@ def test_periods_validate_and_reach_both_namelist_versions(tmp_path):
     from types import SimpleNamespace
 
     from mhm_qgis.vSpecific import build_initial_values
-    values = dict(sim_start="2001-01-01T00:00", eval_start="2001-01-11T00:00", sim_end="2001-02-01T00:00")
+    values = {"sim_start": "2001-01-01T00:00", "eval_start": "2001-01-11T00:00", "sim_end": "2001-02-01T00:00"}
     update_section(tmp_path, "time", values)
     dialog = SimpleNamespace(project_folder=tmp_path)
     v5 = build_initial_values("5.13", dialog)["main"]["time_periods"]

@@ -79,7 +79,7 @@ def test_land_cover_period_adapter_uses_public_api(tmp_path, monkeypatch):
     assert calls[0]["resampling"] == "auto"
 
 
-@pytest.mark.parametrize("options, expected", [
+@pytest.mark.parametrize(("options", "expected"), [
     ({}, (5.0, 0.1)),
     ({"composition_step": 2.5, "bulk_density_step": 0.05}, (2.5, 0.05)),
 ])

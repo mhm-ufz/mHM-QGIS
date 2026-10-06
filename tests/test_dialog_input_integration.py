@@ -296,7 +296,7 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     restored.close()
 
 
-@pytest.mark.parametrize("workflow,button", [
+@pytest.mark.parametrize(("workflow", "button"), [
     ("project_structure", "pushButton_createOrLoadDomainStructure"),
     ("scan_precipitation", "pushButton_scanPrecipitationFiles"),
     ("execute_all_observations", "pushButton_executeAllObservation"),

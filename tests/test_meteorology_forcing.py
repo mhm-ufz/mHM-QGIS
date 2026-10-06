@@ -93,7 +93,7 @@ def test_scan_reads_metadata_and_glob_only(tmp_path, monkeypatch):
     assert not (tmp_path / "out").exists()
 
 
-@pytest.mark.parametrize("cadence,times", [
+@pytest.mark.parametrize(("cadence", "times"), [
     ("Hourly", ("2001-01-01T00", "2001-01-01T01", "2001-01-01T02")),
     ("Daily", ("2001-01-01", "2001-01-02", "2001-01-03")),
     ("Monthly", ("2000-01-01", "2000-02-01", "2000-03-01")),
@@ -132,7 +132,7 @@ def test_cumulative_hourly_cross_file_and_chunk_boundaries(tmp_path):
         assert ds.time_bnds[0, 0] == np.datetime64("2001-01-01T00")
 
 
-@pytest.mark.parametrize("variable,source,method,expected", [
+@pytest.mark.parametrize(("variable", "source", "method", "expected"), [
     ("tavg", "t2m", "Average", 11.5),
     ("tmin", "t2m", "Minimum", 0.0),
     ("tmax", "t2m", "Maximum", 23.0),
@@ -194,7 +194,7 @@ def test_cf_edge_fragments_are_dropped_and_other_variables_share_precipitation_w
     assert metadata.start_time.startswith("2001-01-01")
     assert metadata.end_time.startswith("2001-01-02")
     result = process_meteo_inputs(specs, tmp_path / "out", target())
-    for variable, path in result.outputs.items():
+    for _variable, path in result.outputs.items():
         with xr.open_dataset(path) as output:
             assert output.sizes["time"] == 2
             np.testing.assert_array_equal(
@@ -223,7 +223,7 @@ def test_era_hourly_precipitation_can_use_daily_maximum(tmp_path):
         np.testing.assert_allclose(ds.pre, 24.0)
 
 
-@pytest.mark.parametrize("variable,source,unit,value,expected", [
+@pytest.mark.parametrize(("variable", "source", "unit", "value", "expected"), [
     ("tavg", "t2m", "K", 274.15, 1.),
     ("tmin", "tmin", "Celsius", -5., -5.),
     ("tmax", "tmax", "K", 283.15, 10.),
@@ -373,9 +373,10 @@ def test_interval_batching_does_not_change_the_written_values(tmp_path, monkeypa
                               ds["time_bnds"].values.copy())
 
     assert written["one"][0].shape[0] == 7
-    for one, many in zip(written["one"], written["many"]):
+    for one, many in zip(written["one"], written["many"], strict=True):
         np.testing.assert_array_equal(one, many)
-    assert ticks and ticks[-1] == 100
+    assert ticks
+    assert ticks[-1] == 100
 
 
 def test_calendar_interval_keys_and_bounds():
@@ -415,7 +416,7 @@ def test_calendar_interval_keys_and_bounds():
 
 
 @pytest.mark.parametrize("method", ["Maximum", "Minimum", "Sum", "Average"])
-@pytest.mark.parametrize("cadence,days", [("Daily", 3), ("Monthly", 31)])
+@pytest.mark.parametrize(("cadence", "days"), [("Daily", 3), ("Monthly", 31)])
 def test_group_reduction_matches_a_plain_python_reference(method, cadence, days, tmp_path):
     """The reshape path and the uneven-group path must agree with the obvious loop."""
     hours = 24 * days

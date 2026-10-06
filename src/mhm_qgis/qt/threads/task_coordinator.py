@@ -1,6 +1,7 @@
 """Bounded QGIS task queue shared by plugin preprocessing tasks."""
 from __future__ import annotations
 
+import contextlib
 import threading
 import traceback
 from dataclasses import dataclass, field
@@ -300,14 +301,12 @@ class TaskCoordinator(QtCore.QObject):
                     except RuntimeError:
                         self._control_states[widget_id] = True
                 owners.add(record.key)
-            try:
+            with contextlib.suppress(RuntimeError):
                 widget.setEnabled(
                     False
                     if owners
                     else self._control_states.pop(widget_id, True)
                 )
-            except RuntimeError:
-                pass
             if not owners:
                 self._control_owners.pop(widget_id, None)
                 self._control_states.pop(widget_id, None)

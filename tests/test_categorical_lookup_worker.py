@@ -45,7 +45,7 @@ def _run_worker(work, payload):
     process = subprocess.run(
         [sys.executable, "-m", "mhm_qgis.core.native_worker",
          str(job_file), str(result_file)],
-        capture_output=True, text=True,
+        check=False, capture_output=True, text=True,
         env=dict(os.environ, PYTHONPATH=str(REPO / "src")),
     )
     return process, result_file
@@ -56,7 +56,7 @@ def test_the_lookup_module_imports_without_qgis():
     process = subprocess.run(
         [sys.executable, "-c",
          "import mhm_qgis.core.handlers.lookup.job as m; print(m.run_lookup_job.__name__)"],
-        capture_output=True, text=True,
+        check=False, capture_output=True, text=True,
         env=dict(os.environ, PYTHONPATH=str(REPO / "src")),
     )
     assert process.returncode == 0, process.stderr
@@ -66,12 +66,12 @@ def test_the_lookup_module_imports_without_qgis():
 def test_relocated_worker_imports_without_gui_dependencies():
     process = subprocess.run(
         [sys.executable, "-c",
-         "import sys; "
+         ("import sys; "
          "sys.modules.update({name: None for name in ('qgis', 'PyQt5', 'PyQt6', 'PySide6', 'mhm_qgis.qt')}); "
          "from mhm_qgis.core.native_worker import run; assert callable(run); "
          "from mhm_qgis.core.handlers.store.morphology import resolve_display_output; "
-         "assert callable(resolve_display_output)"],
-        capture_output=True, text=True,
+         "assert callable(resolve_display_output)")],
+        check=False, capture_output=True, text=True,
         env=dict(os.environ, PYTHONPATH=str(REPO / "src")),
     )
     assert process.returncode == 0, process.stderr
@@ -109,9 +109,9 @@ def test_the_worker_asks_the_kernel_to_kill_it_before_qgis():
     """Geology formatting peaked at 5.5 GiB and OOM-killed the QGIS process."""
     process = subprocess.run(
         [sys.executable, "-c",
-         "from mhm_qgis.core.native_worker import _prefer_worker_termination as f; f();"
-         "print(open('/proc/self/oom_score_adj').read().strip())"],
-        capture_output=True, text=True,
+         ("from mhm_qgis.core.native_worker import _prefer_worker_termination as f; f();"
+         "print(open('/proc/self/oom_score_adj').read().strip())")],
+        check=False, capture_output=True, text=True,
         env=dict(os.environ, PYTHONPATH=str(REPO / "src")),
     )
     assert process.returncode == 0, process.stderr

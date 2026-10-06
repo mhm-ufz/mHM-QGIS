@@ -236,8 +236,8 @@ def copy_ready(
 def _publish(replacements, removals, temporary: Path) -> None:
     """Replace one categorical output set without leaving half a set."""
     tracked = []
-    for path in [destination for _source, destination in replacements] + list(removals):
-        path = Path(path)
+    for name in [destination for _source, destination in replacements] + list(removals):
+        path = Path(name)
         if path not in tracked:
             tracked.append(path)
     backups = []

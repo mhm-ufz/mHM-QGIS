@@ -46,8 +46,7 @@ def overlay(project_folder, sections: Mapping[str, Any]) -> dict[str, Any]:
 
 def section(project_folder, name: str, default=None):
     """Return one section from the latest state."""
-    value = load(project_folder).get(name, default)
-    return value
+    return load(project_folder).get(name, default)
 
 
 def set_entry(

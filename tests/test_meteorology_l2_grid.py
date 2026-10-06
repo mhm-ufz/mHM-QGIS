@@ -122,7 +122,7 @@ def test_prepared_grid_and_written_header_are_validated(tmp_path):
     write_header(dataset, "pre", header_file, header=dict(L2_HEADER))
     assert_header_file_matches(header_file, L2_HEADER)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Written L2 header"):
         assert_header_file_matches(
             header_file, {**L2_HEADER, "cellsize": 200.0}
         )
@@ -188,7 +188,7 @@ def test_the_single_pass_and_sequential_paths_agree(tmp_path, monkeypatch):
     specs = [s for s in FORCING_SPECS if s.output_variable in ("tavg", "tmin", "tmax")]
     lat = np.linspace(31.0, 30.0, 4)
     lon = np.linspace(79.0, 80.0, 5)
-    kwargs = dict(bounds=None, target_lat=lat, target_lon=lon)
+    kwargs = {"bounds": None, "target_lat": lat, "target_lon": lon}
 
     monkeypatch.setenv(METEO_MAX_BYTES_ENV, str(64 * 1024 ** 3))
     single = build_daily_datasets(files, specs, **kwargs)

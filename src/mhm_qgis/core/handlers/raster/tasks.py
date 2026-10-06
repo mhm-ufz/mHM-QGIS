@@ -569,7 +569,7 @@ def _ascii_rows(block) -> list[str]:
     return [
         " ".join(map(str, row.astype(np.int64).tolist())) if row_is_whole
         else " ".join([str(int(value)) if value == int(value) else repr(value) for value in row.tolist()])
-        for row, row_is_whole in zip(block, whole.tolist())
+        for row, row_is_whole in zip(block, whole.tolist(), strict=True)
     ]
 
 
@@ -875,7 +875,7 @@ def _write_channel_network(path, accumulation, context, threshold_cells):
 
 
 def _delineate(context, x, y, raster_path, basin_id):
-    np, _pfd, _affine, gdal, _ogr, osr = _dependencies()
+    np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
     inverse = ~context["transform"]
     col_value, row_value = inverse * (float(x), float(y))
     row, col = int(math.floor(row_value)), int(math.floor(col_value))

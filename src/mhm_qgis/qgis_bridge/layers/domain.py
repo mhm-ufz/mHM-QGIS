@@ -68,7 +68,7 @@ def _remove_vector_dataset(path, log: Callable[[str], None] = _noop) -> None:
             log(f"WARNING: Could not remove {sidecar}: {error}")
 
 
-def snap_points_to_network(
+def snap_points_to_network(  # noqa: PLR0912, PLR0915
     pour_points_layer,
     channel_network_layer,
     output_path,
@@ -159,7 +159,9 @@ def snap_points_to_network(
             metric_point.transform(to_metric)
         center = metric_point.asPoint()
 
-        def nearby(distance_m):
+        # Called within this iteration only; the defaults just make that explicit.
+        def nearby(distance_m, center=center, metres_per_unit=metres_per_unit,
+                   from_metric=from_metric):
             radius = distance_m / metres_per_unit
             bounds = QgsRectangle(center.x() - radius, center.y() - radius,
                                   center.x() + radius, center.y() + radius)
@@ -167,7 +169,8 @@ def snap_points_to_network(
                 bounds = from_metric.transformBoundingBox(bounds)
             return network_index.intersects(bounds)
 
-        def measured(feature_id):
+        def measured(feature_id, to_metric=to_metric, metric_point=metric_point,
+                     metres_per_unit=metres_per_unit):
             feature = network[feature_id]
             geometry = QgsGeometry(feature.geometry())
             if to_metric is not None:

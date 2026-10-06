@@ -1,6 +1,7 @@
 """Intersect elevation bands with land-cover classes and write a report."""
 from __future__ import annotations
 
+import contextlib
 import csv
 import math
 import os
@@ -43,10 +44,8 @@ def _class_header(value: int | float, names: dict[int, str]) -> str:
     value_suffix = clean_output_name(suffix, "unknown")
     name = names.get(value)
     if name is None:
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             name = names.get(int(float(value)))
-        except (TypeError, ValueError):
-            pass
     if name:
         return f"land_cover_class_{value_suffix}_{clean_output_name(name, 'unknown')}_area"
     return f"land_cover_class_{value_suffix}_area"
@@ -265,7 +264,7 @@ def create_band_land_cover_details(
                 "area_km2": f"{area_km2:.6f}",
             }
             land_cover_band = mask & land_cover_valid
-            for value, header in zip(values, headers):
+            for value, header in zip(values, headers, strict=True):
                 class_cells = np.count_nonzero(
                     land_cover_band & np.isclose(land_cover_array, float(value))
                 )

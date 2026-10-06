@@ -113,14 +113,14 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     from ...handlers.state import nml_settings
 
     nml_settings.sync_domain_settings(request.project_folder)
-    processing.save_domains(request.project_folder, [dict(
-        domain_id=1,
-        outlet_id="",
-        name="master",
-        mask=str(watershed),
-        directory=morph_folder(request.project_folder),
-        dem_path=domain_dem_path(request.project_folder, "master"),
-    )])
+    processing.save_domains(request.project_folder, [{
+        "domain_id": 1,
+        "outlet_id": "",
+        "name": "master",
+        "mask": str(watershed),
+        "directory": morph_folder(request.project_folder),
+        "dem_path": domain_dem_path(request.project_folder, "master"),
+    }])
     return Path(masked), Path(morph_mask)
 
 
@@ -234,13 +234,13 @@ def publish(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         _model_sources(Path(temp_morphology_folder(request.project_folder))))
     units = max(1, classes + staged_lai.is_file() + grids)
     before_grids = 100 * (classes + staged_lai.is_file()) / units
-    outputs = list(
+    outputs = [
         Path(path)
         for path in publish_model_inputs(
             request.project_folder, request.headers["L0"], log=log,
             task=TaskShare(task, 0, 100 * classes / units),
         )
-    )
+    ]
     if staged_lai.is_file():
         from ...handlers.state.nml_settings import load_settings
 

@@ -1,6 +1,7 @@
 """Persistent project terminal dialog for mhm_qgis."""
 from __future__ import annotations
 
+import contextlib
 import os
 import shlex
 import signal
@@ -117,10 +118,8 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         if not self.is_running():
             return
         if os.name == "posix":
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.killpg(int(self._process.processId()), signal.SIGTERM)
-            except ProcessLookupError:
-                pass
         else:
             self._process.kill()
         QtCore.QTimer.singleShot(2000, self._kill_if_running)
@@ -129,10 +128,8 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         if not self.is_running():
             return
         if os.name == "posix":
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.killpg(int(self._process.processId()), signal.SIGKILL)
-            except ProcessLookupError:
-                pass
         else:
             self._process.kill()
 

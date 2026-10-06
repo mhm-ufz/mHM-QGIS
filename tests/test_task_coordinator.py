@@ -95,7 +95,8 @@ def test_jobs_run_off_the_qgstask_thread_and_still_report_failures():
     # A raw QgsTask thread is not created by Python, so it reports as
     # `_DummyThread`; a real one means the job ran off the QgsTask thread.
     assert kinds == ["Thread"]
-    assert errors and "boom" in errors[0]
+    assert errors
+    assert "boom" in errors[0]
 
 
 def _until_cancelled(task):

@@ -78,7 +78,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
     }
     rows = geology_rows(dialog)
     if rows:
-        parameters = [dict(value=100.0, min=1.0, max=1000.0, optimize=True)
+        parameters = [{"value": 100.0, "min": 1.0, "max": 1000.0, "optimize": True}
                       for _ in range(geo_count)]
         for row in rows:
             if row["value"] is not None:

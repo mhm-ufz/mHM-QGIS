@@ -69,7 +69,7 @@ def ensure_qgis_runtime_dependencies(parent=None, prompt=True) -> BootstrapResul
     even when they appear in the requirements file.
     """
 
-    global _LAST_RESULT
+    global _LAST_RESULT  # noqa: PLW0603 -- one cached result per QGIS session
 
     configure_qtpy_api()
     add_user_site()
@@ -138,7 +138,7 @@ def dependency_from_requirement_line(line: str) -> Dependency | None:
     if not requirement or requirement.startswith(("-", ".")):
         return None
 
-    package_name = re.split(r"\s*(?:\[|==|!=|~=|>=|<=|>|<|;)", requirement, 1)[0]
+    package_name = re.split(r"\s*(?:\[|==|!=|~=|>=|<=|>|<|;)", requirement, maxsplit=1)[0]
     package_key = package_name.strip().lower().replace("_", "-")
     if not package_key or package_key in SKIPPED_QGIS_PACKAGES:
         return None
@@ -350,7 +350,7 @@ def show_info(parent, title: str, message: str) -> None:
 
         QMessageBox.information(parent, title, message)
     except Exception:
-        print(f"{title}: {message}")
+        print(f"{title}: {message}")  # noqa: T201 -- Qt unavailable
 
 
 def show_warning(parent, title: str, message: str) -> None:
@@ -361,7 +361,7 @@ def show_warning(parent, title: str, message: str) -> None:
 
         QMessageBox.warning(parent, title, message)
     except Exception:
-        print(f"{title}: {message}")
+        print(f"{title}: {message}")  # noqa: T201 -- Qt unavailable
 
 
 def show_failure(parent, result: BootstrapResult) -> None:

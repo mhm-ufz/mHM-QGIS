@@ -123,7 +123,8 @@ def test_execute_all_stage_order_uses_saved_hydrology_inputs():
         "dem_derivatives", "gauge_position", "morph_mask", "categorical",
         "categorical", "categorical", "lai", "publication",
     ]
-    assert "hydrology" not in order and "snap_points" not in order
+    assert "hydrology" not in order
+    assert "snap_points" not in order
     # The three categorical stages are lc, soil, geology -- in that order.
     assert [s.args[0] for s in EXECUTE_ALL_STAGES if s.command == "categorical"] == [
         "lc", "soil", "geology",
@@ -379,14 +380,16 @@ def test_prerequisites_run_dem_first_then_their_own_stage(tmp_path):
     assert [key for key, _ in submitted] == [
         "domain-delineator-preflight-dem", "domain-delineator-preflight",
     ]
-    assert prepared and prepared[0]["prepared"]
+    assert prepared
+    assert prepared[0]["prepared"]
 
     submitted.clear()
     published = []
     bridge = dialog.morphology_tasks
     bridge.start_categorical = lambda kind, **options: published.append((kind, options)) or True
     assert bridge.start_ready_input("soil", failed=None)
-    assert [key for key, _ in submitted] == ["ready-soil-dem"] and not published
+    assert [key for key, _ in submitted] == ["ready-soil-dem"]
+    assert not published
     complete({"filled_dem": str(tmp_path / "filled.nc"), "dem_derivatives": str(tmp_path / "d.nc")})
     assert published == [("soil", {"key": "ready-soil", "publish": True, "failed": None})]
     dialog.close()

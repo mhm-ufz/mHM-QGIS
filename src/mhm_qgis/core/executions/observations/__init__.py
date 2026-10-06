@@ -32,7 +32,7 @@ def prepare(run: ObservationRun, *, log=None, cancelled=None) -> bool:
     result = process_meteo_inputs(
         run.inputs, output_root, run.target_grid,
         flat_layout=True, inspections=inspections, log=log, cancelled=cancelled)
-    for variable, path in result.outputs.items():
+    for path in result.outputs.values():
         registry.register(
             run.project_folder, path, name=Path(path).name,
             category="observation")

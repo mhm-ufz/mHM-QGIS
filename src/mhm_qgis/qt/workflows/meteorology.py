@@ -45,7 +45,7 @@ def start(dialog):
 
         return coordinator.submit(
             TASK_KEY, "Meteorology Preparation", prepare,
-            on_success=lambda ok: finished(ok),
+            on_success=finished,
             on_error=lambda message: finished(False, message),
         )
 

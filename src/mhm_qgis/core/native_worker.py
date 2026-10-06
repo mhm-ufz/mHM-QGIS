@@ -1,6 +1,7 @@
 """Qt/QGIS-free subprocess entry point for native raster libraries."""
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
 import traceback
@@ -21,10 +22,8 @@ from .morphology.layers.advanced_inputs import (
 
 def _prefer_worker_termination():
     """Let Linux terminate this disposable worker before the QGIS process."""
-    try:
+    with contextlib.suppress(OSError):
         Path("/proc/self/oom_score_adj").write_text("500", encoding="ascii")
-    except OSError:
-        pass
 
 
 def _land_use(value):

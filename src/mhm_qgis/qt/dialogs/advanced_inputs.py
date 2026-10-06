@@ -1,6 +1,7 @@
 """Controllers for the historical land-use and multi-horizon soil forms."""
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 from dataclasses import dataclass
@@ -58,10 +59,8 @@ class _DynamicInputDialogMixin:
     """Shared path-combo and dynamic-row helpers."""
 
     def _replace_accept_handler(self, button_box) -> None:
-        try:
+        with contextlib.suppress(TypeError):
             button_box.accepted.disconnect()
-        except TypeError:
-            pass
         button_box.accepted.connect(self._accept)
 
     def _new_adapter(self, combo, kind: str) -> InputComboAdapter:
