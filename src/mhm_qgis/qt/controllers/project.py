@@ -18,7 +18,7 @@ from .workflow_state import set_status, switch_busy
 def work_type_changed(dialog):
     single = dialog.comboBox_mhmWorkType.currentIndex() == 0
     dialog.stackedWidget_configuration.setCurrentWidget(
-        dialog.page_singleDomain if single else dialog.page_2
+        dialog.page_singleDomain if single else dialog.page_multiDomain
     )
     for page in (
         dialog.tab_geometry,

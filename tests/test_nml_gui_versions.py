@@ -173,6 +173,7 @@ def test_version_projects_have_model_filenames_and_dimensions(tmp_path: Path) ->
         "parameter": "mhm_parameter.nml",
     }
     assert {profile.name: profile.default_file for profile in v6.profiles} == {
+        "meta": "combine.nml",
         "main": "mhm.nml",
         "output": "outputs.nml",
         "parameter": "parameters.nml",

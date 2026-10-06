@@ -107,7 +107,12 @@ A module belongs to exactly one layer.
   Forms are the runtime source of truth: no `pyui/`, `pyuic5` or `pyrcc5` step.
   Icons use paths relative to the form; promoted-widget headers use `qgis.gui`.
   Keep XML enum spellings compatible with Qt5 Designer (e.g. `Qt::Vertical`);
-  the runtime loader generates the binding-specific Python. `resources.qrc` is
+  the runtime loader generates the binding-specific Python. Qt6 Designer saves
+  scoped spellings (`Qt::Orientation::Vertical`, `Qt::AlignmentFlag::AlignLeft`,
+  `QDialogButtonBox::StandardButton::Ok`) that PyQt5's uic cannot compile; after a
+  Qt6 Designer save run
+  `sed -i -E 's/\b(Qt|Q[A-Za-z]+)::[A-Za-z]+::([A-Za-z0-9_]+)/\1::\2/g' <form>.ui`.
+  `test_designer_forms_and_icons[PyQt5]` fails on any that remain. `resources.qrc` is
   retained only for Designer asset editing, never imported at runtime.
 - `qt/bindings/`: connects a signal to a slot and nothing else.
 - `qt/controllers/`: what a widget shows and whether it is enabled -- reads and writes
@@ -851,6 +856,9 @@ Four JSON files live under each domain's `.temp/` directory.
 - Keep the `mhm-tools` dependency floor synchronized between `pyproject.toml` and
   `requirements.txt` when a handler starts using a newer public API.
 - Include plugin assets, schemas, templates and project-template files in the PyPI build.
+  Every `*.yml` under `src/mhm_qgis/` ships (package-data `**/*.yml`, `MANIFEST.in`
+  `recursive-include`; the plugin ZIP allows `.yml`), so a new YAML schema needs no
+  packaging change.
 - If adding data files under `src/mhm_qgis/`, update `MANIFEST.in` and package-data
   patterns if the extension is new.
 - Do not add `qgis` as a PyPI dependency. QGIS is provided by QGIS itself.
@@ -892,14 +900,22 @@ Four JSON files live under each domain's `.temp/` directory.
   metadata), generate it before and after the change from identical inputs and `cmp` the
   bytes.
 - For real-QGIS checks, prepend `/usr/share/qgis/python` and
-  `/usr/share/qgis/python/plugins` to `sys.path`, call `QgsApplication.setPrefixPath` and
+  `/usr/share/qgis/python/plugins` to `sys.path` **after `src`**:
+  `PYTHONPATH=src:/usr/share/qgis/python:/usr/share/qgis/python/plugins`. The plugins
+  folder holds the `mhm_qgis` symlink to the main checkout, so with it first a worktree
+  or scratch copy silently tests the main checkout's code. Then call `QgsApplication.setPrefixPath` and
   `initQgis()`. Set `locale/userLocale` in `QSettings` **after** `initQgis()` or
   `classFactory` fails on a headless machine. Useful assertions: the main dialog
   constructs with 2 input adapters (DEM, pour points) and 6 tabs.
-- A shell Python may not have `PyYAML`; QGIS Python may. If schema loading
-  fails only because `yaml` is missing in shell Python, note it rather than treating it as
-  a plugin failure.
+- `PyYAML` is a declared dependency (`pyproject.toml`, both `requirements.txt`), so
+  `dependency_bootstrap` checks it before the dialog opens; the plugin's own schemas
+  may use `yaml.safe_load`.
 - Do not claim full runtime verification unless it was actually tested inside QGIS.
+- A test that opens a pyqtgraph window must `deleteLater()` its dialog and flush
+  `DeferredDelete` before returning, while it still holds the plot. Left to the cycle
+  collector, pyqtgraph's C++ items can outlive their Python wrappers and segfault the
+  session teardown in `conftest.pytest_sessionfinish` (exit 139 after every test passed;
+  `test_discharge_graph.py` did this in about one run in three).
 
 ## Development Workflow
 

@@ -15,7 +15,8 @@ def test_stop_ends_active_shell_and_command(tmp_path):
     loop = QtCore.QEventLoop()
     terminal._process.finished.connect(loop.quit)
     terminal.stop()
-    QtCore.QTimer.singleShot(3000, loop.quit)
+    # Ceiling only: stop() escalates to SIGKILL after 2 s, and `finished` ends the wait.
+    QtCore.QTimer.singleShot(10000, loop.quit)
     loop.exec()
     assert not terminal.is_running()
     assert not terminal.command_running()

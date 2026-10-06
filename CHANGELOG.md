@@ -21,3 +21,6 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
 - A standalone map window with a layer tree (visibility, ordering), cursor and time
   read-outs, and file drops. In QGIS Desktop, Map Canvas focuses Desktop's canvas.
 - Supports QGIS 3.44+ (Qt5) and QGIS 4 (Qt6).
+
+### Changed
+- PyYAML is a declared dependency; the plugin reads its own YAML schemas.
