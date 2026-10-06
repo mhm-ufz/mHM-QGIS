@@ -152,6 +152,13 @@ A module belongs to exactly one layer.
 - `qt/threads/`: `task_coordinator.py`, the one background mechanism (real QgsTask
   scheduling). The native raster subprocess entry point belongs to `core/`, not this
   Qt package.
+- `qt/tooltip/`: the Help tour. `Closure.helpRequested` starts it on the visible page:
+  the current `tabWidget_steps` tab plus any visible stacked page inside it, with steps
+  from `tooltips.yml` keyed by object name, in list order. A step whose widget is hidden
+  or missing is skipped. The tour is a child overlay with its own outline frame; an
+  event filter on the dialog keeps it placed and makes Esc end the tour rather than close
+  the dialog. **Renaming or removing a widget named in `tooltips.yml` means updating the
+  schema**; `test_tooltip.py` fails otherwise. New form widgets get a step there too.
 - `qt/objects/`: a long-lived `QObject` attached to a widget rather than defined by one
   -- `viewport_raster_range.py` watches a map canvas and keeps a renderer in step. Not
   keyed to a single form, so it belongs in none of the three layers above.

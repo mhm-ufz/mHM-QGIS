@@ -21,6 +21,8 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
 - A standalone map window with a layer tree (visibility, ordering), cursor and time
   read-outs, and file drops. In QGIS Desktop, Map Canvas focuses Desktop's canvas.
 - Supports QGIS 3.44+ (Qt5) and QGIS 4 (Qt6).
+- A guided tour from the Help button: it steps through the visible page's main inputs
+  with a short explanation each.
 - Net radiation (`netrad`) as a meteorology input, so PET Priestley-Taylor and
   Penman-Monteith (process cases 2 and 3) can be prepared.
 
