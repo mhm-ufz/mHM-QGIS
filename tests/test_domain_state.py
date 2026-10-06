@@ -6,8 +6,6 @@ from pathlib import Path
 
 import pytest
 
-
-
 # isort: off
 from mhm_qgis.core.handlers.state.domain_state import (
     DEM_DOMAIN_ID,

@@ -1,6 +1,7 @@
 """Visible-extent raster statistics and gray-renderer updates."""
 from __future__ import annotations
 
+import contextlib
 import math
 
 from qgis.PyQt import QtCore
@@ -10,8 +11,8 @@ def raster_window_range(path, bounds, bounds_crs="", max_samples=262_144):
     """Return finite min/max values for one clipped, capped raster window."""
     import numpy as np
     import rasterio
-    from rasterio.windows import from_bounds
     from rasterio.warp import transform_bounds
+    from rasterio.windows import from_bounds
 
     with rasterio.open(path) as source:
         left, bottom, right, top = map(float, bounds)
@@ -86,7 +87,8 @@ class ViewportRasterRangeController(QtCore.QObject):
         )
         self._pending = request
         generation, bounds, authid = request
-        runner = lambda _task: raster_window_range(self.path, bounds, authid)
+        def runner(_task):
+            return raster_window_range(self.path, bounds, authid)
         started = self.coordinator.submit(
             "flow-accumulation-visible-range",
             "Flow accumulation visible range",
@@ -124,10 +126,8 @@ class ViewportRasterRangeController(QtCore.QObject):
     def close(self):
         self._closed = True
         self._timer.stop()
-        try:
+        with contextlib.suppress(TypeError, RuntimeError):
             self.canvas.extentsChanged.disconnect(self.schedule)
-        except (TypeError, RuntimeError):
-            pass
 
 
 __all__ = ["ViewportRasterRangeController", "raster_window_range"]

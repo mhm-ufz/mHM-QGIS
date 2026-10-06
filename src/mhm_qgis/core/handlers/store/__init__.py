@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Where a project's files are, and whether they are there yet.
 
 The bridge between the Qt layer asking "can I show this?" and the processing

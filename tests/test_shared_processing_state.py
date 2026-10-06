@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 import pytest
 
 from mhm_qgis.core.handlers.file import json as jsonio
-from mhm_qgis.core.handlers.state import cache
-from mhm_qgis.core.handlers.state import processing
+from mhm_qgis.core.handlers.state import cache, processing
 from mhm_qgis.core.handlers.state.meteo_outputs import MeteorologyOutputState
 
 
@@ -69,7 +67,8 @@ def test_unrelated_sections_written_by_anyone_else_survive(project):
     state = jsonio.read_mapping(path)
     assert state["workflows"] == {"execute_all_morphology": "done"}
     assert state["grid"] == {"ncols": 10}
-    assert "stages" in state and "outputs" in state
+    assert "stages" in state
+    assert "outputs" in state
 
 
 def test_parallel_updates_to_one_section_do_not_lose_entries(project):

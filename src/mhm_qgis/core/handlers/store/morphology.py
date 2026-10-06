@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from datetime import datetime
-from ..lookup.manifests import period_datetime
+from pathlib import Path
 
-from ..state.nml_settings import load_settings
 from ..file.netcdf.raster import variables
+from ..lookup.manifests import period_datetime
+from ..state.nml_settings import load_settings
+from .layout import MERGED_MASK_NAME, lai_folder, morph_folder
 from .paths import temp_morphology_folder, workspace_folder
-from .layout import MERGED_MASK_NAME, morph_folder, lai_folder
 from .registry import first_existing, variants
 
 
@@ -29,7 +29,7 @@ def land_cover_periods(project_folder: str | Path) -> list[dict]:
     return [scene for scene in scenes if isinstance(scene, dict)]
 
 
-def resolve_display_output(
+def resolve_display_output(  # noqa: PLR0911
     project_folder: str | Path,
     key: str,
     *,

@@ -1,0 +1,107 @@
+image: python:3.12
+
+stages:
+  - check
+  - test
+  - build
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  QT_QPA_PLATFORM: offscreen
+  # --- Unreleased dependencies: delete these and `.unreleased` once mhm-tools 0.3
+  # and nml-tools 0.6 are on PyPI.
+  MHM_TOOLS_GIT: "mhm-tools@git+https://git.ufz.de/mhm/mhm-tools.git@3b77269"
+  NML_TOOLS_GIT: "nml-tools[gui]@git+https://github.com/SanjeevBashyal/nml-tools.git@f8d46cb"
+  # ---
+
+cache:
+  key: pip
+  paths:
+    - .cache/pip
+
+# A git checkout carries no matching version tag, so each build gets the version
+# pymhm pins. hatch-vcs ignores the per-package SETUPTOOLS_SCM_PRETEND_VERSION_FOR_*
+# variables, hence one pip call per package.
+.unreleased: &unreleased
+  - SETUPTOOLS_SCM_PRETEND_VERSION=0.3.0 pip install "$MHM_TOOLS_GIT"
+  - SETUPTOOLS_SCM_PRETEND_VERSION=0.6.0 pip install "$NML_TOOLS_GIT"
+
+.qt_libs: &qt_libs
+  - apt-get update -qq
+  - apt-get install -y -qq --no-install-recommends libgl1 libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+
+isort:
+  stage: check
+  script:
+    - pip install "isort[colors]>=5.13"
+    - isort --check --diff --color .
+
+ruff:
+  stage: check
+  script:
+    - pip install "ruff>=0.16,<0.17"
+    - ruff check src tests tools
+
+test:
+  stage: test
+  when: always
+  image: python:$PY
+  parallel:
+    matrix:
+      - PY: ["3.11", "3.13"]
+  before_script:
+    - *qt_libs
+    - *unreleased
+  script:
+    - pip install -e .[test]
+    - python -m pytest --cov mhm_qgis --cov-report term-missing --cov-report xml:cov.xml -o addopts="" -q tests/
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: cov.xml
+
+build:
+  stage: build
+  when: always
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - pip install build twine
+    - python -m build
+    - twine check dist/*
+    - python tools/build_qgis_plugin.py
+    # wheelhouse for test-qgis; drop with the unreleased block
+    - SETUPTOOLS_SCM_PRETEND_VERSION=0.3.0 pip wheel --no-deps -w dist "$MHM_TOOLS_GIT"
+    - SETUPTOOLS_SCM_PRETEND_VERSION=0.6.0 pip wheel --no-deps -w dist "$NML_TOOLS_GIT"
+  artifacts:
+    paths:
+      - dist
+
+# The full QGIS suite inside the private QGIS 3.44 runtime. It downloads a conda
+# QGIS, so it runs on a schedule, on tags or by hand; the local QGIS suite is the
+# per-stage gate.
+test-qgis:
+  stage: build
+  needs: [build]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_TAG
+    - when: manual
+      allow_failure: true
+  variables:
+    XDG_DATA_HOME: "$CI_PROJECT_DIR/.runtime"  # runtime_root() honours it on Linux
+  before_script:
+    - *qt_libs
+  script:
+    - pip install dist/*.whl
+    - mhm-qgis-runtime install --yes --wheelhouse dist
+    - python tools/run_in_runtime.py python -m pip install pytest
+    - python tools/run_in_runtime.py python -m pytest tests -q -o addopts="" -p no:cacheprovider
+  cache:
+    key:
+      files:
+        - src/mhm_qgis/runtime/locks/linux-64.lock
+    paths:
+      - .runtime/mhm-qgis/mamba/pkgs

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 import os
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,24 +15,24 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # isort: off
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.core import (  # noqa: E402
+from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsProject,
     QgsRasterLayer,
     QgsVectorLayer,
 )
-from qgis.PyQt import QtWidgets  # noqa: E402
+from qgis.PyQt import QtWidgets
 
-from mhm_qgis.qt.dialogs.input_selection import (  # noqa: E402
+from mhm_qgis.qt.dialogs.input_selection import (
     EXCLUDED_PROJECT_FOLDERS,
     InputComboAdapter,
     loaded_qgis_items,
     scan_project_inputs,
 )
-from mhm_qgis.qt.dialogs.lai_netcdf_input import LaiNetcdfInputDialog  # noqa: E402
-from mhm_qgis.qt.dialogs.mhm_ready_morph_input import MhmReadyInputDialog  # noqa: E402
-from mhm_qgis.qt.dialogs.single_layer_input import SingleLayerInputDialog  # noqa: E402
-from mhm_qgis.qt.dialogs import file_picker, input_selection  # noqa: E402
+from mhm_qgis.qt.dialogs.lai_netcdf_input import LaiNetcdfInputDialog
+from mhm_qgis.qt.dialogs.mhm_ready_morph_input import MhmReadyInputDialog
+from mhm_qgis.qt.dialogs.single_layer_input import SingleLayerInputDialog
+from mhm_qgis.qt.dialogs import file_picker
 # isort: on
 
 _APPLICATION = None

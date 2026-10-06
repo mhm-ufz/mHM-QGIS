@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """CRS questions that are answered by opening a layer."""
 from __future__ import annotations
 

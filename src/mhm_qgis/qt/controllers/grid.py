@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """The common L0/L1/L11/L2 grid on the main form.
 
 The DEM fixes L0, the precipitation reference folder and the multiplier fix L2,
@@ -13,6 +12,7 @@ import os
 from qgis.PyQt.QtCore import QDateTime, QSignalBlocker
 from qgis.PyQt.QtWidgets import QMessageBox
 
+from ...core.executions.morphology import setup as morphology_setup
 from ...core.grid import (
     Extent,
     Grid,
@@ -31,7 +31,6 @@ from ...core.grid import (
     target_grid_from_header,
     validate_grid_headers,
 )
-from ...core.executions.morphology import setup as morphology_setup
 from ...core.handlers.state import processing
 from ...core.handlers.state import settings as project_settings
 from ...core.handlers.store.paths import data_folder, portable_path
@@ -43,7 +42,6 @@ from .version import selected as selected_version
 from .workflow_state import invalidate as invalidate_workflows
 from .workflow_state import invalidate_meteo
 from .workflow_state import set_status as set_workflow_status
-
 
 # --- Precipitation reference folder ---------------------------------------
 
@@ -162,8 +160,8 @@ def invalidate_grid(dialog):
 
 
 def grid_fingerprint(dialog):
-    from ...core.handlers.state.cache import fingerprint
     from ...core.handlers.file.netcdf.raster import file_path
+    from ...core.handlers.state.cache import fingerprint
     from ...core.meteorology.forcing import inspection_fingerprint
     layer = dialog.input_combo("dem").currentLayer()
     return fingerprint([file_path(layer.source())] if layer else [], {
@@ -573,7 +571,7 @@ def update_extent_labels(dialog, metadata=None):
         or current_grid_unit(dialog)
     )
     precision = display_precision_for_unit(unit)
-    for label, value in zip(labels, header_bounds(header)):
+    for label, value in zip(labels, header_bounds(header), strict=True):
         label.setText(format_resolution(value, unit, precision=precision))
 
 

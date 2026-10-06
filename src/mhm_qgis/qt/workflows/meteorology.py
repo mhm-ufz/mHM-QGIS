@@ -7,7 +7,6 @@ from ...core.handlers.state.meteo_outputs import MeteorologyOutputState
 from ..controllers import forcing, grid, time
 from . import lifecycle
 
-
 WORKFLOW_KEY = "execute_all_meteo"
 TASK_KEY = f"workflow-{WORKFLOW_KEY}"
 
@@ -46,7 +45,7 @@ def start(dialog):
 
         return coordinator.submit(
             TASK_KEY, "Meteorology Preparation", prepare,
-            on_success=lambda ok: finished(ok),
+            on_success=finished,
             on_error=lambda message: finished(False, message),
         )
 

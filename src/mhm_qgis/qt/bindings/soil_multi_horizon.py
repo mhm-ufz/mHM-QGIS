@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget wiring for `soil_multi_horizon_input.ui`."""
 from __future__ import annotations
 

@@ -4,23 +4,27 @@ from pathlib import Path
 import numpy as np
 import pytest
 from netCDF4 import Dataset
+
+pytest.importorskip("osgeo", reason="GDAL Python bindings come with QGIS or the system")
 from osgeo import gdal, osr
 
-from mhm_qgis.externals import mhm_tools_handler
 from mhm_qgis.core.executions.morphology import commands, setup
-from mhm_qgis.core.grid import header_from_geotransform
 from mhm_qgis.core.handlers.file.json import write as write_json
 from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters, source, variables
 from mhm_qgis.core.handlers.raster.tasks import dem_derivative_files
 from mhm_qgis.core.handlers.state import domain_state, processing
 from mhm_qgis.core.handlers.store.layout import (
-    MERGED_MASK_NAME, domain_dem_path, ensure_project_structure, input_state_path, morph_folder,
+    domain_dem_path,
+    ensure_project_structure,
+    input_state_path,
+    morph_folder,
 )
 from mhm_qgis.core.handlers.store.paths import (
-    temp_morphology_folder,
     data_folder,
     morph_staging_folder,
+    temp_morphology_folder,
 )
+from mhm_qgis.externals import mhm_tools_handler
 
 
 def _raster(path, values=None, *, epsg=32632, cell=100, origin=(0, 1000)):
@@ -39,7 +43,7 @@ def _raster(path, values=None, *, epsg=32632, cell=100, origin=(0, 1000)):
     return path
 
 
-@pytest.mark.parametrize("epsg,cell,origin", [(32632, 100, (0, 1000)), (4326, 1 / 1200, (80, 30))])
+@pytest.mark.parametrize(("epsg", "cell", "origin"), [(32632, 100, (0, 1000)), (4326, 1 / 1200, (80, 30))])
 def test_single_variable_filled_dem_is_readable_without_selection(tmp_path, epsg, cell, origin):
     import rasterio
 
@@ -126,6 +130,7 @@ def test_native_command_produces_netcdf_in_a_subprocess(tmp_path):
 
 def test_hydrology_reuses_saved_direction_without_recomputing_dem(tmp_path, monkeypatch):
     import pyflwdir
+
     from mhm_qgis.core.handlers.raster.tasks import _flow_context
 
     original = _raster(tmp_path / "source.tif")
@@ -140,9 +145,9 @@ def test_hydrology_reuses_saved_direction_without_recomputing_dem(tmp_path, monk
 
 
 
-@pytest.mark.parametrize("version,category_format", [("5.13", "nc"), ("6", "nc")])
+@pytest.mark.parametrize(("version", "category_format"), [("5.13", "nc"), ("6", "nc")])
 @pytest.mark.parametrize("catchments", [False, True])
-def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, category_format, catchments):
+def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, category_format, catchments):  # noqa: PLR0915
     from mhm_qgis.core.handlers.state import nml_settings
 
     ensure_project_structure(tmp_path, version)
@@ -167,11 +172,11 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
             cells[2:10, columns[0]:columns[1]] = index
             keep |= cells != 0
             path = _raster(folder / f"catchment{index}.tif", cells, origin=(-100, 1100))
-            picked = dict(x=50, y=50, crs="EPSG:32632")
-            state["outlets"][str(index)] = dict(is_domain=True, picked=picked, confidence=2,
-                delineation=dict(raster_path=str(path), mask_value=index, cell_center=[50, 50],
-                    catchment_area_m2=160000, picked=picked,
-                    fingerprint=domain_state.delineation_fingerprint(result["filled_dem"], 50, 50)))
+            picked = {"x": 50, "y": 50, "crs": "EPSG:32632"}
+            state["outlets"][str(index)] = {"is_domain": True, "picked": picked, "confidence": 2,
+                "delineation": {"raster_path": str(path), "mask_value": index, "cell_center": [50, 50],
+                    "catchment_area_m2": 160000, "picked": picked,
+                    "fingerprint": domain_state.delineation_fingerprint(result["filled_dem"], 50, 50)}}
         domain_state.save_state(tmp_path, state)
 
     watershed = _raster(
@@ -204,7 +209,7 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
         section = {"lc": "land_cover", "soil_class": "soil", "geology_class": "geology"}[name]
         nml_settings.update_section(tmp_path, section, {
             "output_path": nml_settings.relative_workspace_path(tmp_path, path)})
-    request = setup.SetupRequest(str(tmp_path), {level: header for level in ("L0", "L1", "L11", "L2")},
+    request = setup.SetupRequest(str(tmp_path), dict.fromkeys(("L0", "L1", "L11", "L2"), header),
                                  crs="EPSG:32632")
     latlon = Path(data_folder(tmp_path)) / "latlon.nc"
     latlon.parent.mkdir(parents=True, exist_ok=True)
@@ -244,7 +249,8 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
     expected_suffix = "soil_class.asc" if version == "5.13" else "soil_class.nc"
     assert nml_settings.load_settings(tmp_path)["soil"]["output_path"].endswith(expected_suffix)
     domains = nml_settings.load_settings(tmp_path)["domains"]
-    assert len(domains) == 1 and domains[0]["name"] == "master"
+    assert len(domains) == 1
+    assert domains[0]["name"] == "master"
     assert len(processing.section(tmp_path, "domains", [])) == 1
     assert set(processing.section(tmp_path, "workflows", {})).isdisjoint(
         {"execute_all_link_domains", "execute_all_crop", "execute_all_domain_dems"})

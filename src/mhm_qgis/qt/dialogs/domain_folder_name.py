@@ -1,7 +1,8 @@
 """Collect a new setup directory name using the Designer form."""
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox
-from ...core.handlers.store.paths import domain_folder
+
 from ...core.handlers.store.layout import domain_folders
+from ...core.handlers.store.paths import domain_folder
 from ..ui import load_form
 
 

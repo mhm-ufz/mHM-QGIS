@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canvas half of `groupBox_displayMorphLayers`.
 
 Which file to show is decided by the QGIS-free resolver in

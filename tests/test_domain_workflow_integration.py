@@ -5,19 +5,17 @@ from pathlib import Path
 
 import pytest
 
-
-
 # isort: off
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.core import QgsCoordinateReferenceSystem  # noqa: E402
+from qgis.core import QgsCoordinateReferenceSystem
 
-from mhm_qgis.core.executions.morphology.reset import clear_geometry  # noqa: E402
-from mhm_qgis.core.handlers.state.domain_state import load_state, save_state  # noqa: E402
-from mhm_qgis.core.handlers.store.layout import temp_morphology_folder  # noqa: E402
-from mhm_qgis.qgis_bridge.layers import gauges  # noqa: E402
-from mhm_qgis.qt.controllers.main import update_gauged_outlet_count  # noqa: E402
-from mhm_qgis.vSpecific.common import domain_count  # noqa: E402
+from mhm_qgis.core.executions.morphology.reset import clear_geometry
+from mhm_qgis.core.handlers.state.domain_state import load_state, save_state
+from mhm_qgis.core.handlers.store.layout import temp_morphology_folder
+from mhm_qgis.qgis_bridge.layers import gauges
+from mhm_qgis.qt.controllers.main import update_gauged_outlet_count
+from mhm_qgis.vSpecific.common import domain_count
 # isort: on
 
 

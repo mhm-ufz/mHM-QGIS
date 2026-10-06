@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Fingerprinted result cache kept in the project processing state.
 
 Both Execute All and Morphology Setup repeat expensive work whose result only
@@ -14,9 +13,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+
 from ...utils.time import utc_timestamp
 from . import processing
-
 
 STATE_FILENAME = processing.STATE_FILENAME
 CACHE_VERSION = 1
@@ -44,14 +43,14 @@ def fingerprint(paths=(), config=None) -> str:
     input invalidates the cache instead of silently matching.
     """
     digest = hashlib.sha256()
-    digest.update(f"v{CACHE_VERSION}\n".encode("utf-8"))
+    digest.update(f"v{CACHE_VERSION}\n".encode())
     for value in sorted(str(path) for path in paths if str(path)):
         try:
             status = os.stat(value)
             digest.update(
-                f"{value}|{status.st_size}|{status.st_mtime_ns}\n".encode("utf-8"))
+                f"{value}|{status.st_size}|{status.st_mtime_ns}\n".encode())
         except OSError:
-            digest.update(f"{value}|missing\n".encode("utf-8"))
+            digest.update(f"{value}|missing\n".encode())
     if config:
         digest.update(
             json.dumps(config, sort_keys=True, default=str).encode("utf-8"))

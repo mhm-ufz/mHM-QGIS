@@ -4,7 +4,6 @@ from qgis.PyQt.QtCore import QDateTime, QSignalBlocker
 
 from .version import selected as selected_version
 
-
 TIME_WIDGETS = {
     "sim_start": "dateTimeEdit_simulationStartTimeInput",
     "eval_start": "dateTimeEdit_evaluationStartTimeInput",

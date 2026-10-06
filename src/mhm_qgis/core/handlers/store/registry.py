@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """What a project has actually produced, and where to find it.
 
 The question "is this output ready?" was answered four different ways: a bare
@@ -49,10 +48,8 @@ def variants(path) -> tuple[Path, ...]:
     path = Path(path)
     if any(path.stem.endswith(suffix) for suffix in DISPLAY_SUFFIXES):
         return (path,)
-    return tuple(
-        path.with_name(f"{path.stem}{suffix}{path.suffix}")
-        for suffix in DISPLAY_SUFFIXES
-    ) + (path,)
+    variants = (path.with_name(f"{path.stem}{suffix}{path.suffix}") for suffix in DISPLAY_SUFFIXES)
+    return (*variants, path)
 
 
 def preferred(path):

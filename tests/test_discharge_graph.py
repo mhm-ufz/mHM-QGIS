@@ -1,14 +1,14 @@
 """Saved gauges drive the station list and observation plot, without QGIS."""
 import math
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
-from mhm_qgis.core.post.graph import discharge_series, stations
 from mhm_qgis.core.handlers.state.domain_state import save_state
 from mhm_qgis.core.handlers.store.layout import streamflow_observation_folder
-from pathlib import Path
+from mhm_qgis.core.post.graph import discharge_series, stations
 
 
 def _observation(path):
@@ -31,9 +31,13 @@ def test_saved_gauges_and_missing_observations(tmp_path):
     }})
     assert stations(tmp_path) == [{"id": "00350", "path": str(path)}]
     x, y = discharge_series(path)
-    assert x[0] == datetime(2020, 1, 1, tzinfo=timezone.utc).timestamp()
-    assert len(x) == 5 and y[0] == 0 and y[2] == 4.5 and y[4] == 7
-    assert math.isnan(y[1]) and math.isnan(y[3])
+    assert x[0] == datetime(2020, 1, 1, tzinfo=UTC).timestamp()
+    assert len(x) == 5
+    assert y[0] == 0
+    assert y[2] == 4.5
+    assert y[4] == 7
+    assert math.isnan(y[1])
+    assert math.isnan(y[3])
     with pytest.raises(FileNotFoundError):
         discharge_series(folder / "missing.txt")
     path.write_text("not observations\n")
@@ -46,9 +50,10 @@ def test_discharge_button_opens_reusable_plot_and_project_change_clears_stations
     pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
     pytest.importorskip("pyqtgraph")
     from qgis.PyQt.QtWidgets import QApplication
+
     from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
-    app = QApplication.instance() or QApplication([])
+    _app = QApplication.instance() or QApplication([])  # keep a created application alive
     path = _observation(Path(streamflow_observation_folder(tmp_path)) / "00350.txt")
     save_state(tmp_path, {"outlets": {"00350": {"is_gauged": True}}})
     dialog = MhmQgisDialog()
@@ -58,7 +63,8 @@ def test_discharge_button_opens_reusable_plot_and_project_change_clears_stations
     assert dialog.comboBox_displayOutletStation.currentData() == str(path)
     dialog.pushButton_observationDisplay_discharge.click()
     plot = dialog._discharge_plot
-    assert plot.isVisible() and "00350" in plot.windowTitle()
+    assert plot.isVisible()
+    assert "00350" in plot.windowTitle()
     assert plot.plot.getAxis("bottom").labelText == "Date"
     assert plot.plot.getAxis("left").labelUnits == "m³/s"
     assert math.isnan(plot.curve.getData()[1][1])

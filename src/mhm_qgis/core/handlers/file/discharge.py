@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Convert discharge tables to mHM streamflow observation text files."""
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlparse
-
 
 NODATA_VALUE = -9999.0
 
@@ -141,8 +139,8 @@ def records_from_grdc_file(path: Path) -> list[DischargeRecord]:
         return []
 
     records = []
-    for line in lines[data_start_idx:]:
-        line = line.strip()
+    for raw_line in lines[data_start_idx:]:
+        line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
 
@@ -307,7 +305,7 @@ def normalize_field_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", str(name).strip().lower())
 
 
-def parse_datetime_value(value) -> datetime | None:
+def parse_datetime_value(value) -> datetime | None:  # noqa: PLR0911
     """Parse common QGIS, Python, and text date values."""
     if value is None:
         return None

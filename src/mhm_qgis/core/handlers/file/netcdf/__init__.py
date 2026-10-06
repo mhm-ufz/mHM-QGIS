@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Read gridded NetCDF without assuming how it was written.
 
 mHM output does not name its dimensions consistently -- one file uses

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import importlib
 import json
@@ -17,7 +18,6 @@ from urllib.request import Request, urlopen
 
 from .._version import __version__
 from ..core.handlers.file.json import read_mapping, write
-
 
 APP_NAME = "mhm-qgis"
 IN_RUNTIME = "MHM_QGIS_IN_RUNTIME"
@@ -295,10 +295,9 @@ def install_runtime(*, yes=False, wheelhouse=None, root=None) -> dict:
     previous = _marker(root).get("prefix")
     write(root / MARKER, marker, newline=True, fsync=True)
     if previous and previous != marker["prefix"]:
-        try:
+        # A still-running older runtime is left for `mhm-qgis-runtime remove`.
+        with contextlib.suppress(OSError, RuntimeSetupError):
             _safe_remove(Path(previous), root)
-        except (OSError, RuntimeSetupError):
-            pass  # A still-running older runtime is left for `mhm-qgis-runtime remove`.
     return marker
 
 

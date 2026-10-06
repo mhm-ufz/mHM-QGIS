@@ -5,12 +5,11 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-import pytest
 import pandas as pd
+import pytest
 
-from mhm_qgis.externals import mhm_tools_handler as categorical
-from mhm_qgis.core.handlers import lookup
 from mhm_qgis.core.handlers.lookup import table as lookup_table
+from mhm_qgis.externals import mhm_tools_handler as categorical
 
 
 def _touch(path: Path) -> Path:
@@ -29,7 +28,7 @@ def _install_fake_mhm_tools(monkeypatch, **functions):
     # reaches for through `lookup.read` has to be present too.
     common = ModuleType("mhm_tools.common")
     lookup_handler = ModuleType("mhm_tools.common.lookup_handler")
-    lookup_handler.read_lookup_table = lambda path: pd.read_csv(path)
+    lookup_handler.read_lookup_table = pd.read_csv
     common.lookup_handler = lookup_handler
     package.common = common
     monkeypatch.setitem(sys.modules, "mhm_tools", package)
@@ -69,7 +68,8 @@ def test_raster_soil_formats_and_moves_canonical_outputs(tmp_path, monkeypatch):
 
     _install_fake_mhm_tools(monkeypatch, format_soil_data=format_soil_data)
     captures = _capture_counter(monkeypatch)
-    log = lambda _message: None
+    def log(_message):
+        return None
 
     result = categorical.prepare_categorical_file(
         "soil",
@@ -287,7 +287,7 @@ def test_rejects_unknown_kind_and_land_cover_definition(tmp_path):
 def test_rejects_an_output_name_that_misstates_the_written_format(tmp_path):
     """mhm-tools writes GeoTIFF; a `.asc` name reaches publication as text."""
     assert categorical.categorical_output_suffix("geology") == ".nc"
-    with pytest.raises(ValueError, match="must be named .nc"):
+    with pytest.raises(ValueError, match=r"must be named \.nc"):
         categorical.prepare_categorical_file(
             "geology",
             tmp_path / "input.tif",

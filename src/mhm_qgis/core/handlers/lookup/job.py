@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """QGIS-free categorical lookup preparation and atomic publication.
 
 `native_worker` runs this in a child process. Formatting a vector categorical

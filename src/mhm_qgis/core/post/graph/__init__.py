@@ -1,5 +1,5 @@
 """Qt-free station discovery and discharge plot data."""
-from datetime import timezone
+from datetime import UTC
 from pathlib import Path
 
 from ...handlers.file.discharge import records_from_mhm_file
@@ -27,6 +27,6 @@ def discharge_series(path):
     """Return UTC epoch seconds and m³/s values; missing observations are NaN."""
     records = records_from_mhm_file(Path(path))
     return (
-        [record.timestamp.replace(tzinfo=timezone.utc).timestamp() for record in records],
+        [record.timestamp.replace(tzinfo=UTC).timestamp() for record in records],
         [record.value for record in records],
     )

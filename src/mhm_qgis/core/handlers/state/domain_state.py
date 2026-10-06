@@ -1,14 +1,14 @@
-# -*- coding: utf-8 -*-
 """QGIS-free persistence helpers for watershed domain delineation."""
 from __future__ import annotations
 
 import json
 import os
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Union
-from ....core.handlers.store.paths import temp_folder, workspace_folder
+from typing import Any
 
+from ....core.handlers.store.paths import temp_folder, workspace_folder
 
 STATE_FILENAME = "mhm_qgis_domain_delineation_state.json"
 STATE_VERSION = 2
@@ -19,10 +19,10 @@ DOMAIN_MODES = {
     DOMAIN_MODE_DEM_EXTENT,
     DOMAIN_MODE_DELINEATOR,
 }
-PathInput = Union[str, Path]
+PathInput = str | Path
 
 
-def default_state() -> Dict[str, Any]:
+def default_state() -> dict[str, Any]:
     """Return a new empty domain-delineation state."""
     return {
         "version": STATE_VERSION,
@@ -45,7 +45,7 @@ def state_path(project_folder: PathInput) -> Path:
     return Path(temp_folder(project_folder)) / STATE_FILENAME
 
 
-def _normalized_state(value: object) -> Dict[str, Any]:
+def _normalized_state(value: object) -> dict[str, Any]:
     state = default_state()
     if not isinstance(value, Mapping):
         return state
@@ -89,12 +89,12 @@ def _normalized_state(value: object) -> Dict[str, Any]:
     return state
 
 
-def ordered_outlet_ids(state: Mapping[str, Any]) -> List[str]:
+def ordered_outlet_ids(state: Mapping[str, Any]) -> list[str]:
     """Return outlet IDs in their explicit stable feature order."""
     outlets = state.get("outlets", {})
     if not isinstance(outlets, Mapping):
         return []
-    ordered: List[str] = []
+    ordered: list[str] = []
     requested = state.get("outlet_order", [])
     if isinstance(requested, (list, tuple)):
         for value in requested:
@@ -108,7 +108,7 @@ def ordered_outlet_ids(state: Mapping[str, Any]) -> List[str]:
     return ordered
 
 
-def assign_domain_ids(state: Dict[str, Any]) -> Dict[str, Any]:
+def assign_domain_ids(state: dict[str, Any]) -> dict[str, Any]:
     """Assign deterministic contiguous IDs to the active domains in-place."""
     outlets = state.get("outlets", {})
     if not isinstance(outlets, dict):
@@ -130,7 +130,7 @@ def assign_domain_ids(state: Dict[str, Any]) -> Dict[str, Any]:
     return state
 
 
-def load_state(project_folder: PathInput) -> Dict[str, Any]:
+def load_state(project_folder: PathInput) -> dict[str, Any]:
     """Load state, returning defaults for missing or malformed content."""
     path = state_path(project_folder)
     try:
@@ -192,7 +192,7 @@ def resolve_output_path(project_folder: PathInput, value: PathInput) -> Path:
 def _serialized_state(
     project_folder: PathInput,
     value: Mapping[str, Any],
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     state = _normalized_state(value)
     for record in state["outlets"].values():
         if isinstance(record.get("delineation"), dict) and record["delineation"].get("raster_path"):
@@ -277,7 +277,7 @@ def save_state(
     return path
 
 
-def gauged_outlet_ids(state: Mapping[str, Any]) -> List[str]:
+def gauged_outlet_ids(state: Mapping[str, Any]) -> list[str]:
     """Return IDs of outlets marked as gauged, in stored order."""
     outlets = state.get("outlets", {})
     if not isinstance(outlets, Mapping):
@@ -291,10 +291,10 @@ def gauged_outlet_ids(state: Mapping[str, Any]) -> List[str]:
     ]
 
 
-def active_domain_records(state: Mapping[str, Any]) -> List[Dict[str, Any]]:
+def active_domain_records(state: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Return active outlet domains plus the optional synthetic DEM domain."""
     state = _normalized_state(state)
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     outlets = state.get("outlets", {})
     if isinstance(outlets, Mapping):
         for outlet_id in ordered_outlet_ids(state):
@@ -327,11 +327,11 @@ def domain_count(state: Mapping[str, Any]) -> int:
     return 1
 
 
-def gauge_records(state: Mapping[str, Any]) -> List[Dict[str, Any]]:
+def gauge_records(state: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Return normalized gauge metadata suitable for namelist projection."""
     state = _normalized_state(state)
     outlets = state["outlets"]
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     for outlet_id in gauged_outlet_ids(state):
         record = outlets[outlet_id]
         try:

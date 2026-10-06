@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.handlers.file.ascii.pad import (  # noqa: E402
+from mhm_qgis.core.handlers.file.ascii.pad import (
     ascii_window_offsets,
     pad_ascii_grid,
     read_ascii_header,
@@ -42,8 +42,10 @@ def _rows(path):
 def test_header_is_read_including_centre_variants(tmp_path):
     path = _grid(tmp_path / "a.asc")
     header = read_ascii_header(path)
-    assert header["ncols"] == 2 and header["nrows"] == 2
-    assert header["xllcorner"] == 100.0 and header["cellsize"] == 10.0
+    assert header["ncols"] == 2
+    assert header["nrows"] == 2
+    assert header["xllcorner"] == 100.0
+    assert header["cellsize"] == 10.0
 
     centred = tmp_path / "b.asc"
     centred.write_text(
@@ -52,7 +54,8 @@ def test_header_is_read_including_centre_variants(tmp_path):
         encoding="utf-8",
     )
     header = read_ascii_header(centred)
-    assert header["xllcorner"] == 100.0 and header["yllcorner"] == 200.0
+    assert header["xllcorner"] == 100.0
+    assert header["yllcorner"] == 200.0
 
 
 def test_a_file_without_a_header_is_rejected(tmp_path):
@@ -85,7 +88,8 @@ def test_padding_surrounds_the_source_with_nodata(tmp_path):
 
     header = read_ascii_header(path)
     assert (header["ncols"], header["nrows"]) == (4, 4)
-    assert header["xllcorner"] == 90.0 and header["yllcorner"] == 190.0
+    assert header["xllcorner"] == 90.0
+    assert header["yllcorner"] == 190.0
     assert _rows(path) == [
         ["-9999", "-9999", "-9999", "-9999"],
         ["-9999", "1", "2", "-9999"],
@@ -145,10 +149,12 @@ def test_the_a26_geometry_pads_to_the_common_extent(tmp_path):
     pad_ascii_grid(path, target)
 
     rows = _rows(path)
-    assert len(rows) == 4 and all(len(row) == 5 for row in rows)
+    assert len(rows) == 4
+    assert all(len(row) == 5 for row in rows)
     # One padded row on top, the data, then one below; two padded columns right.
     assert rows[0] == ["-9999"] * 5
-    assert rows[1][:3] == ["1", "2", "3"] and rows[1][3:] == ["-9999", "-9999"]
+    assert rows[1][:3] == ["1", "2", "3"]
+    assert rows[1][3:] == ["-9999", "-9999"]
     assert rows[3] == ["-9999"] * 5
 
 

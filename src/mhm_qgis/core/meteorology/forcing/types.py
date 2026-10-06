@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 """Value objects shared by meteorology inspection and preparation."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-
 
 MHM_READY = "mHM ready"
 AUTO = "auto"
@@ -58,7 +56,7 @@ class MeteoFolderSpec:
     cumulative: bool = False
     cumulative_resolution: str = ""
 
-    def normalized(self) -> "MeteoFolderSpec":
+    def normalized(self) -> MeteoFolderSpec:
         return MeteoFolderSpec(
             kind=normalize_kind(self.kind),
             folder=Path(self.folder),

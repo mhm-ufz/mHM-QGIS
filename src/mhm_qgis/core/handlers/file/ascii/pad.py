@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Crop/pad an Arc/Info ASCII grid onto an aligned header by streaming text.
 
 An ASCII grid is row-major
@@ -6,10 +5,11 @@ text, so padding is a line-by-line rewrite with constant memory instead.
 """
 from __future__ import annotations
 
-import os
 import math
+import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from ....grid import aligned_window, headers_match, standardize_header
 
@@ -17,7 +17,7 @@ from ....grid import aligned_window, headers_match, standardize_header
 def read_ascii_header(path) -> dict:
     """Return the six header values of an Arc/Info ASCII grid."""
     header: dict[str, Any] = {}
-    with open(path, "r", encoding="utf-8") as stream:
+    with open(path, encoding="utf-8") as stream:
         for _ in range(8):
             position = stream.tell()
             line = stream.readline()
@@ -39,8 +39,8 @@ def read_ascii_header(path) -> dict:
                 break
     try:
         return standardize_header(header)
-    except ValueError:
-        raise ValueError(f"Not a readable Arc/Info ASCII header: {path}")
+    except ValueError as error:
+        raise ValueError(f"Not a readable Arc/Info ASCII header: {path}") from error
 
 
 def ascii_window_offsets(source: Mapping[str, Any],
@@ -102,7 +102,7 @@ def pad_ascii_grid(path, target: Mapping[str, Any], nodata=-9999, pad=None, *, f
     temporary = path.with_name(f".{path.name}.pad.tmp")
     temporary.unlink(missing_ok=True)
     try:
-        with open(path, "r", encoding="utf-8") as source_stream, \
+        with open(path, encoding="utf-8") as source_stream, \
                 open(temporary, "w", encoding="utf-8") as output_stream:
             for _ in range(6):
                 source_stream.readline()

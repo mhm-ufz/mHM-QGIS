@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
 """mHM morphology ASCII preparation through mhm_tools file handlers."""
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,14 +10,13 @@ from typing import Any
 from ....grid import (
     assert_source_covers_header,
     axes_match_header,
-    header_center_coordinates,
     grid_matches_header,
+    header_center_coordinates,
     headers_match,
     reindex_to_header,
     standardize_header,
-    validate_grid_headers as validate_mhm_grid_headers,
 )
-
+from ....grid import validate_grid_headers as validate_mhm_grid_headers
 
 Header = dict[str, Any]
 LogCallback = Callable[[str], None]
@@ -114,8 +113,11 @@ def align_dataset_to_header(
         integer: bool = False):
     """Return a dataset sampled on the exact grid described by ``header``."""
     import xarray as xr
-    from .....externals.mhm_tools_handler import (xarray_coord_key,
-                                                   xarray_single_data_var)
+
+    from .....externals.mhm_tools_handler import (
+        xarray_coord_key,
+        xarray_single_data_var,
+    )
 
     header = standardize_header(header)
     var_name = data_var
@@ -183,8 +185,10 @@ def pad_dataset_to_header(
     or ``nodata_value`` when no pad value is given. Non-spatial dimensions such
     as time or soil horizon are preserved.
     """
-    from .....externals.mhm_tools_handler import (xarray_coord_key,
-                                                   xarray_single_data_var)
+    from .....externals.mhm_tools_handler import (
+        xarray_coord_key,
+        xarray_single_data_var,
+    )
 
     header = standardize_header(header)
     var_name = data_var
@@ -308,8 +312,10 @@ def _read_raster(path: Path, data_var: str | None):
 
 def _write_ascii(dataset, output_path: Path, header: Mapping[str, Any],
                  nodata_value: float | int) -> None:
-    from .....externals.mhm_tools_handler import (write_xarray_ascii,
-                                                   xarray_single_data_var)
+    from .....externals.mhm_tools_handler import (
+        write_xarray_ascii,
+        xarray_single_data_var,
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     data_var = xarray_single_data_var(dataset)
@@ -379,10 +385,8 @@ def _drop_singleton_non_spatial_dims(da, x_key: str, y_key: str):
 def _apply_nodata(da, nodata_value: float | int, integer: bool):
     source_nodata = da.attrs.get("_FillValue", da.attrs.get("nodata_value"))
     if source_nodata is not None:
-        try:
+        with contextlib.suppress(Exception):
             da = da.where(da != source_nodata, nodata_value)
-        except Exception:
-            pass
     da = da.fillna(nodata_value)
     if integer:
         da = da.round().astype("int32")

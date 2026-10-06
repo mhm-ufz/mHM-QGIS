@@ -11,19 +11,19 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.handlers.file.ascii.morphology import (  # noqa: E402
+from mhm_qgis.core.handlers.file.ascii.morphology import (
     pad_dataset_to_header,
     pad_l0_file_to_header,
 )
-from mhm_qgis.core.morphology.layers.advanced_l0 import (  # noqa: E402
+from mhm_qgis.core.handlers.state.nml_settings import update_section
+from mhm_qgis.core.handlers.store.layout import morph_folder
+from mhm_qgis.core.handlers.store.paths import morph_staging_folder
+from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE
+from mhm_qgis.core.morphology.layers.advanced_l0 import (
     missing_model_inputs,
     publish_model_inputs,
     staged_files,
 )
-from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE  # noqa: E402
-from mhm_qgis.core.handlers.state.nml_settings import update_section  # noqa: E402
-from mhm_qgis.core.handlers.store.paths import morph_staging_folder, workspace_folder
-from mhm_qgis.core.handlers.store.layout import morph_folder  # noqa: E402
 
 xr = pytest.importorskip("xarray")
 
@@ -122,6 +122,7 @@ def test_a_file_already_on_the_l0_grid_is_left_untouched(tmp_path):
 
 def _staged_nc(project, name, header=None, variable="soil_class"):
     from osgeo import gdal, osr
+
     from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters
 
     header = header or L0_TARGET
@@ -198,6 +199,7 @@ L0_TARGET = {
 
 
 def test_exact_netcdf_is_converted_and_definitions_are_carried(tmp_path):
+    pytest.importorskip("osgeo")
     _staged_nc(tmp_path, "soil_class.nc")
     definition = Path(morph_staging_folder(tmp_path)) / "soil_classdefinition.txt"
     definition.write_text("1 sand\n", encoding="utf-8")
@@ -212,10 +214,12 @@ def test_exact_netcdf_is_converted_and_definitions_are_carried(tmp_path):
     assert [path.name for path in staged_files(tmp_path)] == ["soil_class.nc", "soil_classdefinition.txt"]
     assert (master / "soil_classdefinition.txt").read_text(encoding="utf-8") == "1 sand\n"
     header = (master / "soil_class.asc").read_text(encoding="utf-8").splitlines()
-    assert header[0].split()[1] == "4" and header[1].split()[1] == "4"
+    assert header[0].split()[1] == "4"
+    assert header[1].split()[1] == "4"
 
 
 def test_v5_soil_horizons_are_published_as_ascii_layers(tmp_path):
+    pytest.importorskip("osgeo")
     _staged_soil_horizons(tmp_path)
     definition = Path(morph_staging_folder(tmp_path)) / (
         "soil_classdefinition_iFlag_soilDB_1.txt"
@@ -247,6 +251,7 @@ def test_v5_soil_horizons_are_published_as_ascii_layers(tmp_path):
 
 
 def test_publication_rejects_a_grid_that_is_not_the_common_extent(tmp_path):
+    pytest.importorskip("osgeo")
     _staged_nc(tmp_path, "soil_class.nc", L0_TARGET)
     small = {**L0_TARGET, "ncols": 2, "nrows": 2, "xllcorner": 100, "yllcorner": 100}
     with pytest.raises(ValueError, match="does not match the common L0 grid"):
@@ -254,6 +259,7 @@ def test_publication_rejects_a_grid_that_is_not_the_common_extent(tmp_path):
 
 
 def test_publication_does_not_invent_class_values_for_missing_cells(tmp_path):
+    pytest.importorskip("osgeo")
     source = {**L0_TARGET, "ncols": 2, "nrows": 2, "xllcorner": 100, "yllcorner": 100}
     _staged_nc(tmp_path, "soil_class.nc", source)
     with pytest.raises(ValueError, match="does not match the common L0 grid"):
@@ -261,6 +267,7 @@ def test_publication_does_not_invent_class_values_for_missing_cells(tmp_path):
 
 
 def test_publishing_repoints_the_namelist_handoff_at_data_master(tmp_path):
+    pytest.importorskip("osgeo")
     _staged_nc(tmp_path, "soil_class.nc")
     _staged_nc(tmp_path, "lc.nc", variable="land_cover")
     definition = Path(morph_staging_folder(tmp_path)) / "soil_classdefinition.txt"
@@ -310,6 +317,7 @@ def test_missing_model_inputs_reports_paths_that_do_not_resolve(tmp_path):
 
 
 def test_an_unexpected_staged_file_is_left_alone(tmp_path):
+    pytest.importorskip("osgeo")
     folder = Path(morph_staging_folder(tmp_path))
     folder.mkdir(parents=True, exist_ok=True)
     stray = folder / "scratch.tmp"
@@ -350,6 +358,7 @@ def test_a_path_left_pointing_at_staging_is_repointed_to_master(tmp_path):
 def test_republishing_rewrites_nothing_unchanged_and_ignores_stale_staged_copies(tmp_path):
     """Publication used to copy its own ASCII output back into staging and then
     export every such grid twice, first from the stale copy."""
+    pytest.importorskip("osgeo")
     import shutil
 
     _staged_soil_horizons(tmp_path)

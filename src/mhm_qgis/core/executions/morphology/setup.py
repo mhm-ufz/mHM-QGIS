@@ -1,29 +1,39 @@
 """Morphology publication commands with explicit, path-only inputs."""
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Mapping
 
 from ....externals.mhm_tools_handler import create_latlon_file
 from ...handlers.file.netcdf.raster import copy_rasters, source, variables
-from ...handlers.raster.tasks import TaskShare, _cancelled, _progress, _target_mask, write_domain_dem_ascii
+from ...handlers.raster.tasks import (
+    TaskShare,
+    _cancelled,
+    _progress,
+    _target_mask,
+    write_domain_dem_ascii,
+)
 from ...handlers.state import processing
-from ...handlers.state.domain_state import load_state as load_domain_state, resolve_output_path
+from ...handlers.state.domain_state import load_state as load_domain_state
+from ...handlers.state.domain_state import resolve_output_path
 from ...handlers.store import registry
 from ...handlers.store.layout import domain_dem_path, is_v6, morph_folder
 from ...handlers.store.paths import (
-    temp_morphology_folder,
-    lai_dem_staging_path,
     data_folder,
+    lai_dem_staging_path,
+    temp_morphology_folder,
     workspace_folder,
 )
 from ...morphology.layers import lai
 from ...morphology.layers.advanced_l0 import (
-    RASTER_SUFFIXES, missing_model_inputs, publish_model_inputs, staged_files,
+    RASTER_SUFFIXES,
+    missing_model_inputs,
+    publish_model_inputs,
+    staged_files,
 )
-from ...morphology.layers.morph_input_nc import write_morph_input_nc
 from ...morphology.layers.mask import write_morph_mask
+from ...morphology.layers.morph_input_nc import write_morph_input_nc
 from . import PUBLICATION_STAGES
 
 
@@ -103,14 +113,14 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     from ...handlers.state import nml_settings
 
     nml_settings.sync_domain_settings(request.project_folder)
-    processing.save_domains(request.project_folder, [dict(
-        domain_id=1,
-        outlet_id="",
-        name="master",
-        mask=str(watershed),
-        directory=morph_folder(request.project_folder),
-        dem_path=domain_dem_path(request.project_folder, "master"),
-    )])
+    processing.save_domains(request.project_folder, [{
+        "domain_id": 1,
+        "outlet_id": "",
+        "name": "master",
+        "mask": str(watershed),
+        "directory": morph_folder(request.project_folder),
+        "dem_path": domain_dem_path(request.project_folder, "master"),
+    }])
     return Path(masked), Path(morph_mask)
 
 
@@ -224,13 +234,13 @@ def publish(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         _model_sources(Path(temp_morphology_folder(request.project_folder))))
     units = max(1, classes + staged_lai.is_file() + grids)
     before_grids = 100 * (classes + staged_lai.is_file()) / units
-    outputs = list(
+    outputs = [
         Path(path)
         for path in publish_model_inputs(
             request.project_folder, request.headers["L0"], log=log,
             task=TaskShare(task, 0, 100 * classes / units),
         )
-    )
+    ]
     if staged_lai.is_file():
         from ...handlers.state.nml_settings import load_settings
 

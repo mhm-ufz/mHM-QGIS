@@ -5,22 +5,20 @@ from pathlib import Path
 
 import pytest
 
-
-
 # isort: off
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.core import QgsVectorLayer  # noqa: E402
+from qgis.core import QgsVectorLayer
 
-from mhm_qgis.core.morphology.hydrology.outlets import (  # noqa: E402
+from mhm_qgis.core.morphology.hydrology.outlets import (
     OutletAssignment,
 )
-from mhm_qgis.core.handlers.state.domain_state import (  # noqa: E402
+from mhm_qgis.core.handlers.state.domain_state import (
     DOMAIN_MODE_DEM_EXTENT,
     DOMAIN_MODE_DELINEATOR,
     gauge_records,
 )
-from mhm_qgis.qgis_bridge.layers.domain import (  # noqa: E402
+from mhm_qgis.qgis_bridge.layers.domain import (
     DomainWorkflow,
 )
 # isort: on
@@ -90,7 +88,11 @@ def test_gauges_are_all_validated_before_any_observation_is_written(tmp_path):
 
 
 def test_show_for_changed_point_source_preserves_committed_domains(tmp_path):
-    from mhm_qgis.core.handlers.state.domain_state import load_state, save_state, save_preview
+    from mhm_qgis.core.handlers.state.domain_state import (
+        load_state,
+        save_preview,
+        save_state,
+    )
 
     workflow = _workflow(tmp_path, ("1",))
     save_state(tmp_path, {"pour_points_source": "previous.gpkg", "outlet_id_field": "id",

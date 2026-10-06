@@ -40,7 +40,7 @@ def _dem_ready(dialog):
 def _locked(dialog, controls):
     """Also lock the project selector while a task started from a form runs."""
     controls = tuple(controls)
-    return controls + (dialog.pushButton_BrowseProjectFolder,) if controls else controls
+    return (*controls, dialog.pushButton_BrowseProjectFolder) if controls else controls
 
 
 def dem_options(dialog):

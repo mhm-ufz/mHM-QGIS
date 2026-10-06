@@ -7,14 +7,14 @@ import pytest
 import xarray as xr
 
 pytest.importorskip("qgis.core")
-from qgis.core import QgsApplication, QgsCoordinateReferenceSystem, QgsRasterLayer
 from osgeo import gdal, osr
+from qgis.core import QgsApplication, QgsCoordinateReferenceSystem, QgsRasterLayer
 
-from mhm_qgis.qt.controllers import grid, main, project
-from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 from mhm_qgis.core.handlers.state import nml_settings, processing
 from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+from mhm_qgis.qt.controllers import grid, main, project
 from mhm_qgis.qt.dialogs.meteo_var_details_input import MeteoVarDetailsDialog
+from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
 
 def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeypatch):
@@ -97,8 +97,8 @@ def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
         return 0
     monkeypatch.setattr(ProjectFolderTreeDialog, "exec", show)
     dialog = MhmQgisDialog()
-    from mhm_qgis.qt.dialogs.domain_folder_name import DomainFolderNameDialog
     from mhm_qgis.core.handlers.store.paths import domain_folder
+    from mhm_qgis.qt.dialogs.domain_folder_name import DomainFolderNameDialog
     dialog.project_directory = str(tmp_path)
     project.populate_domains(dialog)
     def name(prompt):

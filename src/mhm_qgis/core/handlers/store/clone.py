@@ -9,7 +9,6 @@ from ..file import json as jsonio
 from .layout import project_version
 from .paths import temp_folder, version_key
 
-
 STATE_FILES = {
     "mhm_qgis_input_state.json",
     "mhm_qgis_domain_delineation_state.json",
@@ -70,8 +69,8 @@ def _rebase(value, old, new):
 def _link_tree(source, target):
     if not source.is_dir():
         return
-    for folder, directories, files in os.walk(source, followlinks=False):
-        folder = Path(folder)
+    for folder_name, directories, files in os.walk(source, followlinks=False):
+        folder = Path(folder_name)
         relative = folder.relative_to(source)
         destination = target / relative
         destination.mkdir(parents=True, exist_ok=True)

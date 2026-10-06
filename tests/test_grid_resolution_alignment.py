@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.grid import (  # noqa: E402
+from mhm_qgis.core.grid import (
     Extent,
     Grid,
     Resolution,
@@ -23,7 +23,6 @@ from mhm_qgis.core.grid import (  # noqa: E402
     validate_grid_headers,
     validate_l0_l2_alignment,
 )
-
 
 L0_ANCHOR = {
     "xllcorner": 100.0,
@@ -80,16 +79,16 @@ def test_alignment_gap_limit_comes_from_settings_and_material_gap_resamples(tmp_
     settings.write_text("grid_alignment_gap_limit: 0.02\n", encoding="utf-8")
     assert alignment_gap_limit_fraction(settings) == 0.02
 
-    base = dict(
-        l0_header={**L0_ANCHOR, "ncols": 100, "nrows": 100},
-        domain_extents=((115, 985, 218, 812),),
-        multiplier=3,
-        crs="EPSG:32632",
-        unit="m",
-        raw_l2_resolution=(30, 30),
-        raw_l2_crs="EPSG:32632",
-        gap_limit_fraction=0.02,
-    )
+    base = {
+        "l0_header": {**L0_ANCHOR, "ncols": 100, "nrows": 100},
+        "domain_extents": ((115, 985, 218, 812),),
+        "multiplier": 3,
+        "crs": "EPSG:32632",
+        "unit": "m",
+        "raw_l2_resolution": (30, 30),
+        "raw_l2_crs": "EPSG:32632",
+        "gap_limit_fraction": 0.02,
+    }
     within = Grid.for_meteorology(
         **base, raw_l2_extent=Extent(100.1, 1000.1, 200, 830)
     )
@@ -149,7 +148,7 @@ def test_paired_headers_expand_outward_and_are_exact_by_construction():
 
 
 @pytest.mark.parametrize(
-    "bounds, expected",
+    ("bounds", "expected"),
     [
         # Exactly on the L2 grid: never expanded.
         ((100.0, 190.0, 200.0, 290.0), (100.0, 190.0, 200.0, 290.0)),
@@ -218,7 +217,7 @@ def test_l0_header_from_l2_rejects_a_non_integer_multiple():
         (99.0, 191.0, 199.0, 291.0), L0_ANCHOR, multiplier=3, unit="m"
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not an exact multiple of L0"):
         l0_header_from_l2(l2, 7.0, 3)
 
 
@@ -258,10 +257,7 @@ DEGREE_ANCHOR = {
 def test_repeating_degree_l2_cell_size_is_never_rounded_away():
     from mhm_qgis.core.grid import (
         floor_cellsize,
-        header_for_existing_bounds,
         possible_resolutions,
-        read_header_file,
-        write_header_file,
     )
 
     bounds = (78.99958333333333, 90.00041666666226, 26.0, 31.000416666666666)
@@ -279,13 +275,13 @@ def test_repeating_degree_l2_cell_size_is_never_rounded_away():
 
 
 def test_all_four_levels_validate_on_a_repeating_degree_grid(tmp_path):
-    from mhm_qgis.core.handlers.file.ascii.morphology import validate_grid_headers
     from mhm_qgis.core.grid import (
         header_for_existing_bounds,
         possible_resolutions,
         read_header_file,
         write_header_file,
     )
+    from mhm_qgis.core.handlers.file.ascii.morphology import validate_grid_headers
 
     bounds = (78.99958333333333, 90.00041666666226, 26.0, 31.000416666666666)
     l0, l2 = aligned_l0_l2_headers(bounds, DEGREE_ANCHOR, multiplier=120, unit="deg")

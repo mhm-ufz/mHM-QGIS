@@ -1,32 +1,30 @@
 """Independent forcing variables, streamed at a selected output cadence."""
 from __future__ import annotations
+
+import itertools
+import os
+import tempfile
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
-import os
-import tempfile
-from ..ERA5Land.mhm.types import MeteoForcingResult
-from ..ERA5Land.mhm.io import write_header, write_netcdf
+
 from ...grid import (
     TargetGrid,
     assert_header_file_matches,
     assert_matches_header,
-    axis_resolution,
     axes_match_header,
-    crs_equal as _same_crs,
+    axis_resolution,
+)
+from ...grid import crs_equal as _same_crs
+from ...grid import (
     header_center_arrays,
     mesh_resolution,
     nearest_curvilinear,
     nearest_rectilinear,
     slice_and_pad,
 )
-from .types import (
-    AUTO,
-    MeteoFolderSpec,
-    SpatialMetadata,
-)
-
-
+from ..ERA5Land.mhm.io import write_header, write_netcdf
+from ..ERA5Land.mhm.types import MeteoForcingResult
 from .temporal import (
     VARIABLES,
     complete_window,
@@ -38,6 +36,11 @@ from .temporal import (
     period_bounds,
     time_index,
     validate_spec,
+)
+from .types import (
+    AUTO,
+    MeteoFolderSpec,
+    SpatialMetadata,
 )
 
 
@@ -317,7 +320,7 @@ def _reduce_groups(values, edges, method, np):
         block = values.reshape(len(lengths), int(lengths[0]), *values.shape[1:])
         return _reduce_axis(block, 1, method, np)
     reduced = [_reduce_axis(values[first:stop], 0, method, np)
-               for first, stop in zip(edges[:-1], edges[1:])]
+               for first, stop in itertools.pairwise(edges)]
     return (np.stack([value for value, _ in reduced]),
             np.stack([count for _, count in reduced]))
 
@@ -586,7 +589,7 @@ def _axis_values(ds, dim: str, axis: str):
         if axis == "x" else
         ("lat", "latitude", "yc", "y", "northing")
     )
-    for name in (dim,) + candidates:
+    for name in (dim, *candidates):
         if name not in ds.variables:
             continue
         values = np.asarray(ds[name].values)
@@ -740,8 +743,8 @@ def _resample_ready(da, ds, source_crs, target, np, xr):
 
     if x_values is not None and y_values is not None:
         source_crs = _dataset_crs(ds, da, x_name, y_name) or source_crs
-        lon_name, lon = _geographic_coordinate(ds, "lon", (y_dim, x_dim))
-        lat_name, lat = _geographic_coordinate(ds, "lat", (y_dim, x_dim))
+        _lon_name, lon = _geographic_coordinate(ds, "lon", (y_dim, x_dim))
+        _lat_name, lat = _geographic_coordinate(ds, "lat", (y_dim, x_dim))
         if source_crs is None and lon is not None and lat is not None:
             return nearest_curvilinear(
                 da, np.asarray(lon), np.asarray(lat),
@@ -810,8 +813,8 @@ def _resample_ready(da, ds, source_crs, target, np, xr):
         return result.assign_coords(lon=target_lon, lat=target_lat).transpose(
             "time", "lat", "lon")
 
-    lon_name, lon = _geographic_coordinate(ds, "lon", (y_dim, x_dim))
-    lat_name, lat = _geographic_coordinate(ds, "lat", (y_dim, x_dim))
+    _lon_name, lon = _geographic_coordinate(ds, "lon", (y_dim, x_dim))
+    _lat_name, lat = _geographic_coordinate(ds, "lat", (y_dim, x_dim))
     if lon is None or lat is None:
         raise ValueError("mHM-ready data has no usable spatial coordinates.")
     return nearest_curvilinear(

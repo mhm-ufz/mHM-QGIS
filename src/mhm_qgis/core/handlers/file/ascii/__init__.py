@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Arc/Info ASCII grids, as mHM reads and writes them.
 
 `pad` streams a grid onto a larger header row by row -- loading one to pad it

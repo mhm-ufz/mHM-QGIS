@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget state for `land_use_historical_input.ui`.
 
 Row construction stays on the dialog: each row's browse button closes over the
@@ -6,15 +5,14 @@ combo adapter built with it, so it can only be wired where the row is made.
 """
 from __future__ import annotations
 
-
+from qgis.PyQt import QtWidgets
 from qgis.PyQt.QtCore import QDateTime, QSignalBlocker
 
-from qgis.PyQt import QtWidgets
-
 from ...core.handlers import lookup
-from ...core.handlers.lookup import LandUseInput, MAX_LAND_USE_PERIODS
+from ...core.handlers.lookup import MAX_LAND_USE_PERIODS, LandUseInput
 from ..dialogs.file_picker import open_file
 from ..dialogs.input_selection import scan_project_inputs
+
 
 def set_layer_count(dialog, count: int) -> None:
     count = min(MAX_LAND_USE_PERIODS, max(1, int(count)))
@@ -68,14 +66,14 @@ def set_input(dialog, value) -> None:
     set_layer_count(dialog, len(periods) or 1)
     from ...core.handlers.lookup import LandUsePeriod
     from ...core.handlers.lookup.manifests import period_datetime
-    for index, period in enumerate(periods):
-        period = LandUsePeriod.from_dict(period)
+    for index, saved_period in enumerate(periods):
+        period = LandUsePeriod.from_dict(saved_period)
         if period.start_time < period_datetime(dialog.simulation_start) or period.end_time > period_datetime(dialog.simulation_end):
             raise ValueError("Saved land-use periods exceed the simulation range; update the periods first.")
-        for column, value in enumerate((period.start_time, period.end_time)):
+        for column, moment in enumerate((period.start_time, period.end_time)):
             editor = dialog.tableWidget_landUseTimeInputs.cellWidget(index, column)
             with QSignalBlocker(editor):
-                editor.setDateTime(QDateTime.fromString(value.isoformat(), "yyyy-MM-ddTHH:mm:ss"))
+                editor.setDateTime(QDateTime.fromString(moment.isoformat(), "yyyy-MM-ddTHH:mm:ss"))
         dialog._select_path(dialog._rows[index].adapter, period.file_path)
     lookup = str(data.get("lookup_table", "") or "")
     if lookup:

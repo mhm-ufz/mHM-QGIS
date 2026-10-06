@@ -29,6 +29,9 @@ whether hosted by QGIS Desktop or launched directly.
 - `pyproject.toml`, `MANIFEST.in`: PyPI packaging metadata.
 - `tests/`: core checks run in plain Python; GUI checks require real QGIS and
   are skipped when unavailable. `conftest.py` initializes an offscreen QGIS application.
+  Checks that reach GDAL (`osgeo`, which comes with QGIS or the system, not PyPI) call
+  `pytest.importorskip("osgeo")`, so CI's pip-only environment skips them instead of
+  failing; a new test that reaches GDAL needs the same line.
 
 A local QGIS install typically symlinks the plugin at
 `/usr/share/qgis/python/plugins/mhm_qgis -> src/mhm_qgis`, which is why a real-QGIS
@@ -866,10 +869,22 @@ Four JSON files live under each domain's `.temp/` directory.
   the PEP 625 sdist name PyPI requires (`mhm_qgis-X.tar.gz`). 77+ rejects the current
   `license = {file}` table plus license classifier, so moving past 70 means switching to
   an SPDX `license` string first.
-- `.github/workflows/release-check.yml` runs on the GitHub `origin` (public home:
-  `git.ufz.de/mhm/mhm-qgis`). It builds the artifacts, runs core tests on Python 3.10
-  and 3.14, and installs the private runtime plus a GUI open/close on Linux, Windows
-  and both macOS architectures. Publishing stays manual.
+- `.gitlab-ci.yml` runs on every push to `upstream` (`git.ufz.de/mhm/mhm-qgis`), shaped
+  like mhm-tools' pipeline: `isort --check`, `ruff check src tests tools`, the plain test
+  suite on Python 3.11 and 3.13 with coverage, and `build` (wheel, sdist, `twine check`,
+  plugin ZIP). `test-qgis` runs the whole suite inside the private QGIS 3.44 runtime
+  through `tools/run_in_runtime.py`; it downloads a conda QGIS, so it runs on a
+  schedule, on tags or by hand. The local QGIS suite stays the gate for a change.
+- `.github/workflows/release-check.yml` runs on the GitHub `origin` (tags, manual,
+  weekly). It builds the artifacts, runs core tests on Python 3.11 and 3.14, and installs
+  the private runtime plus a GUI open/close on Linux, Windows and both macOS
+  architectures. Publishing stays manual.
+- Until mhm-tools 0.3 and nml-tools 0.6 are on PyPI, both pipelines install them from
+  pinned commits, one `pip` call each with `SETUPTOOLS_SCM_PRETEND_VERSION` set to the
+  version pymhm pins: git checkouts carry no matching tag, and hatch-vcs ignores the
+  per-package `SETUPTOOLS_SCM_PRETEND_VERSION_FOR_*` variables (measured: they installed
+  as `0.2.4.dev57` and `0.1.dev285`). Move a pin when the local checkout the
+  suites ran against moves; delete the block at the PyPI release.
 - The private runtime is `runtime/locks/<platform>.lock`, generated from
   `tools/runtime/environment.yml` with `uvx conda-lock lock -f tools/runtime/environment.yml
   --virtual-package-spec tools/runtime/virtual-packages.yml --kind explicit
@@ -925,6 +940,12 @@ Four JSON files live under each domain's `.temp/` directory.
 - Keep changes narrow and aligned with existing module boundaries.
 
 ## Style
+
+- Lint: `isort .` then `ruff check src tests tools` (config in `pyproject.toml`). isort
+  is the only import sorter, so ruff's `I` rule is off. `D`, `EM`, `PTH` and `ARG` are a
+  deferred ratchet: don't add new violations of them. `RUF046` stays off because NumPy 1.x
+  `round()` of a float32 returns float32, so `int(round(x))` is deliberate. A `noqa`
+  carries its reason.
 
 - Keep UI code focused on UI state, validation and logging.
 - Keep the `externals/` boundary QGIS-free.

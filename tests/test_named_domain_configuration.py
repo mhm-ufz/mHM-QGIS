@@ -7,7 +7,9 @@ import pytest
 
 from mhm_qgis.core.handlers.state import nml_settings, processing
 from mhm_qgis.core.handlers.state.nml_outputs import (
-    register_meteo, register_morphology, register_observations,
+    register_meteo,
+    register_morphology,
+    register_observations,
 )
 from mhm_qgis.core.handlers.store import layout, paths
 from mhm_qgis.core.handlers.store.clone import clone_domain_inputs
@@ -40,7 +42,7 @@ def test_domain_paths_states_and_namelists_are_isolated(tmp_path, version):
 
 @pytest.mark.parametrize("name", ["", "..", "../outside", "a/b", "a\\b", "data", ".temp", "<new>"])
 def test_domain_names_cannot_escape_or_replace_reserved_folders(tmp_path, name):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="without path separators or reserved"):
         paths.domain_folder(tmp_path, name)
 
 
@@ -116,9 +118,9 @@ def test_v6_prepared_outputs_are_registered_for_namelists(tmp_path):
 
 def test_switching_domains_restores_only_the_selected_setup(tmp_path, monkeypatch):
     pytest.importorskip("qgis.core")
-    from mhm_qgis.qt.controllers import main, project
-    from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
+    from mhm_qgis.qt.controllers import project
     from mhm_qgis.qt.dialogs.domain_folder_name import DomainFolderNameDialog
+    from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
     from mhm_qgis.qt.dialogs.project_folder_tree import ProjectFolderTreeDialog
     names = iter(("Alpine", "Valley"))
     def name(prompt):
@@ -152,8 +154,8 @@ def test_switching_domains_restores_only_the_selected_setup(tmp_path, monkeypatc
 def test_meteo_dialog_cancel_and_edit_do_not_prepare_data(tmp_path, monkeypatch):
     pytest.importorskip("qgis.core")
     from mhm_qgis.qt.controllers import forcing
-    from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
     from mhm_qgis.qt.dialogs.meteo_var_details_input import MeteoVarDetailsDialog
+    from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
     dialog = MhmQgisDialog()
     dialog.project_folder = str(paths.domain_folder(tmp_path, "Alpine"))
     layout.ensure_project_structure(dialog.project_folder, "6")

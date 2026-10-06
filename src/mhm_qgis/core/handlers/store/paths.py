@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Where things live: pure path construction, no I/O and no version branching.
 
 Deliberately the leaf of the store. `core/handlers/state` imports only this, so

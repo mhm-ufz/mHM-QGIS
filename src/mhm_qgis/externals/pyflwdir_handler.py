@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Everything the plugin asks of pyflwdir.
 
 One flow grid is built from the filled DEM and every derived product -- flow
@@ -182,9 +181,9 @@ def cell_for_point(context, x: float, y: float):
 
 __all__ = [
     "FLOW_DIRECTION_NODATA",
-    "MissingDependencies",
     "NODATA",
     "PACKAGES",
+    "MissingDependencies",
     "basins",
     "cell_area_m2",
     "cell_for_point",

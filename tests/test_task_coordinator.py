@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import pytest
-
 import os
 import threading
+
+import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -11,11 +11,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.PyQt import QtCore, QtWidgets  # noqa: E402
+from qgis.PyQt import QtCore, QtWidgets
 
-from mhm_qgis.qt.threads.task_coordinator import TaskCoordinator  # noqa: E402
-from mhm_qgis.qt.dialogs.thread_display import ThreadDisplayDialog  # noqa: E402
-
+from mhm_qgis.qt.dialogs.thread_display import ThreadDisplayDialog
+from mhm_qgis.qt.threads.task_coordinator import TaskCoordinator
 
 _APPLICATION = None
 
@@ -96,7 +95,8 @@ def test_jobs_run_off_the_qgstask_thread_and_still_report_failures():
     # A raw QgsTask thread is not created by Python, so it reports as
     # `_DummyThread`; a real one means the job ran off the QgsTask thread.
     assert kinds == ["Thread"]
-    assert errors and "boom" in errors[0]
+    assert errors
+    assert "boom" in errors[0]
 
 
 def _until_cancelled(task):
@@ -168,8 +168,9 @@ def test_main_dialog_cancel_waits_for_workers_then_closes():
 
 def test_cancelled_dialog_is_replaced_when_plugin_reopens(monkeypatch):
     from types import SimpleNamespace
-    from mhm_qgis.mhm_qgis import MhmQgis
+
     from mhm_qgis import dependency_bootstrap
+    from mhm_qgis.mhm_qgis import MhmQgis
     from mhm_qgis.qt.dialogs import mhm_qgis_main
 
     old = SimpleNamespace(
@@ -194,6 +195,7 @@ def test_cancelled_dialog_is_replaced_when_plugin_reopens(monkeypatch):
 
 def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_path):
     from types import SimpleNamespace
+
     from mhm_qgis.core.executions import meteo
     from mhm_qgis.core.handlers.state import processing
     from mhm_qgis.qt.controllers import forcing, grid, time, workflow_state

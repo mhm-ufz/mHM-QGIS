@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget state for the forms: read, populate, enable, validate.
 
 Functions take the dialog as their first argument, so behaviour is testable

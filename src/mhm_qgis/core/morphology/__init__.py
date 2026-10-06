@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Morphology computation: plain functions, no Qt, no QGIS, no dialog.
 
 What each step of the morphology workflow actually does, expressed as functions

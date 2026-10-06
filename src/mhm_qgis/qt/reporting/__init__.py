@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Turning a message from the core layers into a Qt dialog.
 
 Code under `core/` must not import Qt, but it still has things a user has to be
@@ -57,11 +56,11 @@ def log_reporter(log):
 
 
 __all__ = [
-    "error_detail",
     "CRITICAL",
     "INFORMATION",
     "WARNING",
     "dialog_confirmer",
     "dialog_reporter",
+    "error_detail",
     "log_reporter",
 ]

@@ -5,16 +5,13 @@ import numpy as np
 import pytest
 import xarray as xr
 
+from mhm_qgis.core.grid import TargetGrid
 from mhm_qgis.core.meteorology.forcing import (
-    ERA5LAND,
-    MHM_READY,
     MeteoFolderSpec,
     inspect_meteo_folder,
     inspect_meteo_inputs,
     process_meteo_inputs,
 )
-from mhm_qgis.core.grid import TargetGrid, resolution_in_crs
-
 
 LAT = np.array([51.0, 50.0])
 LON = np.array([10.0, 11.0])
@@ -96,7 +93,7 @@ def test_scan_reads_metadata_and_glob_only(tmp_path, monkeypatch):
     assert not (tmp_path / "out").exists()
 
 
-@pytest.mark.parametrize("cadence,times", [
+@pytest.mark.parametrize(("cadence", "times"), [
     ("Hourly", ("2001-01-01T00", "2001-01-01T01", "2001-01-01T02")),
     ("Daily", ("2001-01-01", "2001-01-02", "2001-01-03")),
     ("Monthly", ("2000-01-01", "2000-02-01", "2000-03-01")),
@@ -135,7 +132,7 @@ def test_cumulative_hourly_cross_file_and_chunk_boundaries(tmp_path):
         assert ds.time_bnds[0, 0] == np.datetime64("2001-01-01T00")
 
 
-@pytest.mark.parametrize("variable,source,method,expected", [
+@pytest.mark.parametrize(("variable", "source", "method", "expected"), [
     ("tavg", "t2m", "Average", 11.5),
     ("tmin", "t2m", "Minimum", 0.0),
     ("tmax", "t2m", "Maximum", 23.0),
@@ -197,7 +194,7 @@ def test_cf_edge_fragments_are_dropped_and_other_variables_share_precipitation_w
     assert metadata.start_time.startswith("2001-01-01")
     assert metadata.end_time.startswith("2001-01-02")
     result = process_meteo_inputs(specs, tmp_path / "out", target())
-    for variable, path in result.outputs.items():
+    for _variable, path in result.outputs.items():
         with xr.open_dataset(path) as output:
             assert output.sizes["time"] == 2
             np.testing.assert_array_equal(
@@ -226,7 +223,7 @@ def test_era_hourly_precipitation_can_use_daily_maximum(tmp_path):
         np.testing.assert_allclose(ds.pre, 24.0)
 
 
-@pytest.mark.parametrize("variable,source,unit,value,expected", [
+@pytest.mark.parametrize(("variable", "source", "unit", "value", "expected"), [
     ("tavg", "t2m", "K", 274.15, 1.),
     ("tmin", "tmin", "Celsius", -5., -5.),
     ("tmax", "tmax", "K", 283.15, 10.),
@@ -275,8 +272,8 @@ def test_incomplete_cumulative_cycle_does_not_replace_outputs(tmp_path):
 
 
 def test_supplied_inspection_and_padded_grid(tmp_path, monkeypatch):
-    from mhm_qgis.core.meteorology.forcing import api
     from mhm_qgis.core.grid import target_grid_from_header
+    from mhm_qgis.core.meteorology.forcing import api
     _write_nc(tmp_path / "raw/pre.nc", "pre", units="mm")
     spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="mm")
     inspected = inspect_meteo_inputs([spec])
@@ -293,7 +290,7 @@ def test_supplied_inspection_and_padded_grid(tmp_path, monkeypatch):
 
 
 def test_projected_input_uses_exact_target_grid(tmp_path):
-    from mhm_qgis.core.grid import target_grid_from_header, assert_matches_header
+    from mhm_qgis.core.grid import assert_matches_header, target_grid_from_header
     _write_projected_nc(tmp_path / "raw/tavg.nc", "tavg", 273.15)
     spec = MeteoFolderSpec("tavg", tmp_path / "raw", unit="K")
     header = dict(target().header, xllcorner=0., yllcorner=0., cellsize=1000.)
@@ -326,7 +323,10 @@ def test_publication_failure_restores_previous_files(tmp_path, monkeypatch):
 def test_execute_meteo_prepares_and_reuses_the_configured_collection(tmp_path, monkeypatch):
     from mhm_qgis.core.executions import meteo
     from mhm_qgis.core.handlers.state.meteo_outputs import MeteorologyOutputState
-    from mhm_qgis.core.handlers.store.layout import ensure_project_structure, input_state_path
+    from mhm_qgis.core.handlers.store.layout import (
+        ensure_project_structure,
+        input_state_path,
+    )
     root = tmp_path / "mhm-qgis/Alpine"
     ensure_project_structure(root, "6")
     Path(input_state_path(root)).write_text('{"mhm_version": "6"}')
@@ -373,9 +373,10 @@ def test_interval_batching_does_not_change_the_written_values(tmp_path, monkeypa
                               ds["time_bnds"].values.copy())
 
     assert written["one"][0].shape[0] == 7
-    for one, many in zip(written["one"], written["many"]):
+    for one, many in zip(written["one"], written["many"], strict=True):
         np.testing.assert_array_equal(one, many)
-    assert ticks and ticks[-1] == 100
+    assert ticks
+    assert ticks[-1] == 100
 
 
 def test_calendar_interval_keys_and_bounds():
@@ -415,7 +416,7 @@ def test_calendar_interval_keys_and_bounds():
 
 
 @pytest.mark.parametrize("method", ["Maximum", "Minimum", "Sum", "Average"])
-@pytest.mark.parametrize("cadence,days", [("Daily", 3), ("Monthly", 31)])
+@pytest.mark.parametrize(("cadence", "days"), [("Daily", 3), ("Monthly", 31)])
 def test_group_reduction_matches_a_plain_python_reference(method, cadence, days, tmp_path):
     """The reshape path and the uneven-group path must agree with the obvious loop."""
     hours = 24 * days

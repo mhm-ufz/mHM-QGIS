@@ -67,8 +67,7 @@ def run_stages(stages, start, *, on_done, on_fail):
 
 # Imported after the plans are defined: ``setup`` consumes
 # ``PUBLICATION_STAGES`` as its canonical order.
-from . import reset, setup
-
+from . import reset, setup  # noqa: E402 -- after the plan constants they import
 
 __all__ = [
     "EXECUTE_ALL_STAGES",

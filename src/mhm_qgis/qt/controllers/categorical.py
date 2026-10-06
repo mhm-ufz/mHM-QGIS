@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Land cover, soil, geology and LAI input types on the main form.
 
 Choosing an input type opens its child dialog at once. Accepting stores the

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """QGIS plugin implementation for mhm_qgis."""
 from __future__ import annotations
 
@@ -21,8 +20,9 @@ sys.path[:] = [
     if os.path.normcase(os.path.abspath(path or os.curdir)) != _plugin_dir_key
 ]
 
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+from qgis.PyQt.QtCore import QCoreApplication, QSettings, QTranslator
 from qgis.PyQt.QtGui import QIcon
+
 try:
     from qgis.PyQt.QtGui import QAction
 except ImportError:  # Qt5
@@ -46,7 +46,7 @@ def classFactory(iface):  # pylint: disable=invalid-name
                 f"mHM QGIS dependency check could not run.\n\n{exc}",
             )
         except Exception:
-            print(f"mHM QGIS dependency check could not run: {exc}")
+            print(f"mHM QGIS dependency check could not run: {exc}")  # noqa: T201 -- no GUI yet
     return MhmQgis(iface)
 
 
@@ -68,7 +68,7 @@ class MhmQgis:
         # initialize locale
         locale = QSettings().value("locale/userLocale")[0:2]
         locale_path = os.path.join(
-            self.plugin_dir, "i18n", "mhm_qgis_{}.qm".format(locale)
+            self.plugin_dir, "i18n", f"mhm_qgis_{locale}.qm"
         )
 
         if os.path.exists(locale_path):
@@ -240,7 +240,7 @@ class MhmQgis:
 
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
+        if self.first_start:
             self.first_start = False
             self.dlg = MhmQgisDialog(iface=self.iface)
 

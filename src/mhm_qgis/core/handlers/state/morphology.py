@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """The morphology half of `mhm_qgis_processing_state.json`.
 
 This compatibility module keeps the former session-facing API while all

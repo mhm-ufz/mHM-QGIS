@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 """Lazy NumPy/xarray operations for matching data to an exact grid."""
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from .model import (
     Extent,
@@ -82,8 +82,8 @@ def axes_match_header(x_values, y_values, header: Mapping) -> bool:
     cellsize = float(header["cellsize"])
     tolerance = abs(cellsize) * 1e-6
     target_x, target_y = header_center_coordinates(header)
-    for values, target in ((x_values, target_x), (y_values, sorted(target_y))):
-        values = np.sort(np.asarray(values, dtype="float64").ravel())
+    for axis_values, target in ((x_values, target_x), (y_values, sorted(target_y))):
+        values = np.sort(np.asarray(axis_values, dtype="float64").ravel())
         if values.size < 1:
             return False
         if values.size > 1 and abs(float(np.abs(np.diff(values)).max()) - cellsize) > tolerance:

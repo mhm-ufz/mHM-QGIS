@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Inspect inputs and prepare model-ready meteorology forcing."""
 
 from .api import (
@@ -33,8 +32,8 @@ __all__ = [
     "inspect_meteo_inputs",
     "inspect_meteo_inputs_cached",
     "inspection_fingerprint",
-    "preparation_fingerprint",
     "normalize_kind",
     "normalize_source",
+    "preparation_fingerprint",
     "process_meteo_inputs",
 ]

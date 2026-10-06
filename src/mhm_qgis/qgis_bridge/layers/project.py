@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """The set of layers the QGIS project currently holds.
 
 Registering a layer, finding one again, and dropping the ones that came out of

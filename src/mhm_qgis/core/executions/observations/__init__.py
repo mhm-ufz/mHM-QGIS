@@ -1,16 +1,18 @@
 """Prepare gridded observations with the shared L2 forcing pipeline."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from ...grid import TargetGrid
 from ...handlers.state.nml_outputs import register_observations
 from ...handlers.store import registry
 from ...handlers.store.paths import data_folder
 from ...meteorology.forcing import (
-    MeteoFolderSpec, SpatialMetadata, inspect_meteo_inputs_cached,
+    MeteoFolderSpec,
+    SpatialMetadata,
+    inspect_meteo_inputs_cached,
     process_meteo_inputs,
 )
 
@@ -30,7 +32,7 @@ def prepare(run: ObservationRun, *, log=None, cancelled=None) -> bool:
     result = process_meteo_inputs(
         run.inputs, output_root, run.target_grid,
         flat_layout=True, inspections=inspections, log=log, cancelled=cancelled)
-    for variable, path in result.outputs.items():
+    for path in result.outputs.values():
         registry.register(
             run.project_folder, path, name=Path(path).name,
             category="observation")

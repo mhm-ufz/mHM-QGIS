@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Cache the meteorology folder inspection between sessions.
 
 `inspect_meteo_folder` opens every NetCDF in a folder twice: once for its
@@ -12,10 +11,9 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 
+from ...handlers.state.cache import cached_payload, fingerprint, store_payload
 from .api import _files_for_spec, inspect_meteo_folder
 from .types import MeteoFolderSpec, SpatialMetadata
-from ...handlers.state.cache import cached_payload, fingerprint, store_payload
-
 
 SECTION = "meteo_inspection"
 
@@ -77,7 +75,7 @@ def inspect_meteo_folder_cached(project_folder, spec, log=None, cancelled=None):
     spec = spec.normalized()
     if not project_folder:
         return inspect_meteo_folder(spec, cancelled=cancelled)
-    digest, files = inspection_fingerprint(spec)
+    digest, _files = inspection_fingerprint(spec)
     metadata = _from_payload(cached_payload(project_folder, SECTION, spec.kind, digest))
     if metadata is not None:
         return metadata

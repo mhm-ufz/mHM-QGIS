@@ -12,18 +12,20 @@ import os
 
 import numpy as np
 import pytest
+
+pytest.importorskip("osgeo", reason="GDAL Python bindings come with QGIS or the system")
 from osgeo import gdal, osr
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.handlers.file.ascii.morphology import (  # noqa: E402
+from mhm_qgis.core.grid import header_center_coordinates
+from mhm_qgis.core.handlers.file.ascii.morphology import (
     _read_raster,
     align_dataset_to_header,
     file_matches_header,
 )
-from mhm_qgis.core.grid import header_center_coordinates  # noqa: E402
 
 xr = pytest.importorskip("xarray")
 
@@ -73,7 +75,7 @@ def _aligned(path, *, header=None, integer=False):
         )
     finally:
         dataset.close()
-    name = list(result.data_vars)[0]
+    name = next(iter(result.data_vars))
     return result[name]
 
 

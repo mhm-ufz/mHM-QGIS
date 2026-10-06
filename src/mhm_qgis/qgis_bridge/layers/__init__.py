@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """QGIS layer handling: build a layer, register it, find it, ask its CRS.
 
 The one place in the plugin that knows the `QgsRasterLayer` / `QgsVectorLayer` /
@@ -41,17 +40,16 @@ __all__ = [
     "crs_of",
     "crs_string",
     "crs_unit",
-    "transform_between",
+    "extent_bounds",
     "find_by_name",
     "find_by_source",
-    "extent_bounds",
     "gauge_coordinates",
     "load",
     "local_layer_source",
-    "normalized_source",
-    "materialize_vector_layer",
     "materialize_raster_layer",
+    "materialize_vector_layer",
     "merged_domain_bounds",
+    "normalized_source",
     "open_layer",
     "qgs_field",
     "raster_resolution_info",
@@ -60,5 +58,6 @@ __all__ = [
     "remove_under",
     "remove_vector_dataset",
     "source_uri",
+    "transform_between",
     "transform_to_raster",
 ]

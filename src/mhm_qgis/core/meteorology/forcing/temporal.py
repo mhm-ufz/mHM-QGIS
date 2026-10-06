@@ -161,6 +161,7 @@ def deaccumulate_values(values, bounds, spec, previous=None):
     """Return interval values while retaining the last cumulative plane."""
     import numpy as np
     import pandas as pd
+
     # Only the cumulative branch writes into the block, so a non-cumulative
     # variable must not pay a full copy of every chunk for nothing.
     result = np.asarray(values, dtype="float64")

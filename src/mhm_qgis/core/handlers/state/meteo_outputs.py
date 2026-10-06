@@ -1,16 +1,13 @@
-# -*- coding: utf-8 -*-
 """Project-local registry updates for meteorology outputs."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Union
 
 from ..store.registry import key_for, register
 from . import processing
 
-
 STATE_FILENAME = processing.STATE_FILENAME
-PathInput = Union[str, Path]
+PathInput = str | Path
 
 
 class MeteorologyOutputState:

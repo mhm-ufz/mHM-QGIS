@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
-from datetime import datetime
+
 from ....core.handlers.store.paths import temp_folder, workspace_folder
 
 
@@ -47,7 +48,7 @@ def validate_times(values, version="v6") -> dict[str, str]:
         raise ValueError("mHM 5 simulation periods require whole dates (00:00).")
     if not dates[0] <= dates[1] <= dates[2]:
         raise ValueError("Dates must satisfy simulation start ≤ evaluation start ≤ simulation end.")
-    return {name: date.isoformat(timespec="minutes") for name, date in zip(names, dates)}
+    return {name: date.isoformat(timespec="minutes") for name, date in zip(names, dates, strict=True)}
 
 
 def save_settings(
@@ -81,8 +82,8 @@ def sync_domain_settings(project_folder: str | Path) -> Path:
     from .domain_state import (
         assign_domain_ids,
         gauge_records,
-        load_state as load_domain_state,
     )
+    from .domain_state import load_state as load_domain_state
 
     domain_state = load_domain_state(project_folder)
     assign_domain_ids(domain_state)

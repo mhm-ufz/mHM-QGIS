@@ -7,8 +7,8 @@ import pytest
 
 from mhm_qgis.core.handlers.state.nml_settings import load_settings, update_section
 from mhm_qgis.core.handlers.store.layout import ensure_project_structure, morph_folder
-from mhm_qgis.core.morphology.layers import categorical
 from mhm_qgis.core.handlers.store.paths import morph_staging_folder
+from mhm_qgis.core.morphology.layers import categorical
 
 
 def _touch(path: Path, content: bytes = b"") -> Path:
@@ -91,8 +91,9 @@ def test_ready_mode_rejects_non_raster_input(tmp_path):
 
 
 def test_ready_raster_is_placed_on_the_common_grid(tmp_path):
-    from osgeo import gdal, osr
+    pytest.importorskip("osgeo")
     import numpy as np
+    from osgeo import gdal, osr
 
     ensure_project_structure(tmp_path, "6")
     source = tmp_path / "input" / "soil.tif"

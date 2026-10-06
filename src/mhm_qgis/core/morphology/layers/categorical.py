@@ -12,8 +12,11 @@ from ...handlers.state.nml_settings import (
     update_section,
 )
 from ...handlers.store.layout import morph_folder
-from ...handlers.store.paths import temp_morphology_folder, workspace_folder, morph_staging_folder
-
+from ...handlers.store.paths import (
+    morph_staging_folder,
+    temp_morphology_folder,
+    workspace_folder,
+)
 
 SPECS = {
     "lc": {
@@ -172,7 +175,8 @@ def copy_ready(
         temporary = Path(name)
         prepared = temporary / target.name
         if target_header:
-            from ...handlers.file.netcdf.raster import copy_rasters, source as raster_source
+            from ...handlers.file.netcdf.raster import copy_rasters
+            from ...handlers.file.netcdf.raster import source as raster_source
             from ...handlers.raster.tasks import warp_raster_to_header
 
             uri = raster_source(source, variable) if source.suffix.lower() == ".nc" else source
@@ -232,8 +236,8 @@ def copy_ready(
 def _publish(replacements, removals, temporary: Path) -> None:
     """Replace one categorical output set without leaving half a set."""
     tracked = []
-    for path in [destination for _source, destination in replacements] + list(removals):
-        path = Path(path)
+    for name in [destination for _source, destination in replacements] + list(removals):
+        path = Path(name)
         if path not in tracked:
             tracked.append(path)
     backups = []

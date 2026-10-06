@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Long-lived Qt objects that are neither a form nor its wiring.
 
 A `QObject` that owns a signal connection and some state of its own, attached

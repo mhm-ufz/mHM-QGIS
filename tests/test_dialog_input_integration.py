@@ -4,9 +4,7 @@ import json
 import os
 from pathlib import Path
 
-import numpy as np
 import pytest
-import xarray as xr
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,16 +13,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # isort: off
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.core import (QgsCoordinateReferenceSystem,  # noqa: E402
-                       QgsVectorLayer)
-from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
+from qgis.core import (QgsVectorLayer)
+from qgis.PyQt.QtWidgets import QApplication
 
-from mhm_qgis.qt.dialogs.input_selection import InputComboAdapter  # noqa: E402
-from mhm_qgis.core.handlers.state import processing  # noqa: E402
+from mhm_qgis.qt.dialogs.input_selection import InputComboAdapter
+from mhm_qgis.core.handlers.state import processing
 from mhm_qgis.core.handlers.store.paths import data_folder
-from mhm_qgis.core.handlers.store.layout import input_state_path  # noqa: E402
-from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog  # noqa: E402
-from mhm_qgis.qt.controllers import main, workflow_state  # noqa: E402
+from mhm_qgis.core.handlers.store.layout import input_state_path
+from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
+from mhm_qgis.qt.controllers import main, workflow_state
 # isort: on
 
 _APPLICATION = None
@@ -113,6 +110,7 @@ def test_main_configuration_buttons_use_dialog_first_controller(monkeypatch):
 
 def test_morphology_display_wiring_selects_historical_band(tmp_path, monkeypatch):
     from qgis.PyQt.QtCore import QDate
+
     from mhm_qgis.core.handlers.state.nml_settings import update_section
     from mhm_qgis.qgis_bridge.display import morphology
     from mhm_qgis.qt.controllers import main
@@ -236,6 +234,7 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
 
 def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
     from dataclasses import asdict
+
     from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
     from mhm_qgis.qt.controllers import forcing, grid
     folder = tmp_path / "forcing"
@@ -263,6 +262,7 @@ def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
 
 def test_meteo_requires_pre_but_not_unconfigured_variables(tmp_path):
     from dataclasses import asdict
+
     from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
     from mhm_qgis.qt.controllers import forcing
     dialog = MhmQgisDialog()
@@ -296,7 +296,7 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     restored.close()
 
 
-@pytest.mark.parametrize("workflow,button", [
+@pytest.mark.parametrize(("workflow", "button"), [
     ("project_structure", "pushButton_createOrLoadDomainStructure"),
     ("scan_precipitation", "pushButton_scanPrecipitationFiles"),
     ("execute_all_observations", "pushButton_executeAllObservation"),

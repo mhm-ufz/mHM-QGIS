@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """QGIS plugin entry point for mhm_qgis."""
 
 from ._version import __version__
+
+__all__ = ["__version__", "classFactory"]
 
 
 # noinspection PyPep8Naming
@@ -27,7 +28,7 @@ def classFactory(iface):  # pylint: disable=invalid-name
                 f"mHM QGIS dependency check could not run.\n\n{exc}",
             )
         except Exception:
-            print(f"mHM QGIS dependency check could not run: {exc}")
+            print(f"mHM QGIS dependency check could not run: {exc}")  # noqa: T201 -- no GUI yet
 
     from .mhm_qgis import MhmQgis
 

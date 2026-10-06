@@ -12,7 +12,6 @@ from ...handlers.state.nml_settings import relative_workspace_path, update_secti
 from ...handlers.store.layout import lai_folder
 from ...handlers.store.paths import lai_dem_staging_path
 
-
 DEFAULT_TIMESTEP = "Long Term Mean Monthly Gridded Data"
 
 

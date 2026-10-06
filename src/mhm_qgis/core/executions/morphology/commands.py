@@ -16,15 +16,14 @@ from ...handlers.raster.tasks import (
 from ...handlers.state.cache import (
     cached_payload,
     fingerprint,
+    load_state,
     outputs_newer_than_inputs,
     outputs_present,
-    load_state,
     store_payload,
 )
 from ...handlers.store.paths import temp_morphology_folder
-from ...morphology.layers.categorical import saved_outputs
-from ...morphology.layers.categorical import copy_ready
 from ...morphology.layers.advanced_l0 import publish_model_inputs
+from ...morphology.layers.categorical import copy_ready, saved_outputs
 
 
 def dem_derivatives(task, options):
@@ -166,8 +165,8 @@ def native_worker(task, payload, working_folder):
         task.setProgress(5)
     with TemporaryDirectory(
         prefix="mhm_qgis_native_", dir=str(working_folder)
-    ) as temporary:
-        temporary = Path(temporary)
+    ) as temporary_name:
+        temporary = Path(temporary_name)
         job_file = temporary / "job.json"
         result_file = temporary / "result.json"
         job_file.write_text(json.dumps(payload), encoding="utf-8")
@@ -231,8 +230,8 @@ __all__ = [
     "lai",
     "lookup",
     "native_worker",
-    "record_stage",
     "ready",
+    "record_stage",
     "reusable_stage",
     "stage_digest",
 ]

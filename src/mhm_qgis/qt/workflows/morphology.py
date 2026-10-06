@@ -14,10 +14,9 @@ from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from qgis.PyQt import QtCore
 from qgis.core import QgsVectorLayer
+from qgis.PyQt import QtCore
 
-from ...externals.mhm_tools_handler import categorical_output_suffix
 from ...core.executions import morphology
 from ...core.executions.morphology import commands
 from ...core.handlers.state import processing
@@ -29,6 +28,7 @@ from ...core.morphology.hydrology.outlets import (
 )
 from ...core.morphology.layers import categorical, lai
 from ...core.morphology.layers.categorical import SPECS
+from ...externals.mhm_tools_handler import categorical_output_suffix
 from ...qgis_bridge import layers
 from ..controllers import grid
 from ..controllers.categorical import advanced_input, record_standard_soil_output
@@ -360,7 +360,7 @@ class MorphologyTaskBridge:
         digest = input_fingerprint(value, self.filled_dem_path, job["version"])
         reusable = self._reusable_stage(kind, digest) if reuse_existing else None
         if reusable:
-            result = dict(kind=kind, outputs=reusable["outputs"])
+            result = {"kind": kind, "outputs": reusable["outputs"]}
             QtCore.QTimer.singleShot(0, lambda: self._advanced_ready(result, done))
             return True
         return (

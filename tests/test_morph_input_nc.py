@@ -2,22 +2,24 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import numpy as np
 import pytest
+
+pytest.importorskip("osgeo", reason="GDAL Python bindings come with QGIS or the system")
 from osgeo import gdal, osr
+
 from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters, source
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.morphology.layers.morph_input_nc import (  # noqa: E402
+from mhm_qgis.core.morphology.layers.mask import write_morph_mask
+from mhm_qgis.core.morphology.layers.morph_input_nc import (
     MORPH_VARIABLES,
     write_morph_input_nc,
 )
-from mhm_qgis.core.morphology.layers.mask import write_morph_mask
 
 xr = pytest.importorskip("xarray")
 
@@ -149,8 +151,10 @@ def test_missing_layers_are_simply_omitted(tmp_path):
         crs_string="EPSG:32632")
 
     with xr.open_dataset(output) as result:
-        assert "dem" in result and "facc" in result
-        assert "slope" not in result and "soil_class" not in result
+        assert "dem" in result
+        assert "facc" in result
+        assert "slope" not in result
+        assert "soil_class" not in result
 
 
 def test_morph_mask_uses_selected_dem_cells_and_l0_coordinates(tmp_path):

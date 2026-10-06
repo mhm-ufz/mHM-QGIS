@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
 """Persistent project terminal dialog for mhm_qgis."""
 from __future__ import annotations
 
+import contextlib
 import os
 import shlex
 import signal
@@ -20,7 +20,7 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
     """A small persistent shell session shown in a reusable dialog."""
 
     def __init__(self, parent=None):
-        super(ProjectTerminalDialog, self).__init__(parent)
+        super().__init__(parent)
         self.setupUi(self)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
@@ -118,10 +118,8 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         if not self.is_running():
             return
         if os.name == "posix":
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.killpg(int(self._process.processId()), signal.SIGTERM)
-            except ProcessLookupError:
-                pass
         else:
             self._process.kill()
         QtCore.QTimer.singleShot(2000, self._kill_if_running)
@@ -130,10 +128,8 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         if not self.is_running():
             return
         if os.name == "posix":
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.killpg(int(self._process.processId()), signal.SIGKILL)
-            except ProcessLookupError:
-                pass
         else:
             self._process.kill()
 
@@ -158,7 +154,7 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
             if event.key() == QtCore.Qt.Key.Key_Down:
                 self._show_history(1)
                 return True
-        return super(ProjectTerminalDialog, self).eventFilter(watched, event)
+        return super().eventFilter(watched, event)
 
     def closeEvent(self, event):
         """Hide the dialog without stopping the shell process."""

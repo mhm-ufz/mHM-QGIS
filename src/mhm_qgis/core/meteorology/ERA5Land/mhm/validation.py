@@ -1,11 +1,10 @@
 """Validation for reusing existing mHM forcing outputs."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from .logging import log_message
-
 
 EXPECTED_COORDINATE_ATTRS = {
     "lat": {
@@ -21,7 +20,7 @@ EXPECTED_COORDINATE_ATTRS = {
 }
 
 
-def existing_output_is_valid(
+def existing_output_is_valid(  # noqa: PLR0911
     output_file: Path,
     variable: str,
     np,

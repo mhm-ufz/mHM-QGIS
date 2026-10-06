@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Read gauge points from QGIS layers for the core raster command."""
 from __future__ import annotations
 

@@ -1,10 +1,15 @@
 """Populate and validate meteorology metadata without opening data files."""
 from pathlib import Path
+
 from qgis.PyQt.QtWidgets import QMessageBox
-from ...core.meteorology.forcing.types import MeteoFolderSpec
+
 from ...core.meteorology.forcing.temporal import (
-    CADENCES, VARIABLES, normalize_unit, validate_spec,
+    CADENCES,
+    VARIABLES,
+    normalize_unit,
+    validate_spec,
 )
+from ...core.meteorology.forcing.types import MeteoFolderSpec
 from ..dialogs.file_picker import open_directory
 
 

@@ -2,9 +2,12 @@
 
 from pathlib import Path
 
-from mhm_qgis.core.handlers.store.morphology import land_cover_periods, resolve_display_output
 from mhm_qgis.core.handlers.state.nml_settings import update_section
 from mhm_qgis.core.handlers.store.layout import ensure_project_structure, morph_folder
+from mhm_qgis.core.handlers.store.morphology import (
+    land_cover_periods,
+    resolve_display_output,
+)
 from mhm_qgis.core.handlers.store.paths import temp_morphology_folder
 
 

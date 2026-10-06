@@ -1,17 +1,20 @@
-# -*- coding: utf-8 -*-
 """Publish staged class inputs on the pre-scanned common L0 grid."""
 from __future__ import annotations
 
 import os
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-from ...handlers.state.nml_settings import load_settings, relative_workspace_path, save_settings
-from ...handlers.store.paths import morph_staging_folder, workspace_folder
-from ...handlers.store.layout import morph_folder, is_v6
 from ...handlers.file.ascii.morphology import file_matches_header
-
+from ...handlers.state.nml_settings import (
+    load_settings,
+    relative_workspace_path,
+    save_settings,
+)
+from ...handlers.store.layout import is_v6, morph_folder
+from ...handlers.store.paths import morph_staging_folder, workspace_folder
 
 RASTER_SUFFIXES = {".asc", ".nc", ".tif", ".tiff"}
 # Class definitions and projection sidecars travel with their raster untouched.
@@ -215,10 +218,10 @@ def _repoint_settings(project_folder, published, log=None) -> None:
                 if updated != value:
                     scene["output_path"] = updated
                     changed = True
-        if not is_v6(project_folder) and section == "land_cover" and record.get("scenes"):
-            if record.get("output_path"):
-                record["output_path"] = ""
-                changed = True
+        if (not is_v6(project_folder) and section == "land_cover" and record.get("scenes")
+                and record.get("output_path")):
+            record["output_path"] = ""
+            changed = True
     if changed:
         save_settings(project_folder, settings)
         if log:
@@ -252,7 +255,7 @@ def missing_model_inputs(project_folder) -> list[str]:
         if not path.is_file():
             missing.append(text)
 
-    for section in SECTIONS + ("lai",):
+    for section in (*SECTIONS, "lai"):
         record = settings.get(section)
         if not isinstance(record, dict):
             continue

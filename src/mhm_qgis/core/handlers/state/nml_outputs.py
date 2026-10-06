@@ -5,7 +5,6 @@ from pathlib import Path
 
 from .nml_settings import load_settings, relative_workspace_path, save_settings
 
-
 METEO_FIELDS = {
     "pre": "pre", "pet": "pet", "tavg": "temp", "tann": "tann",
     "tmin": "tmin", "tmax": "tmax", "ssrd": "ssrd", "strd": "strd",

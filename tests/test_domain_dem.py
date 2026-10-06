@@ -2,19 +2,19 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import numpy as np
 import pytest
+
+pytest.importorskip("osgeo", reason="GDAL Python bindings come with QGIS or the system")
 from osgeo import gdal, ogr, osr
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.handlers.raster.tasks import write_domain_dem_ascii  # noqa: E402
-from mhm_qgis.core.handlers.file.ascii.pad import read_ascii_header  # noqa: E402
-
+from mhm_qgis.core.handlers.file.ascii.pad import read_ascii_header
+from mhm_qgis.core.handlers.raster.tasks import write_domain_dem_ascii
 
 L0 = {
     "ncols": 6, "nrows": 5, "xllcorner": 0.0, "yllcorner": 0.0,
@@ -75,11 +75,13 @@ def test_the_domain_dem_keeps_the_common_extent_not_the_domain_bounding_box(tmp_
 
     header = read_ascii_header(output)
     assert (int(header["ncols"]), int(header["nrows"])) == (6, 5)
-    assert header["xllcorner"] == 0.0 and header["yllcorner"] == 0.0
+    assert header["xllcorner"] == 0.0
+    assert header["yllcorner"] == 0.0
     assert header["cellsize"] == 100.0
 
     rows = _rows(output)
-    assert len(rows) == 5 and all(len(row) == 6 for row in rows)
+    assert len(rows) == 5
+    assert all(len(row) == 6 for row in rows)
     kept = np.zeros((5, 6), dtype=bool)
     kept[1:3, 2:4] = True
     written = np.array([[float(cell) for cell in row] for row in rows])

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Shims for QGIS and Qt APIs that changed between supported versions.
 
 Every helper here exists because the same call spells differently across the
@@ -6,6 +5,8 @@ QGIS releases the plugin runs on. Keeping them together means there is one
 place to delete from once a minimum version is agreed.
 """
 from __future__ import annotations
+
+import contextlib
 
 
 def _qmeta_type(type_name):
@@ -39,10 +40,8 @@ def qgs_field(name, field_type):
         }
     qmeta_name = qmeta_name_by_qvariant_name.get(field_type, field_type)
     candidates = [_qmeta_type(qmeta_name)]
-    try:
+    with contextlib.suppress(TypeError, ValueError):
         candidates.append(int(candidates[0]))
-    except (TypeError, ValueError):
-        pass
     if field_type in qvariant_type_by_name:
         candidates.append(qvariant_type_by_name[field_type])
 

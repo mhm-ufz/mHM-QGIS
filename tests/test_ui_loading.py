@@ -1,15 +1,15 @@
 """Designer sources compile on either Qt binding without generated modules."""
 import importlib.util
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 
-@pytest.mark.parametrize("version,api,plot_api", [
+@pytest.mark.parametrize(("version", "api", "plot_api"), [
     ("5.15.14", "pyqt5", "PyQt5"), ("6.8.3", "pyqt6", "PyQt6"),
 ])
 def test_binding_selection_uses_qgis_qt_version(monkeypatch, version, api, plot_api):
@@ -24,10 +24,10 @@ def test_binding_selection_uses_qgis_qt_version(monkeypatch, version, api, plot_
 
 def test_launcher_requires_real_qgis():
     result = subprocess.run(
-        [sys.executable, "-c", "import sys; sys.modules['qgis'] = None; "
-         "from mhm_qgis.qt.__main__ import main; main([])"],
+        [sys.executable, "-c", ("import sys; sys.modules['qgis'] = None; "
+         "from mhm_qgis.qt.__main__ import main; main([])")],
         env=dict(os.environ, PYTHONPATH=str(Path(__file__).parents[1] / "src")),
-        capture_output=True, text=True, timeout=10,
+        check=False, capture_output=True, text=True, timeout=10,
     )
     assert result.returncode == 1
     assert "QGIS runtime libraries are required" in result.stderr
@@ -55,7 +55,7 @@ sys.exit(main([]))
         [sys.executable, "-c", script],
         env=dict(os.environ, QT_QPA_PLATFORM="offscreen",
                  PYTHONPATH=os.pathsep.join(filter(None, paths))),
-        capture_output=True, text=True, timeout=120,
+        check=False, capture_output=True, text=True, timeout=120,
     )
     assert result.returncode == 0, result.stderr[-3000:]
     assert "Traceback" not in result.stderr
@@ -93,6 +93,6 @@ for path in Path(sys.argv[2]).glob("*.ui"):
             assert button is not None and not button.icon().isNull(), path
 ''', binding, str(forms.resolve())],
         cwd=forms.parent, env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
-        capture_output=True, text=True, timeout=30,
+        check=False, capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr

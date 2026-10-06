@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Severity levels for the `report=` callback contract.
 
 Defined here, in a leaf with no dependencies, so `core` can name a severity

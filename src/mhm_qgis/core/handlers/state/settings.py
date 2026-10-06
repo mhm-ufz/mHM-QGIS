@@ -1,10 +1,9 @@
 """Project-local numeric settings; the packaged file supplies initial defaults."""
-from pathlib import Path
 import math
 import re
+from pathlib import Path
 
 from ..store.paths import settings_path
-
 
 DEFAULTS = {"grid_alignment_gap_limit": 1.0e-7, "max_snap_buffer_distance": 1000.0}
 PACKAGED_SETTINGS = Path(__file__).parents[3] / "settings.yaml"
@@ -33,7 +32,7 @@ def read(project_folder=None, *, path=None):
         content = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return values
-    for key in values:
+    for key in DEFAULTS:
         match = re.search(rf"(?m)^\s*{key}\s*:\s*([^#\n]*)", content)
         if match:
             try:

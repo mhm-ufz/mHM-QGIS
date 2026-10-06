@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Load Designer forms with the Qt binding supplied by QGIS."""
 from pathlib import Path
 

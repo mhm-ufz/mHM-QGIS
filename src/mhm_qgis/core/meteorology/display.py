@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Resolve prepared meteorology forcing for the display selector.
 
 Kept free of QGIS so time-coordinate selection stays testable; the canvas half lives
@@ -9,12 +8,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 from functools import lru_cache
-
-from ..handlers.file.netcdf import time_axis
-from ..post import step_for_when
 from pathlib import Path
 
+from ..handlers.file.netcdf import time_axis
 from ..handlers.store.layout import METEO_VARIABLES, expected_meteo_outputs
+from ..post import step_for_when
 
 #: Historical forcing files used days since this epoch.
 TIME_EPOCH = date(1900, 1, 1)
@@ -111,12 +109,12 @@ def resolve_meteo_output(project_folder, variable: str, when):
 
 __all__ = [
     "DISPLAY_VARIABLES",
-    "MeteoOutput",
     "VARIABLE_LABELS",
+    "MeteoOutput",
     "available_meteo_variables",
     "meteo_output_path",
+    "meteo_steps",
     "meteo_time_range",
     "project_time_range",
     "resolve_meteo_output",
-    "meteo_steps",
 ]

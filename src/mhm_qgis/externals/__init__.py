@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Handlers for external packages and executables the plugin does not own.
 
 One module per external dependency. Package calls and version-specific mHM

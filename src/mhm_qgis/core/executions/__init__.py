@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """What the plugin's workflow buttons actually run.
 
 One subpackage per workflow: `morpho` for `pushButton_executeAllMorphology`,

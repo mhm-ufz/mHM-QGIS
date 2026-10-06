@@ -5,15 +5,17 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
+pytest.importorskip("osgeo", reason="GDAL Python bindings come with QGIS or the system")
 from osgeo import gdal, ogr, osr
+
 from mhm_qgis.core.handlers.file.netcdf.raster import file_path, variables
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE  # noqa: E402
-from mhm_qgis.core.handlers.raster.tasks import (  # noqa: E402
+from mhm_qgis.core.handlers.raster.tasks import (
     crop_aligned_l0_raster,
     delineate_domains_file,
     delineate_outlet_file,
@@ -21,6 +23,7 @@ from mhm_qgis.core.handlers.raster.tasks import (  # noqa: E402
     hydrology_files,
     mask_aligned_l0_raster,
 )
+from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE
 
 
 def _dem(path):
@@ -319,7 +322,8 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
                               outlets=[first, second], merged_path=folder / "merged.tif",
                               dem_domain=(2, str(folder / "dem-mask.tif"), str(folder / "dem.asc")))
     assert result["outlets"]["2"]["mask_value"] == 8
-    assert result["dem_mask_path"] and not Path(result["dem_domain_path"]).exists()
+    assert result["dem_mask_path"]
+    assert not Path(result["dem_domain_path"]).exists()
     assert set(np.unique(_band(result["merged_path"]))) <= {1, 2}
     status = source.stat()
     os.utime(source, ns=(status.st_atime_ns, status.st_mtime_ns + 1000000000))

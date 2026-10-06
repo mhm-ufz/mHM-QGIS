@@ -1,11 +1,14 @@
 """Exact, bounded-memory NetCDF raster copies, with GDAL-readable grid metadata."""
-from contextlib import contextmanager
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 from ....grid import (
-    aligned_window, crs_equal, geotransform_from_header,
-    header_center_arrays, header_from_geotransform,
+    aligned_window,
+    crs_equal,
+    geotransform_from_header,
+    header_center_arrays,
+    header_from_geotransform,
 )
 
 

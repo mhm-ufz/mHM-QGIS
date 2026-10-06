@@ -41,8 +41,8 @@ def create_structure(dialog):
         return
     active_domain = False
     try:
-        from ...core.handlers.store.paths import domain_folder
         from ...core.handlers.state import settings
+        from ...core.handlers.store.paths import domain_folder
 
         name = dialog.comboBox_domainFolderSelector.currentData()
         if name is None:

@@ -1,14 +1,13 @@
 """Focused tests for the nml-tools configuration bridge."""
 from __future__ import annotations
 
-import pytest
-
 import os
 import sys
 import types
 from pathlib import Path
 
 import nml_tools.gui
+import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -16,15 +15,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from mhm_qgis.qt.controllers import model as controller_module
-from mhm_qgis.qt.controllers.time import TIME_WIDGETS
-from mhm_qgis.qt.controllers.version import selected as selected_version
+from mhm_qgis.core.handlers.state import processing
+from mhm_qgis.core.handlers.store.paths import workspace_folder
 from mhm_qgis.dependency_bootstrap import (
     configure_qtpy_api,
     dependency_from_requirement_line,
 )
-from mhm_qgis.core.handlers.store.paths import workspace_folder
-from mhm_qgis.core.handlers.state import processing
+from mhm_qgis.qt.controllers import model as controller_module
+from mhm_qgis.qt.controllers.time import TIME_WIDGETS
+from mhm_qgis.qt.controllers.version import selected as selected_version
 
 
 class ComboBox:

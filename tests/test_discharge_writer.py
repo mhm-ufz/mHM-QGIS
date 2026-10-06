@@ -1,8 +1,6 @@
 """Tests for discharge files that do not require a valid QGIS table layer."""
 from pathlib import Path
 
-
-
 # isort: off
 from mhm_qgis.core.handlers.file.discharge import (
     records_from_layer,

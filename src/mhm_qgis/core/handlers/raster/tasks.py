@@ -569,7 +569,7 @@ def _ascii_rows(block) -> list[str]:
     return [
         " ".join(map(str, row.astype(np.int64).tolist())) if row_is_whole
         else " ".join([str(int(value)) if value == int(value) else repr(value) for value in row.tolist()])
-        for row, row_is_whole in zip(block, whole.tolist())
+        for row, row_is_whole in zip(block, whole.tolist(), strict=True)
     ]
 
 
@@ -623,7 +623,9 @@ def dem_derivative_files(
 ):
     """Prepare one derivative dataset and a single-variable filled DEM."""
     from netCDF4 import Dataset
-    from ..file.netcdf.raster import copy_rasters, file_path, source as raster_source
+
+    from ..file.netcdf.raster import copy_rasters, file_path
+    from ..file.netcdf.raster import source as raster_source
     from ..state.cache import fingerprint
 
     _cancelled(task)
@@ -873,7 +875,7 @@ def _write_channel_network(path, accumulation, context, threshold_cells):
 
 
 def _delineate(context, x, y, raster_path, basin_id):
-    np, _pfd, _affine, gdal, _ogr, osr = _dependencies()
+    np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
     inverse = ~context["transform"]
     col_value, row_value = inverse * (float(x), float(y))
     row, col = int(math.floor(row_value)), int(math.floor(col_value))
@@ -1036,12 +1038,12 @@ def delineate_domains_file(
 
 __all__ = [
     "crop_aligned_l0_raster",
-    "domain_mask_bounds",
-    "merge_domain_masks",
     "delineate_domains_file",
     "delineate_outlet_file",
+    "domain_mask_bounds",
     "gauge_position_file",
     "hydrology_files",
     "mask_aligned_l0_raster",
+    "merge_domain_masks",
     "write_domain_dem_ascii",
 ]

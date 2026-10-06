@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget wiring for `single_layer_input_with_lookup_config_dialog.ui`."""
 from __future__ import annotations
 

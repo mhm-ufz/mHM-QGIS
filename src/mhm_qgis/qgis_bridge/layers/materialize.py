@@ -1,15 +1,13 @@
-# -*- coding: utf-8 -*-
 """Materialize QGIS inputs for path-based processing backends."""
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-import os
-
-from .compat import create_vector_file_writer
 from .. import processing
+from .compat import create_vector_file_writer
 
 
 def local_layer_source(layer):

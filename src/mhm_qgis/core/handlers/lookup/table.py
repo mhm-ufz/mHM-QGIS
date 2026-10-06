@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Read mHM categorical lookup tables and resolve their columns.
 
 A lookup table arrives either as `.csv`, whose format mHM-tools owns, or as a

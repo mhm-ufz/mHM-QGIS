@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """Widget state for the input-plus-lookup half of the single-layer form."""
 from __future__ import annotations
+
 from ...core.handlers import lookup
 from ..dialogs.input_selection import _browse_into_combo, _combo_path
 
