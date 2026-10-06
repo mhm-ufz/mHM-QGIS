@@ -12,10 +12,8 @@ pages:
     kind: info
     title: Welcome to mHM
     text: >-
-      mHM simulates the water cycle on nested grids: the DEM and soil, land-cover and
-      geology maps on L0; the hydrology on the coarser L1; river routing on L11; and the
-      meteorological forcing on L2. Multiscale Parameter Regionalization (MPR) carries the
-      L0 detail up to L1. This wizard suggests settings for your study; you can change
+      The mesoscale Hydrologic Model (mHM) is a spatially distributed, grid-based hydrological model designed to simulate major terrestrial water-cycle processes across multiple spatial scales. A key feature of mHM is its Multiscale Parameter Regionalization (MPR) approach, which enables model parameters to be transferred and applied consistently across different resolutions and supports hydrological prediction in both gauged and ungauged basins. The original mHM concept and MPR framework were developed by Luis Samaniego, Rohini Kumar, and Sabine Attinger, with the foundational work published in 2010 and further developed in subsequent studies. mHM originated at the Helmholtz Centre for Environmental Research, UFZ, particularly within its hydrological modelling and Computational Hydrosystems research activities in Leipzig, Germany, and has since evolved into an actively developed open-source hydrological modelling system supported by a broad community of researchers and contributors.
+      This wizard suggests settings for your study; you can change
       every one of them later.
 
   - id: setup_type
