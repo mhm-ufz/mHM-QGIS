@@ -323,9 +323,35 @@ Four JSON files live under each domain's `.temp/` directory.
   under `data/` and `.temp/Morphology/` are relative symlinks; writers must replace
   the link itself before writing so the source domain remains unchanged. `output/` and
   `restart/` are never cloned.
-- Configuration lives in `tabWidget_steps` and `stackedWidget_configuration`.
-  Only `page_singleDomain` (first work-type option) is implemented; other modes are
-  disabled. Do not restore the removed steps stacked widget.
+- Configuration lives in `tabWidget_steps` and `stackedWidget_configuration`:
+  `page_singleDomain` (work type 0) and `page_multiDomain` (work type 1, combine
+  domains); the mRM-only type 2 stays disabled. Do not restore the removed steps
+  stacked widget.
+- **Multi-domain setups** live at `<project>/mhm-qgis-multi/<name>/` (`.temp/`, `output/`,
+  `restart/` and the combined namelists only). They prepare nothing: they combine
+  single-domain setups that already run on their own, and **domains are read, never
+  written**. `core/multi_domain.py` is Qt-free; `qt/controllers/multi_domain.py` drives the
+  page, with `dialog._multi_domains` (stored paths, relative to the multi folder) as the
+  open setup's list. None means no combined setup is open. Its input state holds only
+  `setup: multi`, the version, the domains and the wizard answers.
+  - Adding a domain checks the setup state, the version, duplicates and a saved `mhm.nml`.
+    Prepare **blocks** on fewer than two domains, different process cases, (v5) land-cover
+    scenes or soil horizons, and different `geology_classdefinition.txt`; it **warns** on
+    different time periods. It copies the first domain's parameter and output namelists
+    into the multi folder if missing, and writes the `multi_domain` section of
+    `nml-settings.json`, which switches `vSpecific` to the combined values.
+  - v6: `combine.nml` (profile `meta`) lists `domain_dirs`; mHM reads each domain's own
+    `mhm.nml` but takes `config_processes`, `parameters.nml` and `outputs.nml` from the multi
+    folder. Run is `mhm-driver -n combine.nml`. Each domain still writes its outputs to its
+    own `output_path`, inside the domain folder (prepare warns).
+  - v5.13: one `mhm.nml` whose per-domain arrays (`x-fortran-shape: nDomains` in the schemas)
+    come from each domain's saved namelist. Input paths (`format: directory-path` /
+    `file-path`) are rebased into the domain, except `LCoverfName` (a name inside
+    `dir_LCover(i)`); `dir_Out`, the restart outputs and `dirConfigOut` stay in the multi
+    folder (`output/<domain>/`). Gauge rows are padded to rectangular (nml-tools rejects
+    ragged arrays): the editor dimension `nGaugesTotal` is the widest row, while the value
+    `nGaugesTotal` is the sum, which mHM needs for its discharge buffers.
+  - Switching the work type closes an open setup of the other kind.
 - `pushButton_scanPrecipitationFiles` is the explicit metadata scan boundary.
   The selected folder and relative `lineEdit_precipitationGlobDefinition` determine
   the file set, never a recursive search of every NetCDF in the project. No scan

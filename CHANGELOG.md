@@ -21,6 +21,9 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
 - A standalone map window with a layer tree (visibility, ordering), cursor and time
   read-outs, and file drops. In QGIS Desktop, Map Canvas focuses Desktop's canvas.
 - Supports QGIS 3.44+ (Qt5) and QGIS 4 (Qt6).
+- Multi-domain runs: combine prepared single-domain setups into one mHM run (work type
+  "Combine Existing Domains"). The plugin checks that the domains agree and builds
+  `combine.nml` (v6) or one `mhm.nml` with per-domain arrays (v5.13).
 - An introduction wizard (Launch on the Configuration tab): a few questions about the study
   and the available data set the work type, resolutions and PET method, and pre-fill the
   process and output choices in the namelist editor.
