@@ -48,14 +48,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+check = [
+    "isort[colors]>=5.13",
+    "ruff>=0.16,<0.17",
+]
+test = [
+    "pytest>=6.0",
+    "pytest-cov>=3",
+]
 dev = [
     "build",
-    "pytest>=6.0",
-    "pytest-cov",
-    "black",
-    "flake8",
-    "mypy",
     "twine",
+    "mhm-qgis[check,test]",
 ]
 docs = [
     "sphinx",
@@ -99,7 +103,7 @@ mhm_qgis = ["**/*.ipynb", "**/*.qrc"]
 
 [tool.black]
 line-length = 88
-target-version = ['py39']
+target-version = ['py310']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -123,8 +127,33 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
-[tool.mypy]
-python_version = "3.9"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+known_first_party = ["mhm_qgis"]
+known_third_party = ["qgis"]
+skip_gitignore = true
+
+[tool.ruff]
+line-length = 88
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+# mhm-tools' rule set without "I": isort is the only import sorter.
+select = [
+    "E", "F", "W", "B", "B904", "ARG", "C4", "EM", "ICN", "ISC", "PGH", "PIE",
+    "PL", "PT", "PTH", "RET", "RUF", "SIM", "T20", "UP", "YTT", "D",
+]
+ignore = [
+    "E501", "PLR2004", "PLC0415", "PLR0917",
+    # Deferred families (ratchet): remove one per lint-<family> branch.
+    "D", "EM", "PTH", "ARG",
+]
+
+[tool.ruff.lint.pylint]
+max-args = 15
+max-branches = 20
+max-statements = 80
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
