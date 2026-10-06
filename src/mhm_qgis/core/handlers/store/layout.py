@@ -40,7 +40,7 @@ MERGED_MASK_NAME = "4_watershed_merged_mask.tif"
 #: project folder -> version key, with the state file's mtime as the guard.
 _VERSION_CACHE: dict[str, tuple[float, str]] = {}
 
-METEO_VARIABLES = ("pre", "tavg", "tmin", "tmax", "tann", "pet", "ssrd", "strd", "eabs", "windspeed")
+METEO_VARIABLES = ("pre", "tavg", "tmin", "tmax", "tann", "pet", "ssrd", "strd", "netrad", "eabs", "windspeed")
 
 
 def domain_folders(project_folder) -> tuple[Path, ...]:

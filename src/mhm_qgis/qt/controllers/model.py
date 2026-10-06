@@ -1,14 +1,13 @@
 """mHM version, namelist editor, and model execution actions."""
 
 import os
-from pathlib import Path
 
 from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import QMessageBox
 
 from ...core.handlers.state import processing
 from ...core.handlers.store.layout import ensure_project_structure
-from ...core.handlers.store.paths import plugin_root, version_key, workspace_folder
+from ...core.handlers.store.paths import schemas_folder, workspace_folder
 from ...dependency_bootstrap import configure_qtpy_api
 from ..dialogs.file_picker import open_file
 from .categorical import refresh_advanced_nml_settings
@@ -87,7 +86,7 @@ def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
             )
             nml_settings.sync_domain_settings(dialog.project_folder)
         workspace = workspace_folder(dialog.project_folder)
-        schemas_dir = Path(plugin_root()) / "nml-schemas" / version_key(version)
+        schemas_dir = schemas_folder(version)
         ensure_project_structure(dialog.project_folder, version)
         configure_qtpy_api()
         from ...externals.nml_tools_handler import launch_profile_editor

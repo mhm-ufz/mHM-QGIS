@@ -1,0 +1,83 @@
+# What an mHM run writes, and what each post-processing analysis needs from it.
+# Verified in mHM/mo_write_fluxes_states.f90, common/mo_nc_output.f90 and
+# MPR/mo_multi_param_reg.f90 (v5.13 and v6), the v6 app containers
+# (exchange/mo_mhm_container.F90, mo_mrm_container.F90) and the v6 examples.
+# Units are absent on purpose: flux units follow the output step, so the file's
+# attributes decide.
+version: 1
+
+outputs:
+  # kind: flux values are summed over the output interval, states averaged.
+  # weight: how a basin mean treats the value. cell = per cell area (as written);
+  #   pervious = multiply by (1 - fSealed); sealed = multiply by fSealed.
+  interception:  {nc: interception, switch: 1, file: mhm, kind: state, weight: cell, group: interception, aggregate: [mean, max], balance: storage}
+  snowpack:      {nc: snowpack, switch: 2, file: mhm, kind: state, weight: cell, group: snow, aggregate: [mean, max], balance: storage, needs: {snow: [1]}}
+  SWC_L:         {nc: "SWC_L{layer:02d}", switch: 3, file: mhm, kind: state, weight: pervious, layered: true, group: soil, aggregate: [mean, min, max], balance: storage}
+  SM_L:          {nc: "SM_L{layer:02d}", switch: 4, file: mhm, kind: state, weight: pervious, layered: true, group: soil, aggregate: [mean, min, max]}
+  SM_Lall:       {nc: SM_Lall, switch: 5, file: mhm, kind: state, weight: pervious, group: soil, aggregate: [mean, min, max]}
+  sealedSTW:     {nc: sealedSTW, switch: 6, file: mhm, kind: state, weight: sealed, group: runoff, aggregate: [mean, max], balance: storage}
+  unsatSTW:      {nc: unsatSTW, switch: 7, file: mhm, kind: state, weight: pervious, group: groundwater, aggregate: [mean, max], balance: storage}
+  satSTW:        {nc: satSTW, switch: 8, file: mhm, kind: state, weight: pervious, group: groundwater, aggregate: [mean, max], balance: storage, needs: {baseflow: [1]}}
+  PET:           {nc: PET, switch: 9, file: mhm, kind: flux, weight: cell, group: evapotranspiration, aggregate: [sum, mean]}
+  aET:           {nc: aET, switch: 10, file: mhm, kind: flux, weight: cell, group: evapotranspiration, aggregate: [sum, mean], balance: et}
+  Q:             {nc: Q, switch: 11, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], balance: runoff}
+  QD:            {nc: QD, switch: 12, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], needs: {direct_runoff: [1]}}
+  QIf:           {nc: QIf, switch: 13, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], needs: {interflow: [1]}}
+  QIs:           {nc: QIs, switch: 14, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], needs: {interflow: [1]}}
+  QB:            {nc: QB, switch: 15, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], needs: {baseflow: [1]}}
+  recharge:      {nc: recharge, switch: 16, file: mhm, kind: flux, weight: cell, group: groundwater, aggregate: [sum, mean], needs: {percolation: [1]}}
+  soil_infil_L:  {nc: "soil_infil_L{layer:02d}", switch: 17, file: mhm, kind: flux, weight: cell, layered: true, group: soil, aggregate: [sum, mean]}
+  neutrons:      {nc: neutrons, switch: 18, file: mhm, kind: state, weight: cell, group: soil, aggregate: [mean], needs: {neutrons: [1, 2]}}
+  aET_L:         {nc: "aET_L{layer:02d}", switch: 19, file: mhm, kind: flux, weight: cell, layered: true, group: evapotranspiration, aggregate: [sum, mean]}
+  preEffect:     {nc: preEffect, switch: 20, file: mhm, kind: flux, weight: cell, group: meteorology, aggregate: [sum, mean]}
+  Qsm:           {nc: Qsm, switch: 21, file: mhm, kind: flux, weight: cell, group: snow, aggregate: [sum, mean], needs: {snow: [1]}}
+  # Routed discharge on L11; the v6 app names it `discharge` and switches it in &output_mrm.
+  Qrouted:       {nc: Qrouted, nc_v6: discharge, switch: mrm, file: mrm, kind: flux, weight: cell, group: routing, aggregate: [mean, max], needs: {routing: [1, 2, 3]}}
+  # Gauge series: v5.13 discharge.nc (daily only; subdaily_discharge.nc when the
+  # observations are sub-daily); v6 the point-of-interest file (layout checked in post P0).
+  discharge:     {nc: ["Qsim_{gauge:010d}", "Qobs_{gauge:010d}"], file: discharge, kind: series, group: routing, nodata: -9999, needs: {routing: [1, 2, 3]}}
+  precipitation:   {input: pre, kind: flux, weight: cell, group: meteorology, aggregate: [sum, mean], balance: precipitation}
+  sealed_fraction: {restart: L1_fSealed, input: land_cover, parameter: fracSealed_cityArea, kind: static, group: land_cover}
+
+analyses:
+  # min_step: the coarsest output step the analysis works with.
+  water_balance:    {needs: [precipitation, aET, Q, interception, snowpack, SWC_L, sealedSTW, unsatSTW, satSTW, sealed_fraction]}
+  runoff_partition: {needs: [QD, QIf, QIs, QB]}
+  snow:             {needs: [snowpack, Qsm]}
+  soil_profile:     {needs: [SWC_L, SM_L]}
+  gauge_validation: {needs: [discharge]}
+  et_ratios:        {needs: [aET, PET, precipitation]}
+  signatures:       {needs: [discharge], min_step: day}
+  events:           {needs: [discharge, precipitation], min_step: day}
+  extremes:         {needs: [discharge], min_step: day}
+  drought:          {any_of: [discharge, SM_Lall], min_step: day}
+  climatology:      {needs: [precipitation, aET, Q], min_period_days: 365}
+
+observables:
+  discharge:     {model: discharge}
+  soil_moisture: {model: SM_L, depth_weighted: true}
+  et:            {model: aET}
+  swe:           {model: snowpack}
+  snow_cover:    {model: snowpack, threshold: true}
+  tws_anomaly:   {model: [interception, snowpack, SWC_L, sealedSTW, unsatSTW, satSTW], anomaly: true, weighted: true}
+  neutrons:      {model: neutrons}
+
+files:
+  # v5.13: fixed names inside dir_Out(i). v6 app: paths from the namelists,
+  # relative to each domain folder (examples: output/mhm_output.nc, output/mrm_output.nc).
+  v5.13:
+    mhm:       {name: mHM_Fluxes_States.nc, grid: L1}
+    mrm:       {name: mRM_Fluxes_States.nc, grid: L11}
+    discharge: {name: [discharge.nc, subdaily_discharge.nc, daily_discharge.out]}
+    log:       {name: ConfigFile.log}
+  v6:
+    mhm:       {namelist: config_mhm, key: output_path, grid: L1}
+    mrm:       {namelist: config_mrm, key: output_path, grid: L11}
+    discharge: {namelist: config_mrm, key: output_poi_path}
+
+switches:
+  # Where an output's on/off switch lives in the saved output namelist.
+  v5.13: {namelist: nloutputresults, key: outputflxstate, step: timestep_model_outputs}
+  v6:    {namelist: output_mhm, key: "out_{name}", step: output_frequency,
+          keys: {SWC_L: out_SWC, SM_L: out_SM, SM_Lall: out_SM_all, aET: out_aET_all, soil_infil_L: out_soil_infil, aET_L: out_aET_layer,
+                 Qrouted: output_mrm.out_Qrouted}}
