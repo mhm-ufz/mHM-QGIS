@@ -11,6 +11,7 @@ VARIABLES = {
     "tann": (("tann", "annual_mean_temperature"), "Celsius", ("Celsius", "K")),
     "ssrd": (("ssrd", "surface_solar_radiation_downwards"), "W m-2", ("W m-2", "J m-2")),
     "strd": (("strd", "surface_thermal_radiation_downwards"), "W m-2", ("W m-2", "J m-2")),
+    "netrad": (("netrad", "net_radiation", "surface_net_radiation"), "W m-2", ("W m-2", "J m-2")),
     "eabs": (("eabs", "vapour_pressure", "vapor_pressure"), "Pa", ("Pa", "hPa", "kPa")),
     "windspeed": (("windspeed", "wind_speed"), "m s-1", ("m s-1", "km/h")),
     # Additional observations are already expressed in their model units.

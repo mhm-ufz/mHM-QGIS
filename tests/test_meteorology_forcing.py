@@ -233,6 +233,8 @@ def test_era_hourly_precipitation_can_use_daily_maximum(tmp_path):
     ("windspeed", "windspeed", "km/h", 36., 10.),
     ("ssrd", "ssrd", "J m-2", 3600., 1.),
     ("strd", "strd", "W m-2", 10., 10.),
+    ("netrad", "netrad", "J m-2", 7200., 2.),
+    ("netrad", "net_radiation", "W m-2", 150., 150.),
     ("pre", "pre", "kg m-2 s-1", .001, 3.6),
 ])
 def test_units_for_independent_variables(tmp_path, variable, source, unit, value, expected):

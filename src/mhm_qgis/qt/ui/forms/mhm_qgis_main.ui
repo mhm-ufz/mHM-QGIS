@@ -1981,6 +1981,11 @@
               </item>
               <item>
                <property name="text">
+                <string>netrad</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
                 <string>eabs</string>
                </property>
               </item>

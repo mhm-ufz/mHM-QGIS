@@ -3,6 +3,7 @@ import pytest
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
+from mhm_qgis.core.handlers.store.layout import METEO_VARIABLES
 from mhm_qgis.qt.controllers import grid
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
@@ -45,4 +46,13 @@ def test_resolution_fields_preserve_exact_positive_values_for_click_validation()
     dialog.lineEdit_L1Resolution.setText("0.5")
     assert dialog.current_l1_resolution() == 0.5
     assert not dialog.comboBox_L1ResolutionUnit.isEnabled()
+    dialog.close()
+
+
+def test_meteo_combo_offers_every_prepared_forcing():
+    # Precipitation has its own scan; every other forcing is added here (netrad
+    # was missing, which made PET cases 2 and 3 unpreparable).
+    dialog = MhmQgisDialog()
+    combo = dialog.comboBox_meteoVar
+    assert {combo.itemText(i) for i in range(combo.count())} == set(METEO_VARIABLES) - {"pre"}
     dialog.close()

@@ -12,7 +12,7 @@ _KINDS = {
     "precipitation": "pre",
     "temp": "tavg",
     "temperature": "tavg",
-    **{name: name for name in ("tavg", "tmin", "tmax", "tann", "ssrd", "strd", "eabs", "windspeed")},
+    **{name: name for name in ("tavg", "tmin", "tmax", "tann", "ssrd", "strd", "netrad", "eabs", "windspeed")},
     "pet": "pet",
     "q_bkfl": "Q_bkfl",
     **{name: name for name in ("et", "sm", "neutrons", "twsa")},
