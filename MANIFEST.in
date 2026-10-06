@@ -7,6 +7,7 @@ include src/mhm_qgis/settings.yaml
 include tools/runtime/*.yml
 prune tests
 graft src/mhm_qgis/nml-schemas
+recursive-include src/mhm_qgis *.yml
 graft src/mhm_qgis/runtime/locks
 include src/mhm_qgis/runtime/micromamba.json
 recursive-include src/mhm_qgis/qt/ui/forms *.ui
