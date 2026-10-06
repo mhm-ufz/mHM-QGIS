@@ -58,7 +58,7 @@ def edit_meteo_input(dialog, variable=None):
 
     started = _submit_scan(dialog, f"meteo-scan-{variable}", variable, spec, scanned, failed, (
         dialog.tabWidget_steps, dialog.pushButton_BrowseProjectFolder,
-        dialog.comboBox_domainFolderSelector, dialog.pushButton_createProjectStructure,
+        dialog.comboBox_domainFolderSelector, dialog.pushButton_createOrLoadDomainStructure,
     ))
     if variable == "pre" and not started:
         set_status(dialog, "scan_precipitation", "failed", "Scan is already running.")

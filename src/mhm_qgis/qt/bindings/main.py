@@ -59,8 +59,8 @@ def bind(dialog):
     dialog.pushButton_BrowseProjectFolder.clicked.connect(
         lambda: project.select_folder(dialog)
     )
-    # pushButton_createProjectStructure → project.create_structure
-    dialog.pushButton_createProjectStructure.clicked.connect(
+    # pushButton_createOrLoadDomainStructure → project.create_structure
+    dialog.pushButton_createOrLoadDomainStructure.clicked.connect(
         lambda: project.create_structure(dialog)
     )
     dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(

@@ -105,7 +105,7 @@ def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
         prompt.path = domain_folder(tmp_path, "Alpine")
         return prompt.DialogCode.Accepted
     monkeypatch.setattr(DomainFolderNameDialog, "exec", name)
-    dialog.pushButton_createProjectStructure.click()
+    dialog.pushButton_createOrLoadDomainStructure.click()
     root = tmp_path / "mhm-qgis/Alpine"
     assert opened == [str(root)]
     from mhm_qgis.core.handlers.store.layout import morph_folder
@@ -113,7 +113,7 @@ def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
     assert (root / "settings.yaml").is_file()
     assert (root / ".temp" / "mhm_qgis_input_state.json").is_file()
     assert processing.workflow(root, "project_structure")["status"] == "completed"
-    assert "#2e7d32" in dialog.pushButton_createProjectStructure.styleSheet()
+    assert "#2e7d32" in dialog.pushButton_createOrLoadDomainStructure.styleSheet()
     assert not dialog.comboBox_mHMversion.isEnabled()
     dialog.comboBox_domainFolderSelector.setCurrentIndex(
         dialog.comboBox_domainFolderSelector.count() - 1

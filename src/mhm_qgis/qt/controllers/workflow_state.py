@@ -22,7 +22,7 @@ def invalidate(dialog, *keys):
 def specs(dialog):
     return {
         "project_structure": {
-            "button": dialog.pushButton_createProjectStructure,
+            "button": dialog.pushButton_createOrLoadDomainStructure,
             "label": "Project Structure",
             "completed_message": "Project structure is ready.",
             "failed_message": "Project structure setup failed.",
@@ -85,7 +85,6 @@ def set_setup_controls_enabled(dialog, enabled):
     """Lock the inputs a running workflow reads, so they cannot change under it."""
     for widget in (
         dialog.groupBox_mHMConfiguration,
-        dialog.groupBox_ProjectFolder,
         dialog.groupBox_morphReferenceL0,
         dialog.groupBox_meteoReferenceL2,
         dialog.groupBox_4,

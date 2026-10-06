@@ -265,6 +265,14 @@ mod_path = "src/nml/nml_output_mrm.f90"
 doc_path = "doc/nml/output_mrm.md"
 
 [[file_profiles]]
+name = "meta"
+title = "Meta configuration"
+description = "Project-level configuration for combined mHM runs."
+default_file = "combine.nml"
+namelists = ["config_project", "config_domain", "config_processes", "config_optimize"]
+required = ["config_project", "config_processes"]
+
+[[file_profiles]]
 name = "main"
 title = "Main configuration"
 description = "Domain-local runtime configuration for mHM."
