@@ -70,3 +70,9 @@ def test_discharge_button_opens_reusable_plot_and_project_change_clears_stations
     assert not dialog.pushButton_observationDisplay_discharge.isEnabled()
     assert not plot.isVisible()
     dialog.close()
+    # Delete while `plot` is still referenced: left to the cycle collector, pyqtgraph's
+    # C++ items can outlive their Python wrappers and segfault the session teardown.
+    from qgis.PyQt.QtCore import QCoreApplication, QEvent
+
+    dialog.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
