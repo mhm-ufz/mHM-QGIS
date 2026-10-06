@@ -5,16 +5,13 @@ import numpy as np
 import pytest
 import xarray as xr
 
+from mhm_qgis.core.grid import TargetGrid
 from mhm_qgis.core.meteorology.forcing import (
-    ERA5LAND,
-    MHM_READY,
     MeteoFolderSpec,
     inspect_meteo_folder,
     inspect_meteo_inputs,
     process_meteo_inputs,
 )
-from mhm_qgis.core.grid import TargetGrid, resolution_in_crs
-
 
 LAT = np.array([51.0, 50.0])
 LON = np.array([10.0, 11.0])
@@ -275,8 +272,8 @@ def test_incomplete_cumulative_cycle_does_not_replace_outputs(tmp_path):
 
 
 def test_supplied_inspection_and_padded_grid(tmp_path, monkeypatch):
-    from mhm_qgis.core.meteorology.forcing import api
     from mhm_qgis.core.grid import target_grid_from_header
+    from mhm_qgis.core.meteorology.forcing import api
     _write_nc(tmp_path / "raw/pre.nc", "pre", units="mm")
     spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="mm")
     inspected = inspect_meteo_inputs([spec])
@@ -293,7 +290,7 @@ def test_supplied_inspection_and_padded_grid(tmp_path, monkeypatch):
 
 
 def test_projected_input_uses_exact_target_grid(tmp_path):
-    from mhm_qgis.core.grid import target_grid_from_header, assert_matches_header
+    from mhm_qgis.core.grid import assert_matches_header, target_grid_from_header
     _write_projected_nc(tmp_path / "raw/tavg.nc", "tavg", 273.15)
     spec = MeteoFolderSpec("tavg", tmp_path / "raw", unit="K")
     header = dict(target().header, xllcorner=0., yllcorner=0., cellsize=1000.)
@@ -326,7 +323,10 @@ def test_publication_failure_restores_previous_files(tmp_path, monkeypatch):
 def test_execute_meteo_prepares_and_reuses_the_configured_collection(tmp_path, monkeypatch):
     from mhm_qgis.core.executions import meteo
     from mhm_qgis.core.handlers.state.meteo_outputs import MeteorologyOutputState
-    from mhm_qgis.core.handlers.store.layout import ensure_project_structure, input_state_path
+    from mhm_qgis.core.handlers.store.layout import (
+        ensure_project_structure,
+        input_state_path,
+    )
     root = tmp_path / "mhm-qgis/Alpine"
     ensure_project_structure(root, "6")
     Path(input_state_path(root)).write_text('{"mhm_version": "6"}')

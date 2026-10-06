@@ -6,14 +6,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 from osgeo import gdal, ogr, osr
+
 from mhm_qgis.core.handlers.file.netcdf.raster import file_path, variables
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE  # noqa: E402
-from mhm_qgis.core.handlers.raster.tasks import (  # noqa: E402
+from mhm_qgis.core.handlers.raster.tasks import (
     crop_aligned_l0_raster,
     delineate_domains_file,
     delineate_outlet_file,
@@ -21,6 +21,7 @@ from mhm_qgis.core.handlers.raster.tasks import (  # noqa: E402
     hydrology_files,
     mask_aligned_l0_raster,
 )
+from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE
 
 
 def _dem(path):

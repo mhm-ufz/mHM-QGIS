@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """QGIS plugin implementation for mhm_qgis."""
 from __future__ import annotations
 
@@ -21,8 +20,9 @@ sys.path[:] = [
     if os.path.normcase(os.path.abspath(path or os.curdir)) != _plugin_dir_key
 ]
 
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+from qgis.PyQt.QtCore import QCoreApplication, QSettings, QTranslator
 from qgis.PyQt.QtGui import QIcon
+
 try:
     from qgis.PyQt.QtGui import QAction
 except ImportError:  # Qt5
@@ -68,7 +68,7 @@ class MhmQgis:
         # initialize locale
         locale = QSettings().value("locale/userLocale")[0:2]
         locale_path = os.path.join(
-            self.plugin_dir, "i18n", "mhm_qgis_{}.qm".format(locale)
+            self.plugin_dir, "i18n", f"mhm_qgis_{locale}.qm"
         )
 
         if os.path.exists(locale_path):

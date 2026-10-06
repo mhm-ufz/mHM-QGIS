@@ -18,12 +18,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.handlers.file.ascii.morphology import (  # noqa: E402
+from mhm_qgis.core.grid import header_center_coordinates
+from mhm_qgis.core.handlers.file.ascii.morphology import (
     _read_raster,
     align_dataset_to_header,
     file_matches_header,
 )
-from mhm_qgis.core.grid import header_center_coordinates  # noqa: E402
 
 xr = pytest.importorskip("xarray")
 

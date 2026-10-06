@@ -11,12 +11,11 @@ from ...core.handlers.store.layout import ensure_project_structure
 from ...core.handlers.store.paths import plugin_root, version_key, workspace_folder
 from ...dependency_bootstrap import configure_qtpy_api
 from ..dialogs.file_picker import open_file
+from .categorical import refresh_advanced_nml_settings
 from .time import restore as restore_simulation_times
 from .time import values as simulation_times
 from .version import selected as selected_version
-from .categorical import refresh_advanced_nml_settings
 from .workflow_state import invalidate, require_active, set_button_state, set_status
-
 
 MHM_V6_SETTINGS_KEY = "mhm_qgis/executables/v6"
 
@@ -78,8 +77,8 @@ def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
     if not require_active(dialog):
         return False
     try:
-        from ...vSpecific import build_dimensions, build_initial_values
         from ...core.handlers.state import nml_settings
+        from ...vSpecific import build_dimensions, build_initial_values
 
         version = selected_version(dialog)
         if update_inputs:

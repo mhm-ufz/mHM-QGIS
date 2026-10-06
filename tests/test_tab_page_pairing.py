@@ -3,8 +3,8 @@ import pytest
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 from mhm_qgis.qt.controllers import grid
+from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
 
 def test_each_step_owns_its_controls():

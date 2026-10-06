@@ -6,17 +6,24 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from ....externals.mhm_tools_handler import (
+    prepare_land_cover_periods,
+    prepare_soil_horizons,
+)
 from ...handlers.lookup import (
     LandUseInput,
     SoilInput,
-    write_land_use_manifest,
     validate_land_use_input,
+    write_land_use_manifest,
     write_soil_manifest,
 )
-from ....externals.mhm_tools_handler import prepare_land_cover_periods, prepare_soil_horizons
-from ...handlers.state.nml_settings import relative_workspace_path, update_section, load_settings
+from ...handlers.state.nml_settings import (
+    load_settings,
+    relative_workspace_path,
+    update_section,
+)
 from ...handlers.store.layout import morph_folder
-from ...handlers.store.paths import temp_morphology_folder, morph_staging_folder
+from ...handlers.store.paths import morph_staging_folder, temp_morphology_folder
 
 
 def input_fingerprint(value, dem_file, version):

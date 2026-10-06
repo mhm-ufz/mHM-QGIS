@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """The single persistence boundary for project processing state.
 
 Every feature that records an output, workflow, grid or reuse fingerprint uses
@@ -13,10 +12,9 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
+from ...utils.time import utc_timestamp
 from ..file import json as jsonio
 from ..store.paths import temp_folder
-from ...utils.time import utc_timestamp
-
 
 STATE_FILENAME = "mhm_qgis_processing_state.json"
 STATE_VERSION = 1
@@ -200,10 +198,10 @@ def save_domains(project_folder, plan) -> list[dict]:
 __all__ = [
     "STATE_FILENAME",
     "STATE_VERSION",
-    "load",
     "grid_metadata",
-    "overlay",
+    "load",
     "mark_workflow",
+    "overlay",
     "remove_entry",
     "save_domains",
     "save_grid",

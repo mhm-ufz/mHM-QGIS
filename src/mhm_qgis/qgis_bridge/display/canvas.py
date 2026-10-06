@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Put a prepared raster into the QGIS map canvas."""
 from __future__ import annotations
 

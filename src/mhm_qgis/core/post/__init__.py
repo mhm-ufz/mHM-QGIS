@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Post-processing: turn a finished mHM run into something displayable.
 
 Owns the question "what did this run produce, and what does one timestep of it
@@ -12,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from ...core.handlers.store.paths import output_folder
 from ..handlers.file.netcdf import (
     GridVariable,
     grid_variables,
@@ -19,7 +19,6 @@ from ..handlers.file.netcdf import (
     read_slice,
     time_axis,
 )
-from ...core.handlers.store.paths import output_folder
 
 
 @dataclass(frozen=True)

@@ -1,30 +1,27 @@
-# -*- coding: utf-8 -*-
 """QGIS boundary for domain masks, snapped outlets and gauge observations."""
 from __future__ import annotations
 
+import math
 import os
 import re
-import math
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...core.handlers.file.netcdf.raster import file_path, source
-from typing import Callable, Iterable
-
+from ...core.grid import local_distance_crs
 from ...core.handlers.file.discharge import (
     local_source_path,
     records_from_layer,
     streamflow_filename,
     write_streamflow_observation,
 )
+from ...core.handlers.file.netcdf.raster import file_path, source
 from ...core.handlers.raster.tasks import (
     _read_raster,
     delineate_domains_file,
     merge_domain_masks,
 )
-from ...core.handlers.state import processing
-from ...core.handlers.state import settings
-from ...core.grid import local_distance_crs
+from ...core.handlers.state import processing, settings
 from ...core.handlers.state.domain_state import (
     DOMAIN_MODE_DEM_EXTENT,
     active_domain_records,
@@ -35,9 +32,12 @@ from ...core.handlers.state.domain_state import (
     save_state,
 )
 from ...core.handlers.store import registry
-from ...core.handlers.store.layout import MERGED_MASK_NAME, domain_dem_path
+from ...core.handlers.store.layout import (
+    MERGED_MASK_NAME,
+    domain_dem_path,
+    morph_folder,
+)
 from ...core.handlers.store.paths import temp_morphology_folder
-from ...core.handlers.store.layout import morph_folder
 from ...core.morphology.hydrology.observation_paths import (
     streamflow_observation_folder,
 )
@@ -80,8 +80,8 @@ def snap_points_to_network(
 ) -> str:
     """Snap points to the nearest preferred stream segment and write a layer."""
     from qgis.core import (
-        QgsFeature,
         QgsCoordinateReferenceSystem,
+        QgsFeature,
         QgsFields,
         QgsGeometry,
         QgsRectangle,

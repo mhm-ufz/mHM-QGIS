@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """What a project has actually produced, and where to find it.
 
 The question "is this output ready?" was answered four different ways: a bare

@@ -1,29 +1,39 @@
 """Morphology publication commands with explicit, path-only inputs."""
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Mapping
 
 from ....externals.mhm_tools_handler import create_latlon_file
 from ...handlers.file.netcdf.raster import copy_rasters, source, variables
-from ...handlers.raster.tasks import TaskShare, _cancelled, _progress, _target_mask, write_domain_dem_ascii
+from ...handlers.raster.tasks import (
+    TaskShare,
+    _cancelled,
+    _progress,
+    _target_mask,
+    write_domain_dem_ascii,
+)
 from ...handlers.state import processing
-from ...handlers.state.domain_state import load_state as load_domain_state, resolve_output_path
+from ...handlers.state.domain_state import load_state as load_domain_state
+from ...handlers.state.domain_state import resolve_output_path
 from ...handlers.store import registry
 from ...handlers.store.layout import domain_dem_path, is_v6, morph_folder
 from ...handlers.store.paths import (
-    temp_morphology_folder,
-    lai_dem_staging_path,
     data_folder,
+    lai_dem_staging_path,
+    temp_morphology_folder,
     workspace_folder,
 )
 from ...morphology.layers import lai
 from ...morphology.layers.advanced_l0 import (
-    RASTER_SUFFIXES, missing_model_inputs, publish_model_inputs, staged_files,
+    RASTER_SUFFIXES,
+    missing_model_inputs,
+    publish_model_inputs,
+    staged_files,
 )
-from ...morphology.layers.morph_input_nc import write_morph_input_nc
 from ...morphology.layers.mask import write_morph_mask
+from ...morphology.layers.morph_input_nc import write_morph_input_nc
 from . import PUBLICATION_STAGES
 
 

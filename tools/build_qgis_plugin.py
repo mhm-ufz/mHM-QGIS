@@ -8,7 +8,6 @@ import re
 import zipfile
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "src" / "mhm_qgis"
 MAX_SIZE = 20 * 1024 * 1024

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Running QGIS Processing algorithms.
 
 The one place that imports `processing`. That import only resolves inside a
@@ -17,6 +16,7 @@ def initialize():
     """Initialize real Processing providers when running outside QGIS Desktop."""
     import sys
     from pathlib import Path
+
     from qgis.core import QgsApplication
 
     for root in (QgsApplication.pkgDataPath(), QgsApplication.prefixPath()):

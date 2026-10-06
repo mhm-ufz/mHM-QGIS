@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """QGIS-free raster and watershed jobs, safe to run in a worker.
 
 GDAL and NumPy only -- no QGIS, no Qt -- so these run inside a `QgsTask` or the

@@ -10,13 +10,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.meteorology.forcing import cache as inspection_cache  # noqa: E402
-from mhm_qgis.core.meteorology.forcing import (  # noqa: E402
+from mhm_qgis.core.meteorology.forcing import (
+    MeteoFolderSpec,
+)
+from mhm_qgis.core.meteorology.forcing import cache as inspection_cache
+from mhm_qgis.core.meteorology.forcing import (
     inspect_meteo_folder_cached,
     inspect_meteo_inputs_cached,
     inspection_fingerprint,
 )
-from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec  # noqa: E402
 
 xr = pytest.importorskip("xarray")
 

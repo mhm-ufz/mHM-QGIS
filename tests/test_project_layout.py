@@ -3,12 +3,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mhm_qgis.core.handlers.store.layout import (
+    domain_dem_path,
+    ensure_project_structure,
+    lai_folder,
+    morph_folder,
+    streamflow_observation_folder,
+)
 from mhm_qgis.core.handlers.store.paths import (
-    data_folder, temp_morphology_folder, meteo_folder, output_folder,
-    portable_path, project_path, restart_folder, static_folder, temp_folder,
+    data_folder,
+    meteo_folder,
+    output_folder,
+    portable_path,
+    project_path,
+    restart_folder,
+    static_folder,
+    temp_folder,
+    temp_morphology_folder,
     workspace_folder,
 )
-from mhm_qgis.core.handlers.store.layout import domain_dem_path, ensure_project_structure, lai_folder, morph_folder, streamflow_observation_folder
 
 
 def test_all_generated_paths_are_inside_the_domain(tmp_path: Path) -> None:

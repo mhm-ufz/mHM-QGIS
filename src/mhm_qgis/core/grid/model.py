@@ -1,13 +1,11 @@
-# -*- coding: utf-8 -*-
 """Exact, QGIS-free grid, resolution and extent calculations."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_FLOOR
 import math
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
+from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
-
 
 NODATA_VALUE = -9999.0
 DEFAULT_ALIGNMENT_GAP_LIMIT = 1.0e-7
@@ -86,12 +84,12 @@ class Extent:
         return self.xmin, self.xmax, self.ymin, self.ymax
 
     @classmethod
-    def from_bounds(cls, bounds: Sequence[float]) -> "Extent":
+    def from_bounds(cls, bounds: Sequence[float]) -> Extent:
         xmin, xmax, ymin, ymax = map(float, bounds)
         return cls(min(xmin, xmax), max(xmin, xmax), min(ymin, ymax), max(ymin, ymax))
 
     @classmethod
-    def from_header(cls, header: Mapping) -> "Extent":
+    def from_header(cls, header: Mapping) -> Extent:
         return cls.from_bounds(header_bounds(header))
 
     @classmethod
@@ -100,14 +98,14 @@ class Extent:
         bounds: Sequence[float],
         x_resolution: float,
         y_resolution: float,
-    ) -> "Extent":
+    ) -> Extent:
         """Convert min/max cell-centre coordinates to cell-edge bounds."""
         xmin, xmax, ymin, ymax = cls.from_bounds(bounds).bounds
         half_x, half_y = abs(float(x_resolution)) / 2, abs(float(y_resolution)) / 2
         return cls(xmin - half_x, xmax + half_x, ymin - half_y, ymax + half_y)
 
     @classmethod
-    def union(cls, extents: Iterable["Extent | Sequence[float]"]) -> "Extent":
+    def union(cls, extents: Iterable[Extent | Sequence[float]]) -> Extent:
         values = [item if isinstance(item, cls) else cls.from_bounds(item) for item in extents]
         if not values:
             raise ValueError("At least one domain extent is required.")
@@ -256,7 +254,7 @@ class Grid(Resolution):
         raw_l2_extent: Extent | None = None,
         raw_l2_crs: str | None = None,
         gap_limit_fraction: float | None = None,
-    ) -> "Grid":
+    ) -> Grid:
         """Build the exact common L0/L2 target selected by the user."""
         ratio = _positive_integer(multiplier)
         normalized_l0 = standardize_header(l0_header, unit=unit)

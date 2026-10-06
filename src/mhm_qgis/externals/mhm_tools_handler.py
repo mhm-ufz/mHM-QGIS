@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Small path-based adapters for the installed :mod:`mhm_tools` package."""
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from ..core.handlers import lookup
-
 
 LogCallback = Callable[[str], None]
 
@@ -158,90 +156,89 @@ def prepare_categorical_file(
     from mhm_tools import pre
 
     formatter = getattr(pre, formatter_name)
-    with capture_messages(log):
-        with TemporaryDirectory(
-            prefix=f"mhm_qgis_{kind}_", dir=output_path.parent
-        ) as temporary:
-            temporary_path = Path(temporary)
-            with lookup.as_csv(lookup_path, dir=temporary_path) as lookup_for_tools:
-                formatted_input = input_path
-                formatter_mapping_field = mapping_field
-                formatter_input_crs = input_crs
+    with capture_messages(log), TemporaryDirectory(
+        prefix=f"mhm_qgis_{kind}_", dir=output_path.parent
+    ) as temporary:
+        temporary_path = Path(temporary)
+        with lookup.as_csv(lookup_path, dir=temporary_path) as lookup_for_tools:
+            formatted_input = input_path
+            formatter_mapping_field = mapping_field
+            formatter_input_crs = input_crs
 
-                if input_path.suffix.lower() == ".nc" and input_variable:
-                    from mhm_tools.common.file_handler import (
-                        get_raster_data,
-                        write_xarray_to_geotiff,
-                    )
-
-                    data = get_raster_data(
-                        input_path, var_name=input_variable, crs=input_crs
-                    )
-                    try:
-                        formatted_input = temporary_path / f"{kind}_selected.tif"
-                        write_xarray_to_geotiff(
-                            data, formatted_input, data_var=input_variable
-                        )
-                    finally:
-                        data.close()
-                    formatter_input_crs = None
-
-                if is_vector:
-                    formatted_input = temporary_path / f"{kind}_rasterized.tif"
-                    # Lookup-based preparation always burns the class field and
-                    # joins on the mapping field, both named as the user chose
-                    # them in the lookup table.
-                    rasterize_kwargs = {
-                        "input_file": input_path,
-                        "dem_file": dem_path,
-                        "output_file": formatted_input,
-                        "burn_field": class_field,
-                        "lookup_table": lookup_for_tools,
-                        "mapping_field": mapping_field,
-                    }
-                    if input_crs is not None:
-                        rasterize_kwargs["input_crs"] = input_crs
-                    if dem_crs is not None:
-                        rasterize_kwargs["dem_crs"] = dem_crs
-                    pre.rasterize_map_data(**rasterize_kwargs)
-                    formatter_mapping_field = class_field
-                    formatter_input_crs = None
-
-                formatter_kwargs = {
-                    "input_file": formatted_input,
-                    "dem_file": dem_path,
-                    "output_path": temporary_path,
-                    "lookup_table": lookup_for_tools,
-                    "mapping_field": formatter_mapping_field,
-                    "class_field": class_field,
-                    "output_type": Path(raster_name).suffix.lstrip("."),
-                }
-                if formatter_input_crs is not None:
-                    formatter_kwargs["input_crs"] = formatter_input_crs
-                if dem_crs is not None:
-                    formatter_kwargs["dem_crs"] = dem_crs
-                formatter(**formatter_kwargs)
-
-                raster_output = temporary_path / raster_name
-                if not raster_output.is_file():
-                    raise FileNotFoundError(
-                        f"mhm-tools did not create the expected raster: {raster_output}"
-                    )
-
-                definition_output = (
-                    temporary_path / definition_name
-                    if definition_path is not None and definition_name is not None
-                    else None
+            if input_path.suffix.lower() == ".nc" and input_variable:
+                from mhm_tools.common.file_handler import (
+                    get_raster_data,
+                    write_xarray_to_geotiff,
                 )
-                if definition_output is not None and not definition_output.is_file():
-                    raise FileNotFoundError(
-                        "mhm-tools did not create the expected classdefinition: "
-                        f"{definition_output}"
-                    )
 
-                os.replace(raster_output, output_path)
-                if definition_output is not None and definition_path is not None:
-                    os.replace(definition_output, definition_path)
+                data = get_raster_data(
+                    input_path, var_name=input_variable, crs=input_crs
+                )
+                try:
+                    formatted_input = temporary_path / f"{kind}_selected.tif"
+                    write_xarray_to_geotiff(
+                        data, formatted_input, data_var=input_variable
+                    )
+                finally:
+                    data.close()
+                formatter_input_crs = None
+
+            if is_vector:
+                formatted_input = temporary_path / f"{kind}_rasterized.tif"
+                # Lookup-based preparation always burns the class field and
+                # joins on the mapping field, both named as the user chose
+                # them in the lookup table.
+                rasterize_kwargs = {
+                    "input_file": input_path,
+                    "dem_file": dem_path,
+                    "output_file": formatted_input,
+                    "burn_field": class_field,
+                    "lookup_table": lookup_for_tools,
+                    "mapping_field": mapping_field,
+                }
+                if input_crs is not None:
+                    rasterize_kwargs["input_crs"] = input_crs
+                if dem_crs is not None:
+                    rasterize_kwargs["dem_crs"] = dem_crs
+                pre.rasterize_map_data(**rasterize_kwargs)
+                formatter_mapping_field = class_field
+                formatter_input_crs = None
+
+            formatter_kwargs = {
+                "input_file": formatted_input,
+                "dem_file": dem_path,
+                "output_path": temporary_path,
+                "lookup_table": lookup_for_tools,
+                "mapping_field": formatter_mapping_field,
+                "class_field": class_field,
+                "output_type": Path(raster_name).suffix.lstrip("."),
+            }
+            if formatter_input_crs is not None:
+                formatter_kwargs["input_crs"] = formatter_input_crs
+            if dem_crs is not None:
+                formatter_kwargs["dem_crs"] = dem_crs
+            formatter(**formatter_kwargs)
+
+            raster_output = temporary_path / raster_name
+            if not raster_output.is_file():
+                raise FileNotFoundError(
+                    f"mhm-tools did not create the expected raster: {raster_output}"
+                )
+
+            definition_output = (
+                temporary_path / definition_name
+                if definition_path is not None and definition_name is not None
+                else None
+            )
+            if definition_output is not None and not definition_output.is_file():
+                raise FileNotFoundError(
+                    "mhm-tools did not create the expected classdefinition: "
+                    f"{definition_output}"
+                )
+
+            os.replace(raster_output, output_path)
+            if definition_output is not None and definition_path is not None:
+                os.replace(definition_output, definition_path)
 
     return output_path
 
@@ -471,6 +468,7 @@ def create_dem_derivative_files(
     `compute` hook. This function is the one entry point either route uses.
     """
     from mhm_tools.pre.dem_derivatives import create_dem_derivatives
+
     from ..core.handlers.file.netcdf.raster import file_path
 
     variable = str(input_file).rsplit(":", 1)[-1] if str(input_file).startswith('NETCDF:"') else None
@@ -566,17 +564,17 @@ def create_latlon_file(
 
 __all__ = [
     "capture_messages",
-    "read_xarray_dataset",
-    "write_xarray_ascii",
-    "xarray_coord_key",
-    "xarray_single_data_var",
     "copy_lai_file_to_grid",
     "create_dem_derivative_files",
     "create_latlon_file",
     "lai_time_step",
     "link_folder_tree",
     "prepare_categorical_file",
-    "prepare_land_cover_periods",
     "prepare_lai_file",
+    "prepare_land_cover_periods",
     "prepare_soil_horizons",
+    "read_xarray_dataset",
+    "write_xarray_ascii",
+    "xarray_coord_key",
+    "xarray_single_data_var",
 ]

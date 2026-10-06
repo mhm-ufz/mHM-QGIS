@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Shims for QGIS and Qt APIs that changed between supported versions.
 
 Every helper here exists because the same call spells differently across the

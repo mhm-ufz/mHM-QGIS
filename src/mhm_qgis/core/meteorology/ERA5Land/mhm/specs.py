@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from .types import ForcingSpec
 
-
 TEMPERATURE_FILE_VARIABLE = "2m_temperature"
 PRECIPITATION_FILE_VARIABLE = "total_precipitation"
 

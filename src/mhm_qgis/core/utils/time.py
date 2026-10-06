@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Shared time helpers."""
 
 from datetime import datetime, timezone

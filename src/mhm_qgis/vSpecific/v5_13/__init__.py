@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 from ..common import (
     coordinate_flag,
     domain_count,
     geology_count,
     geoparameter,
-    namelist_settings,
     model_data_path,
+    namelist_settings,
     repeat,
     resolution,
 )
@@ -106,6 +106,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
         values["main"]["LAI_data_information"] = lai
     if settings.get("time"):
         from datetime import datetime
+
         from ...core.handlers.state.nml_settings import validate_times
         times = validate_times(settings["time"], "v5.13")
         start, evaluation, end = (datetime.fromisoformat(times[key])

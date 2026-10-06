@@ -11,19 +11,19 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.handlers.file.ascii.morphology import (  # noqa: E402
+from mhm_qgis.core.handlers.file.ascii.morphology import (
     pad_dataset_to_header,
     pad_l0_file_to_header,
 )
-from mhm_qgis.core.morphology.layers.advanced_l0 import (  # noqa: E402
+from mhm_qgis.core.handlers.state.nml_settings import update_section
+from mhm_qgis.core.handlers.store.layout import morph_folder
+from mhm_qgis.core.handlers.store.paths import morph_staging_folder
+from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE
+from mhm_qgis.core.morphology.layers.advanced_l0 import (
     missing_model_inputs,
     publish_model_inputs,
     staged_files,
 )
-from mhm_qgis.core.morphology.layers import CATEGORICAL_PAD_VALUE  # noqa: E402
-from mhm_qgis.core.handlers.state.nml_settings import update_section  # noqa: E402
-from mhm_qgis.core.handlers.store.paths import morph_staging_folder, workspace_folder
-from mhm_qgis.core.handlers.store.layout import morph_folder  # noqa: E402
 
 xr = pytest.importorskip("xarray")
 
@@ -122,6 +122,7 @@ def test_a_file_already_on_the_l0_grid_is_left_untouched(tmp_path):
 
 def _staged_nc(project, name, header=None, variable="soil_class"):
     from osgeo import gdal, osr
+
     from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters
 
     header = header or L0_TARGET

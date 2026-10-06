@@ -82,6 +82,7 @@ def test_relocated_worker_imports_without_gui_dependencies():
 
 def test_native_command_launches_the_relocated_worker(tmp_path):
     from unittest.mock import Mock
+
     from mhm_qgis.core.executions.morphology.commands import native_worker
 
     task = Mock()

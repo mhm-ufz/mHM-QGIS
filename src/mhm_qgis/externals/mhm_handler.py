@@ -13,7 +13,6 @@ from pathlib import Path
 
 from ..core.handlers.store.paths import version_key
 
-
 V6_ENVIRONMENT_VARIABLE = "MHM_QGIS_MHMV6"
 
 

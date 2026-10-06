@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget state for `soil_multi_horizon_input.ui`.
 
 The four component tabs (clay, sand, silt, bulk density) hold parallel row
@@ -9,6 +8,7 @@ from __future__ import annotations
 from qgis.PyQt import QtWidgets
 
 from ...core.handlers.lookup import MAX_SOIL_HORIZONS, SoilInput
+
 
 def set_horizon_count(dialog, count: int) -> None:
     count = min(MAX_SOIL_HORIZONS, max(1, int(count)))

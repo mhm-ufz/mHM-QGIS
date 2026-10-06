@@ -1,11 +1,10 @@
 """Validation for reusing existing mHM forcing outputs."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from .logging import log_message
-
 
 EXPECTED_COORDINATE_ATTRS = {
     "lat": {

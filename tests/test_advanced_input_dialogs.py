@@ -1,9 +1,9 @@
 """Offscreen tests for dynamic land-use and soil input rows."""
 from __future__ import annotations
 
-import pytest
-
 import os
+
+import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -11,16 +11,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
+from qgis.PyQt import QtWidgets
 from qgis.PyQt.QtCore import QDateTime
-from qgis.PyQt import QtWidgets  # noqa: E402
 
-from mhm_qgis.qt.dialogs.advanced_inputs import (  # noqa: E402
+from mhm_qgis.qt.controllers import land_use_historical as land_use_controller
+from mhm_qgis.qt.controllers import soil_multi_horizon as soil_controller
+from mhm_qgis.qt.dialogs.advanced_inputs import (
     HistoricalLandUseDialog,
     MultiHorizonSoilDialog,
 )
-from mhm_qgis.qt.controllers import land_use_historical as land_use_controller  # noqa: E402
-from mhm_qgis.qt.controllers import soil_multi_horizon as soil_controller  # noqa: E402
-
 
 _APPLICATION = None
 

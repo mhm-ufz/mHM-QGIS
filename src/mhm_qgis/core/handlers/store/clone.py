@@ -9,7 +9,6 @@ from ..file import json as jsonio
 from .layout import project_version
 from .paths import temp_folder, version_key
 
-
 STATE_FILES = {
     "mhm_qgis_input_state.json",
     "mhm_qgis_domain_delineation_state.json",

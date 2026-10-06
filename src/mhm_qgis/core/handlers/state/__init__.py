@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """The project's own persisted state, one module per store.
 
 Every JSON file the plugin keeps inside a user project is read and written from

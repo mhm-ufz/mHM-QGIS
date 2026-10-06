@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """UI adapter for the QGIS-free elevation-band API."""
 from __future__ import annotations
 

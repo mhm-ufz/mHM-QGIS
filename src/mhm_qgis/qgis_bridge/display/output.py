@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canvas half of `groupBox_outputDisplay`.
 
 Pick a variable an mHM run produced and a moment, and show that timestep as a

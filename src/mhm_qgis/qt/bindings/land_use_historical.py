@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget wiring for `land_use_historical_input.ui`.
 
 Each row's browse button is connected where the row is built, since it closes

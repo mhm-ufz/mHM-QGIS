@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget wiring for the main form (`mhm_qgis_main.ui`).
 
 `bind(dialog)` is called once from `MhmQgisDialog.__init__`. Each processing
@@ -8,10 +7,19 @@ from __future__ import annotations
 
 from qgis.core import QgsProject
 
-from ...qgis_bridge.display import meteo as meteo_display
 from ...qgis_bridge.display import grid as grid_display
+from ...qgis_bridge.display import meteo as meteo_display
 from ...qgis_bridge.display import output as output_display
-from ..controllers import categorical, forcing, grid, main, model, project, time, version
+from ..controllers import (
+    categorical,
+    forcing,
+    grid,
+    main,
+    model,
+    project,
+    time,
+    version,
+)
 from ..workflows import meteorology, observations
 
 

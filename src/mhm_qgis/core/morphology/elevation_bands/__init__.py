@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """QGIS-free elevation-band raster and land-cover reporting API."""
 
 from .bands import (

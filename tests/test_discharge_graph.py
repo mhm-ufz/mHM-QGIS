@@ -2,13 +2,13 @@
 import math
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
-from mhm_qgis.core.post.graph import discharge_series, stations
 from mhm_qgis.core.handlers.state.domain_state import save_state
 from mhm_qgis.core.handlers.store.layout import streamflow_observation_folder
-from pathlib import Path
+from mhm_qgis.core.post.graph import discharge_series, stations
 
 
 def _observation(path):
@@ -46,6 +46,7 @@ def test_discharge_button_opens_reusable_plot_and_project_change_clears_stations
     pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
     pytest.importorskip("pyqtgraph")
     from qgis.PyQt.QtWidgets import QApplication
+
     from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
     app = QApplication.instance() or QApplication([])

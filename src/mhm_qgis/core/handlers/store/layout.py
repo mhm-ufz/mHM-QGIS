@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Which layout a project uses, and the folders that follow from it.
 
 v5.13 and v6 disagree about where morphology, LAI and observations live, so
@@ -15,10 +14,21 @@ import os
 from pathlib import Path
 
 from ..file import json as jsonio
-from .paths import (data_folder, temp_morphology_folder,
-                    lai_staging_folder, meteo_folder, morph_staging_folder,
-                    output_folder, plugin_root, restart_folder, static_folder,
-                    temp_folder, version_key, workspace_folder, domain_folder)
+from .paths import (
+    data_folder,
+    domain_folder,
+    lai_staging_folder,
+    meteo_folder,
+    morph_staging_folder,
+    output_folder,
+    plugin_root,
+    restart_folder,
+    static_folder,
+    temp_folder,
+    temp_morphology_folder,
+    version_key,
+    workspace_folder,
+)
 
 INPUT_STATE_FILENAME = "mhm_qgis_input_state.json"
 

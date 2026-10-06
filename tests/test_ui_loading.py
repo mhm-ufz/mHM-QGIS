@@ -1,9 +1,9 @@
 """Designer sources compile on either Qt binding without generated modules."""
 import importlib.util
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest

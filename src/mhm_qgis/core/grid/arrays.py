@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 """Lazy NumPy/xarray operations for matching data to an exact grid."""
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from .model import (
     Extent,

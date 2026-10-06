@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from mhm_qgis.core.morphology.layers import advanced_inputs as processing
 from mhm_qgis.core.handlers.lookup import (
     LandUseInput,
     LandUsePeriod,
@@ -11,6 +10,7 @@ from mhm_qgis.core.handlers.lookup import (
 )
 from mhm_qgis.core.handlers.state.nml_settings import load_settings
 from mhm_qgis.core.handlers.store.layout import ensure_project_structure
+from mhm_qgis.core.morphology.layers import advanced_inputs as processing
 from mhm_qgis.vSpecific import build_initial_values
 
 
@@ -82,6 +82,7 @@ def test_land_cover_processing_writes_period_state(tmp_path, monkeypatch):
 
 def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch):
     from dataclasses import replace
+
     from mhm_qgis.core.native_worker import run
 
     ensure_project_structure(tmp_path, "6.0")

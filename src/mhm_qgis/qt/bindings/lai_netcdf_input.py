@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget wiring for `lai_netcdf_input_dialog.ui`."""
 from __future__ import annotations
 

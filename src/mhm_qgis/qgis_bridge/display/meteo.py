@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canvas half of `groupBox_meteoDisplay`.
 
 Pick a forcing variable and a date, and show that timestep as a raster. The
@@ -9,6 +8,7 @@ from __future__ import annotations
 from qgis.PyQt import QtCore
 from qgis.PyQt.QtWidgets import QMessageBox
 
+from ...core.handlers.file.netcdf import grid_variables, read_slice
 from ...core.meteorology.display import (
     VARIABLE_LABELS,
     available_meteo_variables,
@@ -17,8 +17,8 @@ from ...core.meteorology.display import (
     resolve_meteo_output,
 )
 from ...core.post import step_for_when
-from ...core.handlers.file.netcdf import grid_variables, read_slice
 from .canvas import show_dataarray
+
 
 def _as_qdatetime(value):
     return QtCore.QDateTime(value)

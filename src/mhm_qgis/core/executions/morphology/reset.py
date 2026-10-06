@@ -7,7 +7,6 @@ from ...handlers.state import processing
 from ...handlers.state.domain_state import load_state, save_state, state_path
 from ...handlers.store.paths import temp_morphology_folder
 
-
 _DOMAIN_OUTPUT_KEYS = (
     "picked",
     "picked_point",

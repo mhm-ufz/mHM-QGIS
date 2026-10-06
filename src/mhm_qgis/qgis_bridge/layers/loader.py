@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Turn a path into a QGIS layer.
 
 `open_layer` builds one and hands back None when it is unusable; `load` also
@@ -84,6 +83,7 @@ def load(path, name: str, *, is_raster: bool = True, log=None):
 def refresh_source(layer, source, name, *, is_raster=True, log=None):
     """Refresh provider metadata, replacing the layer only if its type changes."""
     from qgis.core import QgsRasterLayer
+
     from . import project
 
     if isinstance(layer, QgsRasterLayer) != is_raster:

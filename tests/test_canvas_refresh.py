@@ -51,9 +51,10 @@ def test_reuses_layer_but_refreshes_replaced_sources(tmp_path, monkeypatch):
 
 
 def test_returning_to_first_netcdf_band_selects_band_one(monkeypatch):
-    from mhm_qgis.qgis_bridge.display import morphology
-    from mhm_qgis.core.handlers.store.morphology import DisplayOutput
     from pathlib import Path
+
+    from mhm_qgis.core.handlers.store.morphology import DisplayOutput
+    from mhm_qgis.qgis_bridge.display import morphology
 
     bands = []
     monkeypatch.setattr(morphology, "show_raster", lambda *args, **kwargs: bands.append(kwargs["band"]))

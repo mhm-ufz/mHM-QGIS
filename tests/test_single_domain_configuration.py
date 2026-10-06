@@ -3,8 +3,12 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from mhm_qgis.core.handlers.state.nml_settings import validate_times, update_section
-from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec, inspect_meteo_folder, inspect_meteo_folder_cached
+from mhm_qgis.core.handlers.state.nml_settings import update_section, validate_times
+from mhm_qgis.core.meteorology.forcing import (
+    MeteoFolderSpec,
+    inspect_meteo_folder,
+    inspect_meteo_folder_cached,
+)
 
 
 def precipitation(path, *, variable="pre", units="mm", hours=24, start="2001-01-01"):
@@ -44,8 +48,9 @@ def test_changed_glob_never_reuses_another_inspection(tmp_path):
 
 
 def test_periods_validate_and_reach_both_namelist_versions(tmp_path):
-    from mhm_qgis.vSpecific import build_initial_values
     from types import SimpleNamespace
+
+    from mhm_qgis.vSpecific import build_initial_values
     values = dict(sim_start="2001-01-01T00:00", eval_start="2001-01-11T00:00", sim_end="2001-02-01T00:00")
     update_section(tmp_path, "time", values)
     dialog = SimpleNamespace(project_folder=tmp_path)

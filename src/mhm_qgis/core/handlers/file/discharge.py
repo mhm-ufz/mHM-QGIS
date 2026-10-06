@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Convert discharge tables to mHM streamflow observation text files."""
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlparse
-
 
 NODATA_VALUE = -9999.0
 

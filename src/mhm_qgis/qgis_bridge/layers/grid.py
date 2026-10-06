@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Convert live QGIS layers and extents into values accepted by ``core.grid``."""
 from __future__ import annotations
 

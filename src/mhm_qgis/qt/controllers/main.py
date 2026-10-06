@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Input sources, outlets, domain definition and result display on the main form."""
 from __future__ import annotations
 
@@ -22,7 +21,6 @@ from ..dialogs.input_selection import (
 from ..reporting import error_detail
 from ..workflows import hydrology
 from .workflow_state import invalidate_meteo
-
 
 # --- Input sources --------------------------------------------------------
 
@@ -286,10 +284,10 @@ def open_domain_assignment(dialog):
     if outlet_ids is None:
         return False
     try:
-        from ..dialogs.discharge_assignment import DischargeTableAssignmentDialog
-        from ...qgis_bridge.layers.domain import DomainWorkflow
         from ...core.handlers.state.domain_state import DOMAIN_MODE_DEM_EXTENT
         from ...core.handlers.state.nml_settings import sync_domain_settings
+        from ...qgis_bridge.layers.domain import DomainWorkflow
+        from ..dialogs.discharge_assignment import DischargeTableAssignmentDialog
 
         workflow = DomainWorkflow(
             dialog.project_folder,
@@ -337,8 +335,8 @@ def open_domain_delineator(dialog):
 
 
 def _show_domain_delineator(dialog, context, pour_points_layer, outlet_id_field, outlet_ids):
-    from ..dialogs.domain_delineator import DomainDelineatorDialog
     from ...core.handlers.state.nml_settings import sync_domain_settings
+    from ..dialogs.domain_delineator import DomainDelineatorDialog
 
     try:
         dialog._domain_delineator_dialog = DomainDelineatorDialog(

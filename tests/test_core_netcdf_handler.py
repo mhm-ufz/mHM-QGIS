@@ -78,6 +78,7 @@ def test_variables_without_a_time_dimension_are_not_offered(tmp_path):
 
 def test_raster_variables_exclude_coordinate_axes(tmp_path):
     from netCDF4 import Dataset
+
     from mhm_qgis.core.handlers.file.netcdf.raster import raster_variables
 
     path = tmp_path / "raster.nc"

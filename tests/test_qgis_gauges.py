@@ -1,17 +1,15 @@
 """Gauge extraction at the QGIS/core boundary."""
 from __future__ import annotations
 
-
-
 # isort: off
 import pytest
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.core import QgsCoordinateReferenceSystem, QgsPointXY  # noqa: E402
+from qgis.core import QgsCoordinateReferenceSystem, QgsPointXY
 
-from mhm_qgis.core.handlers.state.domain_state import save_state  # noqa: E402
-from mhm_qgis.qgis_bridge.layers import gauges  # noqa: E402
+from mhm_qgis.core.handlers.state.domain_state import save_state
+from mhm_qgis.qgis_bridge.layers import gauges
 # isort: on
 
 

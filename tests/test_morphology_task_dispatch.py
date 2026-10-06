@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
-import pytest
 from pathlib import Path
+
+import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -10,13 +11,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
+from qgis.PyQt.QtWidgets import QApplication
 
-from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog  # noqa: E402
-from mhm_qgis.core.executions.morphology import commands  # noqa: E402
-from mhm_qgis.core.handlers.state.nml_settings import update_section  # noqa: E402
-from mhm_qgis.core.handlers.store.layout import ensure_project_structure  # noqa: E402
-
+from mhm_qgis.core.executions.morphology import commands
+from mhm_qgis.core.handlers.state.nml_settings import update_section
+from mhm_qgis.core.handlers.store.layout import ensure_project_structure
+from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
 _APPLICATION = None
 
@@ -352,6 +352,7 @@ def test_geology_outputs_already_on_disk_are_adopted_not_rebuilt(tmp_path):
 
 def test_prerequisites_run_dem_first_then_their_own_stage(tmp_path):
     from osgeo import gdal
+
     from mhm_qgis.qt.controllers import main
     from mhm_qgis.qt.workflows import hydrology
 

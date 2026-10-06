@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget wiring for `domain_delineator_dialog.ui`."""
 from __future__ import annotations
 

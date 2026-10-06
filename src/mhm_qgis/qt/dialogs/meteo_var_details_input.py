@@ -1,8 +1,9 @@
 """One metadata form shared by every meteorology variable."""
 from qgis.PyQt.QtWidgets import QDialog
-from ..ui import load_form
-from ..controllers import meteo_var_details_input as controller
+
 from ..bindings.meteo_var_details_input import bind
+from ..controllers import meteo_var_details_input as controller
+from ..ui import load_form
 
 
 class MeteoVarDetailsDialog(QDialog, load_form("meteo_var_details_input.ui")):

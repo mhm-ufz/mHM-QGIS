@@ -623,7 +623,9 @@ def dem_derivative_files(
 ):
     """Prepare one derivative dataset and a single-variable filled DEM."""
     from netCDF4 import Dataset
-    from ..file.netcdf.raster import copy_rasters, file_path, source as raster_source
+
+    from ..file.netcdf.raster import copy_rasters, file_path
+    from ..file.netcdf.raster import source as raster_source
     from ..state.cache import fingerprint
 
     _cancelled(task)
@@ -1036,12 +1038,12 @@ def delineate_domains_file(
 
 __all__ = [
     "crop_aligned_l0_raster",
-    "domain_mask_bounds",
-    "merge_domain_masks",
     "delineate_domains_file",
     "delineate_outlet_file",
+    "domain_mask_bounds",
     "gauge_position_file",
     "hydrology_files",
     "mask_aligned_l0_raster",
+    "merge_domain_masks",
     "write_domain_dem_ascii",
 ]

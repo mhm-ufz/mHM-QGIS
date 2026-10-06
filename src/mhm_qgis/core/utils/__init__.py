@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Small, dependency-free helpers shared across `core`.
 
 Nothing here knows about Qt, QGIS, or the project layout -- these are leaf

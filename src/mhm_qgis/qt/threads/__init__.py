@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Work that runs off the GUI thread.
 
 - `task_coordinator`: bounded scheduling on the real QGIS task manager; every

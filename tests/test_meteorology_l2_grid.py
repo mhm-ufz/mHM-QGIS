@@ -10,13 +10,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.grid import TargetGrid  # noqa: E402
-from mhm_qgis.core.meteorology.forcing.api import _resample_ready  # noqa: E402
-from mhm_qgis.core.meteorology.ERA5Land.mhm.io import write_header  # noqa: E402
-from mhm_qgis.core.grid import (  # noqa: E402
+from mhm_qgis.core.grid import (
+    TargetGrid,
     assert_header_file_matches,
     assert_matches_header,
 )
+from mhm_qgis.core.meteorology.ERA5Land.mhm.io import write_header
+from mhm_qgis.core.meteorology.forcing.api import _resample_ready
 
 xr = pytest.importorskip("xarray")
 

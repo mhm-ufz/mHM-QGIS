@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 import pytest
 
 from mhm_qgis.core.handlers.file import json as jsonio
-from mhm_qgis.core.handlers.state import cache
-from mhm_qgis.core.handlers.state import processing
+from mhm_qgis.core.handlers.state import cache, processing
 from mhm_qgis.core.handlers.state.meteo_outputs import MeteorologyOutputState
 
 

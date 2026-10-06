@@ -10,8 +10,8 @@ def raster_window_range(path, bounds, bounds_crs="", max_samples=262_144):
     """Return finite min/max values for one clipped, capped raster window."""
     import numpy as np
     import rasterio
-    from rasterio.windows import from_bounds
     from rasterio.warp import transform_bounds
+    from rasterio.windows import from_bounds
 
     with rasterio.open(path) as source:
         left, bottom, right, top = map(float, bounds)

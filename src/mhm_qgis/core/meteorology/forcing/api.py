@@ -1,32 +1,29 @@
 """Independent forcing variables, streamed at a selected output cadence."""
 from __future__ import annotations
+
+import os
+import tempfile
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
-import os
-import tempfile
-from ..ERA5Land.mhm.types import MeteoForcingResult
-from ..ERA5Land.mhm.io import write_header, write_netcdf
+
 from ...grid import (
     TargetGrid,
     assert_header_file_matches,
     assert_matches_header,
-    axis_resolution,
     axes_match_header,
-    crs_equal as _same_crs,
+    axis_resolution,
+)
+from ...grid import crs_equal as _same_crs
+from ...grid import (
     header_center_arrays,
     mesh_resolution,
     nearest_curvilinear,
     nearest_rectilinear,
     slice_and_pad,
 )
-from .types import (
-    AUTO,
-    MeteoFolderSpec,
-    SpatialMetadata,
-)
-
-
+from ..ERA5Land.mhm.io import write_header, write_netcdf
+from ..ERA5Land.mhm.types import MeteoForcingResult
 from .temporal import (
     VARIABLES,
     complete_window,
@@ -38,6 +35,11 @@ from .temporal import (
     period_bounds,
     time_index,
     validate_spec,
+)
+from .types import (
+    AUTO,
+    MeteoFolderSpec,
+    SpatialMetadata,
 )
 
 

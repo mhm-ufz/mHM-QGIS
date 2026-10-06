@@ -6,8 +6,6 @@ from types import ModuleType
 
 import pandas as pd
 
-
-
 from mhm_qgis.core.handlers.lookup import geology as geology_metadata
 
 

@@ -1,11 +1,13 @@
 """Read-only, lazy project tree backed by Qt's filesystem model."""
 from qgis.PyQt.QtWidgets import QDialog
+
 try:
     from qgis.PyQt.QtWidgets import QFileSystemModel
 except ImportError:  # Qt 6 moved this model to QtGui.
     from qgis.PyQt.QtGui import QFileSystemModel
-from ..ui import load_form
+
 from ...core.handlers.store.paths import workspace_folder
+from ..ui import load_form
 
 
 class ProjectFolderTreeDialog(QDialog, load_form("project_folder_tree.ui")):

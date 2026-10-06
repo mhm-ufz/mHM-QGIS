@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Reuse checks for meteorology forcing already recorded in the project state.
 
 A prepared file may only be reused when the processing state records it, the
@@ -7,14 +6,13 @@ grid the current run targets. A changed L2 grid always forces a rebuild.
 """
 from __future__ import annotations
 
-import os
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from ..grid import assert_header_file_matches, assert_netcdf_matches_header
 from ..handlers.store.layout import expected_meteo_outputs
 from ..handlers.store.registry import key_for
-
 
 BASE_VARIABLES = ("pre", "tavg", "tmin", "tmax")
 

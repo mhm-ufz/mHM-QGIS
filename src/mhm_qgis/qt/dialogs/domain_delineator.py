@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Interactive per-outlet watershed delineation dialog."""
 from __future__ import annotations
 
@@ -7,14 +6,6 @@ import os
 from functools import partial
 from pathlib import Path
 
-from qgis.PyQt.QtCore import QEvent, Qt
-from qgis.PyQt.QtGui import QColor
-from qgis.PyQt.QtWidgets import (
-    QApplication,
-    QDialog,
-    QMessageBox,
-    QVBoxLayout,
-)
 from qgis.core import (
     QgsCoordinateTransform,
     QgsGeometry,
@@ -24,25 +15,32 @@ from qgis.core import (
     QgsVectorLayer,
 )
 from qgis.gui import QgsMapCanvas, QgsMapToolEmitPoint, QgsVertexMarker
-
-from ...core.morphology.hydrology.outlets import (
-    OutletAssignment,
-    find_outlet_id_field,
-    station_id_text,
+from qgis.PyQt.QtCore import QEvent, Qt
+from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QDialog,
+    QMessageBox,
+    QVBoxLayout,
 )
+
+from ...core.executions.morphology import delineation
 from ...core.handlers.state.domain_state import (
     DOMAIN_MODE_DELINEATOR,
     assign_domain_ids,
     cached_delineation,
     resolve_input_path,
-    save_state,
     save_preview,
+    save_state,
+)
+from ...core.handlers.store import registry
+from ...core.handlers.store.layout import domain_dem_path, morph_folder
+from ...core.morphology.hydrology.outlets import (
+    OutletAssignment,
+    find_outlet_id_field,
+    station_id_text,
 )
 from ...qgis_bridge.layers.domain import DomainWorkflow
-from ...core.executions.morphology import delineation
-from ...core.handlers.store import registry
-from ...core.handlers.store.layout import morph_folder
-from ...core.handlers.store.layout import domain_dem_path
 from ..bindings.domain_delineator import bind as bind_domain_delineator
 from ..ui import load_form
 from .file_picker import open_file
@@ -52,7 +50,6 @@ Ui_DomainDelineatorDialog = load_form("domain_delineator_dialog.ui")
 from ..objects.viewport_raster_range import ViewportRasterRangeController
 from ..reporting import error_detail
 from ..workflows import hydrology
-
 
 MASK_COLOR = QColor(255, 105, 180)
 MASK_OPACITY = 0.5

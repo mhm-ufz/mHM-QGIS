@@ -18,7 +18,6 @@ from urllib.request import Request, urlopen
 from .._version import __version__
 from ..core.handlers.file.json import read_mapping, write
 
-
 APP_NAME = "mhm-qgis"
 IN_RUNTIME = "MHM_QGIS_IN_RUNTIME"
 WHEELHOUSE = "MHM_QGIS_WHEELHOUSE"

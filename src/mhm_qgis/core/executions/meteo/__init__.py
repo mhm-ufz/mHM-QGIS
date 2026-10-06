@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Preparing mHM meteorology forcing.
 
 Qt-free: the caller passes `log=` for the running commentary and `report=` for
@@ -8,27 +7,27 @@ worker thread and the tests.
 from __future__ import annotations
 
 import traceback
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Mapping
 
-from ...meteorology.forcing import (
-    MeteoFolderSpec,
-    SpatialMetadata,
-    process_meteo_inputs,
-    inspect_meteo_inputs_cached,
-    preparation_fingerprint,
-)
 from ...grid import TargetGrid
-from ...meteorology.mask import write_meteo_mask
+from ...handlers.state import processing
 from ...handlers.store.layout import (
     expected_meteo_outputs,
     is_v6,
     meteo_mask_path,
     meteo_output_root,
 )
+from ...meteorology.forcing import (
+    MeteoFolderSpec,
+    SpatialMetadata,
+    inspect_meteo_inputs_cached,
+    preparation_fingerprint,
+    process_meteo_inputs,
+)
+from ...meteorology.mask import write_meteo_mask
 from ...meteorology.reuse import stale_meteo_variables
-from ...handlers.state import processing
 from ...utils.report import CRITICAL, INFORMATION
 
 

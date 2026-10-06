@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Geology parameter metadata derived from a lookup table."""
 
 from __future__ import annotations

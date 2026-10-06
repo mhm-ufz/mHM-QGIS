@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.handlers.file.ascii.pad import (  # noqa: E402
+from mhm_qgis.core.handlers.file.ascii.pad import (
     ascii_window_offsets,
     pad_ascii_grid,
     read_ascii_header,

@@ -1,8 +1,8 @@
 """Run QGIS domain checks in an isolated application process."""
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 

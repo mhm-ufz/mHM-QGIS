@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Reading and writing the plugin's JSON, in one place.
 
 Eight persisted files were being read and written by fourteen modules through

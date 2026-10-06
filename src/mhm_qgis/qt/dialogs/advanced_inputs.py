@@ -7,32 +7,30 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from qgis.PyQt import QtWidgets
+
 from ...core.handlers.lookup import (
-    LandUseInput,
-    LandUsePeriod,
     MAX_LAND_USE_PERIODS,
     MAX_SOIL_HORIZONS,
+    LandUseInput,
+    LandUsePeriod,
     SoilHorizon,
     SoilInput,
     validate_land_use_input,
     validate_soil_input,
 )
+from ...qt.bindings.land_use_historical import bind_historical_land_use
+from ...qt.bindings.soil_multi_horizon import bind_multi_horizon_soil
+from ...qt.controllers import land_use_historical as land_use_controller
+from ...qt.controllers import soil_multi_horizon as soil_controller
+from ..ui import load_form
+from .file_picker import open_file
 from .input_selection import (
     INPUT_EXTENSIONS,
     InputComboAdapter,
     loaded_qgis_items,
     scan_project_inputs,
 )
-from .file_picker import open_file
-
-
-from qgis.PyQt import QtWidgets  # noqa: E402
-
-from ...qt.controllers import land_use_historical as land_use_controller
-from ...qt.controllers import soil_multi_horizon as soil_controller
-from ...qt.bindings.land_use_historical import bind_historical_land_use
-from ...qt.bindings.soil_multi_horizon import bind_multi_horizon_soil
-from ..ui import load_form
 
 Ui_LandUse = load_form("land_use_historical_input.ui")
 Ui_Soil = load_form("soil_multi_horizon_input.ui")

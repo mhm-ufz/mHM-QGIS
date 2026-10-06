@@ -11,9 +11,12 @@ from .handlers.lookup import (
     LandUsePeriod,
     SoilHorizon,
     SoilInput,
+    run_lookup_job,
 )
-from .morphology.layers.advanced_inputs import process_land_cover_input, process_soil_input
-from .handlers.lookup import run_lookup_job
+from .morphology.layers.advanced_inputs import (
+    process_land_cover_input,
+    process_soil_input,
+)
 
 
 def _prefer_worker_termination():

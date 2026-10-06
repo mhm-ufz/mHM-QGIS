@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from qgis.core import QgsMapLayer, QgsProject
 from qgis.PyQt import QtCore, QtWidgets
-from ...qgis_bridge import layers
+
 from ...core.handlers.store.paths import WORKSPACE_FOLDER_NAME
+from ...qgis_bridge import layers
 from .file_picker import open_file
 
 EXCLUDED_PROJECT_FOLDERS = {WORKSPACE_FOLDER_NAME}

@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
-from datetime import datetime
+
 from ....core.handlers.store.paths import temp_folder, workspace_folder
 
 
@@ -81,8 +82,8 @@ def sync_domain_settings(project_folder: str | Path) -> Path:
     from .domain_state import (
         assign_domain_ids,
         gauge_records,
-        load_state as load_domain_state,
     )
+    from .domain_state import load_state as load_domain_state
 
     domain_state = load_domain_state(project_folder)
     assign_domain_ids(domain_state)

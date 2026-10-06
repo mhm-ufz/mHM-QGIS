@@ -11,12 +11,11 @@ import pytest
 from nml_tools.gui.arrays import axis_labels
 from nml_tools.gui.model import (
     load_project,
-    render_profile as _render_profile,
 )
+from nml_tools.gui.model import render_profile as _render_profile
 
 from mhm_qgis.core.handlers.store.paths import temp_morphology_folder
 from mhm_qgis.vSpecific import build_dimensions, build_initial_values
-
 
 SCHEMAS = Path(__file__).resolve().parents[1] / "src" / "mhm_qgis" / "nml-schemas"
 
@@ -350,6 +349,7 @@ def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
     application = QApplication.instance() or QApplication([])
     dialog = Dialog(tmp_path)
     from mhm_qgis.core.handlers.state.nml_settings import update_section
+
     # Supply real soil configuration rather than depending on the external
     # editor's zero padding of an incomplete schema example.
     update_section(tmp_path, "soil", {"horizons": [

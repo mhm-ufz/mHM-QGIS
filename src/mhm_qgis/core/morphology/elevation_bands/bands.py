@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
 """Create elevation-band rasters and their area summary."""
 from __future__ import annotations
 
 import csv
 import math
 import os
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from ....externals import pyflwdir_handler
 

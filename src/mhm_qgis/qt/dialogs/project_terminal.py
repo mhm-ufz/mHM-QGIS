@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Persistent project terminal dialog for mhm_qgis."""
 from __future__ import annotations
 
@@ -20,7 +19,7 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
     """A small persistent shell session shown in a reusable dialog."""
 
     def __init__(self, parent=None):
-        super(ProjectTerminalDialog, self).__init__(parent)
+        super().__init__(parent)
         self.setupUi(self)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
@@ -158,7 +157,7 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
             if event.key() == QtCore.Qt.Key.Key_Down:
                 self._show_history(1)
                 return True
-        return super(ProjectTerminalDialog, self).eventFilter(watched, event)
+        return super().eventFilter(watched, event)
 
     def closeEvent(self, event):
         """Hide the dialog without stopping the shell process."""

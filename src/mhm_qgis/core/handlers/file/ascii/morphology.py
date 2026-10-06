@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """mHM morphology ASCII preparation through mhm_tools file handlers."""
 from __future__ import annotations
 
@@ -10,14 +9,13 @@ from typing import Any
 from ....grid import (
     assert_source_covers_header,
     axes_match_header,
-    header_center_coordinates,
     grid_matches_header,
+    header_center_coordinates,
     headers_match,
     reindex_to_header,
     standardize_header,
-    validate_grid_headers as validate_mhm_grid_headers,
 )
-
+from ....grid import validate_grid_headers as validate_mhm_grid_headers
 
 Header = dict[str, Any]
 LogCallback = Callable[[str], None]
@@ -114,8 +112,11 @@ def align_dataset_to_header(
         integer: bool = False):
     """Return a dataset sampled on the exact grid described by ``header``."""
     import xarray as xr
-    from .....externals.mhm_tools_handler import (xarray_coord_key,
-                                                   xarray_single_data_var)
+
+    from .....externals.mhm_tools_handler import (
+        xarray_coord_key,
+        xarray_single_data_var,
+    )
 
     header = standardize_header(header)
     var_name = data_var
@@ -183,8 +184,10 @@ def pad_dataset_to_header(
     or ``nodata_value`` when no pad value is given. Non-spatial dimensions such
     as time or soil horizon are preserved.
     """
-    from .....externals.mhm_tools_handler import (xarray_coord_key,
-                                                   xarray_single_data_var)
+    from .....externals.mhm_tools_handler import (
+        xarray_coord_key,
+        xarray_single_data_var,
+    )
 
     header = standardize_header(header)
     var_name = data_var
@@ -308,8 +311,10 @@ def _read_raster(path: Path, data_var: str | None):
 
 def _write_ascii(dataset, output_path: Path, header: Mapping[str, Any],
                  nodata_value: float | int) -> None:
-    from .....externals.mhm_tools_handler import (write_xarray_ascii,
-                                                   xarray_single_data_var)
+    from .....externals.mhm_tools_handler import (
+        write_xarray_ascii,
+        xarray_single_data_var,
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     data_var = xarray_single_data_var(dataset)

@@ -1,8 +1,8 @@
 """Dataset opening, standardization, and variable discovery."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 
 def open_dataset(path: Path, xr):

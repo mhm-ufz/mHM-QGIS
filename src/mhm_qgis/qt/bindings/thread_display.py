@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Widget wiring for `thread_display_dialog.ui`."""
 from __future__ import annotations
 

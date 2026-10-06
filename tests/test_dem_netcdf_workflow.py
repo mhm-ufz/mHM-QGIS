@@ -6,21 +6,23 @@ import pytest
 from netCDF4 import Dataset
 from osgeo import gdal, osr
 
-from mhm_qgis.externals import mhm_tools_handler
 from mhm_qgis.core.executions.morphology import commands, setup
-from mhm_qgis.core.grid import header_from_geotransform
 from mhm_qgis.core.handlers.file.json import write as write_json
 from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters, source, variables
 from mhm_qgis.core.handlers.raster.tasks import dem_derivative_files
 from mhm_qgis.core.handlers.state import domain_state, processing
 from mhm_qgis.core.handlers.store.layout import (
-    MERGED_MASK_NAME, domain_dem_path, ensure_project_structure, input_state_path, morph_folder,
+    domain_dem_path,
+    ensure_project_structure,
+    input_state_path,
+    morph_folder,
 )
 from mhm_qgis.core.handlers.store.paths import (
-    temp_morphology_folder,
     data_folder,
     morph_staging_folder,
+    temp_morphology_folder,
 )
+from mhm_qgis.externals import mhm_tools_handler
 
 
 def _raster(path, values=None, *, epsg=32632, cell=100, origin=(0, 1000)):
@@ -126,6 +128,7 @@ def test_native_command_produces_netcdf_in_a_subprocess(tmp_path):
 
 def test_hydrology_reuses_saved_direction_without_recomputing_dem(tmp_path, monkeypatch):
     import pyflwdir
+
     from mhm_qgis.core.handlers.raster.tasks import _flow_context
 
     original = _raster(tmp_path / "source.tif")
@@ -204,7 +207,7 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
         section = {"lc": "land_cover", "soil_class": "soil", "geology_class": "geology"}[name]
         nml_settings.update_section(tmp_path, section, {
             "output_path": nml_settings.relative_workspace_path(tmp_path, path)})
-    request = setup.SetupRequest(str(tmp_path), {level: header for level in ("L0", "L1", "L11", "L2")},
+    request = setup.SetupRequest(str(tmp_path), dict.fromkeys(("L0", "L1", "L11", "L2"), header),
                                  crs="EPSG:32632")
     latlon = Path(data_folder(tmp_path)) / "latlon.nc"
     latlon.parent.mkdir(parents=True, exist_ok=True)

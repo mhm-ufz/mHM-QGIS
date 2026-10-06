@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
 """Intersect elevation bands with land-cover classes and write a report."""
 from __future__ import annotations
 
 import csv
 import math
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ....externals import pyflwdir_handler
 from ...grid import geotransform_bounds, raster_grids_match

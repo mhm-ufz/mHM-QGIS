@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Connect the widgets of each form to the methods that answer them.
 
 One module per form. Each exposes ``bind(dialog)``, called from that dialog's

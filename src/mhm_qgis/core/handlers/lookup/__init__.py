@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """CSV and TXT lookup tables, and the manifests built from them.
 
 Four concerns, one vocabulary:

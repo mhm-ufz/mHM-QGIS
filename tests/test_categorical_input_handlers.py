@@ -18,12 +18,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # isort: off
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.PyQt.QtWidgets import QApplication, QDialog  # noqa: E402
+from qgis.PyQt.QtWidgets import QApplication, QDialog
 
-from mhm_qgis.qt.controllers import categorical  # noqa: E402
-from mhm_qgis.qt.dialogs import advanced_inputs  # noqa: E402
-from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog  # noqa: E402
-from mhm_qgis.core.handlers.lookup import (  # noqa: E402
+from mhm_qgis.qt.controllers import categorical
+from mhm_qgis.qt.dialogs import advanced_inputs
+from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
+from mhm_qgis.core.handlers.lookup import (
     LandUseInput,
     LandUsePeriod,
     SoilHorizon,

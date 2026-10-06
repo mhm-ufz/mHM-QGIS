@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Gauge outlet helpers for the Hydrology page."""
 from __future__ import annotations
 

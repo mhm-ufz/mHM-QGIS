@@ -2,22 +2,22 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import numpy as np
 import pytest
 from osgeo import gdal, osr
+
 from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters, source
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.morphology.layers.morph_input_nc import (  # noqa: E402
+from mhm_qgis.core.morphology.layers.mask import write_morph_mask
+from mhm_qgis.core.morphology.layers.morph_input_nc import (
     MORPH_VARIABLES,
     write_morph_input_nc,
 )
-from mhm_qgis.core.morphology.layers.mask import write_morph_mask
 
 xr = pytest.importorskip("xarray")
 

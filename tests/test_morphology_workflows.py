@@ -11,7 +11,6 @@ from mhm_qgis.core.executions.morphology import setup
 from mhm_qgis.core.handlers.state import processing
 from mhm_qgis.core.handlers.store.layout import input_state_path
 
-
 HEADERS = {
     level: {
         "ncols": 6,
@@ -122,6 +121,7 @@ def test_only_the_dem_comes_from_the_masked_bundle(tmp_path):
     """Watershed-masking every derivative would carve nodata out of them."""
     import numpy as np
     from osgeo import gdal, osr
+
     from mhm_qgis.core.handlers.file.netcdf.raster import copy_rasters, source
 
     def raster(name, value):

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -12,9 +11,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.handlers.raster.tasks import write_domain_dem_ascii  # noqa: E402
-from mhm_qgis.core.handlers.file.ascii.pad import read_ascii_header  # noqa: E402
-
+from mhm_qgis.core.handlers.file.ascii.pad import read_ascii_header
+from mhm_qgis.core.handlers.raster.tasks import write_domain_dem_ascii
 
 L0 = {
     "ncols": 6, "nrows": 5, "xllcorner": 0.0, "yllcorner": 0.0,

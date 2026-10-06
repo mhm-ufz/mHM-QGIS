@@ -5,12 +5,11 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-import pytest
 import pandas as pd
+import pytest
 
-from mhm_qgis.externals import mhm_tools_handler as categorical
-from mhm_qgis.core.handlers import lookup
 from mhm_qgis.core.handlers.lookup import table as lookup_table
+from mhm_qgis.externals import mhm_tools_handler as categorical
 
 
 def _touch(path: Path) -> Path:

@@ -9,8 +9,8 @@ import pytest
 from mhm_qgis.externals.mhm_tools_handler import (
     create_latlon_file,
     lai_time_step,
-    prepare_land_cover_periods,
     prepare_lai_file,
+    prepare_land_cover_periods,
     prepare_soil_horizons,
 )
 

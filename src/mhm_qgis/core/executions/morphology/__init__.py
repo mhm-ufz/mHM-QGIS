@@ -69,7 +69,6 @@ def run_stages(stages, start, *, on_done, on_fail):
 # ``PUBLICATION_STAGES`` as its canonical order.
 from . import reset, setup
 
-
 __all__ = [
     "EXECUTE_ALL_STAGES",
     "PUBLICATION_STAGES",

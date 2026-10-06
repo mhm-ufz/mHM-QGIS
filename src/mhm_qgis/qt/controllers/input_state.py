@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Save and restore the main form's selections in `mhm_qgis_input_state.json`.
 
 Paths inside the domain are stored relative to it, so a cloned domain keeps

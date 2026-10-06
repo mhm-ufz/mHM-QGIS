@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """Per-outlet gauge and discharge-table assignment for the DEM-extent domain."""
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from qgis.core import QgsMapLayer, QgsProject, QgsVectorLayer
 from qgis.PyQt.QtWidgets import (

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Assemble common-L0 morphology rasters into one v6 ``input.nc``.
 
 mHM v6 reads its static morphology from a single NetCDF whose variables share
@@ -12,12 +11,12 @@ the LAI and domain-DEM writers work.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from ...grid import header_center_arrays
 from ...handlers.raster.tasks import _aligned_l0_window
-
 
 NODATA = -9999
 BLOCK_ROWS = 256

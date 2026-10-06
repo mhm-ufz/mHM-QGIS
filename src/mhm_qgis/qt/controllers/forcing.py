@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Meteorology and gridded-observation variable inputs on the main form.
 
 Each variable is described once in `meteo_var_details_input.ui`; only OK starts
@@ -15,7 +14,13 @@ from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetI
 from ...core.meteorology.forcing import MeteoFolderSpec, inspect_meteo_folder_cached
 from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
 from . import grid
-from .workflow_state import invalidate, invalidate_meteo, require_active, set_status, switch_busy
+from .workflow_state import (
+    invalidate,
+    invalidate_meteo,
+    require_active,
+    set_status,
+    switch_busy,
+)
 
 
 def scan_precipitation(dialog):

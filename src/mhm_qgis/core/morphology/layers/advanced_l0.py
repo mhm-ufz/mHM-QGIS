@@ -1,17 +1,20 @@
-# -*- coding: utf-8 -*-
 """Publish staged class inputs on the pre-scanned common L0 grid."""
 from __future__ import annotations
 
 import os
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-from ...handlers.state.nml_settings import load_settings, relative_workspace_path, save_settings
-from ...handlers.store.paths import morph_staging_folder, workspace_folder
-from ...handlers.store.layout import morph_folder, is_v6
 from ...handlers.file.ascii.morphology import file_matches_header
-
+from ...handlers.state.nml_settings import (
+    load_settings,
+    relative_workspace_path,
+    save_settings,
+)
+from ...handlers.store.layout import is_v6, morph_folder
+from ...handlers.store.paths import morph_staging_folder, workspace_folder
 
 RASTER_SUFFIXES = {".asc", ".nc", ".tif", ".tiff"}
 # Class definitions and projection sidecars travel with their raster untouched.

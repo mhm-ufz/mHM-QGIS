@@ -1,8 +1,8 @@
 import pytest
 
+from mhm_qgis.core.grid.distance import local_distance_crs
 from mhm_qgis.core.handlers.state import settings
 from mhm_qgis.core.handlers.store.layout import ensure_project_structure
-from mhm_qgis.core.grid.distance import local_distance_crs
 
 
 def test_settings_are_copied_once_and_reloaded_per_project(tmp_path):

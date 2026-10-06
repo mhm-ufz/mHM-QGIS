@@ -1,9 +1,9 @@
 """Focused tests for Designer-backed per-outlet assignment rows."""
 from __future__ import annotations
 
-import pytest
-
 import os
+
+import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -12,9 +12,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # isort: off
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
+from qgis.PyQt.QtWidgets import QApplication
 
-from mhm_qgis.qt.dialogs.discharge_assignment import (  # noqa: E402
+from mhm_qgis.qt.dialogs.discharge_assignment import (
     DischargeTableAssignmentDialog,
     OutletAssignment,
 )

@@ -8,6 +8,7 @@ from ...handlers.state.domain_state import cached_delineation, delineation_finge
 def domain_mask(task, project_folder, filled_dem, crs):
     """Rebuild one model mask from saved catchments, or valid DEM cells."""
     from pyproj import Transformer
+
     from ...handlers.state import domain_state, nml_settings
     from ...handlers.store.layout import MERGED_MASK_NAME, domain_dem_path
     from ...handlers.store.paths import temp_morphology_folder

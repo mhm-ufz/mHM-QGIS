@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.grid import (  # noqa: E402
+from mhm_qgis.core.grid import (
     Extent,
     Grid,
     Resolution,
@@ -23,7 +23,6 @@ from mhm_qgis.core.grid import (  # noqa: E402
     validate_grid_headers,
     validate_l0_l2_alignment,
 )
-
 
 L0_ANCHOR = {
     "xllcorner": 100.0,
@@ -258,10 +257,7 @@ DEGREE_ANCHOR = {
 def test_repeating_degree_l2_cell_size_is_never_rounded_away():
     from mhm_qgis.core.grid import (
         floor_cellsize,
-        header_for_existing_bounds,
         possible_resolutions,
-        read_header_file,
-        write_header_file,
     )
 
     bounds = (78.99958333333333, 90.00041666666226, 26.0, 31.000416666666666)
@@ -279,13 +275,13 @@ def test_repeating_degree_l2_cell_size_is_never_rounded_away():
 
 
 def test_all_four_levels_validate_on_a_repeating_degree_grid(tmp_path):
-    from mhm_qgis.core.handlers.file.ascii.morphology import validate_grid_headers
     from mhm_qgis.core.grid import (
         header_for_existing_bounds,
         possible_resolutions,
         read_header_file,
         write_header_file,
     )
+    from mhm_qgis.core.handlers.file.ascii.morphology import validate_grid_headers
 
     bounds = (78.99958333333333, 90.00041666666226, 26.0, 31.000416666666666)
     l0, l2 = aligned_l0_l2_headers(bounds, DEGREE_ANCHOR, multiplier=120, unit="deg")

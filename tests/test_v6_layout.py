@@ -12,14 +12,17 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.handlers.store.layout import (  # noqa: E402
+from mhm_qgis.core.handlers.store.layout import (
+    domain_dem_path,
     expected_meteo_outputs,
+    input_state_path,
+    lai_folder,
     meteo_mask_path,
+    morph_folder,
+    project_version,
+    streamflow_observation_folder,
 )
 from mhm_qgis.core.handlers.store.paths import workspace_folder
-from mhm_qgis.core.handlers.store.layout import (  # noqa: E402
-    domain_dem_path, input_state_path, lai_folder, morph_folder, project_version,
-    streamflow_observation_folder)
 
 xr = pytest.importorskip("xarray")
 

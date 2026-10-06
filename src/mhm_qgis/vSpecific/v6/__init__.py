@@ -8,8 +8,8 @@ from ..common import (
     domain_count,
     geology_count,
     geology_rows,
-    namelist_settings,
     model_data_path,
+    namelist_settings,
     repeat,
     resolution,
 )

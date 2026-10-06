@@ -1,21 +1,27 @@
 """Small offscreen integration check; executed by test_domain_qgis_runtime."""
+from importlib.util import find_spec
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
-from importlib.util import find_spec
 
 if find_spec("qgis") is None:
     raise SystemExit(77)
 
-from qgis.core import (QgsApplication, QgsCoordinateReferenceSystem, QgsFeature,
-                       QgsGeometry, QgsVectorLayer, QgsRasterLayer, QgsPointXY)
+from qgis.core import (
+    QgsApplication,
+    QgsCoordinateReferenceSystem,
+    QgsFeature,
+    QgsGeometry,
+    QgsPointXY,
+    QgsRasterLayer,
+    QgsVectorLayer,
+)
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QDialog
 
-from mhm_qgis.qgis_bridge.layers.domain import snap_points_to_network, DomainWorkflow
-from mhm_qgis.core.handlers.state import domain_state
-from mhm_qgis.core.executions.morphology import delineation
 from mhm_qgis.core.handlers.raster.tasks import dem_derivative_files, hydrology_files
+from mhm_qgis.core.handlers.state import domain_state
+from mhm_qgis.qgis_bridge.layers.domain import DomainWorkflow, snap_points_to_network
 
 
 def layer(kind, crs, field, features):
@@ -62,6 +68,7 @@ def snapping(folder):
 def navigation(folder):
     import numpy as np
     from osgeo import gdal, osr
+
     from mhm_qgis.qt.dialogs.domain_delineator import DomainDelineatorDialog
 
     points = layer("Point", "EPSG:32632", "id", [(1, "POINT(850 150)"), (2, "POINT(950 50)")])
@@ -85,7 +92,7 @@ def navigation(folder):
     main.project_folder = str(folder)
     main.get_crs = lambda: QgsCoordinateReferenceSystem("EPSG:32632")
     main.log_message = Mock()
-    main.selected_input_file_paths = lambda: []
+    main.selected_input_file_paths = list
     main.task_coordinator = Mock()
     main.save_input_state = Mock()
     main.update_gauged_outlet_count = Mock()

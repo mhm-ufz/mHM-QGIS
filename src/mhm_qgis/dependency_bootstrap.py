@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """QGIS runtime dependency bootstrap for the mhm_qgis plugin."""
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-
 
 SKIPPED_QGIS_PACKAGES = {
     "pyqt5",

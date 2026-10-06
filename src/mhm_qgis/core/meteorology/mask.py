@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """The v6 meteorology mask.
 
 `config_input` names `meteo_mask_path`, and both mHM examples ship a
@@ -7,11 +6,11 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from ..grid import header_center_coordinates
-
 
 NODATA = -9999
 

@@ -5,8 +5,8 @@ import threading
 import traceback
 from dataclasses import dataclass, field
 
-from qgis.PyQt import QtCore
 from qgis.core import QgsApplication, QgsTask
+from qgis.PyQt import QtCore
 
 
 @dataclass
