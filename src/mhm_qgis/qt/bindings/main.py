@@ -15,6 +15,7 @@ from ..controllers import (
     categorical,
     forcing,
     grid,
+    intro,
     main,
     model,
     project,
@@ -65,6 +66,9 @@ def bind(dialog):
 
     # Closure Help → tooltip.start (a guided tour of the visible page)
     dialog.Closure.helpRequested.connect(lambda: tooltip.start(dialog))
+
+    # pushButton_launchIntroductionWizard → intro.launch
+    dialog.pushButton_launchIntroductionWizard.clicked.connect(lambda: intro.launch(dialog))
 
     # Project management
     # pushButton_BrowseProjectFolder → project.select_folder

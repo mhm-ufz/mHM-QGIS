@@ -10,7 +10,7 @@ from ...core.handlers.store.layout import ensure_project_structure
 from ...qgis_bridge.display import meteo as meteo_display
 from ...qgis_bridge.display import output as output_display
 from ..dialogs.file_picker import open_directory
-from . import grid, input_state, workflow_state
+from . import grid, input_state, intro, workflow_state
 from .version import selected as selected_version
 from .workflow_state import set_status, switch_busy
 
@@ -85,6 +85,7 @@ def create_structure(dialog):
         workflow_state.refresh_all(dialog)
         dialog.save_input_state()
         populate_domains(dialog, path.name)
+        intro.write_pending(dialog)
         dialog.comboBox_mHMversion.setEnabled(False)
         set_status(dialog, "project_structure", "completed")
         from ..dialogs.project_folder_tree import ProjectFolderTreeDialog

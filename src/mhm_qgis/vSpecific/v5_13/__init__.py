@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..common import (
+    apply_registered,
     coordinate_flag,
     domain_count,
     geology_count,
@@ -117,6 +118,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
                                 "dStart": evaluation.day, "yEnd": end.year,
                                 "mEnd": end.month, "dEnd": end.day}, count),
         }
+    apply_registered(values, settings)
     return values
 
 

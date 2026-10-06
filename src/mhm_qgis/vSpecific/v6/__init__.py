@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..common import (
+    apply_registered,
     domain_count,
     geology_count,
     geology_rows,
@@ -93,18 +94,8 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
     _apply_land_cover(values["main"], settings, count)
     _apply_soil(values["main"], settings, count)
     _apply_lai(values["main"], settings, count, data)
-    _apply_registered(values, settings)
+    apply_registered(values, settings)
     return values
-
-
-def _apply_registered(values, settings):
-    """Overlay only outputs explicitly registered by preprocessing."""
-    for profile, namelists in settings.get("namelist_values", {}).items():
-        if profile not in values or not isinstance(namelists, dict):
-            continue
-        for namelist, fields in namelists.items():
-            if isinstance(fields, dict):
-                values[profile].setdefault(namelist, {}).update(fields)
 
 
 def _apply_land_cover(main, settings, count):

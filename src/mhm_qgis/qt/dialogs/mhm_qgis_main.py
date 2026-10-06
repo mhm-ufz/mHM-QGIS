@@ -55,6 +55,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._grid_l2_metadata = None
         self._grid_l2_header = None
         self._l2_multiplier_user_selected = False
+        self._intro_answers = {}
+        self._intro_pending = False
         self._preferred_l1_resolution = None
         self._preferred_l11_resolution = None
 
