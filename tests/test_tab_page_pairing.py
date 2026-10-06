@@ -22,6 +22,17 @@ def test_each_step_owns_its_controls():
     dialog.close()
 
 
+def test_work_type_switches_configuration_page():
+    dialog = MhmQgisDialog()
+    dialog.comboBox_mhmWorkType.setCurrentIndex(1)
+    assert dialog.stackedWidget_configuration.currentWidget() is dialog.page_multiDomain
+    assert not dialog.tab_geometry.isEnabled()
+    dialog.comboBox_mhmWorkType.setCurrentIndex(0)
+    assert dialog.stackedWidget_configuration.currentWidget() is dialog.page_singleDomain
+    assert dialog.tab_geometry.isEnabled()
+    dialog.close()
+
+
 def test_resolution_fields_preserve_exact_positive_values_for_click_validation():
     dialog = MhmQgisDialog()
     exact = 1 / 1200
