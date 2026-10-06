@@ -21,9 +21,15 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
 - A standalone map window with a layer tree (visibility, ordering), cursor and time
   read-outs, and file drops. In QGIS Desktop, Map Canvas focuses Desktop's canvas.
 - Supports QGIS 3.44+ (Qt5) and QGIS 4 (Qt6).
+- Net radiation (`netrad`) as a meteorology input, so PET Priestley-Taylor and
+  Penman-Monteith (process cases 2 and 3) can be prepared.
 
 ### Changed
 - PyYAML is a declared dependency; the plugin reads its own YAML schemas.
 - GitLab CI runs isort, ruff, the test suite (Python 3.11 and 3.13) and the build on
   every push; the QGIS suite inside the private runtime runs on a schedule, on tags or by
   hand.
+
+### Fixed
+- The v5.13 process editor labelled processCase 8-10 as Baseflow, Neutrons, Routing;
+  mHM reads them as Routing, Baseflow, Neutrons.

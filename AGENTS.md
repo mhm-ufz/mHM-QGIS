@@ -70,6 +70,14 @@ decision.
   - `post/`: mHM output discovery and variable/time resolution. `graph/` resolves
     saved gauges and Qt-free discharge series; the pyqtgraph window lives in `qt/dialogs/`.
   - `utils/`: dependency-free leaf helpers (`time`).
+  - `datamodel/`: what a run needs and what it writes. `rules.yml` maps each process case
+    to the external inputs mHM reads (v6 `config_processes` ids; v5.13 carries its own
+    `processes` with `processCase` indices under `overrides`). `outputs.yml` lists the
+    written variables (flux sums versus state means, area weighting, switches,
+    per-version file names) and what each post-processing analysis needs. Every rule
+    is checked against the mHM source that `sources` names; re-check it there, not
+    against memory, before changing one. `check(project)` reports missing inputs with
+    their reasons; `check_outputs` and `available_analyses` do the same for outputs.
   - `grid/`: QGIS-free exact resolutions, extents, headers, alignment, coordinate
     generation and NumPy/xarray grid matching.
   - `morphology/`: QGIS-free DEM/hydrology, categorical, LAI, domain-DEM and
@@ -310,6 +318,12 @@ Four JSON files live under each domain's `.temp/` directory.
 - Precipitation Scan and Add/Edit Meteorology open `meteo_var_details_input.ui`.
   Only OK starts metadata inspection; Cancel leaves saved inputs unchanged. The
   variable table is populated after successful inspection and restores without scanning.
+- Forcings: `pre`, `tavg`, `tmin`, `tmax`, `tann`, `pet`, `ssrd`, `strd`, `netrad`, `eabs`,
+  `windspeed` (`layout.METEO_VARIABLES`, `forcing/temporal.VARIABLES`, `forcing/types`,
+  `state/nml_outputs.METEO_FIELDS`, and `comboBox_meteoVar` must list the same names;
+  `test_meteo_combo_offers_every_prepared_forcing` checks the form). `netrad` (W m-2) is
+  what PET Priestley-Taylor (case 2) and Penman-Monteith (case 3) read, with `eabs` and
+  `windspeed` for case 3; it was missing, so those cases could not be prepared.
 - Each variable declares folder/glob, unit and input cadence; the form has no cumulative
   controls, so user specs are non-cumulative. Metadata must agree.
   No temperature triplet or dedicated PET workflow remains.
@@ -729,6 +743,16 @@ Four JSON files live under each domain's `.temp/` directory.
   schema file with no `[[namelists]]` entry. A property that `$ref`s it must not
   also spell out `x-fortran-shape` or `x-nml-tools-ui`, or the two can drift.
   v5.13's `GeoParam` is the one exception: a `[nGeoUnits, 5]` table.
+- `externals/nml_tools_handler.read_namelists(folder, schemas_dir)` reads every saved
+  profile file through our schemas (nml-tools `gui.model`), so values are typed and group
+  and key names are lower case; `core.datamodel.read_namelists(project)` picks the
+  schemas by the setup's version.
+- v5.13 `processCase(1..11)` is interception, snow, soil moisture, direct runoff, PET,
+  interflow, percolation, **routing, baseflow, neutrons**, river temperature
+  (`common/mo_common_variables.F90`). The editor's axis labels follow that order; they
+  had routing, baseflow and neutrons rotated. PET ids differ by version: v5.13 `0` is input
+  with aspect correction, v6 `-2` is, and v6 `0` is off. v6 routing case 1 is not
+  implemented in the v6 app.
 - Version-specific initial values are built by `vSpecific/` (`build_initial_values`,
   `build_dimensions`), which reads `nml-settings.json` through
   `state/nml_settings.load_settings`.
