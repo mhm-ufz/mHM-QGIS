@@ -29,6 +29,9 @@ whether hosted by QGIS Desktop or launched directly.
 - `pyproject.toml`, `MANIFEST.in`: PyPI packaging metadata.
 - `tests/`: core checks run in plain Python; GUI checks require real QGIS and
   are skipped when unavailable. `conftest.py` initializes an offscreen QGIS application.
+  Checks that reach GDAL (`osgeo`, which comes with QGIS or the system, not PyPI) call
+  `pytest.importorskip("osgeo")`, so CI's pip-only environment skips them instead of
+  failing; a new test that reaches GDAL needs the same line.
 
 A local QGIS install typically symlinks the plugin at
 `/usr/share/qgis/python/plugins/mhm_qgis -> src/mhm_qgis`, which is why a real-QGIS
@@ -877,8 +880,10 @@ Four JSON files live under each domain's `.temp/` directory.
   the private runtime plus a GUI open/close on Linux, Windows and both macOS
   architectures. Publishing stays manual.
 - Until mhm-tools 0.3 and nml-tools 0.6 are on PyPI, both pipelines install them from
-  pinned commits with `SETUPTOOLS_SCM_PRETEND_VERSION_FOR_*` set to the pinned
-  versions (git checkouts carry no matching tag). Move a pin when the local checkout the
+  pinned commits, one `pip` call each with `SETUPTOOLS_SCM_PRETEND_VERSION` set to the
+  version pymhm pins: git checkouts carry no matching tag, and hatch-vcs ignores the
+  per-package `SETUPTOOLS_SCM_PRETEND_VERSION_FOR_*` variables (measured: they installed
+  as `0.2.4.dev57` and `0.1.dev285`). Move a pin when the local checkout the
   suites ran against moves; delete the block at the PyPI release.
 - The private runtime is `runtime/locks/<platform>.lock`, generated from
   `tools/runtime/environment.yml` with `uvx conda-lock lock -f tools/runtime/environment.yml

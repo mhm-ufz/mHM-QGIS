@@ -91,6 +91,7 @@ def test_ready_mode_rejects_non_raster_input(tmp_path):
 
 
 def test_ready_raster_is_placed_on_the_common_grid(tmp_path):
+    pytest.importorskip("osgeo")
     import numpy as np
     from osgeo import gdal, osr
 

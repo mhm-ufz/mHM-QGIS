@@ -8,19 +8,23 @@ stages:
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   QT_QPA_PLATFORM: offscreen
-  # --- Unreleased dependencies: delete this block once mhm-tools 0.3 and
-  # nml-tools 0.6 are on PyPI. The pretend versions satisfy pymhm's pins.
-  SETUPTOOLS_SCM_PRETEND_VERSION_FOR_MHM_TOOLS: "0.3.0"
-  SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NML_TOOLS: "0.6.0"
-  UNRELEASED: >-
-    mhm-tools@git+https://git.ufz.de/mhm/mhm-tools.git@3b77269
-    nml-tools[gui]@git+https://github.com/SanjeevBashyal/nml-tools.git@f8d46cb
+  # --- Unreleased dependencies: delete these and `.unreleased` once mhm-tools 0.3
+  # and nml-tools 0.6 are on PyPI.
+  MHM_TOOLS_GIT: "mhm-tools@git+https://git.ufz.de/mhm/mhm-tools.git@3b77269"
+  NML_TOOLS_GIT: "nml-tools[gui]@git+https://github.com/SanjeevBashyal/nml-tools.git@f8d46cb"
   # ---
 
 cache:
   key: pip
   paths:
     - .cache/pip
+
+# A git checkout carries no matching version tag, so each build gets the version
+# pymhm pins. hatch-vcs ignores the per-package SETUPTOOLS_SCM_PRETEND_VERSION_FOR_*
+# variables, hence one pip call per package.
+.unreleased: &unreleased
+  - SETUPTOOLS_SCM_PRETEND_VERSION=0.3.0 pip install "$MHM_TOOLS_GIT"
+  - SETUPTOOLS_SCM_PRETEND_VERSION=0.6.0 pip install "$NML_TOOLS_GIT"
 
 .qt_libs: &qt_libs
   - apt-get update -qq
@@ -47,7 +51,7 @@ test:
       - PY: ["3.11", "3.13"]
   before_script:
     - *qt_libs
-    - pip install $UNRELEASED
+    - *unreleased
   script:
     - pip install -e .[test]
     - python -m pytest --cov mhm_qgis --cov-report term-missing --cov-report xml:cov.xml -o addopts="" -q tests/
@@ -68,7 +72,9 @@ build:
     - python -m build
     - twine check dist/*
     - python tools/build_qgis_plugin.py
-    - pip wheel --no-deps -w dist $UNRELEASED  # wheelhouse for test-qgis; drop with the block above
+    # wheelhouse for test-qgis; drop with the unreleased block
+    - SETUPTOOLS_SCM_PRETEND_VERSION=0.3.0 pip wheel --no-deps -w dist "$MHM_TOOLS_GIT"
+    - SETUPTOOLS_SCM_PRETEND_VERSION=0.6.0 pip wheel --no-deps -w dist "$NML_TOOLS_GIT"
   artifacts:
     paths:
       - dist

@@ -119,6 +119,7 @@ def test_execute_all_plan_contains_every_user_visible_command():
 
 def test_only_the_dem_comes_from_the_masked_bundle(tmp_path):
     """Watershed-masking every derivative would carve nodata out of them."""
+    pytest.importorskip("osgeo")
     import numpy as np
     from osgeo import gdal, osr
 

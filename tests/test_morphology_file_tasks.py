@@ -5,6 +5,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
+pytest.importorskip("osgeo", reason="GDAL Python bindings come with QGIS or the system")
 from osgeo import gdal, ogr, osr
 
 from mhm_qgis.core.handlers.file.netcdf.raster import file_path, variables

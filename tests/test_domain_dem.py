@@ -5,6 +5,8 @@ import os
 
 import numpy as np
 import pytest
+
+pytest.importorskip("osgeo", reason="GDAL Python bindings come with QGIS or the system")
 from osgeo import gdal, ogr, osr
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

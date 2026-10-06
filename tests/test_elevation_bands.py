@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from mhm_qgis.core.morphology import elevation_bands
 from mhm_qgis.core.morphology.elevation_bands import bands, land_cover
@@ -76,6 +77,7 @@ def test_create_elevation_bands_writes_rasters_and_summary(tmp_path, monkeypatch
 
 
 def test_land_cover_report_uses_class_names(tmp_path, monkeypatch):
+    pytest.importorskip("osgeo")
     band_path = tmp_path / "elevation_bands_alpha.tif"
     band_path.write_bytes(b"raster")
     band_reference = _reference([[1, 1, 2], [2, 0, 0]], nodata=0)
