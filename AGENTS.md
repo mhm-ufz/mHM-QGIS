@@ -90,6 +90,15 @@ decision.
   - `executions/`: canonical workflow plans and commands. `executions/morphology/`
     is the sole definition of Execute All and its publication ordering;
     `executions/observations/` reuses the forcing pipeline for L2 gridded observations.
+- `intro/`: the introduction wizard's content, Qt-free. `questions.yml` holds the pages
+  (info, choice, multiple) and their effects from a closed key set validated on load:
+  `processes.*`, `defaults.work_type`, `defaults.l1_factor`/`l11_factor`, `analyses.*`,
+  `available.*`. `derive` picks a process case from the data ticked as available, through
+  `datamodel.feasible_cases` with a per-version `prefer` order (PET ids differ by
+  version). `handoff()` turns the choices into editor values: v6 `config_processes` and
+  `out_*` keys; v5.13 the full `processCase` and `outputFlxState` arrays merged into the
+  saved namelist. `qt/dialogs/intro_wizard.py` builds a `QWizard` from the schema;
+  `qt/controllers/intro.py` applies the answers.
 - `externals/`: one handler per external package or executable. Processing calls into
   `mhm_tools`, `nml_tools` and `pyflwdir` go through `mhm_tools_handler.py`,
   `nml_tools_handler.py` and `pyflwdir_handler.py`; `mhm_handler.py` resolves the
@@ -760,6 +769,15 @@ Four JSON files live under each domain's `.temp/` directory.
   had routing, baseflow and neutrons rotated. PET ids differ by version: v5.13 `0` is input
   with aspect correction, v6 `-2` is, and v6 `0` is off. v6 routing case 1 is not
   implemented in the v6 app.
+- The wizard's process and output choices are **one-shot**. They go into the
+  `nml-settings.json` section `intro_values`, which `vSpecific.common.apply_registered`
+  overlays after the plugin-managed `namelist_values` (both versions). `model.edit_namelists`
+  empties it once a `.nml` file in the setup has changed, i.e. after the editor saved,
+  so later edits in the editor win. `namelist_values` itself is re-applied on every launch:
+  keep it to values the plugin owns (paths, variable names).
+- Run mHM first calls `model.inputs_ready`: `datamodel.check` lists every input the saved
+  process cases read but nobody prepared, logs each with what needs it, and asks to run
+  anyway. mHM stays the final judge.
 - Version-specific initial values are built by `vSpecific/` (`build_initial_values`,
   `build_dimensions`), which reads `nml-settings.json` through
   `state/nml_settings.load_settings`.

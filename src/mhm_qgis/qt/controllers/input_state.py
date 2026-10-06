@@ -121,6 +121,7 @@ def save(dialog):
         "pour_point_outlet_id_field": main.selected_outlet_id_field(dialog),
         "domain_definition_type": dialog.comboBox_domainDefinitionType.currentText().strip(),
         "crs_authid": crs.authid() if crs and crs.isValid() else "",
+        "intro": dialog._intro_answers,
     }
     try:
         jsonio.write(path, state)
@@ -145,6 +146,8 @@ def load(dialog):
             dialog.log_message("WARNING: Could not read input state: not a JSON object.")
             return
         _restore_combo_text(dialog.comboBox_mHMversion, state.get("mhm_version", ""))
+        # A setup without saved answers keeps the ones given before it was opened.
+        dialog._intro_answers = state.get("intro") or dialog._intro_answers
         _restore_resolution_preferences(dialog, state.get("grid_resolutions", {}))
         _restore_combo_text(dialog.comboBox_lai_inputType, state.get("lai_input_type", ""))
         crs = QgsCoordinateReferenceSystem(state.get("crs_authid", "") or "")

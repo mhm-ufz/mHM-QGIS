@@ -123,6 +123,8 @@ def test_run_mhm_uses_project_terminal(tmp_path: Path, monkeypatch) -> None:
         "require_v6_executable",
         lambda owner: str(executable),
     )
+    # The input check before a run has its own tests (test_intro_wizard.py).
+    monkeypatch.setattr(controller_module, "inputs_ready", lambda owner, folder: True)
     from mhm_qgis.externals import mhm_handler
     monkeypatch.setattr(
         mhm_handler,

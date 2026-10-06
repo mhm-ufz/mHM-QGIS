@@ -28,6 +28,17 @@ def namelist_settings(dialog: Any) -> dict[str, Any]:
     return load_settings(project) if project else {"version": 1}
 
 
+def apply_registered(values: dict, settings: dict) -> None:
+    """Overlay the plugin-managed `namelist_values`, then the wizard's one-shot `intro_values`."""
+    for section in ("namelist_values", "intro_values"):
+        for profile, namelists in (settings.get(section) or {}).items():
+            if not isinstance(namelists, dict) or profile not in ("main", "parameter", "output", "meta"):
+                continue
+            for namelist, fields in namelists.items():
+                if isinstance(fields, dict):
+                    values.setdefault(profile, {}).setdefault(namelist, {}).update(fields)
+
+
 def domain_count(dialog: Any) -> int:
     """Single-domain workspaces may contain several catchments, not domains."""
     return 1

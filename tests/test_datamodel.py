@@ -90,7 +90,7 @@ def test_v513_reads_tavg_lai_and_latlon_every_run(case, inputs):
 def test_process_dependencies_and_unavailable_cases_are_reported():
     messages = datamodel.unmet_needs("6", {"temperature_routing": 1, "routing": 0, "pet": 0, "interception": 1})
     assert any("temperature routing case 1 needs routing case 2 or 3" in m for m in messages)
-    assert any("interception case 1 needs pet" in m for m in messages)
+    assert any("interception case 1 needs PET" in m for m in messages)
     assert datamodel.unmet_needs("6", {"routing": 1}) == [
         "routing case 1 is not available in mHM 6 (valid: 0, 2, 3)."]
     assert datamodel.unmet_needs("5.13", {"routing": 1}) == []
@@ -119,7 +119,7 @@ def test_check_reports_a_missing_forcing_with_its_reason(tmp_path):
     findings = {f.input: f for f in datamodel.check(project, {"pet": 1})}
     assert not findings["tmin"].ok
     assert findings["tmin"].message == (
-        "Missing tmin (Minimum air temperature), needed by pet case 1 (Hargreaves-Samani). "
+        "Missing tmin (Minimum air temperature), needed by PET case 1 (Hargreaves-Samani). "
         "Meteorology tab: add variable tmin.")
     (project / "data" / "meteo").mkdir(parents=True)
     (project / "data" / "meteo" / "tmin.nc").write_bytes(b"")

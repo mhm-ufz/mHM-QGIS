@@ -1,6 +1,7 @@
 """mHM version, namelist editor, and model execution actions."""
 
 import os
+from pathlib import Path
 
 from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import QMessageBox
@@ -72,6 +73,10 @@ def version_changed(dialog) -> None:
     )
 
 
+def _namelist_stamps(folder) -> dict:
+    return {path.name: path.stat().st_mtime_ns for path in Path(folder).glob("*.nml")}
+
+
 def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
     if not require_active(dialog):
         return False
@@ -92,6 +97,7 @@ def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
         from ...externals.nml_tools_handler import launch_profile_editor
 
         dialog.log_message(f"Opening namelist editor for mHM {version}...")
+        before = _namelist_stamps(workspace)
         launch_profile_editor(
             schemas_dir=schemas_dir,
             output_dir=workspace,
@@ -102,11 +108,38 @@ def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
             file_profiles=file_profiles,
             log=dialog.log_message,
         )
+        if _namelist_stamps(workspace) != before and nml_settings.load_settings(
+                dialog.project_folder).get("intro_values"):
+            # The wizard's choices are now in the saved namelists; later edits win.
+            nml_settings.update_section(dialog.project_folder, "intro_values", {})
         return True
     except Exception as error:
         dialog.log_message(f"ERROR: Edit Namelists failed. Details: {error}")
         QMessageBox.critical(dialog, "Configuration Error", str(error))
         return False
+
+
+def inputs_ready(dialog, project_folder) -> bool:
+    """Warn about inputs the saved processes read but nobody prepared; Yes runs anyway."""
+    from ...core import datamodel
+
+    try:
+        missing = [finding for finding in datamodel.check(project_folder) if not finding.ok]
+    except ValueError as error:
+        dialog.log_message(f"WARNING: Could not check the model inputs: {error}")
+        return True
+    if not missing:
+        return True
+    for finding in missing:
+        dialog.log_message(f"WARNING: {finding.message}")
+    answer = QMessageBox.question(
+        dialog, "Model inputs missing",
+        f"{len(missing)} input(s) the selected processes read look missing; the log lists them "
+        "and what needs them.\n\nRun mHM anyway?",
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.No,
+    )
+    return answer == QMessageBox.StandardButton.Yes
 
 
 def run(dialog) -> bool:
@@ -135,6 +168,8 @@ def run(dialog) -> bool:
         if version.startswith("6") and not v6_path:
             return False
         ensure_project_structure(project_folder, version)
+        if not inputs_ready(dialog, project_folder):
+            return False
         workspace = workspace_folder(project_folder)
         terminal = dialog.open_project_terminal()
         if terminal is None:
