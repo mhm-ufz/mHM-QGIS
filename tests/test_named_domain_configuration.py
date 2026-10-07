@@ -93,15 +93,15 @@ def test_v6_prepared_outputs_are_registered_for_namelists(tmp_path):
     register_morphology(
         root, bundle=root / "data/morph/input.nc", dem=root / "data/morph/dem.nc",
         mask=root / "data/morph/morph_mask.nc", latlon=root / "data/latlon.nc")
-    register_meteo(root, {"pet": root / "data/meteo/pet.nc"})
+    register_meteo(root, {"pet": root / "data/meteo/pet.nc"}, v6=True)
     register_meteo(root, {"pre": root / "data/meteo/pre.nc"},
-                   root / "data/meteo/mask.nc")
+                   root / "data/meteo/mask.nc", v6=True)
     observation = MeteoFolderSpec(
         "sm", tmp_path, temporal_resolution="Hourly",
         output_temporal_resolution="Daily", aggregation="Average", unit="m3 m-3",
     ).normalized()
     register_observations(root, {"sm": root / "data/observation/sm.nc"},
-                          (observation,))
+                          (observation,), v6=True)
 
     values = build_initial_values("6", SimpleNamespace(project_folder=root))["main"]
     inputs = values["config_input"]
@@ -114,6 +114,25 @@ def test_v6_prepared_outputs_are_registered_for_namelists(tmp_path):
     observations = values["config_observations"]
     assert observations["sm_path"] == ["data/observation/sm.nc"]
     assert observations["sm_time_step"] == -1
+
+
+def test_v513_setups_get_no_v6_namelist_values(tmp_path):
+    from mhm_qgis.vSpecific.common import apply_registered
+
+    root = paths.domain_folder(tmp_path, "Karnali")
+    root.mkdir(parents=True)
+    # A v6 config_input section written into a v5.13 setup before the fix.
+    nml_settings.update_section(root, "namelist_values", {"main": {"config_input": {"pre_path": ["x"]}}})
+    nml_settings.update_section(root, "intro_values", {"main": {"processSelection": {"processCase": [1] * 11}}})
+    settings = nml_settings.load_settings(root)
+    values = {"main": {}}
+    apply_registered(values, settings, v6=False)
+    assert values == {"main": {"processSelection": {"processCase": [1] * 11}}}
+
+    register_meteo(root, {"pre": root / "data/meteo/pre/pre.nc"}, v6=False)
+    assert "namelist_values" not in nml_settings.load_settings(root)
+    register_observations(root, {"sm": root / "data/observation/sm.nc"}, v6=False)
+    assert "namelist_values" not in nml_settings.load_settings(root)
 
 
 def test_switching_domains_restores_only_the_selected_setup(tmp_path, monkeypatch):

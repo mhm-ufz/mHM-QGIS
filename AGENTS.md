@@ -795,6 +795,12 @@ Four JSON files live under each domain's `.temp/` directory.
   had routing, baseflow and neutrons rotated. PET ids differ by version: v5.13 `0` is input
   with aspect correction, v6 `-2` is, and v6 `0` is off. v6 routing case 1 is not
   implemented in the v6 app.
+- `nml-settings.json` `namelist_values` holds **v6 field names only** (`config_input`,
+  `config_observations`). `state/nml_outputs.register_meteo` and `register_observations` take
+  a required `v6` flag from their callers (the state package must not import the store
+  layout); for a v5.13 setup they drop the section instead of writing it, since v5.13 reads
+  its inputs from the fixed `dir_*` folders that `vSpecific/v5_13` builds.
+  `apply_registered` overlays `namelist_values` for v6 only.
 - The wizard's process and output choices are **one-shot**. They go into the
   `nml-settings.json` section `intro_values`, which `vSpecific.common.apply_registered`
   overlays after the plugin-managed `namelist_values` (both versions). `model.edit_namelists`

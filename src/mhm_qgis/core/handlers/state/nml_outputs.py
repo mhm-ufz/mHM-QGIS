@@ -1,4 +1,10 @@
-"""Register prepared files as schema-ready namelist values."""
+"""Register prepared files as schema-ready namelist values.
+
+The fields are v6 namelist names (`config_input`). A v5.13 setup reads its inputs
+from the fixed `dir_*` folders `vSpecific/v5_13` builds, so writers pass `v6`
+(the caller knows the version; this state module must not import the store
+layout) and a v5.13 setup gets no `namelist_values`, only the removal of stale ones.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,8 +26,12 @@ OBSERVATION_TIME_FIELDS = {
 TIME_STEPS = {"Daily": -1, "Monthly": -2, "Yearly": -3}
 
 
-def register_values(project_folder, profile, namelist, values, *, managed=()):
+def register_values(project_folder, profile, namelist, values, *, managed=(), v6=True):
     state = load_settings(project_folder)
+    if not v6:
+        if state.pop("namelist_values", None) is not None:
+            save_settings(project_folder, state)
+        return
     registry = state.setdefault("namelist_values", {})
     target = registry.setdefault(profile, {}).setdefault(namelist, {})
     for field in managed:
@@ -30,7 +40,7 @@ def register_values(project_folder, profile, namelist, values, *, managed=()):
     save_settings(project_folder, state)
 
 
-def register_meteo(project_folder, outputs, mask=None):
+def register_meteo(project_folder, outputs, mask=None, *, v6):
     values = {}
     for variable, path in outputs.items():
         stem = METEO_FIELDS.get(variable)
@@ -45,10 +55,11 @@ def register_meteo(project_folder, outputs, mask=None):
         for stem in METEO_FIELDS.values() for suffix in ("path", "var")
     } | {"meteo_mask_path", "meteo_mask_var"}
     register_values(
-        project_folder, "main", "config_input", values, managed=managed)
+        project_folder, "main", "config_input", values, managed=managed, v6=v6)
 
 
 def register_morphology(project_folder, *, bundle, dem, mask, latlon):
+    """v6 only: its caller is the v6 branch of the publication stage."""
     bundle = _relative(project_folder, bundle)
     values = {
         "latlon_path": [_relative(project_folder, latlon)],
@@ -66,7 +77,7 @@ def register_morphology(project_folder, *, bundle, dem, mask, latlon):
     register_values(project_folder, "main", "config_input", values)
 
 
-def register_observations(project_folder, outputs, specs=()):
+def register_observations(project_folder, outputs, specs=(), *, v6):
     values = {
         OBSERVATION_FIELDS[variable]: [_relative(project_folder, path)]
         for variable, path in outputs.items() if variable in OBSERVATION_FIELDS
@@ -80,7 +91,7 @@ def register_observations(project_folder, outputs, specs=()):
         OBSERVATION_TIME_FIELDS.values())
     register_values(
         project_folder, "main", "config_observations", values,
-        managed=managed)
+        managed=managed, v6=v6)
     state = load_settings(project_folder)
     state["observations"] = {
         variable: {"path": _relative(project_folder, path), "variable": variable}

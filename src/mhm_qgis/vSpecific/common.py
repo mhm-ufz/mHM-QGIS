@@ -28,9 +28,9 @@ def namelist_settings(dialog: Any) -> dict[str, Any]:
     return load_settings(project) if project else {"version": 1}
 
 
-def apply_registered(values: dict, settings: dict) -> None:
-    """Overlay the plugin-managed `namelist_values`, then the wizard's one-shot `intro_values`."""
-    for section in ("namelist_values", "intro_values"):
+def apply_registered(values: dict, settings: dict, *, v6: bool) -> None:
+    """Overlay the plugin-managed `namelist_values` (v6 names only), then the wizard's one-shot `intro_values`."""
+    for section in ("namelist_values", "intro_values") if v6 else ("intro_values",):
         for profile, namelists in (settings.get(section) or {}).items():
             if not isinstance(namelists, dict) or profile not in ("main", "parameter", "output", "meta"):
                 continue
@@ -51,7 +51,7 @@ def multi_values(dialog: Any, version: str) -> tuple[dict, dict] | None:
     paths = multi_domain.resolve(root, section.get("domains", []))
     combine = multi_domain.v6_values if version.startswith("6") else multi_domain.v5_values
     values, dimensions = combine(paths, root)
-    apply_registered(values, settings)
+    apply_registered(values, settings, v6=version.startswith("6"))
     return values, dimensions
 
 

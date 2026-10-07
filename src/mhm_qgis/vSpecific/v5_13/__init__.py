@@ -125,7 +125,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
                                 "dStart": evaluation.day, "yEnd": end.year,
                                 "mEnd": end.month, "dEnd": end.day}, count),
         }
-    apply_registered(values, settings)
+    apply_registered(values, settings, v6=False)
     return values
 
 
