@@ -264,5 +264,6 @@ def _restart(path, f_sealed, mask, area_km2):
         sealed.long_name = "fraction of Sealed area at level 1"
         sealed[0] = np.where(mask, f_sealed, FILL)
         handle.createVariable("L1_domain_mask", "i4", ("ncols1", "nrows1"))[:] = mask.astype(int)
-        handle.createVariable("L1_domain_cellarea", "f8", ("ncols1", "nrows1"))[:] = area_km2
+        area = handle.createVariable("L1_domain_cellarea", "f8", ("ncols1", "nrows1"), fill_value=FILL)
+        area[:] = np.where(mask, area_km2, FILL)  # unpack(..., mask, nodata) (mo_common_restart.f90:110)
     return path

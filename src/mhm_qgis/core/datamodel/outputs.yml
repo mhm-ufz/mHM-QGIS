@@ -65,17 +65,23 @@ observables:
   neutrons:      {model: neutrons}
 
 files:
-  # v5.13: fixed names inside dir_Out(i). v6 app: paths from the namelists,
-  # relative to each domain folder (examples: output/mhm_output.nc, output/mrm_output.nc).
+  # Where each file of a run lives. `dir`/`key` and `switch` name namelist values
+  # (group.key, per domain index where the key is an array), read relative to the
+  # folder of the namelists that ran. v5.13: fixed names inside dir_Out(i). v6 app:
+  # paths from the namelists (examples: output/mhm_output.nc, output/mrm_output.nc).
+  # `name` lists alternatives; the first that exists is used. `restart` holds
+  # L1_fSealed, L1_domain_cellarea and L1_domain_mask (F14), used only when written.
   v5.13:
-    mhm:       {name: mHM_Fluxes_States.nc, grid: L1}
-    mrm:       {name: mRM_Fluxes_States.nc, grid: L11}
-    discharge: {name: [discharge.nc, subdaily_discharge.nc, daily_discharge.out]}
-    log:       {name: ConfigFile.log}
+    mhm:       {name: mHM_Fluxes_States.nc, dir: directories_general.dir_Out, grid: L1, resolution: mainconfig.resolution_Hydrology}
+    mrm:       {name: mRM_Fluxes_States.nc, dir: directories_general.dir_Out, grid: L11}
+    discharge: {name: [subdaily_discharge.nc, discharge.nc, daily_discharge.out], dir: directories_general.dir_Out}
+    log:       {name: ConfigFile.log, dir: directories_general.dirConfigOut}
+    restart:   {key: directories_general.mhm_file_RestartOut, switch: mainconfig.write_restart}
   v6:
-    mhm:       {namelist: config_mhm, key: output_path, grid: L1}
-    mrm:       {namelist: config_mrm, key: output_path, grid: L11}
-    discharge: {namelist: config_mrm, key: output_poi_path}
+    mhm:       {key: config_mhm.output_path, grid: L1, resolution: config_resolution.hydro}
+    mrm:       {key: config_mrm.output_path, grid: L11}
+    discharge: {key: config_mrm.output_poi_path}
+    restart:   {key: config_mpr.restart_output_path, switch: config_mpr.write_restart}
 
 switches:
   # Where an output's on/off switch lives in the saved output namelist.

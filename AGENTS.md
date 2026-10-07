@@ -764,6 +764,23 @@ Four JSON files live under each domain's `.temp/` directory.
   pixels. Output therefore goes through `show_dataarray`, which attaches a CRS and writes
   a scratch raster. The two paths cost the same per tick (measured 220.3 ms vs 224.7 ms),
   so correctness decides, not speed.
+- **Post-processing engine** (`core/post`, Qt-free; plan `.development/.post`):
+  - `runs.py`: the current `output/` plus archived runs in `runs/<name>/`. Archiving
+    moves `output/` with `os.replace` (no copy), moves output files the namelists put
+    elsewhere and copies the restart, each to the same relative path, so a run's
+    files resolve alike current or archived. A v5.13 multi run lists one run per
+    domain (`output/<domain>/`); v6 domains are listed and archived one by one. The
+    caller refuses archiving while mHM runs.
+  - `catalog.py`: file locations come from the namelists that ran, through
+    `outputs.yml` `files` (never globbed); variables are the file's joined with
+    `outputs.yml` `outputs`; time comes from `time_bnds` only (units whitespace
+    normalised). `findings()` checks bounds, the L1 cell size and the domain area
+    against `ConfigFile.log` (0.5 %).
+  - `grid.py`: basin weights are L0 masks binned into L1 cells (exact block mean, as
+    mHM computes its L1 cell areas). Domain coverage comes from the restart's
+    `L1_domain_cellarea`, else the L0 DEM, else whole valid cells; `sealed_fraction`
+    from the restart's `L1_fSealed`, else L0 land cover == 2 × `fracSealed_cityArea`.
+    The restart is used only when the namelists say it was written.
 
 ## Namelists
 
