@@ -139,3 +139,18 @@ def test_land_use_datetime_widgets_share_boundaries_and_clamp_to_simulation(tmp_
     table.cellWidget(2, 1).setDateTime(QDateTime.fromString("2002-01-01", "yyyy-MM-dd"))
     assert table.cellWidget(2, 1).dateTime().toString("yyyy-MM-ddTHH:mm") == "2001-12-31T23:00"
     dialog.close()
+
+
+def test_land_use_periods_outside_the_simulation_open_clamped(tmp_path):
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+    _app()
+    update_section(tmp_path, "time", {"sim_start": "1980-01-01T00:00", "sim_end": "2020-01-01T00:00"})
+    layer = _touch(tmp_path / "lu.tif")
+    periods = [{"start_time": "1980-01-01T00:00:00", "end_time": "2010-12-30T00:00:00", "file_path": str(layer)},
+               {"start_time": "2010-12-30T00:00:00", "end_time": "2025-12-30T00:00:00", "file_path": str(layer)}]
+    dialog = HistoricalLandUseDialog(tmp_path, initial={"periods": periods})
+    table = dialog.tableWidget_landUseTimeInputs
+    assert table.cellWidget(1, 0).dateTime().toString("yyyy-MM-dd") == "2010-12-30"
+    assert table.cellWidget(1, 1).dateTime().toString("yyyy-MM-dd") == "2020-01-01"
+    assert "period 2: 2010-12-30 to 2025-12-30" in dialog.label_landUseDescription.text()
+    dialog.close()

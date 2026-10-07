@@ -677,7 +677,8 @@ Four JSON files live under each domain's `.temp/` directory.
   `core/handlers/lookup/manifests.py`, which validates before writing: land-use periods
   use continuous `StartDateTime,EndDateTime,FilePath` records (ISO timestamps or
   year boundaries), bounded by the simulation interval. UI QDateTimeEdit cells share
-  adjacent endpoints; v5 transitions must be January 1. Soil horizons are contiguous
+  adjacent endpoints; saved periods outside the simulation interval open clamped, with a
+  red note in the dialog, never a refusal (the dialog is the only place to fix them); v5 transitions must be January 1. Soil horizons are contiguous
   starting at depth 0. The approved small mhm-tools `format_lc_data.py` extension
   reads these dates and preserves fractional-day NetCDF time bounds; legacy
   `StartYear/EndYear` files retain inclusive-year meaning. **Their bytes are a contract mHM-tools parses** -- the soil unit field

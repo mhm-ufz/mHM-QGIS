@@ -41,6 +41,8 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   hand.
 
 ### Fixed
+- The historical land-use dialog opens when saved periods lie outside the simulation
+  period: it shows them clamped to the period, with a note, so they can be corrected.
 - v5.13 setups no longer get v6 `config_input` entries in `nml-settings.json` from the
   meteorology and observation runs, and the v5.13 namelist editor ignores any left over.
 - The v5.13 process editor labelled processCase 8-10 as Baseflow, Neutrons, Routing;

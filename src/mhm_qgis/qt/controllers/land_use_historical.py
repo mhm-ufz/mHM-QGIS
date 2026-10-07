@@ -66,15 +66,25 @@ def set_input(dialog, value) -> None:
     set_layer_count(dialog, len(periods) or 1)
     from ...core.handlers.lookup import LandUsePeriod
     from ...core.handlers.lookup.manifests import period_datetime
+    lower, upper = period_datetime(dialog.simulation_start), period_datetime(dialog.simulation_end)
+    clamped = []
     for index, saved_period in enumerate(periods):
         period = LandUsePeriod.from_dict(saved_period)
-        if period.start_time < period_datetime(dialog.simulation_start) or period.end_time > period_datetime(dialog.simulation_end):
-            raise ValueError("Saved land-use periods exceed the simulation range; update the periods first.")
+        # The editors only hold dates inside the simulation period; show the
+        # clamped dates and say so, so the periods can be fixed here.
+        if period.start_time < lower or period.end_time > upper:
+            clamped.append(f"period {index + 1}: {period.start_time:%Y-%m-%d} to {period.end_time:%Y-%m-%d}")
         for column, moment in enumerate((period.start_time, period.end_time)):
             editor = dialog.tableWidget_landUseTimeInputs.cellWidget(index, column)
             with QSignalBlocker(editor):
-                editor.setDateTime(QDateTime.fromString(moment.isoformat(), "yyyy-MM-ddTHH:mm:ss"))
+                editor.setDateTime(QDateTime.fromString(
+                    min(max(moment, lower), upper).isoformat(), "yyyy-MM-ddTHH:mm:ss"))
         dialog._select_path(dialog._rows[index].adapter, period.file_path)
+    if clamped:
+        dialog.label_landUseDescription.setText(
+            f"<span style='color:#c0392b'>Saved periods lie outside the simulation period "
+            f"{lower:%Y-%m-%d} to {upper:%Y-%m-%d} ({'; '.join(clamped)}) and are shown clamped. "
+            f"Check them and press OK to save.</span><br>{dialog.label_landUseDescription.text()}")
     lookup = str(data.get("lookup_table", "") or "")
     if lookup:
         dialog._select_combo_path(dialog.comboBox_lookupTableInput, lookup)
