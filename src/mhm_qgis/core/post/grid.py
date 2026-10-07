@@ -60,6 +60,14 @@ def axes(path) -> Axes:
     return Axes(x, y, x_bnds, y_bnds, geographic)
 
 
+def cell_index(grid: Axes, x, y):
+    """(iy, ix) of the L1 cell holding a map point, or None outside the grid."""
+    ix = int(np.floor((x - grid.x_bnds.min()) / grid.cell))
+    iy = int(np.floor((grid.y_bnds.max() - y) / abs(grid.y_bnds[0, 1] - grid.y_bnds[0, 0])))
+    ny, nx = grid.shape
+    return (iy, ix) if 0 <= ix < nx and 0 <= iy < ny else None
+
+
 def cell_area_m2(grid: Axes) -> np.ndarray:
     """Full cell areas: dx·dy, or R²·Δλ·(sin φ₂ - sin φ₁) on the sphere."""
     if grid.geographic:

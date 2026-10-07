@@ -809,6 +809,18 @@ Four JSON files live under each domain's `.temp/` directory.
   - `metrics.kge` is mhm-tools' (`externals.mhm_tools_handler.kling_gupta`), so scores
     match its evaluations; importing mhm-tools takes about 0.9 s, so metrics run on a
     coordinator task. Below `min_pairs` every score is NaN with a `reason`.
+- **Post map layer** (`qgis_bridge/display/post_canvas.py`, renders only): each
+  (run, variable) is a VRT in the run's cache, one band per time step pointing into the
+  netCDF (no copy), placed from the axis bounds, CRS from the setup or EPSG:4326 for
+  geographic runs. **GDAL's netCDF driver serves some files south-first (F16: Rapti, not
+  the fixture)**, so `_served_flipped` compares GDAL's first band with netCDF and the VRT
+  gets a south-up geotransform then; QGIS reads both north-up (tested on Rapti). Time is
+  `renderer.setInputBand` (no file I/O); bands carry fixed temporal ranges from
+  `time_bnds`. Colours are fixed from the scan's 2nd/98th percentiles (Viridis) or
+  centred on 0 (RdBu) for differences. Keep a GDAL dataset referenced while using its
+  band; edit graduated classes through the source symbol, never `ranges()` copies; a
+  raster `clone()` drops the fixed classification, so "Open in QGIS" copies the style
+  with `QgsMapLayerStyle`.
 
 ## Namelists
 
