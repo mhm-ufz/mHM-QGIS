@@ -562,11 +562,23 @@ def create_latlon_file(
     return output
 
 
+def kling_gupta(simulated, observed, min_valid_pairs=None) -> tuple[float, float, float, float]:
+    """KGE (2009) by mhm-tools: (kge, alpha, beta, r); all NaN without a result.
+
+    Post-processing scores use it so they match mhm-tools' evaluations. Importing
+    mhm-tools costs about 0.9 s: call it from a coordinator task, never the GUI thread.
+    """
+    from mhm_tools.common.metrics.kge import calculate_kling_gupta_efficiency
+
+    return calculate_kling_gupta_efficiency(simulated, observed, min_valid_pairs)
+
+
 __all__ = [
     "capture_messages",
     "copy_lai_file_to_grid",
     "create_dem_derivative_files",
     "create_latlon_file",
+    "kling_gupta",
     "lai_time_step",
     "link_folder_tree",
     "prepare_categorical_file",
@@ -578,3 +590,4 @@ __all__ = [
     "xarray_coord_key",
     "xarray_single_data_var",
 ]
+

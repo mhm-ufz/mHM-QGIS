@@ -793,6 +793,22 @@ Four JSON files live under each domain's `.temp/` directory.
     fingerprint of its sources changes, so `executions.post.scan_job` rewrites a grid
     product only when its content changes (its mtime is a source). The series cache is
     checked against free disk space before the scan; above 2 GB the UI asks first.
+  - `series.py`, `aggregate.py`, `balance.py` read only the cache (`.npy`, `index.json`
+    with each variable's kind, allowed statistics and data-model key), so the GUI thread
+    may call them; `series.gauge` reads netCDF (coordinator task). Series are indexed
+    by interval start; intervals come from `bounds_<file>.npy`, never from the stamp.
+  - Semantics are enforced: a state's sum is refused ("is a state: sum is meaningless"),
+    flux means are mm per day from the intervals, state means are time-weighted, and a
+    day, month or year the run covers only in part is NaN. **Calendar lengths come from
+    `scan.calendar_days`:** casting `timedelta64[M]` to days gives an average month
+    (30.44 d) and would blank every February.
+  - The balance runs over intervals 2..T (ΔS = S_T - S_1, fluxes from interval 2):
+    exact for model-step output; otherwise `bound` is the full neighbouring-interval
+    change at each end (a bound while storage is monotone across that pair; half of it
+    underestimated a fast recession on the fixture). R is "unaccounted, incl. karstic loss".
+  - `metrics.kge` is mhm-tools' (`externals.mhm_tools_handler.kling_gupta`), so scores
+    match its evaluations; importing mhm-tools takes about 0.9 s, so metrics run on a
+    coordinator task. Below `min_pairs` every score is NaN with a `reason`.
 
 ## Namelists
 
