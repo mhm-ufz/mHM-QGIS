@@ -1,6 +1,7 @@
 """QGIS-free commands used by morphology task schedulers."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -169,7 +170,8 @@ def native_worker(task, payload, working_folder):
         temporary = Path(temporary_name)
         job_file = temporary / "job.json"
         result_file = temporary / "result.json"
-        job_file.write_text(json.dumps(payload), encoding="utf-8")
+        progress_file = temporary / "progress.txt"  # the child writes 0-100 here
+        job_file.write_text(json.dumps({**payload, "progress": str(progress_file)}), encoding="utf-8")
         environment = os.environ.copy()
         package_parent = str(Path(__file__).resolve().parents[4])
         environment["PYTHONPATH"] = os.pathsep.join(
@@ -204,6 +206,9 @@ def native_worker(task, payload, working_folder):
                 try:
                     process.wait(timeout=0.2)
                 except subprocess.TimeoutExpired:
+                    if task is not None and progress_file.is_file():
+                        with contextlib.suppress(OSError, ValueError):
+                            task.setProgress(max(5, min(99, int(progress_file.read_text(encoding="ascii")))))
                     continue
         log = log_file.read_text(encoding="utf-8", errors="replace").strip()
         if not result_file.is_file():

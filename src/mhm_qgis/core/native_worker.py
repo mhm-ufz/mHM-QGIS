@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -58,9 +59,27 @@ def _soil(value):
     )
 
 
+def _progress(path):
+    """Report 0-100 to the parent through `path`, atomically (see `commands.native_worker`)."""
+    def report(value):
+        if path:
+            temporary = Path(f"{path}.tmp")
+            temporary.write_text(str(int(value)), encoding="ascii")
+            os.replace(temporary, path)
+    return report
+
+
 def run(job):
     if job.get("mode") == "lookup":
         return run_lookup_job(job["job"])
+    if job["kind"] == "post-scan":
+        from .post.scan import run_scan
+
+        return {"kind": job["kind"], "summary": run_scan(job, _progress(job.get("progress")))}
+    if job["kind"] == "post-derive":
+        from .post.scan import derive
+
+        return {"kind": job["kind"], "result": derive(job)}
     if job["kind"] == "gauge-position":
         from .handlers.raster.tasks import gauge_position_file
 
