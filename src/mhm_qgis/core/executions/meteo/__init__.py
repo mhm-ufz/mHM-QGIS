@@ -101,6 +101,7 @@ def reuse_prepared(run: MeteorologyRun, state, *, log=None) -> bool:
         run.project_folder,
         {name: expected[name]["netcdf"] for name in variables},
         meteo_mask_path(run.project_folder) if is_v6(run.project_folder) else None,
+        v6=is_v6(run.project_folder),
     )
     return True
 
@@ -155,7 +156,7 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None,
         if header_path:
             state.mark_prepared(header_path, Path(header_path).name)
     from ...handlers.state.nml_outputs import register_meteo
-    register_meteo(run.project_folder, result.outputs, mask)
+    register_meteo(run.project_folder, result.outputs, mask, v6=is_v6(run.project_folder))
     _say(log, "Meteorology forcing preparation completed.")
     _say(log, f"Prepared variables: {', '.join(sorted(result.outputs))}")
     processing.save_grid_metadata(run.project_folder, run.grid_metadata)

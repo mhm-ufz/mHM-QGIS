@@ -101,7 +101,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
     _apply_land_cover(values["main"], settings, count)
     _apply_soil(values["main"], settings, count)
     _apply_lai(values["main"], settings, count, data)
-    apply_registered(values, settings)
+    apply_registered(values, settings, v6=True)
     return values
 
 
