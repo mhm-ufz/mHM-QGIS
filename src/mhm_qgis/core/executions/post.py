@@ -44,9 +44,10 @@ def scan_job(ref, *, file="mhm", variables=None, series=SERIES_DEFAULT, budget_m
     sources = [_save(root, f"cells_{file}", np.array(cells, dtype="i4")), path]
     _save(root, "x", axes.x)
     _save(root, "y", axes.y)
+    _save(root, f"bounds_{file}", run.bounds if file == "mhm" else catalog.read_bounds(path))
     registry = output_registry(run.version)["outputs"]
-    specs = [{"name": v.name, "kind": v.kind or "state", "weight": v.weight,
-              "amount": bool(registry.get(v.output, {}).get("balance"))}
+    specs = [{"name": v.name, "output": v.output, "kind": v.kind or "state", "weight": v.weight,
+              "aggregate": list(v.aggregate), "amount": bool(registry.get(v.output, {}).get("balance"))}
              for v in run.variables if v.present and v.file == file and (variables is None or v.name in variables)]
     job = {"kind": "post-scan", "file": file, "path": str(path), "cache": str(root),
            "shape": list(axes.shape), "budget_mb": budget_mb, "basins": [], "sealed": False, "problems": []}
@@ -70,7 +71,8 @@ def scan_job(ref, *, file="mhm", variables=None, series=SERIES_DEFAULT, budget_m
         forcing = run.forcing()
         if precipitation and forcing:
             job["forcing"] = {"path": str(forcing[0]), "variable": forcing[1]}
-            specs.append({"name": "pre", "kind": "flux", "weight": "cell", "amount": True})
+            specs.append({"name": "pre", "output": "precipitation", "kind": "flux", "weight": "cell",
+                          "aggregate": ["sum", "mean"], "amount": True})
             sources.append(forcing[0])
     names = [spec["name"] for spec in specs]
     job["series"] = [name for name in names if name in series]
@@ -87,17 +89,10 @@ def scan_job(ref, *, file="mhm", variables=None, series=SERIES_DEFAULT, budget_m
 
 
 def scan(task, job) -> dict:
-    """Run the scan in the native worker and record what it built."""
+    """Run the scan in the native worker; it records its products in `index.json`."""
     if not job["variables"]:
         return {}
-    summary = native_worker(task, job, job["cache"])["summary"]
-    index = cache.load_index(job["cache"])
-    for name, info in summary.items():
-        index["variables"][name] = {**info, "fingerprint": job["fingerprints"][name], "file": job["file"]}
-    index["problems"] = job["problems"]
-    index["domain_source"] = job.get("domain_source")
-    cache.save_index(job["cache"], index)
-    return summary
+    return native_worker(task, job, job["cache"])["summary"]
 
 
 def derive(task, job, working_folder):

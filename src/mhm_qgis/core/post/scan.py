@@ -7,7 +7,8 @@ process. Blocks of whole time steps are sized to the memory budget, so each chun
 - `basins/<var>.npy`: (basins, T) weighted means (F8: pervious and sealed states
   carry 1 - fSealed and fSealed; storage amounts are per basin area, intensities
   such as SM_L per weighted area);
-- `stats/<var>.npz`: per cell n, sum, sumsq, min, max;
+- `stats/<var>.npz`: per cell n, sum, sumsq, min, max, and the values of intervals
+  0, 1, T-2 and T-1 (per-cell balance over intervals 2..T and its averaging bound);
 - `monthly/<var>.npy`: totals per calendar month (fluxes, when no interval spans two
   months), NaN for incomplete months; `annual/<var>_max.npy` and `_min.npy`;
 - the 2nd and 98th percentile of a sample, for colours that hold while animating.
@@ -35,6 +36,11 @@ def _calendar(bounds, unit):
         return None, []
     index = (first - first.min()).astype(int)
     return index, [str(first.min() + step) for step in range(index.max() + 1)]
+
+
+def calendar_days(labels) -> np.ndarray:
+    """Days in each calendar period (datetime64 of unit D, M or Y); never an average month."""
+    return ((labels + 1).astype("datetime64[D]") - labels.astype("datetime64[D]")) / np.timedelta64(1, "D")
 
 
 def _axis_index(values, centres):
@@ -110,7 +116,11 @@ class _Products:
         n, steps = len(cells[0]), len(bounds)
         self.spec, self.cells = spec, cells
         self.stats = {"n": np.zeros(n), "sum": np.zeros(n), "sumsq": np.zeros(n),
-                      "min": np.full(n, np.nan), "max": np.full(n, np.nan)}
+                      "min": np.full(n, np.nan), "max": np.full(n, np.nan),
+                      # intervals 0, 1, T-2 and T-1: storage change and its averaging bound per cell
+                      "first": np.full(n, np.nan), "second": np.full(n, np.nan),
+                      "penultimate": np.full(n, np.nan), "last": np.full(n, np.nan)}
+        self.steps = steps
         self.series = series
         self.months, self.month_labels = _calendar(bounds, "M") if spec["kind"] == "flux" else (None, [])
         if self.months is not None:
@@ -135,6 +145,9 @@ class _Products:
         stats["sumsq"] += np.nansum(block ** 2, axis=0)
         stats["min"] = np.fmin(stats["min"], np.fmin.reduce(block, axis=0))
         stats["max"] = np.fmax(stats["max"], np.fmax.reduce(block, axis=0))
+        for key, step in (("first", 0), ("second", 1), ("penultimate", self.steps - 2), ("last", self.steps - 1)):
+            if start <= step < stop:
+                stats[key] = block[step - start]
         if self.series is not None:
             self.series[:, start:stop] = block.T
         if self.weights is not None and len(self.weights):
@@ -170,7 +183,7 @@ class _Products:
             np.save(root / "basins" / f"{name}.npy", self.basins.T)
         if self.months is not None:
             months = np.array(self.month_labels, dtype="datetime64[M]")
-            calendar = (months + 1 - months).astype("timedelta64[s]").astype(float)
+            calendar = calendar_days(months) * 86400
             self.monthly[self.month_seconds < calendar] = np.nan  # a month the run covers in part
             np.save(root / "monthly" / f"{name}.npy", grid(self.monthly.astype("f4")))
         for key, values in self.annual.items():
@@ -183,7 +196,8 @@ class _Products:
 
 
 def run_scan(job, progress=None) -> dict:
-    """Build the products of `job["variables"]` (dicts with name, kind, weight, amount)."""
+    """Build the products of `job["variables"]` and record them, with their
+    fingerprints, in the cache's `index.json`."""
     root = Path(job["cache"])
     cells = tuple(np.load(root / f"cells_{job['file']}.npy"))
     bounds = read_bounds(job["path"])
@@ -218,9 +232,17 @@ def run_scan(job, progress=None) -> dict:
         if series is not None:
             series.flush()
             del series
-        summary[name] = {**products.save(root, shape), "basins": list(job.get("basins", ()))}
+        summary[name] = {**products.save(root, shape), "basins": list(job.get("basins", ())),
+                         **{key: spec[key] for key in ("output", "kind", "weight", "aggregate") if key in spec}}
         if name == "pre":
             summary[name]["incomplete"] = job["_incomplete"]
+    from . import cache
+
+    index = cache.load_index(root)
+    for name, info in summary.items():
+        index["variables"][name] = {**info, "fingerprint": job.get("fingerprints", {}).get(name), "file": job["file"]}
+    index["problems"], index["domain_source"] = job.get("problems", []), job.get("domain_source")
+    cache.save_index(root, index)
     if progress:
         progress(100)
     return summary
@@ -234,4 +256,44 @@ def derive(job):
         with netCDF4.Dataset(job["path"]) as handle:  # decompresses every map (F6): background only
             values = np.ma.filled(np.ma.asarray(handle[job["variable"]][:, job["iy"], job["ix"]], "f8"), np.nan)
         return values.tolist()
+    if job["what"] == "statistic":
+        return _period_statistic(job)
     raise ValueError(f"Unknown derive product: {job['what']}")
+
+
+def _period_statistic(job):
+    """A statistic map over `job["period"]`, read from the file; saved to `job["out"]`.
+
+    Flux means are rates (sum / days), state means are time-weighted (F3, F4).
+    Percentiles hold the period in memory and are refused above `budget_mb`."""
+    import netCDF4
+
+    intervals = read_bounds(job["path"])
+    period = [np.datetime64(value) for value in job["period"]]
+    chosen = np.flatnonzero((intervals[:, 0] >= period[0]) & (intervals[:, 1] <= period[1]))
+    if not chosen.size:
+        raise ValueError("No output interval lies inside the period.")
+    days = (intervals[:, 1] - intervals[:, 0]) / np.timedelta64(1, "D")
+    stat, flux = job["stat"], job["kind"] == "flux"
+    with netCDF4.Dataset(job["path"]) as handle:
+        var = handle[job["variable"]]
+        if stat == "percentile":
+            if chosen.size * var.shape[1] * var.shape[2] * 8 > job.get("budget_mb", 256) * 2 ** 20:
+                raise ValueError("Too long a period for a percentile without the series cache.")
+            values = np.ma.filled(np.ma.asarray(var[chosen[0]:chosen[-1] + 1], "f8"), np.nan)
+            result = np.nanpercentile(values, job["q"], axis=0)
+        else:
+            total = weighted = squares = 0.0
+            low, high = np.inf, -np.inf
+            count = 0
+            for step in chosen:
+                values = np.ma.filled(np.ma.asarray(var[step], "f8"), np.nan)
+                total, weighted = total + values, weighted + values * days[step]
+                squares, count = squares + values ** 2, count + 1
+                low, high = np.fmin(low, values), np.fmax(high, values)
+            mean = total / count
+            result = {"sum": total, "min": low, "max": high,
+                      "mean": total / days[chosen].sum() if flux else weighted / days[chosen].sum(),
+                      "std": np.sqrt(np.maximum(squares / count - mean ** 2, 0))}[stat]
+    np.save(job["out"], result)
+    return job["out"]

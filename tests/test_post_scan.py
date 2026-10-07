@@ -60,6 +60,7 @@ def test_products_equal_brute_force(tmp_path):
     monthly = np.load(root / "monthly" / "aET.npy")
     assert summary["aET"]["months"] == ["2000-01", "2000-02", "2000-03"]
     np.testing.assert_allclose(monthly[0][mask], aet[:31].sum(0)[mask], rtol=1e-6)
+    np.testing.assert_allclose(monthly[1][mask], aet[31:60].sum(0)[mask], rtol=1e-6)  # all 29 days of February
     assert np.isnan(monthly[2]).all()  # March holds two days only
     np.testing.assert_allclose(np.load(root / "annual" / "aET_max.npy")[0][mask], aet[:, mask].max(0), rtol=1e-6)
     low, high = summary["aET"]["range"]

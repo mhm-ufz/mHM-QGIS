@@ -120,6 +120,13 @@ class Run:
         return self.bounds[0, 0], self.bounds[-1, 1]
 
     @property
+    def model_step_days(self) -> float | None:
+        """mHM's model time step (hours in both versions' namelists), in days."""
+        key = "mainconfig_mhm_mrm.timestep" if self.version == "v5.13" else "config_time.time_step"
+        hours = value(self.values, key, self.ref.index)
+        return float(hours) / 24 if hours else None
+
+    @property
     def step_days(self) -> float:
         """The output interval in days (the median; months vary)."""
         return float(np.median(np.diff(self.bounds, axis=1)) / np.timedelta64(1, "D"))
