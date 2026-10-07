@@ -51,13 +51,14 @@ def value(values, dotted, index=1):
 def _locate(ref, values, spec) -> Path | None:
     if "switch" in spec and not value(values, spec["switch"], ref.index):
         return None
+    root = ref.setup if spec.get("input") else ref.root
     if "name" in spec:
-        folder = ref.root / (value(values, spec["dir"], ref.index) or "")
+        folder = root / (value(values, spec["dir"], ref.index) or "")
         names = spec["name"] if isinstance(spec["name"], list) else [spec["name"]]
         found = next((folder / name for name in names if (folder / name).is_file()), folder / names[0])
         return Path(os.path.normpath(found))
     relative = value(values, spec["key"], ref.index)
-    return Path(os.path.normpath(ref.root / relative)) if relative else None
+    return Path(os.path.normpath(root / relative)) if relative else None
 
 
 def read_bounds(path, variable="time"):
@@ -89,7 +90,17 @@ def _patterns(version):
 class Run:
     ref: RunRef
     values: dict
-    files: dict
+    files: dict               # what the run wrote
+    inputs: dict              # model inputs it read (the forcing P)
+
+    def forcing(self):
+        """(path, variable) of the precipitation forcing, or None."""
+        path = self.inputs.get("pre")
+        if path is None or not path.is_file():
+            return None
+        spec = output_registry(self.version)["files"][self.version]["pre"]
+        name = spec["var"] if "." not in spec["var"] else value(self.values, spec["var"], self.ref.index)
+        return path, name or "pre"
 
     @property
     def version(self) -> str:
@@ -194,5 +205,6 @@ def open_run(ref: RunRef, values=None) -> Run:
 
         values = read_namelists(ref.namelists, schemas_folder(ref.version))
     specs = output_registry(ref.version)["files"][version_key(ref.version)]
-    files = {kind: path for kind, spec in specs.items() if (path := _locate(ref, values, spec))}
-    return Run(ref, values, files)
+    located = {kind: (spec, path) for kind, spec in specs.items() if (path := _locate(ref, values, spec))}
+    return Run(ref, values, {kind: path for kind, (spec, path) in located.items() if not spec.get("input")},
+               {kind: path for kind, (spec, path) in located.items() if spec.get("input")})

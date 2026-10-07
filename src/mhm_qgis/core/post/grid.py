@@ -135,12 +135,39 @@ def _l0_source(run, what, scene=0):
     return folder / name, None, 0
 
 
-def _valid_output(run, grid):
+def valid_cells(path) -> np.ndarray:
+    """The cells holding data in the first step of the file's first gridded variable."""
     import netCDF4
 
-    with netCDF4.Dataset(run.files["mhm"]) as handle:
+    with netCDF4.Dataset(path) as handle:
         name = next(name for name, var in handle.variables.items() if var.ndim == 3 and var.dimensions[0] == "time")
-        return (~np.ma.getmaskarray(handle[name][0])).astype("f8")
+        return ~np.ma.getmaskarray(handle[name][0])
+
+
+def scene_index(run, bounds) -> np.ndarray:
+    """The land-cover scene of each output interval (by its start), 0 when unknown.
+
+    v5.13 lists the scenes' years in `&LCover`; a v6 land-cover file with a time axis
+    gives one scene per time step."""
+    starts = bounds[:, 0]
+    try:
+        if run.version == "v5.13":
+            first = np.array(run.values["lcover"]["lcoveryearstart"], dtype=int)
+            years = starts.astype("datetime64[Y]").astype(int) + 1970
+            return np.clip(np.searchsorted(first, years, "right") - 1, 0, len(first) - 1)
+        import netCDF4
+
+        from .catalog import read_bounds
+
+        path, variable, _ = _l0_source(run, "land_cover")
+        with netCDF4.Dataset(path) as handle:
+            if handle[variable].ndim < 3:
+                return np.zeros(len(starts), int)
+            axis = handle[variable].dimensions[0]
+        scenes = read_bounds(path, axis)[:, 0]
+        return np.clip(np.searchsorted(scenes, starts, "right") - 1, 0, len(scenes) - 1)
+    except _UNREADABLE:
+        return np.zeros(len(starts), int)
 
 
 def domain_weights(run, grid: Axes):
@@ -153,7 +180,7 @@ def domain_weights(run, grid: Axes):
         dem, x, y = read_l0(*_l0_source(run, "dem"))
         return basin_weights(grid, ~np.ma.getmaskarray(dem), x, y), "dem"
     except _UNREADABLE:
-        return _valid_output(run, grid), "output"
+        return valid_cells(run.files["mhm"]).astype("f8"), "output"
 
 
 def gauge_weights(run, grid: Axes):

@@ -781,6 +781,18 @@ Four JSON files live under each domain's `.temp/` directory.
     `L1_domain_cellarea`, else the L0 DEM, else whole valid cells; `sealed_fraction`
     from the restart's `L1_fSealed`, else L0 land cover == 2 × `fracSealed_cityArea`.
     The restart is used only when the namelists say it was written.
+  - `scan.py` (in the native worker) is the only full read of an output file: blocks
+    of whole time steps within `budget_mb`, so every (1, ny, nx) chunk is decompressed
+    once. It builds the opt-in cell series cache, basin series (F8: pervious and sealed
+    states weighted by 1 - fSealed or fSealed per scene; storage amounts per basin area,
+    intensities such as `SM_L` per weighted area), per-cell statistics, monthly totals
+    (NaN for months the run covers in part), annual extremes and a colour range.
+    Precipitation comes from the L2 forcing, each L1 cell taking its L2 cell, summed per
+    output interval; intervals the forcing does not cover stay NaN.
+  - `cache.py`: `.temp/Post/<run>_<domain index>/`. A variable is rescanned only when the
+    fingerprint of its sources changes, so `executions.post.scan_job` rewrites a grid
+    product only when its content changes (its mtime is a source). The series cache is
+    checked against free disk space before the scan; above 2 GB the UI asks first.
 
 ## Namelists
 
@@ -890,6 +902,10 @@ Four JSON files live under each domain's `.temp/` directory.
   The worker sets `oom_score_adj=500` so the kernel takes the child first. Cancellation
   must terminate that child; a nonzero or signal exit is reported as a task failure
   rather than crashing QGIS.
+- **Native-worker progress:** the parent adds `"progress": <temp>/progress.txt` to every
+  job; a job that reports writes an integer 0-100 there atomically (`native_worker._progress`)
+  and the parent's 0.2 s poll passes it to `task.setProgress`. Post-processing uses job kinds
+  `post-scan` and `post-derive` (`core/executions/post.py`).
 - **pyproj must never run on a `QgsTask` thread.** QGIS keeps its PROJ context in
   thread-local storage and tears it down when a task thread ends, leaving libproj's
   cached database context dangling for the next pooled thread: the *second* pyproj

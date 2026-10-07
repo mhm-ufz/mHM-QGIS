@@ -71,17 +71,21 @@ files:
   # paths from the namelists (examples: output/mhm_output.nc, output/mrm_output.nc).
   # `name` lists alternatives; the first that exists is used. `restart` holds
   # L1_fSealed, L1_domain_cellarea and L1_domain_mask (F14), used only when written.
+  # `input: true` marks model inputs (the forcing P, F10): read from the setup folder,
+  # never archived with a run.
   v5.13:
     mhm:       {name: mHM_Fluxes_States.nc, dir: directories_general.dir_Out, grid: L1, resolution: mainconfig.resolution_Hydrology}
     mrm:       {name: mRM_Fluxes_States.nc, dir: directories_general.dir_Out, grid: L11}
     discharge: {name: [subdaily_discharge.nc, discharge.nc, daily_discharge.out], dir: directories_general.dir_Out}
     log:       {name: ConfigFile.log, dir: directories_general.dirConfigOut}
     restart:   {key: directories_general.mhm_file_RestartOut, switch: mainconfig.write_restart}
+    pre:       {name: pre.nc, dir: directories_mhm.dir_Precipitation, var: pre, input: true}
   v6:
     mhm:       {key: config_mhm.output_path, grid: L1, resolution: config_resolution.hydro}
     mrm:       {key: config_mrm.output_path, grid: L11}
     discharge: {key: config_mrm.output_poi_path}
     restart:   {key: config_mpr.restart_output_path, switch: config_mpr.write_restart}
+    pre:       {key: config_input.pre_path, var: config_input.pre_var, input: true}
 
 switches:
   # Where an output's on/off switch lives in the saved output namelist.
