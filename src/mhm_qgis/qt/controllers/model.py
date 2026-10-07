@@ -6,8 +6,12 @@ from pathlib import Path
 from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtWidgets import QMessageBox
 
+from ...core import multi_domain
 from ...core.handlers.state import processing
-from ...core.handlers.store.layout import ensure_project_structure
+from ...core.handlers.store.layout import (
+    ensure_multi_structure,
+    ensure_project_structure,
+)
 from ...core.handlers.store.paths import schemas_folder, workspace_folder
 from ...dependency_bootstrap import configure_qtpy_api
 from ..dialogs.file_picker import open_file
@@ -85,14 +89,21 @@ def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
         from ...vSpecific import build_dimensions, build_initial_values
 
         version = selected_version(dialog)
-        if update_inputs:
+        combined = multi_domain.is_multi(dialog.project_folder)
+        if update_inputs and not combined:
             nml_settings.update_section(
                 dialog.project_folder, "time", simulation_times(dialog)
             )
             nml_settings.sync_domain_settings(dialog.project_folder)
         workspace = workspace_folder(dialog.project_folder)
         schemas_dir = schemas_folder(version)
-        ensure_project_structure(dialog.project_folder, version)
+        if combined:
+            ensure_multi_structure(dialog.project_folder)
+            if version.startswith("6") and file_profiles is None:
+                # combine.nml lists the domains; each keeps its own mhm.nml.
+                file_profiles = {"meta": [], "parameter": [], "output": []}
+        else:
+            ensure_project_structure(dialog.project_folder, version)
         configure_qtpy_api()
         from ...externals.nml_tools_handler import launch_profile_editor
 
@@ -124,7 +135,15 @@ def inputs_ready(dialog, project_folder) -> bool:
     from ...core import datamodel
 
     try:
-        missing = [finding for finding in datamodel.check(project_folder) if not finding.ok]
+        if multi_domain.is_multi(project_folder):
+            from ...core.handlers.state.nml_settings import load_settings
+
+            stored = load_settings(project_folder).get(multi_domain.SECTION, {}).get("domains", [])
+            missing = [finding._replace(message=f"{domain.name}: {finding.message}")
+                       for domain in multi_domain.resolve(project_folder, stored)
+                       for finding in datamodel.check(domain) if not finding.ok]
+        else:
+            missing = [finding for finding in datamodel.check(project_folder) if not finding.ok]
     except ValueError as error:
         dialog.log_message(f"WARNING: Could not check the model inputs: {error}")
         return True
@@ -167,7 +186,11 @@ def run(dialog) -> bool:
         v6_path = require_v6_executable(dialog) if version.startswith("6") else None
         if version.startswith("6") and not v6_path:
             return False
-        ensure_project_structure(project_folder, version)
+        combined = multi_domain.is_multi(project_folder)
+        if combined:
+            ensure_multi_structure(project_folder)
+        else:
+            ensure_project_structure(project_folder, version)
         if not inputs_ready(dialog, project_folder):
             return False
         workspace = workspace_folder(project_folder)
@@ -182,6 +205,7 @@ def run(dialog) -> bool:
             terminal.run_command,
             on_finished=finished,
             v6_path=v6_path,
+            namelist="combine.nml" if combined and version.startswith("6") else None,
         )
         if not started:
             finished(-1)

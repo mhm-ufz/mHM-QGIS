@@ -15,6 +15,7 @@ from pathlib import Path
 
 from ..file import json as jsonio
 from .paths import (
+    WORKSPACE_FOLDER_NAME,
     data_folder,
     domain_folder,
     lai_staging_folder,
@@ -43,15 +44,15 @@ _VERSION_CACHE: dict[str, tuple[float, str]] = {}
 METEO_VARIABLES = ("pre", "tavg", "tmin", "tmax", "tann", "pet", "ssrd", "strd", "netrad", "eabs", "windspeed")
 
 
-def domain_folders(project_folder) -> tuple[Path, ...]:
+def domain_folders(project_folder, workspace=WORKSPACE_FOLDER_NAME) -> tuple[Path, ...]:
     """List named setups only; reserved data/output folders are not domains."""
-    container = Path(project_folder) / "mhm-qgis"
+    container = Path(project_folder) / workspace
     if not container.is_dir():
         return ()
     found = []
     for candidate in container.iterdir():
         try:
-            path = domain_folder(project_folder, candidate.name)
+            path = domain_folder(project_folder, candidate.name, workspace)
         except ValueError:
             continue
         if path.is_dir() and (
@@ -194,6 +195,12 @@ def streamflow_observation_folder(project_folder, version: str | None = None) ->
     return os.path.join(
         data_folder(project_folder), "observation", "streamflow"
     )
+
+
+def ensure_multi_structure(root) -> None:
+    """A multi-domain setup holds only its namelists, state, outputs and restarts."""
+    for name in (".temp", "output", "restart"):
+        os.makedirs(os.path.join(str(root), name), exist_ok=True)
 
 
 def ensure_project_structure(project_folder, version_text=None) -> list[str]:

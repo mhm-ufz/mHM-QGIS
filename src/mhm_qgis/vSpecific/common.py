@@ -39,6 +39,22 @@ def apply_registered(values: dict, settings: dict) -> None:
                     values.setdefault(profile, {}).setdefault(namelist, {}).update(fields)
 
 
+def multi_values(dialog: Any, version: str) -> tuple[dict, dict] | None:
+    """Values and dimensions of a combined setup, or None for a single domain."""
+    from ..core import multi_domain
+
+    settings = namelist_settings(dialog)
+    section = settings.get(multi_domain.SECTION)
+    if not section:
+        return None
+    root = dialog.project_folder
+    paths = multi_domain.resolve(root, section.get("domains", []))
+    combine = multi_domain.v6_values if version.startswith("6") else multi_domain.v5_values
+    values, dimensions = combine(paths, root)
+    apply_registered(values, settings)
+    return values, dimensions
+
+
 def domain_count(dialog: Any) -> int:
     """Single-domain workspaces may contain several catchments, not domains."""
     return 1

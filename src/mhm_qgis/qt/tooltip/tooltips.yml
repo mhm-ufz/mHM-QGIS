@@ -79,6 +79,9 @@ pages:
     - widget: lineEdit_domainFolder
       title: Domain to add
       text: Folder of a single-domain setup that is already prepared and runs on its own.
+    - widget: pushButton_browseDomainFolder
+      title: Browse
+      text: Pick the domain folder, usually <code>mhm-qgis/&lt;name&gt;</code> in the project.
     - widget: pushButton_addDomainFolder
       title: Add the domain
       text: Checks that the folder is a setup of the same mHM version, then adds it to the list.
@@ -87,7 +90,7 @@ pages:
       text: The domains combined into this run, in order. Use the cross to remove one.
     - widget: pushButton_prepareMultiDomainSetup
       title: Prepare the combined run
-      text: Checks that the domains agree on processes, land-cover scenes, soil horizons and geology, then writes the namelist handoff.
+      text: Checks that the domains agree on processes, land-cover scenes, soil horizons and geology, copies the first domain's parameter and output namelists if this setup has none, then writes the namelist handoff.
     - widget: pushButton_edit_nmls
       title: Edit namelists
       text: Opens the namelist editor for the combined run.

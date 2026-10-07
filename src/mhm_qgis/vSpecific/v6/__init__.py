@@ -10,6 +10,7 @@ from ..common import (
     geology_count,
     geology_rows,
     model_data_path,
+    multi_values,
     namelist_settings,
     repeat,
     resolution,
@@ -17,6 +18,9 @@ from ..common import (
 
 
 def build_dimensions(dialog: Any) -> dict[str, int]:
+    multi = multi_values(dialog, "6")
+    if multi:
+        return multi[1]
     return {
         "max_layers": 10,
         "n_domains": domain_count(dialog),
@@ -25,6 +29,9 @@ def build_dimensions(dialog: Any) -> dict[str, int]:
 
 
 def build_initial_values(dialog: Any) -> dict[str, Any]:
+    multi = multi_values(dialog, "6")
+    if multi:
+        return multi[0]
     count = domain_count(dialog)
     settings = namelist_settings(dialog)
     data = model_data_path(dialog)

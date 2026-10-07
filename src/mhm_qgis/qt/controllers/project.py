@@ -10,23 +10,33 @@ from ...core.handlers.store.layout import ensure_project_structure
 from ...qgis_bridge.display import meteo as meteo_display
 from ...qgis_bridge.display import output as output_display
 from ..dialogs.file_picker import open_directory
-from . import grid, input_state, intro, workflow_state
+from . import grid, input_state, intro, multi_domain, workflow_state
 from .version import selected as selected_version
 from .workflow_state import set_status, switch_busy
 
 
-def work_type_changed(dialog):
+def show_work_type(dialog):
+    """Show the page of the selected work type; a combined setup prepares no inputs."""
     single = dialog.comboBox_mhmWorkType.currentIndex() == 0
     dialog.stackedWidget_configuration.setCurrentWidget(
         dialog.page_singleDomain if single else dialog.page_multiDomain
     )
-    for page in (
-        dialog.tab_geometry,
-        dialog.tab_meteo,
-        dialog.tab_hydro,
-        dialog.tab_execution,
-    ):
+    for page in (dialog.tab_geometry, dialog.tab_meteo, dialog.tab_hydro):
         page.setEnabled(single)
+
+
+def work_type_changed(dialog):
+    show_work_type(dialog)
+    single = dialog.comboBox_mhmWorkType.currentIndex() == 0
+    if dialog.project_folder and single == (dialog._multi_domains is not None):
+        # The open setup is of the other kind: save and close it.
+        dialog.save_input_state()
+        dialog.project_folder = None
+        dialog._multi_domains = None
+        dialog.comboBox_mHMversion.setEnabled(True)
+        dialog.log_message(
+            "Open a " + ("domain" if single else "multi-domain") + " setup to continue."
+        )
     dialog.save_input_state()
 
 
@@ -134,6 +144,7 @@ def select_folder(dialog):
     finally:
         dialog._loading_input_state = False
     populate_domains(dialog)
+    multi_domain.populate_setups(dialog)
     meteo_display.refresh(dialog)
     output_display.refresh(dialog)
     dialog.log_message(
