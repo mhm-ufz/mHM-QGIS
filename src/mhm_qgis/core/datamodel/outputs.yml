@@ -55,7 +55,9 @@ analyses:
 
 observables:
   discharge:     {model: discharge}
-  soil_moisture: {model: SM_L, depth_weighted: true}
+  # SM_L is relative saturation (soilMoist / soilMoistSat) in both versions, although
+  # v5.13 labels it "volumetric, mm mm-1"; volumetric water content is SWC_L / thickness.
+  soil_moisture: {model: SWC_L, per_thickness: true, depth_weighted: true}
   et:            {model: aET}
   swe:           {model: snowpack}
   snow_cover:    {model: snowpack, threshold: true}
