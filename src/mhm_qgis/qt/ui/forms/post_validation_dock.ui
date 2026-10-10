@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PostValidationDock</class>
+ <widget class="QWidget" name="PostValidationDock">
+  <property name="windowTitle">
+   <string>Validation</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_PostValidationDock">
+   <property name="leftMargin">
+    <number>2</number>
+   </property>
+   <property name="topMargin">
+    <number>2</number>
+   </property>
+   <property name="rightMargin">
+    <number>2</number>
+   </property>
+   <property name="bottomMargin">
+    <number>2</number>
+   </property>
+   <item>
+    <widget class="QWidget" name="page_postValidation">
+     <layout class="QVBoxLayout" name="verticalLayout_postValidation" stretch="0,0,1">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_postValidationInput">
+        <item>
+         <widget class="QComboBox" name="comboBox_postAdapter">
+          <property name="toolTip">
+           <string>What to compare the run with; each picks the matching model output.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="lineEdit_postObservation">
+          <property name="placeholderText">
+           <string>Gridded observation (netCDF)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="toolButton_postObservation">
+          <property name="text">
+           <string>…</string>
+          </property>
+          <property name="toolTip">
+           <string>Choose the observation file</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="comboBox_postObservationVariable">
+          <property name="toolTip">
+           <string>The observed variable in the file</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QDoubleSpinBox" name="doubleSpinBox_postDepth">
+          <property name="suffix">
+           <string> mm</string>
+          </property>
+          <property name="decimals">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <double>5000.000000000000000</double>
+          </property>
+          <property name="value">
+           <double>50.000000000000000</double>
+          </property>
+          <property name="toolTip">
+           <string>Observation depth: the model's soil water is weighted over [0, depth]</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QDoubleSpinBox" name="doubleSpinBox_postThreshold">
+          <property name="suffix">
+           <string> mm</string>
+          </property>
+          <property name="maximum">
+           <double>1000.000000000000000</double>
+          </property>
+          <property name="value">
+           <double>1.000000000000000</double>
+          </property>
+          <property name="toolTip">
+           <string>Snowpack above this counts as snow cover</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_postCompare">
+          <property name="text">
+           <string>Compare</string>
+          </property>
+          <property name="toolTip">
+           <string>Harmonise time, grid and units, then score the run against the observation</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_postValidationTop" stretch="1,0,0">
+        <item>
+         <widget class="QLabel" name="label_postValidationNotes">
+          <property name="text">
+           <string />
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_postValidationMap">
+          <property name="text">
+           <string>Map</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="comboBox_postValidationMap">
+          <property name="toolTip">
+           <string>A per-cell score of the comparison, shown on the Map dock.</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QSplitter" name="splitter_postValidationScores">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <widget class="QTableWidget" name="tableWidget_postValidation">
+         <property name="editTriggers">
+          <set>QAbstractItemView::NoEditTriggers</set>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectRows</enum>
+         </property>
+         <attribute name="horizontalHeaderStretchLastSection">
+          <bool>true</bool>
+         </attribute>
+         <column>
+          <property name="text">
+           <string>Score</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Value</string>
+          </property>
+         </column>
+        </widget>
+        <widget class="QWidget" name="widget_postValidationPlot">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources />
+ <connections />
+</ui>

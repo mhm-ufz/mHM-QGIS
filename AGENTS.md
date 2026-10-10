@@ -760,12 +760,23 @@ Four JSON files live under each domain's `.temp/` directory.
   identity geotransform `(0,1,0,0,0,1)`, which would place it at the origin with unit
   pixels. The Outputs tab therefore wraps it in a VRT (`post_canvas`, below).
 - **Outputs tab** (`tab_outputs` in `mhm_qgis_main.ui`, so Designer shows it): context bar
-  (run, basin, period, resolution), navigation list, `stackedWidget_post` pages and a time
-  bar. `qt/controllers/post_context.py` owns `dialog._post` and its `AnalysisContext`
-  (`qt/objects/analysis_context.py`, one `changed(field)` signal; unchanged values emit
-  nothing). Only the visible page refreshes; hidden pages collect the changed fields and
-  refresh when shown. Pages: `post_balance` (Overview, Water balance, Processes),
-  `post_map` (Map Explorer), `post_hydro` (Hydrograph).
+  (run, basin, period, resolution), the navigation list, "Analysis layout" / "Reset
+  layout" and the status row; nothing else. `qt/controllers/post_context.py` owns
+  `dialog._post` and its `AnalysisContext` (`qt/objects/analysis_context.py`, one
+  `changed(field)` signal; unchanged values emit nothing). Views: `post_balance`
+  (Overview, Water balance, Processes), `post_map` (Map, Map controls, Cell inspector),
+  `post_hydro` (Hydrograph, Signatures, Events, Climatology), `post_validation`.
+  - **The views are docks** (`qt/docks/host.py`, `layouts.yml`; one form per dock in
+    `ui/forms/post_*_dock.ui`, plus `post_time_toolbar.ui`). The host is QGIS's main
+    window (Desktop; docks are registered and removed through `iface`) or the standalone
+    `MapCanvasWindow` (a `QMainWindow`); the central widget is never replaced. Docks are
+    made on first use, and their widgets are reached as `dialog._post.ui.<name>`, never
+    `dialog.<name>`. Selecting a view applies its saved state (QSettings
+    `mhm_qgis/post/layout/<view>`) or builds its `layouts.yml` layout; the workspace keeps
+    the user's own layout (`mhm_qgis/post/user_layout`) and restores it when turned off
+    (the docks are then deleted). One shared Map dock: Water balance and Validation show
+    their maps on it (`post_map.set_view_layers`). Only visible docks refresh; hidden ones
+    collect the changed fields and refresh when shown (`visibilityChanged`).
   - **No netCDF read on the GUI thread** (a test patches `netCDF4.Dataset` to fail there):
     opening a run, building VRTs, gauge series, scores and derive passes go through
     `qt/workflows/post.submit` (coordinator, resource `post-io`; a request that arrives

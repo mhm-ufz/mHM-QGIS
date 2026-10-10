@@ -1,4 +1,9 @@
-"""Standalone map window: the project's layer tree beside one map canvas."""
+"""Standalone map window: the project's layer tree beside one map canvas.
+
+A `QMainWindow`, so post-processing docks and toolbars can sit around it the way
+they do around QGIS Desktop's main window (`qt/docks/host.py`); its central widget
+is the tree and canvas, which docks never replace.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,9 +15,10 @@ from qgis.PyQt import QtCore, QtWidgets
 from ...qgis_bridge import layers
 
 
-class MapCanvasWindow(QtWidgets.QWidget):
+class MapCanvasWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent, QtCore.Qt.WindowType.Window)
+        self.setObjectName("mhmQgisMapWindow")
         self.setWindowTitle("mHM QGIS Map")
         self.setAcceptDrops(True)
         root = QgsProject.instance().layerTreeRoot()
@@ -34,7 +40,7 @@ class MapCanvasWindow(QtWidgets.QWidget):
         self.cursor_label = QtWidgets.QLabel()
         self.time_label = QtWidgets.QLabel()
         self.canvas.xyCoordinates.connect(self._show_cursor)
-        status = QtWidgets.QStatusBar()
+        status = self.statusBar()
         status.addWidget(self.cursor_label)
         status.addPermanentWidget(self.time_label)
 
@@ -42,11 +48,8 @@ class MapCanvasWindow(QtWidgets.QWidget):
         splitter.addWidget(self.tree)
         splitter.addWidget(self.canvas)
         splitter.setStretchFactor(1, 1)
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(splitter)
-        layout.addWidget(status)
-        self.resize(1000, 700)
+        self.setCentralWidget(splitter)
+        self.resize(1200, 800)
 
     def _follow_project_crs(self):
         self.canvas.setDestinationCrs(QgsProject.instance().crs())

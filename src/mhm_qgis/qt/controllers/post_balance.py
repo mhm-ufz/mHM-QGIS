@@ -12,6 +12,7 @@ from qgis.PyQt.QtWidgets import QTableWidgetItem
 
 from ...qgis_bridge.display import post_canvas
 from ..workflows import post as work
+from . import post_map
 from .post_context import plot_widget, seconds
 
 FREQ = {"month": "month", "year": "year"}
@@ -24,7 +25,7 @@ COLOURS = ("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e", "#e6ab02", "#a
 
 
 def bind(dialog) -> None:
-    dialog.comboBox_postBalanceMap.activated.connect(lambda _index: show_balance_map(dialog))
+    dialog._post.ui.comboBox_postBalanceMap.activated.connect(lambda _index: show_balance_map(dialog))
 
 
 def _basin(dialog):
@@ -37,7 +38,7 @@ def _basin(dialog):
 def refresh_overview(dialog, fields) -> None:
     state = dialog._post
     if state.root is None:
-        dialog.textBrowser_postOverview.setHtml(
+        dialog._post.ui.textBrowser_postOverview.setHtml(
             "<p>Open a setup with a finished run; the Outputs tab lists its runs.</p>"
             + "".join(f"<p>{escape(text)}</p>" for text in state.findings))
         return
@@ -94,7 +95,7 @@ def _overview(dialog, table, gauge, gauge_scores) -> None:
     if state.index.get("domain_source") != "restart":
         notes.append("Set write_restart = .true. to use mHM's own cell areas and sealed fraction.")
     missing = [f"{v.name}: {v.message}" for v in state.run.variables if not v.present]
-    dialog.textBrowser_postOverview.setHtml(
+    dialog._post.ui.textBrowser_postOverview.setHtml(
         f"<table style='border-collapse:collapse'><tr>{cells}</tr></table>"
         + ("<h4>Findings</h4><ul>" + "".join(f"<li>{escape(n)}</li>" for n in notes) + "</ul>" if notes else "")
         + ("<h4>Not written by this run</h4><ul>" + "".join(f"<li>{escape(m)}</li>" for m in missing) + "</ul>"
@@ -108,15 +109,14 @@ def refresh_balance(dialog, fields) -> None:
     import pyqtgraph as pg
 
     state = dialog._post
-    table = dialog.tableWidget_postWaterBalance
+    table = dialog._post.ui.tableWidget_postWaterBalance
     if state.root is None:
         table.setRowCount(0)
         if "widget_postWaterBalancePlot" in state.widgets:
             state.widgets["widget_postWaterBalancePlot"].clear()
-        dialog.comboBox_postBalanceMap.clear()
-        dialog.mapCanvas_postBalance.setLayers([])
+        dialog._post.ui.comboBox_postBalanceMap.clear()
         return
-    plot = plot_widget(dialog, dialog.widget_postWaterBalancePlot)
+    plot = plot_widget(dialog, dialog._post.ui.widget_postWaterBalancePlot)
     from ...core.post import balance
 
     if not fields & {"run", "basin", "period", "resolution"}:
@@ -137,7 +137,7 @@ def refresh_balance(dialog, fields) -> None:
         for c, column in enumerate(columns):
             table.setItem(r, c, QTableWidgetItem(f"{row[column]:,.3g}" if column in balance.RATIOS
                                                  else f"{row[column]:,.1f}"))
-    dialog.label_postBalanceNotes.setText(" ".join(frame.attrs.get("notes", [])))
+    dialog._post.ui.label_postBalanceNotes.setText(" ".join(frame.attrs.get("notes", [])))
     monthly = balance.basin(state.root, basin, "month", state.exact, period)
     plot.clear()
     x = seconds(monthly.index) + 15 * 86400
@@ -153,7 +153,7 @@ def refresh_balance(dialog, fields) -> None:
     if "run" in fields:
         maps = balance.cell_maps(state.root, state.exact)
         state.widgets["balance_maps"] = maps
-        combo = dialog.comboBox_postBalanceMap
+        combo = dialog._post.ui.comboBox_postBalanceMap
         combo.clear()
         for name, value in maps.items():
             if isinstance(value, np.ndarray) and value.dtype != bool:
@@ -165,7 +165,7 @@ def refresh_balance(dialog, fields) -> None:
 
 def show_balance_map(dialog) -> None:
     state = dialog._post
-    name = dialog.comboBox_postBalanceMap.currentData()
+    name = dialog._post.ui.comboBox_postBalanceMap.currentData()
     maps = state.widgets.get("balance_maps") or {}
     if name not in maps:
         return
@@ -176,12 +176,7 @@ def show_balance_map(dialog) -> None:
     finite = array[np.isfinite(array)]
     low, high = np.percentile(finite, [2, 98]) if finite.size else (0.0, 1.0)
     layer = post_canvas.raster_layer(tif, name, (float(low), float(high)), diverging=name in ("dS", "R", "P-ET"))
-    canvas = dialog.mapCanvas_postBalance
-    state.widgets["balance_layer"] = layer
-    canvas.setDestinationCrs(layer.crs())
-    canvas.setLayers([layer])
-    canvas.setExtent(layer.extent())
-    canvas.refresh()
+    post_map.set_view_layers(dialog, "water_balance", [layer])
 
 
 # --- Processes ------------------------------------------------------------------
@@ -191,11 +186,11 @@ def refresh_processes(dialog, fields) -> None:
     import pyqtgraph as pg
 
     state = dialog._post
-    container = dialog.widget_postProcessesPlot
+    container = dialog._post.ui.widget_postProcessesPlot
     if state.root is None:
         if "processes" in state.widgets:
             state.widgets["processes"].clear()
-        dialog.label_postProcessesNotes.setText("")
+        dialog._post.ui.label_postProcessesNotes.setText("")
         return
     if "processes" not in state.widgets:
         from qgis.PyQt.QtWidgets import QVBoxLayout
@@ -260,4 +255,4 @@ def refresh_processes(dialog, fields) -> None:
         chosen = state.intervals if period is None else state.intervals[
             (state.intervals[:, 0] >= np.datetime64(period[0])) & (state.intervals[:, 1] <= np.datetime64(period[1]))]
         first.setXRange(seconds(chosen[0, 0])[()], seconds(chosen[-1, 1])[()], padding=0.01)
-    dialog.label_postProcessesNotes.setText(f"Showing {where}. " + " ".join(dict.fromkeys(notes)))
+    dialog._post.ui.label_postProcessesNotes.setText(f"Showing {where}. " + " ".join(dict.fromkeys(notes)))

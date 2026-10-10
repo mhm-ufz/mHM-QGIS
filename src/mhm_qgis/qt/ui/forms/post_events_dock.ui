@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PostEventsDock</class>
+ <widget class="QWidget" name="PostEventsDock">
+  <property name="windowTitle">
+   <string>Events</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_PostEventsDock">
+   <property name="leftMargin">
+    <number>2</number>
+   </property>
+   <property name="topMargin">
+    <number>2</number>
+   </property>
+   <property name="rightMargin">
+    <number>2</number>
+   </property>
+   <property name="bottomMargin">
+    <number>2</number>
+   </property>
+   <item>
+    <widget class="QWidget" name="page_postEvents">
+     <layout class="QVBoxLayout" name="verticalLayout_postEvents" stretch="0,1">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_postEvents">
+        <item>
+         <widget class="QLabel" name="label_postEventRank">
+          <property name="text">
+           <string>Rank by</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="comboBox_postEventRank">
+          <property name="toolTip">
+           <string>Sort the events; the largest come first.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="toolButton_postEventPrevious">
+          <property name="text">
+           <string>◀</string>
+          </property>
+          <property name="toolTip">
+           <string>Previous event</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="toolButton_postEventNext">
+          <property name="text">
+           <string>▶</string>
+          </property>
+          <property name="toolTip">
+           <string>Next event</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_postEventsNotes">
+          <property name="text">
+           <string />
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QSplitter" name="splitter_postEvents">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <widget class="QTableWidget" name="tableWidget_postEvents">
+         <property name="editTriggers">
+          <set>QAbstractItemView::NoEditTriggers</set>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectRows</enum>
+         </property>
+         <attribute name="horizontalHeaderStretchLastSection">
+          <bool>true</bool>
+         </attribute>
+        </widget>
+        <widget class="QWidget" name="widget_postEventsPlot">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>2</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources />
+ <connections />
+</ui>

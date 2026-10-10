@@ -24,16 +24,16 @@ def bind(dialog) -> None:
     from qgis.gui import QgsMapToolEmitPoint
 
     state = dialog._post
-    dialog.treeWidget_postVariables.currentItemChanged.connect(lambda item, _old: _variable_chosen(dialog, item))
-    dialog.comboBox_postStatistic.activated.connect(lambda _index: _statistic_chosen(dialog))
-    dialog.spinBox_postPercentile.valueChanged.connect(lambda _value: _statistic_chosen(dialog))
+    dialog._post.ui.treeWidget_postVariables.currentItemChanged.connect(lambda item, _old: _variable_chosen(dialog, item))
+    dialog._post.ui.comboBox_postStatistic.activated.connect(lambda _index: _statistic_chosen(dialog))
+    dialog._post.ui.spinBox_postPercentile.valueChanged.connect(lambda _value: _statistic_chosen(dialog))
     # pushButton_postBuildCache → build_cache
-    dialog.pushButton_postBuildCache.clicked.connect(lambda: build_cache(dialog))
+    dialog._post.ui.pushButton_postBuildCache.clicked.connect(lambda: build_cache(dialog))
     # pushButton_postOpenInQgis → post_canvas.open_in_qgis
-    dialog.pushButton_postOpenInQgis.clicked.connect(lambda: open_in_qgis(dialog))
-    tool = QgsMapToolEmitPoint(dialog.mapCanvas_post)
+    dialog._post.ui.pushButton_postOpenInQgis.clicked.connect(lambda: open_in_qgis(dialog))
+    tool = QgsMapToolEmitPoint(dialog._post.ui.mapCanvas_post)
     tool.canvasClicked.connect(lambda point, _button: clicked(dialog, point.x(), point.y()))
-    dialog.mapCanvas_post.setMapTool(tool)
+    dialog._post.ui.mapCanvas_post.setMapTool(tool)
     state.widgets["map_tool"] = tool
 
 
@@ -44,9 +44,9 @@ def _crs(dialog):
 def refresh(dialog, fields) -> None:
     state = dialog._post
     if state.root is None:
-        dialog.treeWidget_postVariables.clear()
-        dialog.mapCanvas_post.setLayers([])
-        dialog.tableWidget_postCellInspector.setRowCount(0)
+        dialog._post.ui.treeWidget_postVariables.clear()
+        dialog._post.ui.mapCanvas_post.setLayers([])
+        dialog._post.ui.tableWidget_postCellInspector.setRowCount(0)
         state.widgets.pop("map_layer", None)
         return
     if "run" in fields:
@@ -68,7 +68,7 @@ def refresh(dialog, fields) -> None:
 
 def _populate_tree(dialog) -> None:
     state = dialog._post
-    tree = dialog.treeWidget_postVariables
+    tree = dialog._post.ui.treeWidget_postVariables
     chosen = state.context.get("variable")
     groups = {}
     with QSignalBlocker(tree):
@@ -95,7 +95,7 @@ def _populate_tree(dialog) -> None:
 
 
 def _select_variable(dialog, name) -> None:
-    tree = dialog.treeWidget_postVariables
+    tree = dialog._post.ui.treeWidget_postVariables
     for item in tree.findItems(name or "", Qt.MatchFlag.MatchExactly | Qt.MatchFlag.MatchRecursive):
         tree.setCurrentItem(item)
         return
@@ -108,7 +108,7 @@ def _variable_chosen(dialog, item) -> None:
     from ...core.post import aggregate
 
     info = dialog._post.index["variables"].get(name)
-    combo = dialog.comboBox_postStatistic
+    combo = dialog._post.ui.comboBox_postStatistic
     previous = combo.currentData()
     with QSignalBlocker(combo):
         combo.clear()
@@ -117,7 +117,7 @@ def _variable_chosen(dialog, item) -> None:
         for stat in aggregate.map_statistics(info) if info else ():
             combo.addItem(LABELS[stat], stat)
         combo.setCurrentIndex(max(0, combo.findData(previous)))
-    dialog.spinBox_postPercentile.setEnabled(combo.currentData() == "percentile")
+    dialog._post.ui.spinBox_postPercentile.setEnabled(combo.currentData() == "percentile")
     context = dialog._post.context
     if not context.set("variable", name):
         return
@@ -125,12 +125,12 @@ def _variable_chosen(dialog, item) -> None:
 
 
 def _statistic(dialog):
-    stat = dialog.comboBox_postStatistic.currentData() or "instant"
-    return (stat, dialog.spinBox_postPercentile.value() if stat == "percentile" else None)
+    stat = dialog._post.ui.comboBox_postStatistic.currentData() or "instant"
+    return (stat, dialog._post.ui.spinBox_postPercentile.value() if stat == "percentile" else None)
 
 
 def _statistic_chosen(dialog) -> None:
-    dialog.spinBox_postPercentile.setEnabled(dialog.comboBox_postStatistic.currentData() == "percentile")
+    dialog._post.ui.spinBox_postPercentile.setEnabled(dialog._post.ui.comboBox_postStatistic.currentData() == "percentile")
     dialog._post.context.set("statistic", _statistic(dialog))
 
 
@@ -188,15 +188,45 @@ def show_map(dialog) -> None:
     work.submit(dialog, "map", f"Computing the {LABELS[stat].lower()} of {name}", compute, done)
 
 
+VIEW_MAPS = ("water_balance", "validation")  # views that show their own map on the shared Map dock
+
+
 def _set_layer(dialog, layer) -> None:
+    """The Map Explorer's layer; shown unless the active view has a map of its own."""
     state = dialog._post
-    canvas = dialog.mapCanvas_post
-    first = state.widgets.get("map_layer") is None
     state.widgets["map_layer"] = layer
-    canvas.setDestinationCrs(layer.crs())
-    canvas.setLayers([*state.widgets.get("overlays", []), layer])
+    if state.view not in VIEW_MAPS:
+        _show(dialog, [layer])
+
+
+def set_view_layers(dialog, view, layers) -> None:
+    """A view's own map (balance term, validation score) on the shared Map dock."""
+    state = dialog._post
+    state.widgets.setdefault("view_layers", {})[view] = layers
+    if state.view == view:
+        _show(dialog, layers)
+
+
+def view_changed(dialog, view) -> None:
+    """Show the view's own map, or the Map Explorer layer."""
+    state = dialog._post
+    if "map" not in state.docks:
+        return
+    layers = state.widgets.get("view_layers", {}).get(view) if view in VIEW_MAPS else None
+    explorer = state.widgets.get("map_layer")
+    _show(dialog, layers or ([explorer] if explorer is not None else []))
+
+
+def _show(dialog, layers) -> None:
+    state = dialog._post
+    canvas = getattr(state.ui, "mapCanvas_post", None)
+    if canvas is None or not layers:
+        return
+    first = not canvas.layers()
+    canvas.setDestinationCrs(layers[-1].crs())
+    canvas.setLayers([*state.widgets.get("overlays", []), *layers])
     if first:
-        canvas.setExtent(layer.extent())
+        canvas.setExtent(layers[-1].extent())
     canvas.refresh()
 
 
@@ -211,6 +241,8 @@ def _overlays(dialog) -> None:
     network = post_canvas.network_layer(f"{temp_morphology_folder(state.run.ref.domain)}/2_channel_network.shp")
     state.widgets["overlays"] = [layer for layer in (*layers, network) if layer is not None]
     state.widgets.pop("map_layer", None)
+    state.widgets.pop("view_layers", None)
+    state.ui.mapCanvas_post.setLayers([])  # a new run: zoom to its first map
 
 
 def _zoom_to_gauge(dialog) -> None:
@@ -223,9 +255,9 @@ def _zoom_to_gauge(dialog) -> None:
         if feature["basin"] == str(gauge):
             box = feature.geometry().boundingBox()
             box.scale(1.2)
-            dialog.mapCanvas_post.setExtent(box)
-            dialog.mapCanvas_post.flashGeometries([feature.geometry()], outlines.crs())
-            dialog.mapCanvas_post.refresh()
+            dialog._post.ui.mapCanvas_post.setExtent(box)
+            dialog._post.ui.mapCanvas_post.flashGeometries([feature.geometry()], outlines.crs())
+            dialog._post.ui.mapCanvas_post.refresh()
 
 
 def clicked(dialog, x, y) -> None:
@@ -243,17 +275,17 @@ def _inspect(dialog) -> None:
     from ...core.post import series
 
     state = dialog._post
-    table = dialog.tableWidget_postCellInspector
+    table = dialog._post.ui.tableWidget_postCellInspector
     cell = state.context.get("cell")
     band = state.widgets.pop("cell_band", None)
     if band is not None:
         band.reset()
     if cell is None:
         table.setRowCount(0)
-        dialog.label_postCell.setText("Click a cell on the map.")
+        dialog._post.ui.label_postCell.setText("Click a cell on the map.")
         return
     iy, ix = cell
-    state.widgets["cell_band"] = post_canvas.highlight_cell(dialog.mapCanvas_post, state.axes, iy, ix,
+    state.widgets["cell_band"] = post_canvas.highlight_cell(dialog._post.ui.mapCanvas_post, state.axes, iy, ix,
                                                             dialog.get_crs())
     step = int(state.context.get("current_time") or 0)
     rows = [("Cell area (km²)", np.load(state.root / "area.npy")[iy, ix] / 1e6),
@@ -264,7 +296,7 @@ def _inspect(dialog) -> None:
     for name in state.index["variables"]:
         values = series.cell(state.root, name, iy, ix)
         rows.append((name, values.iloc[step] if values is not None else None))
-    dialog.label_postCell.setText(f"Row {iy}, column {ix}; values at {str(state.intervals[step, 0])[:16]}")
+    dialog._post.ui.label_postCell.setText(f"Row {iy}, column {ix}; values at {str(state.intervals[step, 0])[:16]}")
     table.setRowCount(len(rows))
     for row, (name, value) in enumerate(rows):
         table.setItem(row, 0, QTableWidgetItem(name))
@@ -276,7 +308,7 @@ def _cell_plot(dialog) -> None:
     from ...core.post import series
 
     state = dialog._post
-    plot = plot_widget(dialog, dialog.widget_postCellPlot)
+    plot = plot_widget(dialog, dialog._post.ui.widget_postCellPlot)
     plot.clear()
     cell, name = state.context.get("cell"), state.context.get("variable")
     if cell is None or name is None:

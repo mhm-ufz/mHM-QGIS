@@ -42,7 +42,9 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   events ranked, with their errors), Validation (the run against gridded observations of
   ET, snow, soil moisture or neutrons, TWS anomalies and snow cover through mhm-tools, and
   every gauge's scores) and Climatology. Each run is scanned once in the background; runs
-  can be archived before the next one overwrites `output/`.
+  can be archived before the next one overwrites `output/`. The views open as docks in
+  QGIS's main window (or the standalone map window), arranged per view; the layout you
+  adjust is remembered per view, and turning "Analysis layout" off restores your own.
 
 ### Changed
 - The namelist editor opens nml-tools' project for the setup: `classic` for a v6 single

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PostWaterBalanceDock</class>
+ <widget class="QWidget" name="PostWaterBalanceDock">
+  <property name="windowTitle">
+   <string>Water balance</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_PostWaterBalanceDock">
+   <property name="leftMargin">
+    <number>2</number>
+   </property>
+   <property name="topMargin">
+    <number>2</number>
+   </property>
+   <property name="rightMargin">
+    <number>2</number>
+   </property>
+   <property name="bottomMargin">
+    <number>2</number>
+   </property>
+   <item>
+    <widget class="QWidget" name="page_postWaterBalance">
+     <layout class="QVBoxLayout" name="verticalLayout_postWaterBalance" stretch="0,1">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_postBalanceTop" stretch="1,0,0">
+        <item>
+         <widget class="QLabel" name="label_postBalanceNotes">
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_postBalanceMap">
+          <property name="text">
+           <string>Map</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="comboBox_postBalanceMap">
+          <property name="toolTip">
+           <string>A per-cell term or ratio over the whole run, shown on the Map dock; cells with a ratio above 1 break the mHM check protocol.</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QSplitter" name="splitter_postWaterBalance">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <widget class="QTableWidget" name="tableWidget_postWaterBalance">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="editTriggers">
+          <set>QAbstractItemView::NoEditTriggers</set>
+         </property>
+        </widget>
+        <widget class="QWidget" name="widget_postWaterBalancePlot">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>3</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources />
+ <connections />
+</ui>

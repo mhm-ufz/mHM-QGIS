@@ -17,14 +17,14 @@ SHOWN = ("NSE", "KGE", "KGE'", "logNSE", "r", "alpha", "beta", "PBIAS", "volume 
 
 
 def bind(dialog) -> None:
-    dialog.comboBox_postGauge.activated.connect(lambda _index: _gauge_chosen(dialog))
-    dialog.checkBox_postLogY.toggled.connect(
-        lambda on: plot_widget(dialog, dialog.widget_postHydrographPlot).setLogMode(y=on))
+    dialog._post.ui.comboBox_postGauge.activated.connect(lambda _index: _gauge_chosen(dialog))
+    dialog._post.ui.checkBox_postLogY.toggled.connect(
+        lambda on: plot_widget(dialog, dialog._post.ui.widget_postHydrographPlot).setLogMode(y=on))
 
 
 def _gauge_chosen(dialog) -> None:
     context = dialog._post.context
-    gauge = dialog.comboBox_postGauge.currentData()
+    gauge = dialog._post.ui.comboBox_postGauge.currentData()
     context.set("gauge", gauge)
     basins = next(iter(dialog._post.index["variables"].values()), {}).get("basins", [])
     if str(gauge) in basins:
@@ -35,7 +35,7 @@ def _plots(dialog):
     import pyqtgraph as pg
 
     state = dialog._post
-    main = plot_widget(dialog, dialog.widget_postHydrographPlot)
+    main = plot_widget(dialog, dialog._post.ui.widget_postHydrographPlot)
     if "rain" not in state.widgets:
         main.setLabel("left", "Discharge", units="m³/s")
         main.getAxis("left").enableAutoSIPrefix(False)
@@ -50,8 +50,8 @@ def _plots(dialog):
         cursor = pg.InfiniteLine(angle=90, movable=True, pen=pg.mkPen("#e31a1c", width=1.5))
         cursor.sigPositionChangeFinished.connect(lambda line: _cursor_moved(dialog, line.value()))
         state.widgets.update(rain=rain, cursor=cursor)
-    scatter = plot_widget(dialog, dialog.widget_postHydrographScatter, dates=False)
-    residuals = plot_widget(dialog, dialog.widget_postHydrographResiduals)
+    scatter = plot_widget(dialog, dialog._post.ui.widget_postHydrographScatter, dates=False)
+    residuals = plot_widget(dialog, dialog._post.ui.widget_postHydrographResiduals)
     return main, state.widgets["rain"], state.widgets["cursor"], scatter, residuals
 
 
@@ -62,19 +62,19 @@ def refresh(dialog, fields) -> None:
                      "rain"):
             if name in state.widgets:
                 state.widgets[name].clear()
-        dialog.comboBox_postGauge.clear()
-        dialog.tableWidget_postHydrographMetrics.setRowCount(0)
+        dialog._post.ui.comboBox_postGauge.clear()
+        dialog._post.ui.tableWidget_postHydrographMetrics.setRowCount(0)
         return
     cursor = _plots(dialog)[2]
     if "run" in fields:
-        with QSignalBlocker(dialog.comboBox_postGauge):
-            dialog.comboBox_postGauge.clear()
+        with QSignalBlocker(dialog._post.ui.comboBox_postGauge):
+            dialog._post.ui.comboBox_postGauge.clear()
             for gauge in state.gauges:
-                dialog.comboBox_postGauge.addItem(f"Gauge {gauge}", gauge)
+                dialog._post.ui.comboBox_postGauge.addItem(f"Gauge {gauge}", gauge)
     gauge = state.context.get("gauge")
     if gauge is not None:
-        with QSignalBlocker(dialog.comboBox_postGauge):
-            dialog.comboBox_postGauge.setCurrentIndex(max(0, dialog.comboBox_postGauge.findData(gauge)))
+        with QSignalBlocker(dialog._post.ui.comboBox_postGauge):
+            dialog._post.ui.comboBox_postGauge.setCurrentIndex(max(0, dialog._post.ui.comboBox_postGauge.findData(gauge)))
     if fields & {"run", "gauge", "period", "resolution"}:
         _load(dialog, gauge)
     if fields & {"run", "current_time"}:
@@ -136,7 +136,7 @@ def _draw(dialog, gauge, frame, rain, scores) -> None:
         scatter.setLabel("left", "Simulated")
     residuals.plot(times, (frame["sim"] - frame["obs"]).to_numpy(), pen=pg.mkPen("#756bb1"), connect="finite")
     residuals.setLabel("left", "Sim - obs")
-    table = dialog.tableWidget_postHydrographMetrics
+    table = dialog._post.ui.tableWidget_postHydrographMetrics
     rows = [(name, scores.get(name)) for name in SHOWN] + ([("Note", scores["reason"])] if scores["reason"] else [])
     table.setRowCount(len(rows))
     for row, (name, value) in enumerate(rows):
@@ -193,10 +193,10 @@ def refresh_signatures(dialog, fields) -> None:
     import pyqtgraph as pg
 
     state = dialog._post
-    table = dialog.tableWidget_postSignatures
+    table = dialog._post.ui.tableWidget_postSignatures
     if state.root is None:
         table.setRowCount(0)
-        dialog.label_postSignaturesNotes.setText("")
+        dialog._post.ui.label_postSignaturesNotes.setText("")
         return
     if not fields & {"run", "gauge", "period"}:
         return
@@ -214,12 +214,12 @@ def refresh_signatures(dialog, fields) -> None:
         return "" if observed else "No observations: simulated signatures only.", compared, curves
 
     def draw(result):
-        plot = plot_widget(dialog, dialog.widget_postSignaturesFdc, dates=False)
+        plot = plot_widget(dialog, dialog._post.ui.widget_postSignaturesFdc, dates=False)
         plot.clear()
         if result is None:
             return
         reason, compared, curves = result
-        dialog.label_postSignaturesNotes.setText(reason)
+        dialog._post.ui.label_postSignaturesNotes.setText(reason)
         if compared is None:
             table.setRowCount(0)
             return
@@ -243,7 +243,7 @@ def refresh_signatures(dialog, fields) -> None:
 
 def refresh_events(dialog, fields) -> None:
     state = dialog._post
-    table = dialog.tableWidget_postEvents
+    table = dialog._post.ui.tableWidget_postEvents
     if state.root is None:
         table.setRowCount(0)
         state.widgets.pop("events", None)
@@ -251,12 +251,12 @@ def refresh_events(dialog, fields) -> None:
     if "events_bound" not in state.widgets:
         from ...core.post.events import RANKINGS
 
-        dialog.comboBox_postEventRank.addItems(RANKINGS)
-        dialog.comboBox_postEventRank.setCurrentText("observed peak")
-        dialog.comboBox_postEventRank.activated.connect(lambda _index: _show_events(dialog))
+        dialog._post.ui.comboBox_postEventRank.addItems(RANKINGS)
+        dialog._post.ui.comboBox_postEventRank.setCurrentText("observed peak")
+        dialog._post.ui.comboBox_postEventRank.activated.connect(lambda _index: _show_events(dialog))
         table.currentCellChanged.connect(lambda row, *_: _draw_event(dialog, row))
-        dialog.toolButton_postEventPrevious.clicked.connect(lambda: table.selectRow(max(0, table.currentRow() - 1)))
-        dialog.toolButton_postEventNext.clicked.connect(
+        dialog._post.ui.toolButton_postEventPrevious.clicked.connect(lambda: table.selectRow(max(0, table.currentRow() - 1)))
+        dialog._post.ui.toolButton_postEventNext.clicked.connect(
             lambda: table.selectRow(min(table.rowCount() - 1, table.currentRow() + 1)))
         state.widgets["events_bound"] = True
     if not fields & {"run", "gauge", "period"}:
@@ -278,7 +278,7 @@ def refresh_events(dialog, fields) -> None:
         if result is None:
             return
         notes, found, frame, rain = result
-        dialog.label_postEventsNotes.setText(notes)
+        dialog._post.ui.label_postEventsNotes.setText(notes)
         state.widgets["events"] = (found, frame, rain)
         _show_events(dialog)
 
@@ -288,12 +288,12 @@ def refresh_events(dialog, fields) -> None:
 def _show_events(dialog) -> None:
     from ...core.post import events
 
-    table = dialog.tableWidget_postEvents
+    table = dialog._post.ui.tableWidget_postEvents
     found = dialog._post.widgets.get("events")
     if not found or found[0] is None:
         table.setRowCount(0)
         return
-    ranked = events.ranked(found[0], dialog.comboBox_postEventRank.currentText())
+    ranked = events.ranked(found[0], dialog._post.ui.comboBox_postEventRank.currentText())
     dialog._post.widgets["events_ranked"] = ranked
     columns = [c for c in ranked.columns if not c.startswith("abs ")]
     with QSignalBlocker(table):
@@ -316,7 +316,7 @@ def _draw_event(dialog, row) -> None:
 
     state = dialog._post
     ranked, (_, frame, rain) = state.widgets.get("events_ranked"), state.widgets.get("events", (None,) * 3)
-    plot = plot_widget(dialog, dialog.widget_postEventsPlot)
+    plot = plot_widget(dialog, dialog._post.ui.widget_postEventsPlot)
     plot.clear()
     if ranked is None or not 0 <= row < len(ranked):
         return
@@ -344,7 +344,7 @@ def refresh_climatology(dialog, fields) -> None:
     if state.root is None:
         if "climatology" in state.widgets:
             state.widgets["climatology"].clear()
-        dialog.label_postClimatologyNotes.setText("")
+        dialog._post.ui.label_postClimatologyNotes.setText("")
         return
     if not fields & {"run", "basin", "period"}:
         return
@@ -355,7 +355,7 @@ def refresh_climatology(dialog, fields) -> None:
 
         view = pg.GraphicsLayoutWidget()
         view.setBackground("w")
-        QVBoxLayout(dialog.widget_postClimatologyPlot).addWidget(view)
+        QVBoxLayout(dialog._post.ui.widget_postClimatologyPlot).addWidget(view)
         state.widgets["climatology"] = view
     view = state.widgets["climatology"]
     view.clear()
@@ -374,7 +374,7 @@ def refresh_climatology(dialog, fields) -> None:
             continue
         reason = climatology.usable(monthly)
         if reason:
-            dialog.label_postClimatologyNotes.setText(reason)
+            dialog._post.ui.label_postClimatologyNotes.setText(reason)
             return
         stats = climatology.monthly(monthly)
         plot = view.addPlot(title=f"{label} by calendar month ({'mm' if how == 'sum' else 'mean'})")
@@ -398,5 +398,5 @@ def refresh_climatology(dialog, fields) -> None:
             plot.addItem(pg.BarGraphItem(x=years, height=np.nan_to_num(values.to_numpy()), width=width,
                                          brush=colour, pen=None, name=label))
             plot.getAxis("bottom").setTicks([[(int(year), str(int(year))) for year in values.index.year]])
-    dialog.label_postClimatologyNotes.setText(" ".join(notes) or
+    dialog._post.ui.label_postClimatologyNotes.setText(" ".join(notes) or
                                               f"Basin {basin}: the band is ± one standard deviation between years.")

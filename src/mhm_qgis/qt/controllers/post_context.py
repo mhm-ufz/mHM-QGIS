@@ -1,24 +1,29 @@
-"""The Outputs tab's context: run, basin, period, resolution and time.
+"""The Outputs tab's context: run, basin, period, resolution, the views and time.
 
 Owns `dialog._post` (a `PostState` and its `AnalysisContext`). Selecting a run opens
 it and scans what is stale on coordinator tasks (the scan itself runs in the native
-worker); after that the pages read only the cache. Only the visible page refreshes
-on `changed`; hidden pages collect the changed fields and refresh when shown (§9.2).
+worker); after that the views read only the cache. The views are docks in QGIS's main
+window or the standalone map window (`qt/docks/host.py`): selecting one in the
+navigation list arranges the window for it. Only visible docks refresh on `changed`;
+hidden ones collect the changed fields and refresh when shown (post plan §0b, §9.2).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from qgis.PyQt.QtCore import QDate, QSignalBlocker, QTimer
 from qgis.PyQt.QtWidgets import QInputDialog, QMenu, QMessageBox, QVBoxLayout
 
 from ...core.post import cache, runs
+from ..docks import host
 from ..objects.analysis_context import AnalysisContext
 from ..workflows import post as work
 
 PLAY_MS = 300
+MAP_DOCKS = ("map", "map_controls", "cell_inspector")  # one controller (post_map) drives all three
 
 
 @dataclass
@@ -33,31 +38,36 @@ class PostState:
     gauges: list = field(default_factory=list)
     findings: list = field(default_factory=list)
     exact: bool = False           # output step = model step: the balance is exact
-    dirty: dict = field(default_factory=dict)
-    widgets: dict = field(default_factory=dict)
+    dirty: dict = field(default_factory=dict)      # refresh function -> fields changed while hidden
+    widgets: dict = field(default_factory=dict)    # plots, layers, flags made by the controllers
+    ui: SimpleNamespace = field(default_factory=SimpleNamespace)  # the docks' widgets, by name
+    docks: dict = field(default_factory=dict)      # dock name -> QgsDockWidget
+    toolbar: object = None
+    view: str | None = None
+    workspace: bool = False
 
 
-def pages(dialog) -> dict:
-    """Navigation text -> (page, refresh(dialog, fields))."""
+def refreshers():
+    """(refresh(dialog, fields), the docks it draws on)."""
     from . import post_balance, post_hydro, post_map, post_validation
 
-    return {"Overview": (dialog.page_postOverview, post_balance.refresh_overview),
-            "Map Explorer": (dialog.page_postMap, post_map.refresh),
-            "Hydrograph": (dialog.page_postHydrograph, post_hydro.refresh),
-            "Water balance": (dialog.page_postWaterBalance, post_balance.refresh_balance),
-            "Processes": (dialog.page_postProcesses, post_balance.refresh_processes),
-            "Signatures": (dialog.page_postSignatures, post_hydro.refresh_signatures),
-            "Events": (dialog.page_postEvents, post_hydro.refresh_events),
-            "Validation": (dialog.page_postValidation, post_validation.refresh),
-            "Climatology": (dialog.page_postClimatology, post_hydro.refresh_climatology)}
+    return ((post_map.refresh, MAP_DOCKS),
+            (post_balance.refresh_overview, ("overview",)),
+            (post_hydro.refresh, ("hydrograph",)),
+            (post_balance.refresh_balance, ("water_balance",)),
+            (post_balance.refresh_processes, ("processes",)),
+            (post_hydro.refresh_signatures, ("signatures",)),
+            (post_hydro.refresh_events, ("events",)),
+            (post_validation.refresh, ("validation",)),
+            (post_hydro.refresh_climatology, ("climatology",)))
 
 
 def plot_widget(dialog, container, *, dates=True):
-    """A pyqtgraph PlotWidget filling a placeholder widget of the form (made once).
+    """A pyqtgraph PlotWidget filling a placeholder widget of a dock form (made once).
 
-    Pages make their plots only once a run is open: a dialog holding pyqtgraph items
-    must be deleted by Qt (deleteLater), not left to Python's cycle collector, or the
-    session teardown segfaults (seen in tests; the plugin deletes old dialogs)."""
+    Plots are made only once a run is open: a widget holding pyqtgraph items must be
+    deleted by Qt (deleteLater), not left to Python's cycle collector, or the session
+    teardown segfaults (seen in tests); the docks are deleted with deleteLater."""
     widgets = dialog._post.widgets
     if container.objectName() not in widgets:
         import pyqtgraph as pg
@@ -79,8 +89,6 @@ def seconds(moments) -> np.ndarray:
 
 
 def bind(dialog) -> None:
-    from . import post_balance, post_hydro, post_map, post_validation
-
     dialog._post = PostState(AnalysisContext(dialog))
     context = dialog._post.context
     context.changed.connect(lambda name: changed(dialog, name))
@@ -95,31 +103,139 @@ def bind(dialog) -> None:
         lambda text: context.set("resolution", text.lower()))
     # pushButton_postRefresh → populate (rescan)
     dialog.pushButton_postRefresh.clicked.connect(lambda: populate(dialog, rescan=True))
-    dialog.listWidget_postNavigation.currentRowChanged.connect(lambda _row: page_selected(dialog))
-    debounce = QTimer(dialog)
-    debounce.setSingleShot(True)
-    debounce.setInterval(50)
-    debounce.timeout.connect(lambda: context.set("current_time", dialog.horizontalSlider_postTime.value()))
-    dialog.horizontalSlider_postTime.valueChanged.connect(lambda _value: debounce.start())
-    dialog.horizontalSlider_postTime.valueChanged.connect(lambda value: _show_time(dialog, value))
-    dialog.toolButton_postStepBack.clicked.connect(lambda: step(dialog, -1))
-    dialog.toolButton_postStepForward.clicked.connect(lambda: step(dialog, 1))
-    player = QTimer(dialog)
-    player.setInterval(PLAY_MS)
-    player.timeout.connect(lambda: step(dialog, 1, playing=True))
-    dialog.toolButton_postPlay.toggled.connect(lambda on: player.start() if on else player.stop())
+    # listWidget_postNavigation → view_selected (arranges the host window for the view)
+    dialog.listWidget_postNavigation.currentRowChanged.connect(lambda _row: view_selected(dialog))
+    # pushButton_postWorkspace → workspace on/off; pushButton_postResetLayout → reset_layout
+    dialog.pushButton_postWorkspace.toggled.connect(lambda on: workspace(dialog, on))
+    dialog.pushButton_postResetLayout.clicked.connect(lambda: reset_layout(dialog))
     dialog.task_coordinator.changed.connect(lambda: work.show_progress(dialog))
     context.set("resolution", "native")
-    post_map.bind(dialog)
-    post_hydro.bind(dialog)
-    post_balance.bind(dialog)
-    post_validation.bind(dialog)
-    dialog.listWidget_postNavigation.setCurrentRow(1)
+
+
+def _dock_created(dialog, name) -> None:
+    """Bind a new dock's widgets, and refresh it in full when it is first shown."""
+    from . import post_balance, post_hydro, post_map, post_validation
+
+    state = dialog._post
+    if name in MAP_DOCKS:
+        for other in MAP_DOCKS:
+            host.dock(dialog, other, _dock_created)
+        if not state.widgets.get("map_bound"):
+            state.widgets["map_bound"] = True
+            post_map.bind(dialog)
+    binders = {"hydrograph": post_hydro.bind, "water_balance": post_balance.bind,
+               "validation": post_validation.bind}
+    if name in binders:
+        binders[name](dialog)
+    state.docks[name].visibilityChanged.connect(lambda visible: visible and dock_shown(dialog, name))
+    for refresh, docks in refreshers():
+        if name in docks:
+            state.dirty.setdefault(refresh, set()).add("run")
+
+
+def _toolbar_created(dialog) -> None:
+    """The time controls: slider (debounced), steps, play."""
+    ui, context = dialog._post.ui, dialog._post.context
+    debounce = QTimer(dialog._post.toolbar)
+    debounce.setSingleShot(True)
+    debounce.setInterval(50)
+    debounce.timeout.connect(lambda: context.set("current_time", ui.horizontalSlider_postTime.value()))
+    ui.horizontalSlider_postTime.valueChanged.connect(lambda _value: debounce.start())
+    ui.horizontalSlider_postTime.valueChanged.connect(lambda value: _show_time(dialog, value))
+    ui.toolButton_postStepBack.clicked.connect(lambda: step(dialog, -1))
+    ui.toolButton_postStepForward.clicked.connect(lambda: step(dialog, 1))
+    player = QTimer(dialog._post.toolbar)
+    player.setInterval(PLAY_MS)
+    player.timeout.connect(lambda: step(dialog, 1, playing=True))
+    ui.toolButton_postPlay.toggled.connect(lambda on: player.start() if on else player.stop())
+    _sync_time_bar(dialog)
+
+
+def workspace(dialog, on) -> None:
+    """Turn the analysis layout on (keep the user's layout) or off (restore it)."""
+    state = dialog._post
+    if on == state.workspace:
+        return
+    with QSignalBlocker(dialog.pushButton_postWorkspace):
+        dialog.pushButton_postWorkspace.setChecked(on)
+    if on:
+        state.workspace = True
+        host.begin(dialog)
+        host.time_toolbar(dialog, _toolbar_created)
+        view = host.view_for(getattr(dialog.listWidget_postNavigation.currentItem(), "text", lambda: "")())
+        if view:
+            _show_view(dialog, view)
+        return
+    host.save_view(dialog, state.view)
+    host.end(dialog)
+    state.workspace, state.view, state.dirty = False, None, {}
+    state.ui = SimpleNamespace()
+    state.widgets = {"pending": state.widgets.get("pending", {})}
+
+
+def view_selected(dialog) -> None:
+    item = dialog.listWidget_postNavigation.currentItem()
+    view = host.view_for(item.text()) if item is not None else None
+    if view is None:
+        return
+    if not dialog._post.workspace:
+        workspace(dialog, True)  # applies the selected view
+        return
+    _show_view(dialog, view)
+
+
+def _show_view(dialog, view) -> None:
+    from . import post_map
+
+    state = dialog._post
+    if state.view == view:
+        return
+    host.save_view(dialog, state.view)
+    host.apply(dialog, view, _dock_created)
+    state.view = view
+    post_map.view_changed(dialog, view)
+
+
+def reset_layout(dialog) -> None:
+    state = dialog._post
+    if state.workspace and state.view:
+        host.forget_view(dialog, state.view)
+        host.apply(dialog, state.view, _dock_created, reset=True)
+
+
+def end_workspace(dialog) -> None:
+    """For closing a setup or unloading the plugin."""
+    if getattr(dialog, "_post", None) is not None and dialog._post.workspace:
+        workspace(dialog, False)
+
+
+def _visible(dialog, name) -> bool:
+    created = dialog._post.docks.get(name)
+    return created is not None and created.isVisible()
+
+
+def changed(dialog, name) -> None:
+    state = dialog._post
+    for refresh, docks in refreshers():
+        if any(_visible(dialog, dock) for dock in docks):
+            refresh(dialog, {name})
+        elif any(dock in state.docks for dock in docks):
+            state.dirty.setdefault(refresh, set()).add(name)
+    if name == "current_time":
+        _sync_time_bar(dialog)
+
+
+def dock_shown(dialog, name) -> None:
+    state = dialog._post
+    for refresh, docks in refreshers():
+        if name in docks and state.dirty.get(refresh):
+            refresh(dialog, state.dirty.pop(refresh))
 
 
 def clear(dialog) -> None:
-    """Forget the open run (another setup was opened)."""
+    """Forget the open run (another setup was opened); the analysis layout ends."""
     state = dialog._post
+    end_workspace(dialog)
     for name in ("run", "root", "intervals", "axes"):
         setattr(state, name, None)
     state.refs, state.gauges, state.findings, state.index, state.dirty = [], [], [], {}, {}
@@ -128,8 +244,6 @@ def clear(dialog) -> None:
         state.context.set("resolution", dialog.comboBox_postResolution.currentText().lower())
     dialog.comboBox_postRun.clear()
     dialog.comboBox_postBasin.clear()
-    for _page, refresh in pages(dialog).values():
-        refresh(dialog, {"run"})
 
 
 def populate(dialog, rescan=False) -> None:
@@ -187,7 +301,9 @@ def _opened(dialog, ref, run, findings, job, gauges, exact) -> None:
 
     if job is None:
         dialog._post.findings = findings
-        dialog.textBrowser_postOverview.setHtml("<p>" + "<br>".join(findings) + "</p>")
+        dialog.log_message("Post-processing: " + " ".join(findings))
+        if hasattr(dialog._post.ui, "textBrowser_postOverview"):
+            dialog._post.ui.textBrowser_postOverview.setHtml("<p>" + "<br>".join(findings) + "</p>")
         return
     if job["series_bytes"] > cache.ASK_ABOVE_BYTES and job["series"]:
         answer = QMessageBox.question(
@@ -219,11 +335,6 @@ def _ready(dialog, ref, run, findings, gauges, exact) -> None:
     with QSignalBlocker(dialog.dateEdit_postStart), QSignalBlocker(dialog.dateEdit_postEnd):
         dialog.dateEdit_postStart.setDate(_qdate(first))
         dialog.dateEdit_postEnd.setDate(_qdate(last))
-    slider = dialog.horizontalSlider_postTime
-    with QSignalBlocker(slider):
-        slider.setRange(0, len(state.intervals) - 1)
-        slider.setValue(0)
-    _show_time(dialog, 0)
     names = next(iter(state.index["variables"].values()), {}).get("basins", ["domain"])
     combo = dialog.comboBox_postBasin
     with QSignalBlocker(combo):
@@ -237,35 +348,9 @@ def _ready(dialog, ref, run, findings, gauges, exact) -> None:
         context.set("gauge", gauges[0] if gauges else None)
         context.set("current_time", 0)
         context.set("cell", None)
+    _sync_time_bar(dialog)
     if not context.set("run", ref):
         changed(dialog, "run")  # the same run, rescanned
-
-
-def changed(dialog, name) -> None:
-    state = dialog._post
-    visible = dialog.stackedWidget_post.currentWidget()
-    for page, refresh in pages(dialog).values():
-        if page is visible:
-            refresh(dialog, {name})
-        else:
-            state.dirty.setdefault(page, set()).add(name)
-    if name == "current_time" and state.intervals is not None:
-        slider = dialog.horizontalSlider_postTime
-        with QSignalBlocker(slider):
-            slider.setValue(int(state.context.get("current_time") or 0))
-        _show_time(dialog, slider.value())
-
-
-def page_selected(dialog) -> None:
-    item = dialog.listWidget_postNavigation.currentItem()
-    entry = pages(dialog).get(item.text()) if item is not None else None
-    if entry is None:
-        return
-    page, refresh = entry
-    dialog.stackedWidget_post.setCurrentWidget(page)
-    fields = dialog._post.dirty.pop(page, set())
-    if fields:
-        refresh(dialog, fields)
 
 
 def basin_selected(dialog) -> None:
@@ -287,21 +372,35 @@ def period_changed(dialog) -> None:
 
 
 def step(dialog, delta, playing=False) -> None:
-    slider = dialog.horizontalSlider_postTime
+    slider = getattr(dialog._post.ui, "horizontalSlider_postTime", None)
+    if slider is None:
+        return
     if playing and slider.value() >= slider.maximum():
-        dialog.toolButton_postPlay.setChecked(False)
+        dialog._post.ui.toolButton_postPlay.setChecked(False)
         return
     slider.setValue(slider.value() + delta)
 
 
+def _sync_time_bar(dialog) -> None:
+    """Put the time toolbar (when shown) on the run's intervals and the current time."""
+    state = dialog._post
+    slider = getattr(state.ui, "horizontalSlider_postTime", None)
+    if slider is None or state.intervals is None:
+        return
+    with QSignalBlocker(slider):
+        slider.setRange(0, len(state.intervals) - 1)
+        slider.setValue(int(state.context.get("current_time") or 0))
+    _show_time(dialog, slider.value())
+
+
 def _show_time(dialog, value) -> None:
-    intervals = dialog._post.intervals
-    if intervals is None or not 0 <= value < len(intervals):
+    intervals, ui = dialog._post.intervals, dialog._post.ui
+    if intervals is None or not 0 <= value < len(intervals) or not hasattr(ui, "dateTimeEdit_postTime"):
         return
     from qgis.PyQt.QtCore import QDateTime, Qt
 
-    with QSignalBlocker(dialog.dateTimeEdit_postTime):
-        dialog.dateTimeEdit_postTime.setDateTime(
+    with QSignalBlocker(ui.dateTimeEdit_postTime):
+        ui.dateTimeEdit_postTime.setDateTime(
             QDateTime.fromString(str(intervals[value, 0].astype("datetime64[s]")), Qt.DateFormat.ISODate))
 
 

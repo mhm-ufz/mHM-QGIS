@@ -2964,494 +2964,126 @@
         </layout>
        </item>
        <item>
-        <widget class="QSplitter" name="splitter_post">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-           <horstretch>0</horstretch>
-           <verstretch>1</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <widget class="QListWidget" name="listWidget_postNavigation">
-          <property name="maximumSize">
-           <size>
-            <width>170</width>
-            <height>16777215</height>
-           </size>
-          </property>
-          <item>
-           <property name="text">
-            <string>A · Basics</string>
-           </property>
-           <property name="font">
-            <font>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="flags">
-            <set>ItemIsEnabled</set>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Overview</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Map Explorer</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Hydrograph</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Water balance</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Processes</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>B · Diagnostics</string>
-           </property>
-           <property name="font">
-            <font>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="flags">
-            <set>ItemIsEnabled</set>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Signatures</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Events</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Validation</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Climatology</string>
-           </property>
-          </item>
-         </widget>
-         <widget class="QStackedWidget" name="stackedWidget_post">
-          <widget class="QWidget" name="page_postOverview">
-           <layout class="QVBoxLayout" name="verticalLayout_postOverview">
+        <layout class="QHBoxLayout" name="horizontalLayout_postNavigation">
+         <item>
+          <widget class="QListWidget" name="listWidget_postNavigation">
             <item>
-             <widget class="QTextBrowser" name="textBrowser_postOverview"/>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_postMap">
-           <layout class="QHBoxLayout" name="horizontalLayout_postMap">
-            <item>
-             <widget class="QSplitter" name="splitter_postMap">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <widget class="QWidget" name="widget_postMapControls">
-               <layout class="QVBoxLayout" name="verticalLayout_postMapControls">
-                <item>
-                 <widget class="QTreeWidget" name="treeWidget_postVariables">
-                  <property name="headerHidden">
-                   <bool>true</bool>
-                  </property>
-                  <column>
-                   <property name="text">
-                    <string>Variable</string>
-                   </property>
-                  </column>
-                 </widget>
-                </item>
-                <item>
-                 <layout class="QHBoxLayout" name="horizontalLayout_postStatistic">
-                  <item>
-                   <widget class="QComboBox" name="comboBox_postStatistic">
-                    <property name="toolTip">
-                     <string>Instant shows the time step; the others summarise the period, limited by the variable's kind.</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QSpinBox" name="spinBox_postPercentile">
-                    <property name="suffix">
-                     <string> %</string>
-                    </property>
-                    <property name="minimum">
-                     <number>1</number>
-                    </property>
-                    <property name="maximum">
-                     <number>99</number>
-                    </property>
-                    <property name="value">
-                     <number>50</number>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </item>
-                <item>
-                 <widget class="QPushButton" name="pushButton_postBuildCache">
-                  <property name="toolTip">
-                   <string>Store this variable's series per cell, so cell plots and percentiles are instant.</string>
-                  </property>
-                  <property name="text">
-                   <string>Build series cache</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QPushButton" name="pushButton_postOpenInQgis">
-                  <property name="toolTip">
-                   <string>Copy the shown layer, with its style and time, into the QGIS project.</string>
-                  </property>
-                  <property name="text">
-                   <string>Open in QGIS</string>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-              <widget class="QgsMapCanvas" name="mapCanvas_post">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                 <horstretch>3</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-              </widget>
-              <widget class="QWidget" name="widget_postInspector">
-               <layout class="QVBoxLayout" name="verticalLayout_postInspector">
-                <item>
-                 <widget class="QLabel" name="label_postCell">
-                  <property name="text">
-                   <string>Click a cell on the map.</string>
-                  </property>
-                  <property name="wordWrap">
-                   <bool>true</bool>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QTableWidget" name="tableWidget_postCellInspector">
-                  <property name="editTriggers">
-                   <set>QAbstractItemView::NoEditTriggers</set>
-                  </property>
-                  <attribute name="horizontalHeaderStretchLastSection">
-                   <bool>true</bool>
-                  </attribute>
-                  <attribute name="verticalHeaderVisible">
-                   <bool>false</bool>
-                  </attribute>
-                  <column>
-                   <property name="text">
-                    <string>Variable</string>
-                   </property>
-                  </column>
-                  <column>
-                   <property name="text">
-                    <string>Value</string>
-                   </property>
-                  </column>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QWidget" name="widget_postCellPlot">
-                  <property name="minimumSize">
-                   <size>
-                    <width>0</width>
-                    <height>160</height>
-                   </size>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_postHydrograph">
-           <layout class="QVBoxLayout" name="verticalLayout_postHydrograph">
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_postGauge">
-              <item>
-               <widget class="QLabel" name="label_postGauge">
-                <property name="text">
-                 <string>Gauge</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QComboBox" name="comboBox_postGauge"/>
-              </item>
-              <item>
-               <widget class="QCheckBox" name="checkBox_postLogY">
-                <property name="text">
-                 <string>Log scale</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <spacer name="horizontalSpacer_postGauge">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>20</width>
-                  <height>20</height>
-                 </size>
-                </property>
-               </spacer>
-              </item>
-             </layout>
+             <property name="text">
+              <string>A · Basics</string>
+             </property>
+             <property name="font">
+              <font>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="flags">
+              <set>ItemIsEnabled</set>
+             </property>
             </item>
             <item>
-             <widget class="QSplitter" name="splitter_postHydrograph">
-              <property name="orientation">
-               <enum>Qt::Vertical</enum>
-              </property>
-              <widget class="QWidget" name="widget_postHydrographPlot">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                 <horstretch>0</horstretch>
-                 <verstretch>2</verstretch>
-                </sizepolicy>
-               </property>
-              </widget>
-              <widget class="QSplitter" name="splitter_postHydrographDetails">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <widget class="QTableWidget" name="tableWidget_postHydrographMetrics">
-                <property name="editTriggers">
-                 <set>QAbstractItemView::NoEditTriggers</set>
-                </property>
-                <attribute name="horizontalHeaderStretchLastSection">
-                 <bool>true</bool>
-                </attribute>
-                <attribute name="verticalHeaderVisible">
-                 <bool>false</bool>
-                </attribute>
-                <column>
-                 <property name="text">
-                  <string>Metric</string>
-                 </property>
-                </column>
-                <column>
-                 <property name="text">
-                  <string>Value</string>
-                 </property>
-                </column>
-               </widget>
-               <widget class="QWidget" name="widget_postHydrographScatter"/>
-               <widget class="QWidget" name="widget_postHydrographResiduals"/>
-              </widget>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_postWaterBalance">
-           <layout class="QVBoxLayout" name="verticalLayout_postWaterBalance" stretch="0,1">
-            <item>
-             <widget class="QLabel" name="label_postBalanceNotes">
-              <property name="wordWrap">
-               <bool>true</bool>
-              </property>
-             </widget>
+             <property name="text">
+              <string>Overview</string>
+             </property>
             </item>
             <item>
-             <widget class="QSplitter" name="splitter_postWaterBalance">
-              <property name="orientation">
-               <enum>Qt::Vertical</enum>
-              </property>
-              <widget class="QTableWidget" name="tableWidget_postWaterBalance">
-               <property name="editTriggers">
-                <set>QAbstractItemView::NoEditTriggers</set>
-               </property>
-              </widget>
-              <widget class="QSplitter" name="splitter_postWaterBalanceViews">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <widget class="QWidget" name="widget_postWaterBalancePlot"/>
-               <widget class="QWidget" name="widget_postBalanceMap">
-                <layout class="QVBoxLayout" name="verticalLayout_postBalanceMap">
-                 <item>
-                  <widget class="QComboBox" name="comboBox_postBalanceMap">
-                   <property name="toolTip">
-                    <string>A per-cell term or ratio over the whole run; cells with a ratio above 1 break the mHM check protocol.</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QgsMapCanvas" name="mapCanvas_postBalance"/>
-                 </item>
-                </layout>
-               </widget>
-              </widget>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_postProcesses">
-           <layout class="QVBoxLayout" name="verticalLayout_postProcesses" stretch="0,1">
-            <item>
-             <widget class="QLabel" name="label_postProcessesNotes">
-              <property name="wordWrap">
-               <bool>true</bool>
-              </property>
-             </widget>
+             <property name="text">
+              <string>Map Explorer</string>
+             </property>
             </item>
             <item>
-             <widget class="QWidget" name="widget_postProcessesPlot">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                <horstretch>0</horstretch>
-                <verstretch>1</verstretch>
-               </sizepolicy>
-              </property>
-             </widget>
+             <property name="text">
+              <string>Hydrograph</string>
+             </property>
             </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_postSignatures">
-           <layout class="QVBoxLayout" name="verticalLayout_postSignatures" stretch="0,1">
-            <item><widget class="QLabel" name="label_postSignaturesNotes"><property name="text"><string></string></property><property name="wordWrap"><bool>true</bool></property></widget></item>
-            <item><widget class="QSplitter" name="splitter_postSignatures"><property name="orientation"><enum>Qt::Horizontal</enum></property>
-              <widget class="QWidget" name="widget_postSignaturesFdc"><property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding"><horstretch>0</horstretch><verstretch>1</verstretch></sizepolicy></property></widget>
-              <widget class="QTableWidget" name="tableWidget_postSignatures"><property name="editTriggers"><set>QAbstractItemView::NoEditTriggers</set></property><property name="selectionBehavior"><enum>QAbstractItemView::SelectRows</enum></property><attribute name="horizontalHeaderStretchLastSection"><bool>true</bool></attribute><column><property name="text"><string>Observed</string></property></column><column><property name="text"><string>Simulated</string></property></column><column><property name="text"><string>Relative difference</string></property></column></widget>
-            </widget></item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_postEvents">
-           <layout class="QVBoxLayout" name="verticalLayout_postEvents" stretch="0,1">
-            <item><layout class="QHBoxLayout" name="horizontalLayout_postEvents">
-              <item><widget class="QLabel" name="label_postEventRank"><property name="text"><string>Rank by</string></property></widget></item>
-              <item><widget class="QComboBox" name="comboBox_postEventRank"><property name="toolTip"><string>Sort the events; the largest come first.</string></property></widget></item>
-              <item><widget class="QToolButton" name="toolButton_postEventPrevious"><property name="text"><string>◀</string></property><property name="toolTip"><string>Previous event</string></property></widget></item>
-              <item><widget class="QToolButton" name="toolButton_postEventNext"><property name="text"><string>▶</string></property><property name="toolTip"><string>Next event</string></property></widget></item>
-              <item><widget class="QLabel" name="label_postEventsNotes"><property name="text"><string></string></property><property name="wordWrap"><bool>true</bool></property></widget></item>
-            </layout></item>
-            <item><widget class="QSplitter" name="splitter_postEvents"><property name="orientation"><enum>Qt::Vertical</enum></property>
-              <widget class="QTableWidget" name="tableWidget_postEvents"><property name="editTriggers"><set>QAbstractItemView::NoEditTriggers</set></property><property name="selectionBehavior"><enum>QAbstractItemView::SelectRows</enum></property><attribute name="horizontalHeaderStretchLastSection"><bool>true</bool></attribute></widget>
-              <widget class="QWidget" name="widget_postEventsPlot"><property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding"><horstretch>0</horstretch><verstretch>2</verstretch></sizepolicy></property></widget>
-            </widget></item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_postValidation">
-           <layout class="QVBoxLayout" name="verticalLayout_postValidation" stretch="0,0,1">
-            <item><layout class="QHBoxLayout" name="horizontalLayout_postValidationInput">
-              <item><widget class="QComboBox" name="comboBox_postAdapter"><property name="toolTip"><string>What to compare the run with; each picks the matching model output.</string></property></widget></item>
-              <item><widget class="QLineEdit" name="lineEdit_postObservation"><property name="placeholderText"><string>Gridded observation (netCDF)</string></property></widget></item>
-              <item><widget class="QToolButton" name="toolButton_postObservation"><property name="text"><string>…</string></property><property name="toolTip"><string>Choose the observation file</string></property></widget></item>
-              <item><widget class="QComboBox" name="comboBox_postObservationVariable"><property name="toolTip"><string>The observed variable in the file</string></property></widget></item>
-              <item><widget class="QDoubleSpinBox" name="doubleSpinBox_postDepth"><property name="suffix"><string> mm</string></property><property name="decimals"><number>0</number></property><property name="maximum"><double>5000.000000000000000</double></property><property name="value"><double>50.000000000000000</double></property><property name="toolTip"><string>Observation depth: the model's soil water is weighted over [0, depth]</string></property></widget></item>
-              <item><widget class="QDoubleSpinBox" name="doubleSpinBox_postThreshold"><property name="suffix"><string> mm</string></property><property name="maximum"><double>1000.000000000000000</double></property><property name="value"><double>1.000000000000000</double></property><property name="toolTip"><string>Snowpack above this counts as snow cover</string></property></widget></item>
-              <item><widget class="QPushButton" name="pushButton_postCompare"><property name="text"><string>Compare</string></property><property name="toolTip"><string>Harmonise time, grid and units, then score the run against the observation</string></property></widget></item>
-            </layout></item>
-            <item><widget class="QLabel" name="label_postValidationNotes"><property name="text"><string></string></property><property name="wordWrap"><bool>true</bool></property></widget></item>
-            <item><widget class="QSplitter" name="splitter_postValidation"><property name="orientation"><enum>Qt::Horizontal</enum></property>
-              <widget class="QWidget" name="widget_postValidationMap">
-               <layout class="QVBoxLayout" name="verticalLayout_postValidationMap">
-                <item><widget class="QComboBox" name="comboBox_postValidationMap"/></item>
-                <item><widget class="QgsMapCanvas" name="mapCanvas_postValidation"/></item>
-               </layout>
-              </widget>
-              <widget class="QSplitter" name="splitter_postValidationScores"><property name="orientation"><enum>Qt::Vertical</enum></property>
-               <widget class="QTableWidget" name="tableWidget_postValidation"><property name="editTriggers"><set>QAbstractItemView::NoEditTriggers</set></property><property name="selectionBehavior"><enum>QAbstractItemView::SelectRows</enum></property><attribute name="horizontalHeaderStretchLastSection"><bool>true</bool></attribute><column><property name="text"><string>Score</string></property></column><column><property name="text"><string>Value</string></property></column></widget>
-               <widget class="QWidget" name="widget_postValidationPlot"><property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding"><horstretch>0</horstretch><verstretch>1</verstretch></sizepolicy></property></widget>
-              </widget>
-            </widget></item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_postClimatology">
-           <layout class="QVBoxLayout" name="verticalLayout_postClimatology" stretch="0,1">
-            <item><widget class="QLabel" name="label_postClimatologyNotes"><property name="text"><string></string></property><property name="wordWrap"><bool>true</bool></property></widget></item>
-            <item><widget class="QWidget" name="widget_postClimatologyPlot"><property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding"><horstretch>0</horstretch><verstretch>1</verstretch></sizepolicy></property></widget></item>
-           </layout>
-          </widget>
-         </widget>
-        </widget>
+            <item>
+             <property name="text">
+              <string>Water balance</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Processes</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>B · Diagnostics</string>
+             </property>
+             <property name="font">
+              <font>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="flags">
+              <set>ItemIsEnabled</set>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Signatures</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Events</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Validation</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Climatology</string>
+             </property>
+            </item>
+           </widget>
+         </item>
+         <item>
+          <layout class="QVBoxLayout" name="verticalLayout_postLayoutButtons">
+           <item>
+            <widget class="QPushButton" name="pushButton_postWorkspace">
+             <property name="toolTip">
+              <string>Arrange the main window for post-processing (one layout per view); turning it off restores your own layout.</string>
+             </property>
+             <property name="text">
+              <string>Analysis layout</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButton_postResetLayout">
+             <property name="toolTip">
+              <string>Re-apply the current view's default layout.</string>
+             </property>
+             <property name="text">
+              <string>Reset layout</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="verticalSpacer_postLayoutButtons">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+        </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_postTime">
-         <item>
-          <widget class="QToolButton" name="toolButton_postStepBack">
-           <property name="toolTip">
-            <string>Previous output interval</string>
-           </property>
-           <property name="text">
-            <string>|◀</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QToolButton" name="toolButton_postPlay">
-           <property name="toolTip">
-            <string>Play through the period</string>
-           </property>
-           <property name="text">
-            <string>▶</string>
-           </property>
-           <property name="checkable">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QToolButton" name="toolButton_postStepForward">
-           <property name="toolTip">
-            <string>Next output interval</string>
-           </property>
-           <property name="text">
-            <string>▶|</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QSlider" name="horizontalSlider_postTime">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QDateTimeEdit" name="dateTimeEdit_postTime">
-           <property name="toolTip">
-            <string>The start of the shown output interval</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
-           </property>
-           <property name="buttonSymbols">
-            <enum>QAbstractSpinBox::NoButtons</enum>
-           </property>
-           <property name="displayFormat">
-            <string>yyyy-MM-dd HH:mm</string>
-           </property>
-          </widget>
-         </item>
+        <layout class="QHBoxLayout" name="horizontalLayout_postStatus">
          <item>
           <widget class="QLabel" name="label_postStatus"/>
          </item>
@@ -3558,11 +3190,6 @@
   </layout>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>QgsMapCanvas</class>
-   <extends>QGraphicsView</extends>
-   <header>qgsmapcanvas.h</header>
-  </customwidget>
   <customwidget>
    <class>QgsProjectionSelectionWidget</class>
    <extends>QWidget</extends>

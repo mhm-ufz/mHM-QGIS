@@ -188,6 +188,11 @@ class MhmQgis:
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+        dialog = getattr(self, "dlg", None)
+        if dialog is not None:
+            from .qt.controllers import post_context
+
+            post_context.end_workspace(dialog)  # our docks leave QGIS's window; its layout returns
         for action in self.actions:
             self.iface.removePluginMenu(self.tr("&mHM QGIS"), action)
             self.iface.removeToolBarIcon(action)

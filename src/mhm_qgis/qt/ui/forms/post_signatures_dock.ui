@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PostSignaturesDock</class>
+ <widget class="QWidget" name="PostSignaturesDock">
+  <property name="windowTitle">
+   <string>Signatures</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_PostSignaturesDock">
+   <property name="leftMargin">
+    <number>2</number>
+   </property>
+   <property name="topMargin">
+    <number>2</number>
+   </property>
+   <property name="rightMargin">
+    <number>2</number>
+   </property>
+   <property name="bottomMargin">
+    <number>2</number>
+   </property>
+   <item>
+    <widget class="QWidget" name="page_postSignatures">
+     <layout class="QVBoxLayout" name="verticalLayout_postSignatures" stretch="0,1">
+      <item>
+       <widget class="QLabel" name="label_postSignaturesNotes">
+        <property name="text">
+         <string />
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSplitter" name="splitter_postSignatures">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <widget class="QWidget" name="widget_postSignaturesFdc">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
+        <widget class="QTableWidget" name="tableWidget_postSignatures">
+         <property name="editTriggers">
+          <set>QAbstractItemView::NoEditTriggers</set>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectRows</enum>
+         </property>
+         <attribute name="horizontalHeaderStretchLastSection">
+          <bool>true</bool>
+         </attribute>
+         <column>
+          <property name="text">
+           <string>Observed</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Simulated</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Relative difference</string>
+          </property>
+         </column>
+        </widget>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources />
+ <connections />
+</ui>

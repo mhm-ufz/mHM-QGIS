@@ -189,8 +189,8 @@ pages:
       title: Resolution
       text: Aggregates series and balance tables; fluxes are summed, states averaged.
     - widget: listWidget_postNavigation
-      title: Pages
-      text: Overview, Map Explorer, Hydrograph, Water balance and Processes share the run, basin, period and time above.
-    - widget: horizontalSlider_postTime
-      title: Time
-      text: The shown output interval; the map and the hydrograph cursor follow it.
+      title: Views
+      text: Each view arranges the QGIS window (or the map window) for its kind of analysis, with maps and charts as docks; they share the run, basin, period and time.
+    - widget: pushButton_postWorkspace
+      title: Analysis layout
+      text: Turns the arranged window on; turning it off removes the docks and restores your own layout. The time toolbar steps through the output intervals.
