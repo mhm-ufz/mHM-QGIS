@@ -39,13 +39,17 @@ class PostState:
 
 def pages(dialog) -> dict:
     """Navigation text -> (page, refresh(dialog, fields))."""
-    from . import post_balance, post_hydro, post_map
+    from . import post_balance, post_hydro, post_map, post_validation
 
     return {"Overview": (dialog.page_postOverview, post_balance.refresh_overview),
             "Map Explorer": (dialog.page_postMap, post_map.refresh),
             "Hydrograph": (dialog.page_postHydrograph, post_hydro.refresh),
             "Water balance": (dialog.page_postWaterBalance, post_balance.refresh_balance),
-            "Processes": (dialog.page_postProcesses, post_balance.refresh_processes)}
+            "Processes": (dialog.page_postProcesses, post_balance.refresh_processes),
+            "Signatures": (dialog.page_postSignatures, post_hydro.refresh_signatures),
+            "Events": (dialog.page_postEvents, post_hydro.refresh_events),
+            "Validation": (dialog.page_postValidation, post_validation.refresh),
+            "Climatology": (dialog.page_postClimatology, post_hydro.refresh_climatology)}
 
 
 def plot_widget(dialog, container, *, dates=True):
@@ -75,7 +79,7 @@ def seconds(moments) -> np.ndarray:
 
 
 def bind(dialog) -> None:
-    from . import post_balance, post_hydro, post_map
+    from . import post_balance, post_hydro, post_map, post_validation
 
     dialog._post = PostState(AnalysisContext(dialog))
     context = dialog._post.context
@@ -109,6 +113,7 @@ def bind(dialog) -> None:
     post_map.bind(dialog)
     post_hydro.bind(dialog)
     post_balance.bind(dialog)
+    post_validation.bind(dialog)
     dialog.listWidget_postNavigation.setCurrentRow(1)
 
 

@@ -145,3 +145,64 @@ def test_archiving_lists_the_archived_run(opened, monkeypatch):
     assert dialog.comboBox_postRun.currentText().startswith("baseline")
     assert dialog._post.run.ref.name == "baseline"
     assert np.isfinite(dialog._post.intervals.astype("int64")).all()
+
+
+@pytest.fixture
+def opened_long(tmp_path, monkeypatch):
+    """A daily run over two years and two months, for the Tier B pages."""
+    truth = make_run(tmp_path, days=800)
+    path = input_state_path(tmp_path)
+    (tmp_path / ".temp").mkdir(exist_ok=True)
+    with open(path, "w", encoding="utf-8") as stream:
+        json.dump({"mhm_version": "5.13"}, stream)
+    forget_project_version(tmp_path)
+    real = catalog.open_run
+    monkeypatch.setattr(catalog, "open_run", lambda ref, values=None: real(ref, V5 if values is None else values))
+    dialog = MhmQgisDialog()
+    dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32644"))
+    dialog.project_folder = str(tmp_path)
+    yield dialog, truth, tmp_path
+    _wait(lambda: not dialog.task_coordinator.is_busy())
+    dialog.close()
+    dialog.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def test_tier_b_pages(opened_long, monkeypatch):
+    from post_fixtures import write_observation
+
+    from mhm_qgis.qt.controllers import post_validation
+
+    dialog, truth, folder = opened_long
+    real = netCDF4.Dataset
+
+    def guarded(*args, **kwargs):
+        assert threading.current_thread() is not threading.main_thread(), "netCDF read on the GUI thread"
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(netCDF4, "Dataset", guarded)
+    _open(dialog)
+    state = dialog._post
+    _page(dialog, "Signatures")
+    _wait(lambda: dialog.tableWidget_postSignatures.rowCount() > 0)
+    assert dialog.label_postSignaturesNotes.text() == ""
+    _page(dialog, "Events")
+    _wait(lambda: dialog.tableWidget_postEvents.rowCount() > 0)
+    assert state.widgets["widget_postEventsPlot"].listDataItems()
+    _page(dialog, "Climatology")
+    assert len(state.widgets["climatology"].ci.items) >= 3
+    _page(dialog, "Validation")
+    combo = dialog.comboBox_postAdapter
+    combo.setCurrentIndex(combo.findData("discharge"))
+    dialog.pushButton_postCompare.click()
+    _wait(lambda: dialog.tableWidget_postValidation.rowCount() == len(post_validation.GAUGE_SCORES))
+    monkeypatch.setattr(netCDF4, "Dataset", real)  # the test writes its observation here
+    write_observation(truth, folder / "et.nc")
+    monkeypatch.setattr(netCDF4, "Dataset", guarded)
+    combo.setCurrentIndex(combo.findData("et"))
+    post_validation._observation_chosen(dialog, str(folder / "et.nc"))
+    _wait(lambda: dialog.comboBox_postObservationVariable.count() == 1)
+    dialog.pushButton_postCompare.click()
+    _wait(lambda: dialog.comboBox_postValidationMap.count() > 3 and not dialog.task_coordinator.is_busy())
+    assert dialog.mapCanvas_postValidation.layers()
+    assert "complete windows" in dialog.label_postValidationNotes.text()

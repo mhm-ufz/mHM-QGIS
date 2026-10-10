@@ -771,6 +771,20 @@ Four JSON files live under each domain's `.temp/` directory.
     `qt/workflows/post.submit` (coordinator, resource `post-io`; a request that arrives
     while the same job runs waits and then runs, latest wins). The open task reads
     `run.variables` so the pages can use them; `scan_job(run=...)` reuses that run.
+  - Tier B pages: Signatures, Events and Climatology (`post_hydro`), Validation
+    (`post_validation`). Signatures and events need daily or finer discharge and two
+    years; rainfall joins an event only at the discharge's own step (monthly P is never
+    spread onto days); the runoff ratio uses totals, so any P step works.
+  - **Observation operators** (`core/post/observe.py`, a `derive("observe")` worker
+    job): windows are the coarser record's intervals, used only when the finer one covers
+    them completely; fluxes are summed and states time-weighted. mhm-tools'
+    `resample_to_reference_windows` averages everything (wrong for summed fluxes; a test
+    pins it) and is not used. Grids: exact block mean onto the coarser one; unknown
+    observation units are refused. TWS anomaly and snow cover go to mhm-tools (lat/lon
+    runs only; projected runs are refused with that reason). **Stamp files for mhm-tools
+    at interval centres:** it selects a window's steps with an end-inclusive slice, so an
+    edge stamp lands in two windows. The native worker sets `MPLBACKEND=Agg` (headless;
+    in a VS Code snap terminal a GUI backend crashed the process).
   - **pyqtgraph and teardown:** a dialog holding pyqtgraph items must be deleted by Qt
     (`deleteLater`), not left to Python's cycle collector, or the session teardown
     segfaults. Pages make their plots only once a run is open; tests that open one end

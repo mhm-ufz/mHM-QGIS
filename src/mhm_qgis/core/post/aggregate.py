@@ -18,7 +18,7 @@ from . import cache, series
 from .scan import calendar_days
 
 UNITS = {"day": "D", "month": "M", "year": "Y"}
-MIN_DAYS = {"day": 1, "month": 28, "year": 365}
+MAX_DAYS = {"day": 1, "month": 31, "year": 366}  # a step longer than this is coarser
 
 
 def semantics(root, variable) -> dict:
@@ -61,7 +61,7 @@ def temporal(root, variable, how, freq="native", *, basin="domain", cell=None, p
     flux = info["kind"] == "flux"
     if freq == "native":
         return values / days if flux and how == "mean" else values
-    if freq != "period" and MIN_DAYS[freq] < np.median(days) * 0.99:
+    if freq != "period" and np.median(days) > MAX_DAYS[freq] * 1.001:
         raise ValueError(f"The output step ({np.median(days):g} days) is coarser than a {freq}.")
     starts = intervals[:, 0]
     labels = np.zeros(len(starts), int) if freq == "period" else starts.astype(f"datetime64[{UNITS[freq]}]")

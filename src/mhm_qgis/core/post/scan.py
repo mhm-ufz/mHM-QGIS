@@ -259,6 +259,10 @@ def derive(job):
         return values.tolist()
     if job["what"] == "statistic":
         return _period_statistic(job)
+    if job["what"] == "observe":
+        from .observe import run_job
+
+        return run_job(job)
     raise ValueError(f"Unknown derive product: {job['what']}")
 
 

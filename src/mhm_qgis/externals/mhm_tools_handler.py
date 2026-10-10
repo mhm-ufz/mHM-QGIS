@@ -573,19 +573,87 @@ def kling_gupta(simulated, observed, min_valid_pairs=None) -> tuple[float, float
     return calculate_kling_gupta_efficiency(simulated, observed, min_valid_pairs)
 
 
+def kge_map(simulated, observed, min_valid_pairs=None):
+    """Per-cell KGE of two (time, y, x) arrays by mhm-tools; NaN where not computable."""
+    import xarray as xr
+    from mhm_tools.common.metrics.kge import calculate_kling_gupta_efficiency_per_cell
+
+    dims = ("time", "y", "x")
+    result = calculate_kling_gupta_efficiency_per_cell(
+        xr.DataArray(simulated, dims=dims), xr.DataArray(observed, dims=dims), min_valid_pairs)
+    return result["kge"].to_numpy()
+
+
+def rmse_map(simulated, observed, min_valid_pairs=None):
+    """Per-cell RMSE of two (time, y, x) arrays by mhm-tools."""
+    import xarray as xr
+    from mhm_tools.common.metrics.rmse import calculate_root_mean_square_error_per_cell
+
+    dims = ("time", "y", "x")
+    return calculate_root_mean_square_error_per_cell(
+        xr.DataArray(simulated, dims=dims), xr.DataArray(observed, dims=dims), min_valid_pairs).to_numpy()
+
+
+def pattern_scores(simulated, observed) -> dict:
+    """Spatial-pattern efficiency of one map pair (Koch et al. 2018): SPAEF, ESP,
+    WASPAEF and MSPAEF by mhm-tools, NaN where a score is undefined."""
+    import warnings
+
+    from mhm_tools.common.metrics.esp import ESP
+    from mhm_tools.common.metrics.mspaef import MSPAEF
+    from mhm_tools.common.metrics.spaef import SPAEF, filter_nan
+    from mhm_tools.common.metrics.waspaef import WASPAEF
+
+    scores = {}
+    sim, obs = filter_nan(simulated, observed)
+    for name, score in (("SPAEF", SPAEF), ("ESP", ESP), ("WASPAEF", WASPAEF), ("MSPAEF", MSPAEF)):
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                scores[name] = float(score(sim, obs)[0]) if len(obs) > 2 and obs.std() > 0 else float("nan")
+        except (ValueError, ZeroDivisionError, FloatingPointError):
+            scores[name] = float("nan")
+    return scores
+
+
+def twsa(model_tws, reference, output_dir, ref_var=None, baseline=(2004, 2009)) -> dict:
+    """mhm-tools' TWS-anomaly evaluation of a modelled `tws` file (mm) against a
+    reference, anomalies against the `baseline` years; returns its output files.
+    Region plots are off."""
+    from mhm_tools.post.twsa_evaluation import twsa_evaluation
+
+    return twsa_evaluation(model_tws, reference, output_dir, input_var="tws", ref_var=ref_var,
+                           input_format="tws", regions="none",
+                           baseline_start_year=baseline[0], baseline_end_year=baseline[1])
+
+
+def snow_cover(model, reference, output_dir, ref_var=None, threshold=0.0) -> dict:
+    """mhm-tools' snow-cover evaluation of mHM's `snowpack` against a reference
+    (e.g. MODIS); returns its output files. GIF and region plots are off."""
+    from mhm_tools.post.snow_evaluation import snow_evaluation
+
+    return snow_evaluation(model, reference, output_dir, input_var="snowpack", ref_var=ref_var,
+                           input_snow_threshold=threshold, write_gif=False, regions="none")
+
+
 __all__ = [
     "capture_messages",
     "copy_lai_file_to_grid",
     "create_dem_derivative_files",
     "create_latlon_file",
+    "kge_map",
     "kling_gupta",
     "lai_time_step",
     "link_folder_tree",
+    "pattern_scores",
     "prepare_categorical_file",
     "prepare_lai_file",
     "prepare_land_cover_periods",
     "prepare_soil_horizons",
     "read_xarray_dataset",
+    "rmse_map",
+    "snow_cover",
+    "twsa",
     "write_xarray_ascii",
     "xarray_coord_key",
     "xarray_single_data_var",

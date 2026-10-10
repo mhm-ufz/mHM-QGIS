@@ -1,0 +1,14 @@
+# Tunable parameters of the post-processing analyses (no code change needed).
+# P7 adds the plausibility rules of the mHM check protocol here.
+version: 1
+
+events:
+  # An event starts when quickflow exceeds f_on * P99(quickflow) and ends when it
+  # drops below f_off times that; events closer than merge_gap steps are merged,
+  # those peaking below min_peak (m3 s-1) dropped; rainfall is taken from max_lag
+  # steps before the start.
+  f_on: 0.1
+  f_off: 0.5
+  merge_gap: 2
+  min_peak: 0.0
+  max_lag: 3

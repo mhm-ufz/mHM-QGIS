@@ -267,3 +267,36 @@ def _restart(path, f_sealed, mask, area_km2):
         area = handle.createVariable("L1_domain_cellarea", "f8", ("ncols1", "nrows1"), fill_value=FILL)
         area[:] = np.where(mask, area_km2, FILL)  # unpack(..., mask, nodata) (mo_common_restart.f90:110)
     return path
+
+
+def write_observation(truth, path, units="mm", scale=1.0, coarsen=2):
+    """The fixture's aET, as monthly totals on a grid `coarsen` times coarser."""
+    import netCDF4 as nc
+
+    with nc.Dataset(truth.files["mhm"]) as source:
+        aet = np.ma.filled(source["aET"][:], np.nan)
+        x, y = source["easting"][:], source["northing"][:]
+    days = truth.days
+    months = days.astype("datetime64[M]")
+    labels = np.unique(months)
+    monthly = np.stack([aet[months == m].sum(0) for m in labels])
+    ny, nx = monthly.shape[1] // coarsen, monthly.shape[2] // coarsen
+    blocks = monthly.reshape(len(labels), ny, coarsen, nx, coarsen)
+    coarse = np.nanmean(blocks, axis=(2, 4)) * scale
+    with nc.Dataset(path, "w") as handle:
+        handle.createDimension("time", len(labels))
+        handle.createDimension("x", nx)
+        handle.createDimension("y", ny)
+        handle.createDimension("bnds", 2)
+        starts = (labels.astype("datetime64[D]") - days[0]).astype(int)
+        ends = ((labels + 1).astype("datetime64[D]") - days[0]).astype(int)
+        time = handle.createVariable("time", "f8", ("time",))
+        time.setncatts({"units": f"days since {days[0]} 00:00:00", "bounds": "time_bnds"})
+        time[:] = starts
+        handle.createVariable("time_bnds", "f8", ("time", "bnds"))[:] = np.stack([starts, ends], 1)
+        handle.createVariable("x", "f8", ("x",))[:] = x.reshape(nx, coarsen).mean(1)
+        handle.createVariable("y", "f8", ("y",))[:] = y.reshape(ny, coarsen).mean(1)
+        var = handle.createVariable("et", "f4", ("time", "y", "x"), fill_value=np.float32(np.nan))
+        var.units = units
+        var[:] = coarse
+    return labels

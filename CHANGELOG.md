@@ -37,9 +37,12 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   basin, a period and a resolution; Overview (water balance, ratios, gauge scores and
   findings), Map Explorer (every output variable over time or as a period statistic,
   click a cell for its values and series), Hydrograph (observed and simulated discharge
-  with precipitation and scores), Water balance (tables, monthly bars, per-cell maps) and
-  Processes. Each run is scanned once in the background; runs can be archived before
-  the next one overwrites `output/`.
+  with precipitation and scores), Water balance (tables, monthly bars, per-cell maps),
+  Processes, Signatures (flow duration curve and hydrological signatures), Events (flood
+  events ranked, with their errors), Validation (the run against gridded observations of
+  ET, snow, soil moisture or neutrons, TWS anomalies and snow cover through mhm-tools, and
+  every gauge's scores) and Climatology. Each run is scanned once in the background; runs
+  can be archived before the next one overwrites `output/`.
 
 ### Changed
 - PyYAML is a declared dependency; the plugin reads its own YAML schemas.

@@ -119,6 +119,7 @@ def main(argv=None):
     if len(argv) != 2:
         raise SystemExit("Usage: native_worker JOB_JSON RESULT_JSON")
     _prefer_worker_termination()
+    os.environ.setdefault("MPLBACKEND", "Agg")  # headless: mhm-tools' evaluations plot to files
     job_path, result_path = map(Path, argv)
     try:
         payload = {"result": run(json.loads(job_path.read_text(encoding="utf-8")))}

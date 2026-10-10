@@ -91,6 +91,7 @@ def test_coarser_output_refuses_finer_aggregation(tmp_path):
     _, root = _scanned(tmp_path, days=90, step="month")
     with pytest.raises(ValueError, match="coarser than a day"):
         aggregate.temporal(root, "aET", "sum", "day")
+    assert aggregate.temporal(root, "aET", "sum", "month").notna().sum() == 2  # March lacks its last day
 
 
 def test_statistic_maps(tmp_path):
