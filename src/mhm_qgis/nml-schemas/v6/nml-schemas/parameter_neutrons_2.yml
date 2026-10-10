@@ -6,63 +6,63 @@ properties:
   cosmic_n0:
     $ref: parameter.yml#/$defs/parameter
     title: COSMIC N0 parameter
-    default: {min: 300.0, max: 2000.0}
+    default: {value: 1500.0, min: 300.0, max: 2000.0}
     properties:
       value: {examples: [1500.0]}
       optimize: {examples: [false]}
   cosmic_n1:
     $ref: parameter.yml#/$defs/parameter
     title: COSMIC N1 parameter
-    default: {min: 0.01, max: 10.0}
+    default: {value: 1.0, min: 0.01, max: 10.0}
     properties:
       value: {examples: [1.0]}
       optimize: {examples: [false]}
   cosmic_n2:
     $ref: parameter.yml#/$defs/parameter
     title: COSMIC N2 parameter
-    default: {min: 0.01, max: 10.0}
+    default: {value: 1.0, min: 0.01, max: 10.0}
     properties:
       value: {examples: [1.0]}
       optimize: {examples: [false]}
   cosmic_alpha0:
     $ref: parameter.yml#/$defs/parameter
     title: COSMIC alpha0 parameter
-    default: {min: 0.01, max: 10.0}
+    default: {value: 1.0, min: 0.01, max: 10.0}
     properties:
       value: {examples: [1.0]}
       optimize: {examples: [false]}
   cosmic_alpha1:
     $ref: parameter.yml#/$defs/parameter
     title: COSMIC alpha1 parameter
-    default: {min: 0.01, max: 10.0}
+    default: {value: 1.0, min: 0.01, max: 10.0}
     properties:
       value: {examples: [1.0]}
       optimize: {examples: [false]}
   cosmic_l30:
     $ref: parameter.yml#/$defs/parameter
     title: COSMIC L30 parameter
-    default: {min: 26.56, max: 424.78}
+    default: {value: 106.1942, min: 26.56, max: 424.78}
     properties:
       value: {examples: [106.1942]}
       optimize: {examples: [false]}
   cosmic_l31:
     $ref: parameter.yml#/$defs/parameter
     title: COSMIC L31 parameter
-    default: {min: -118.3, max: 200.28}
+    default: {value: 40.9879, min: -118.3, max: 200.28}
     properties:
       value: {examples: [40.9879]}
       optimize: {examples: [false]}
   cosmic_lw0:
     $ref: parameter.yml#/$defs/parameter
     title: COSMIC lattice-water parameter LW0
-    default: {min: 0.0, max: 0.2}
+    default: {value: 0.1783, min: 0.0, max: 0.2}
     properties:
       value: {examples: [0.1783]}
       optimize: {examples: [false]}
   cosmic_lw1:
     $ref: parameter.yml#/$defs/parameter
     title: COSMIC lattice-water parameter LW1
-    default: {min: 0.0, max: 0.05}
+    default: {value: 0.0, min: 0.0, max: 0.05}
     properties:
       value: {examples: [0.0]}
       optimize: {examples: [false]}

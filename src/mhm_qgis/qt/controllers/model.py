@@ -12,7 +12,11 @@ from ...core.handlers.store.layout import (
     ensure_multi_structure,
     ensure_project_structure,
 )
-from ...core.handlers.store.paths import schemas_folder, workspace_folder
+from ...core.handlers.store.paths import (
+    namelist_project,
+    schemas_folder,
+    workspace_folder,
+)
 from ...dependency_bootstrap import configure_qtpy_api
 from ..dialogs.file_picker import open_file
 from .categorical import refresh_advanced_nml_settings
@@ -81,7 +85,9 @@ def _namelist_stamps(folder) -> dict:
     return {path.name: path.stat().st_mtime_ns for path in Path(folder).glob("*.nml")}
 
 
-def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
+def edit_namelists(dialog, namelists=None, *, update_inputs=True) -> bool:
+    """Open the namelist editor on the setup's nml-tools project (`v5`, `classic` or
+    `combine`); `namelists` ({file profile: [namelist]}) narrows it to part of it."""
     if not require_active(dialog):
         return False
     try:
@@ -99,24 +105,26 @@ def edit_namelists(dialog, file_profiles=None, *, update_inputs=True) -> bool:
         schemas_dir = schemas_folder(version)
         if combined:
             ensure_multi_structure(dialog.project_folder)
-            if version.startswith("6") and file_profiles is None:
-                # combine.nml lists the domains; each keeps its own mhm.nml.
-                file_profiles = {"meta": [], "parameter": [], "output": []}
         else:
             ensure_project_structure(dialog.project_folder, version)
+        project = namelist_project(version, combined)
+        if project == "combine" and namelists:
+            # combine.nml (`meta`) holds what a domain's mhm.nml (`main`) would.
+            namelists = {"meta" if name == "main" else name: groups for name, groups in namelists.items()}
         configure_qtpy_api()
-        from ...externals.nml_tools_handler import launch_profile_editor
+        from ...externals.nml_tools_handler import launch_editor
 
-        dialog.log_message(f"Opening namelist editor for mHM {version}...")
+        dialog.log_message(f"Opening the namelist editor for mHM {version} (project {project})...")
         before = _namelist_stamps(workspace)
-        launch_profile_editor(
-            schemas_dir=schemas_dir,
-            output_dir=workspace,
+        launch_editor(
+            schemas_dir,
+            workspace,
+            project,
+            namelists=namelists,
             initial_values=(
                 build_initial_values(version, dialog) if update_inputs else None
             ),
             initial_dimensions=build_dimensions(version, dialog),
-            file_profiles=file_profiles,
             log=dialog.log_message,
         )
         if _namelist_stamps(workspace) != before and nml_settings.load_settings(

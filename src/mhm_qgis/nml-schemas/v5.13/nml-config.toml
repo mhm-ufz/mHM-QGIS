@@ -196,6 +196,10 @@ schema = "nml-schemas/parameter_geoparameter.yml"
 name = "NLoutputResults"
 schema = "nml-schemas/config_output_results.yml"
 
+[[namelists]]
+name = "NLoutputResults_mrm"
+schema = "nml-schemas/config_output_results_mrm.yml"
+
 [[file_profiles]]
 name = "main"
 title = "mHM 5.13 configuration"
@@ -243,6 +247,12 @@ default_file = "mhm_outputs.nml"
 namelists = ["NLoutputResults"]
 
 [[file_profiles]]
+name = "mrm_output"
+title = "mRM 5.13 output configuration"
+default_file = "mrm_outputs.nml"
+namelists = ["NLoutputResults_mrm"]
+
+[[file_profiles]]
 name = "parameter"
 title = "mHM 5.13 parameter configuration"
 default_file = "mhm_parameter.nml"
@@ -268,3 +278,9 @@ namelists = [
   "neutrons2",
   "geoparameter",
 ]
+
+[[project_profiles]]
+name = "v5"
+title = "For all kinds of runs"
+description = "The only project profile for all v5.13 workflow"
+file_profiles = ["main", "parameter", "output", "mrm_output"]

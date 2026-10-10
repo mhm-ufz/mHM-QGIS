@@ -14,7 +14,7 @@ from nml_tools.gui.model import (
 )
 from nml_tools.gui.model import render_profile as _render_profile
 
-from mhm_qgis.core.handlers.store.paths import temp_morphology_folder
+from mhm_qgis.core.handlers.store.paths import namelist_project, temp_morphology_folder
 from mhm_qgis.vSpecific import build_dimensions, build_initial_values
 
 SCHEMAS = Path(__file__).resolve().parents[1] / "src" / "mhm_qgis" / "nml-schemas"
@@ -147,7 +147,7 @@ class LayerWidget:
 
 def _document(version: str, dialog: Dialog):
     key = "v5.13" if version.startswith("5") else "v6"
-    project = load_project(SCHEMAS / key, dialog.project_folder)
+    project = load_project(SCHEMAS / key, dialog.project_folder, namelist_project(key))
     dimensions = build_dimensions(version, dialog)
     document = build_initial_values(version, dialog)
     return project, dimensions, document
@@ -169,6 +169,7 @@ def test_version_projects_have_model_filenames_and_dimensions(tmp_path: Path) ->
     assert {profile.name: profile.default_file for profile in v5.profiles} == {
         "main": "mhm.nml",
         "output": "mhm_outputs.nml",
+        "mrm_output": "mrm_outputs.nml",
         "parameter": "mhm_parameter.nml",
     }
     assert {profile.name: profile.default_file for profile in v6.profiles} == {
@@ -265,7 +266,7 @@ def test_v513_array_axis_labels_match_version_contract(tmp_path: Path) -> None:
 
     geo_parameter = schemas["geoparameter"]["properties"]["GeoParam"]
     assert axis_labels(geo_parameter, 2, 5) == PARAMETER_COMPONENT_LABELS
-    assert geo_parameter["x-nml-tools-ui"]["table"] == {
+    assert geo_parameter["table"] == {  # nml-tools reads `axes`/`table` at the property's top level
         "row-axis": 1,
         "column-axis": 2,
     }
@@ -355,7 +356,16 @@ def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
     # editor's zero padding of an incomplete schema example.
     update_section(tmp_path, "soil", {"horizons": [
         {"lower_depth": 200}, {"lower_depth": 500}, {"lower_depth": 1000}]})
+    # No geology for v5.13: an unvisited GeoParam page renders its repeated one-row default.
     for version in ("5.13", "6.0"):
+        if version == "6.0":
+            # nml-tools still raises for an unvisited required array of derived items that
+            # has item defaults but no top-level `default` (v6 `baseflow_recession`), so v6
+            # gets the prepared geology a real setup has (reported to nml-tools).
+            morphology = Path(temp_morphology_folder(tmp_path))
+            morphology.mkdir(parents=True, exist_ok=True)
+            (morphology / "geology_class_metadata.json").write_text(json.dumps(
+                {"classes": [{"geo_param": index, "parameter_value": 100.0} for index in (1, 2)]}))
         project, dimensions, document = _document(version, dialog)
         # The editor window normalizes names before building its tabs.
         dimensions = {name.lower(): size for name, size in dimensions.items()}
@@ -366,10 +376,7 @@ def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
                 profile_values(document, profile),
                 dimensions,
             )
-            values = {
-                page.name: editor.forms[page.name].values()
-                for page in profile.pages
-            }
+            values = editor.values()  # pages are built lazily; this covers unvisited ones
             rendered = render_profile(project, profile, values, dimensions)
             assert rendered
             assert re.findall(r"(?m)^&([A-Za-z][A-Za-z0-9_]*)$", rendered) == [
@@ -396,7 +403,7 @@ def test_v513_parameters_share_one_base_type(tmp_path: Path) -> None:
     root = SCHEMAS / "v5.13" / "nml-schemas"
     base = yaml.safe_load((root / "parameter.yml").read_text())["$defs"]["parameter"]
     assert base["x-fortran-shape"] == 5
-    assert base["x-nml-tools-ui"]["axes"]["1"]["labels"] == PARAMETER_COMPONENT_LABELS
+    assert base["axes"]["1"]["labels"] == PARAMETER_COMPONENT_LABELS
 
     referencing = repeated = 0
     for path in sorted(root.glob("parameter_*.yml")):
@@ -406,7 +413,7 @@ def test_v513_parameters_share_one_base_type(tmp_path: Path) -> None:
                 # The $ref carries the shape; repeating it here would let the
                 # two drift apart.
                 assert "x-fortran-shape" not in field, f"{path.name}:{name}"
-                assert "x-nml-tools-ui" not in field, f"{path.name}:{name}"
+                assert "axes" not in field, f"{path.name}:{name}"
             elif field.get("x-fortran-shape") == 5:
                 repeated = repeated + 1
     assert referencing == 136
@@ -445,3 +452,15 @@ def test_v513_arrays_are_sized_to_the_project_not_to_a_maximum(tmp_path: Path) -
     assert "soil_Depth(4)" not in rendered
     assert "Gauge_id(1,2)" in rendered
     assert "Gauge_id(1,3)" not in rendered
+
+
+def test_each_projects_handoff_names_only_its_profiles(tmp_path: Path) -> None:
+    """nml-tools rejects unknown profiles, so the handoff must fit the project."""
+    dialog = Dialog(tmp_path)
+    for version, project_name in (("5.13", "v5"), ("6.0", "classic")):
+        project, _, document = _document(version, dialog)
+        assert {profile.name for profile in project.profiles} >= set(document), project_name
+    v6 = load_project(SCHEMAS / "v6", tmp_path, "classic")
+    combined = load_project(SCHEMAS / "v6", tmp_path, "combine")
+    assert [profile.default_file for profile in v6.profiles] == ["mhm.nml", "parameters.nml", "outputs.nml"]
+    assert [profile.default_file for profile in combined.profiles] == ["combine.nml", "parameters.nml", "outputs.nml"]

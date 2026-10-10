@@ -126,11 +126,12 @@ def summary(version, effects_) -> list[str]:
     return lines + datamodel.unmet_needs(version, processes)
 
 
-def handoff(version, effects_, saved=None) -> dict[str, dict[str, dict]]:
+def handoff(version, effects_, saved=None, project="classic") -> dict[str, dict[str, dict]]:
     """The wizard's process and output choices as `{profile: {namelist: values}}`.
 
     v5.13 keeps both as one-based arrays, so they are merged into the saved
     namelist's lists (`saved` is `datamodel.read_namelists`), or the schema example.
+    In a v6 combined setup (`project` "combine") the processes go to `meta`.
     """
     saved = saved or {}
     processes = {key.split(".", 1)[1]: int(value) for key, value in effects_.items()
@@ -145,7 +146,7 @@ def handoff(version, effects_, saved=None) -> dict[str, dict[str, dict]]:
             output.setdefault(namelist or "output_mhm", {})[name] = True
         result = {"output": output} if output else {}
         if processes:
-            result["main"] = {"config_processes": processes}
+            result["meta" if project == "combine" else "main"] = {"config_processes": processes}
         return result
     result = {}
     if processes:
@@ -154,13 +155,20 @@ def handoff(version, effects_, saved=None) -> dict[str, dict[str, dict]]:
         for process, case in processes.items():
             cases[rules["processes"][process]["v5_13_index"] - 1] = case
         result["main"] = {"processSelection": {"processCase": cases}}
-    if switches:
+    routed = [key for key in switches if "." in key]  # nloutputresults_mrm.outputflxstate_mrm(1)
+    if routed:
+        flags = list(saved.get("nloutputresults_mrm", {}).get("outputflxstate_mrm") or [False, False])
+        for key in routed:
+            flags[int(key.split("(")[1].rstrip(")")) - 1] = True
+        result["mrm_output"] = {"NLoutputResults_mrm": {"outputFlxState_mrm": flags}}
+    if len(routed) < len(switches):
         size = max(spec["switch"] for spec in datamodel.output_registry()["outputs"].values()
                    if isinstance(spec.get("switch"), int))
         flags = list(saved.get("nloutputresults", {}).get("outputflxstate") or [])
         flags += [False] * (size - len(flags))
         for key in switches:
-            flags[int(key.split("(")[1].rstrip(")")) - 1] = True
+            if key not in routed:
+                flags[int(key.split("(")[1].rstrip(")")) - 1] = True
         result["output"] = {"NLoutputResults": {"outputFlxState": flags}}
     return result
 

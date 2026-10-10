@@ -6,30 +6,37 @@ properties:
   canopyheigth_forest:
     $ref: parameter.yml#/$defs/parameter
     title: Canopy height forest
+    default: [15.0, 40.0, 15.0, 1, 1]
     examples: [[15.00, 40.00, 15.000, 1, 1]]
   canopyheigth_impervious:
     $ref: parameter.yml#/$defs/parameter
     title: Canopy height impervious
+    default: [0.01, 0.5, 0.02, 1, 1]
     examples: [[0.01, 0.50, 0.0200, 1, 1]]
   canopyheigth_pervious:
     $ref: parameter.yml#/$defs/parameter
     title: Canopy height pervious
+    default: [0.1, 5.0, 0.11, 1, 1]
     examples: [[0.10, 5.00, 0.1100, 1, 1]]
   displacementheight_coeff:
     $ref: parameter.yml#/$defs/parameter
     title: Displacement height coefficient
+    default: [0.5, 0.85, 0.64, 1, 1]
     examples: [[0.50, 0.85, 0.6400, 1, 1]]
   roughnesslength_momentum_coeff:
     $ref: parameter.yml#/$defs/parameter
     title: Roughness length momentum coefficient
+    default: [0.09, 0.16, 0.095, 1, 1]
     examples: [[0.09, 0.16, 0.0950, 1, 1]]
   roughnesslength_heat_coeff:
     $ref: parameter.yml#/$defs/parameter
     title: Roughness length heat coefficient
+    default: [0.07, 0.13, 0.075, 1, 1]
     examples: [[0.07, 0.13, 0.0750, 1, 1]]
   stomatal_resistance:
     $ref: parameter.yml#/$defs/parameter
     title: Stomatal resistance
+    default: [10.0, 200.0, 56.0, 1, 1]
     examples: [[10.00, 200.00, 56.000, 1, 1]]
 required:
   - canopyheigth_forest

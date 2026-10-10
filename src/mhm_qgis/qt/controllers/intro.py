@@ -100,7 +100,10 @@ def write_pending(dialog):
     except ValueError as error:
         dialog.log_message(f"WARNING: {error}; the wizard's choices start from the defaults.")
         saved = {}
-    values = intro.handoff(version, effects, saved)
+    from ...core.handlers.store.paths import namelist_project
+
+    project = namelist_project(version, dialog._multi_domains is not None)
+    values = intro.handoff(version, effects, saved, project)
     nml_settings.update_section(dialog.project_folder, "intro_values", values)
     dialog._intro_pending = False
     if values:

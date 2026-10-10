@@ -45,6 +45,10 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   can be archived before the next one overwrites `output/`.
 
 ### Changed
+- The namelist editor opens nml-tools' project for the setup: `classic` for a v6 single
+  domain (mhm.nml), `combine` for a v6 multi-domain run (combine.nml) and `v5` for mHM 5.13,
+  which now includes the mRM output namelist (`mrm_outputs.nml`); the routed-discharge
+  output of v5.13 runs is checked like the others.
 - PyYAML is a declared dependency; the plugin reads its own YAML schemas.
 - GitLab CI runs isort, ruff, the test suite (Python 3.11 and 3.13) and the build on
   every push; the QGIS suite inside the private runtime runs on a schedule, on tags or by

@@ -21,13 +21,14 @@ from .handlers.store import layout
 from .handlers.store.paths import (
     MULTI_FOLDER_NAME,
     domain_folder,
+    namelist_project,
     schemas_folder,
     version_key,
 )
 
 SECTION = "multi_domain"
 SHARED_FILES = {"v6": ("parameters.nml", "outputs.nml"),
-                "v5.13": ("mhm_parameter.nml", "mhm_outputs.nml")}
+                "v5.13": ("mhm_parameter.nml", "mhm_outputs.nml", "mrm_outputs.nml")}
 # v5.13 per-domain outputs stay in the multi folder; only inputs point into domains.
 _OUTPUT_PATHS = {"dir_Out": "output/{name}/", "mhm_file_RestartOut": "restart/{name}/mhm_restart_out.nc",
                  "mrm_file_RestartOut": "restart/{name}/mrm_restart_out.nc", "dirConfigOut": "output/"}
@@ -64,7 +65,7 @@ def resolve(root, stored) -> list[Path]:
 def _read(folder, version, lower=False) -> dict:
     from ..externals.nml_tools_handler import read_namelists
 
-    return read_namelists(folder, schemas_folder(version), lower=lower)
+    return read_namelists(folder, schemas_folder(version), lower=lower, project=namelist_project(version))
 
 
 @cache

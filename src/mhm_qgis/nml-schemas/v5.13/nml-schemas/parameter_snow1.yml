@@ -6,34 +6,42 @@ properties:
   snowTreshholdTemperature:
     $ref: parameter.yml#/$defs/parameter
     title: Threshold for rain/snow partitioning [degC].
+    default: [-2.0, 2.0, 1.0, 1, 1]
     examples: [[-2.0000, 2.0000, 1.0, 1, 1]]
   degreeDayFactor_forest:
     $ref: parameter.yml#/$defs/parameter
     title: Degree day factors to determine melting flux [m degC-1].
+    default: [0.0001, 4.0, 1.5, 1, 1]
     examples: [[0.0001, 4.0000, 1.5, 1, 1]]
   degreeDayFactor_impervious:
     $ref: parameter.yml#/$defs/parameter
     title: Degree day factors to determine melting flux [m degC-1].
+    default: [0.0, 1.0, 0.5, 1, 1]
     examples: [[0.0000, 1.0000, 0.5, 1, 1]]
   degreeDayFactor_pervious:
     $ref: parameter.yml#/$defs/parameter
     title: Degree day factors to determine melting flux [m degC-1].
+    default: [0.0, 2.0, 0.5, 1, 1]
     examples: [[0.0000, 2.0000, 0.5, 1, 1]]
   increaseDegreeDayFactorByPrecip:
     $ref: parameter.yml#/$defs/parameter
     title: Increase of degree day factor if there is precipitation [degC-1].
+    default: [0.1, 0.9, 0.5, 1, 1]
     examples: [[0.1000, 0.9000, 0.5, 1, 1]]
   maxDegreeDayFactor_forest:
     $ref: parameter.yml#/$defs/parameter
     title: Maximum values for degree day factor [m degC-1].
+    default: [0.0, 8.0, 3.0, 1, 1]
     examples: [[0.0000, 8.0000, 3.0, 1, 1]]
   maxDegreeDayFactor_impervious:
     $ref: parameter.yml#/$defs/parameter
     title: Maximum values for degree day factor [m degC-1].
+    default: [0.0, 8.0, 3.5, 1, 1]
     examples: [[0.0000, 8.0000, 3.5, 1, 1]]
   maxDegreeDayFactor_pervious:
     $ref: parameter.yml#/$defs/parameter
     title: Maximum values for degree day factor [m degC-1].
+    default: [0.0, 8.0, 4.0, 1, 1]
     examples: [[0.0000, 8.0000, 4.0, 1, 1]]
 required:
   - snowTreshholdTemperature

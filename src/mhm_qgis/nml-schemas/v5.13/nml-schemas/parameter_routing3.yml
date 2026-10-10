@@ -6,6 +6,7 @@ properties:
   slope_factor:
     $ref: parameter.yml#/$defs/parameter
     title: Slope factor
+    default: [0.1, 100.0, 30.0, 0, 1]
     examples: [[0.1, 100., 30., 0, 1]]
 required:
   - slope_factor

@@ -6,7 +6,7 @@ properties:
   canopy_interception_factor:
     $ref: parameter.yml#/$defs/parameter
     title: Multiplier relating LAI to interception storage
-    default: {min: 0.15, max: 0.4}
+    default: {value: 0.15, min: 0.15, max: 0.4}
     properties:
       value: {examples: [0.15]}
       optimize: {examples: [true]}

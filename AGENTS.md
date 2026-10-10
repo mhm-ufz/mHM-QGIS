@@ -866,12 +866,24 @@ Four JSON files live under each domain's `.temp/` directory.
   v5.13 is the five-element array `[lower, upper, value, flag, scaling]` that
   mHM 5.13 parses. `parameter.yml` is a `$defs` library, so it is the one
   schema file with no `[[namelists]]` entry. A property that `$ref`s it must not
-  also spell out `x-fortran-shape` or `x-nml-tools-ui`, or the two can drift.
-  v5.13's `GeoParam` is the one exception: a `[nGeoUnits, 5]` table.
-- `externals/nml_tools_handler.read_namelists(folder, schemas_dir)` reads every saved
-  profile file through our schemas (nml-tools `gui.model`), so values are typed and group
-  and key names are lower case; `core.datamodel.read_namelists(project)` picks the
-  schemas by the setup's version.
+  also spell out `x-fortran-shape` or `axes`, or the two can drift.
+  v5.13's `GeoParam` is the one exception: a `[nGeoUnits, 5]` table. Axis labels and
+  table layout sit at a property's top level (`axes`, `table`); nml-tools still reads the
+  older `x-nml-tools-ui` wrapper. An unvisited page renders an array's repeated default
+  (`x-fortran-default-repeat`, e.g. v5.13 `GeoParam`) through nml-tools' `suggestion`
+  (fixed in nml-tools 2026-10-10). **Still open in nml-tools:** an unvisited required array of
+  derived items with item defaults but no top-level `default` (v6 `baseflow_recession`)
+  raises "has no value"; setups with prepared geology hand it over and don't hit it.
+- **nml-tools project profiles** (`[[project_profiles]]` in `nml-config.toml`) group the
+  file profiles of one workflow: `v5` (v5.13: `main`, `parameter`, `output`, `mrm_output`),
+  `classic` (v6 single domain: `main` = `mhm.nml`, `parameter`, `output`) and `combine` (v6
+  multi-domain: `meta` = `combine.nml`, `parameter`, `output`). `paths.namelist_project(version,
+  combined)` picks one; the editor and every read name it, so v6's `main` and `meta` are
+  never mixed (`load_project(..., None)` loads every file profile).
+- `externals/nml_tools_handler.read_namelists(folder, schemas_dir, project=...)` reads the
+  project's saved files through our schemas (nml-tools `gui.model`), so values are typed and
+  group and key names are lower case; `core.datamodel.read_namelists(setup)` picks the
+  schemas and the project from the setup's version and kind.
 - v5.13 `processCase(1..11)` is interception, snow, soil moisture, direct runoff, PET,
   interflow, percolation, **routing, baseflow, neutrons**, river temperature
   (`common/mo_common_variables.F90`). The editor's axis labels follow that order; they
@@ -909,11 +921,21 @@ Four JSON files live under each domain's `.temp/` directory.
   `_normalize_dimensions`), so camelCase in `nml-config.toml` is for readers and
   `default_dimensions` keys come back lowercased. An unknown name raises rather
   than being ignored.
-- The handoff goes through `externals/nml_tools_handler.launch_profile_editor`.
+- The handoff goes through `externals/nml_tools_handler.launch_editor(schemas_dir,
+  output_dir, project, namelists=..., initial_values=..., initial_dimensions=...)`.
   `configure_qtpy_api()` must run before it, because nml-tools loads Qt on first call.
+  `model.edit_namelists` picks the project from the setup; the optimisation and parameter
+  buttons narrow it (`{file profile: [namelist]}`, nested under the project), with `main`
+  mapped to `meta` in a combined setup. nml-tools preloads an explicitly selected project
+  into its tree (`launch_gui` passes `preload_projects`), so the editor opens on it.
 - Use the installed nml-tools API (development checkout now `/home/bashyal/Codes/nml-tools`),
-  not a hard-coded source path. `launch_gui(schemas_dir, output_dir, file_profiles, ...)`
-  receives the main/parameter/output file-profile dictionary as its third argument.
+  not a hard-coded source path. `launch_gui(schemas_dir, output_dir, project_profiles, ...)`
+  takes a project name or `{project: {file profile: [namelist]}}`; nml-tools **rejects
+  unknown profiles, namelists and fields**, so `build_initial_values` names only the
+  project's profiles (a test checks it). Dimensions are always passed: v6 `n_domains`,
+  `n_geo_units` and, with soil set up, `max_layers` = the horizon count (nml-tools'
+  defaults are 3, 16 and 6); `config_project.max_layers` and `soil_depth` follow the same
+  horizons, unpadded.
 - nml-tools reads/writes namelist files directly; do not restore its removed nml.json
   document APIs. Shrinking legacy domain arrays is previewed in a scratch workspace
   using schema defaults plus explicit plugin values. Only files actually saved by
@@ -924,8 +946,9 @@ Four JSON files live under each domain's `.temp/` directory.
   directly by `qt/bindings/main.py`. There is no configuration processor object.
 - The editor runs modally on the QGIS event loop; its return code does not indicate Save.
   Scratch-file modification stamps distinguish saved files from Cancel.
-- nml-tools' modal dialogs became tabs (`ProfileDialog` -> `ProfileTab`); check the
-  installed API before assuming a class name.
+- nml-tools' modal dialogs became tabs (`ProfileDialog` -> `ProfileTab`), and a tab builds
+  its pages lazily (`tab.values()` covers unvisited ones); check the installed API before
+  assuming a class name.
 - Preserve full v5.13 parameter templates so blocks like `&PET0` remain present.
 - Be careful with Fortran namelist keys containing indices or derived-type fields, e.g.
   `eval_Per%yStart`, `GeoParam(:,1)`, `GeoParam(1,:)`.

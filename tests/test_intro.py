@@ -58,6 +58,9 @@ def test_handoff_v6_and_v513():
     flags = v5["output"]["NLoutputResults"]["outputFlxState"]
     assert len(flags) == 21
     assert flags[7] is True  # satSTW, switch 8
+    combined = intro.handoff("6", intro.effects(questions, ANSWERS, "6"), project="combine")
+    assert combined["meta"]["config_processes"] == {"routing": 3, "pet": 1, "snow": 1}
+    assert "main" not in combined
 
 
 def test_show_if_hides_a_page_until_its_answer_is_given():
@@ -65,3 +68,15 @@ def test_show_if_hides_a_page_until_its_answer_is_given():
     assert intro.visible(page, {"gauges": "with_gauges"})
     assert not intro.visible(page, {"gauges": "no_gauges"})
     assert intro.visible({"id": "plain"}, {})
+
+
+def test_v513_routed_discharge_switch_goes_to_mrm_outputs(monkeypatch):
+    """Qrouted's switch is in mrm_outputs.nml (profile mrm_output), not mHM's outputFlxState."""
+    from mhm_qgis.core import datamodel
+
+    monkeypatch.setattr(datamodel, "output_switches", lambda version, analyses: {
+        "nloutputresults_mrm.outputflxstate_mrm(1)": True, "outputflxstate(8)": True})
+    values = intro.handoff("5.13", {"analyses.extremes": True},
+                           {"nloutputresults_mrm": {"outputflxstate_mrm": [False, True]}})
+    assert values["mrm_output"] == {"NLoutputResults_mrm": {"outputFlxState_mrm": [True, True]}}
+    assert [i for i, on in enumerate(values["output"]["NLoutputResults"]["outputFlxState"]) if on] == [7]

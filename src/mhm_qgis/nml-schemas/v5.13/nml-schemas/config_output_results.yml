@@ -42,6 +42,7 @@ properties:
     items:
       type: boolean
     x-fortran-shape: 21
+    default: [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, true, true]
     examples:
       - [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, true, true]
 required: [outputFlxState]

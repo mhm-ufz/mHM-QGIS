@@ -6,8 +6,7 @@ $defs:
       type: number
       x-fortran-kind: dp
     x-fortran-shape: 5
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Parameter component
-          labels: [Lower bound, Upper bound, Value, Flag, Scaling]
+    axes:
+      "1":
+        title: Parameter component
+        labels: [Lower bound, Upper bound, Value, Flag, Scaling]

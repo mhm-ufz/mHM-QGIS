@@ -6,10 +6,12 @@ properties:
   PriestleyTaylorCoeff:
     $ref: parameter.yml#/$defs/parameter
     title: Priestley-Taylor coefficient
+    default: [0.75, 1.75, 1.19, 1, 1]
     examples: [[0.75, 1.75, 1.1900, 1, 1]]
   PriestleyTaylorLAIcorr:
     $ref: parameter.yml#/$defs/parameter
     title: Priestley-Taylor LAI correction factor
+    default: [-0.5, 0.2, 0.058, 1, 1]
     examples: [[-0.50, 0.20, 0.0580, 1, 1]]
 required:
   - PriestleyTaylorCoeff

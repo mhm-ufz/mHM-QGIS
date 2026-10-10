@@ -30,7 +30,7 @@ def test_output_switch_keys_per_version():
     assert datamodel.switch_key("v6", "aET") == "out_aET_all"
     assert datamodel.switch_key("5.13", "satSTW") == "outputflxstate(8)"
     assert datamodel.switch_key("5.13", "discharge") is None
-    assert datamodel.switch_key("5.13", "Qrouted") is None
+    assert datamodel.switch_key("5.13", "Qrouted") == "nloutputresults_mrm.outputflxstate_mrm(1)"  # mrm_output profile
     assert datamodel.switch_key("v6", "Qrouted") == "output_mrm.out_Qrouted"
 
 

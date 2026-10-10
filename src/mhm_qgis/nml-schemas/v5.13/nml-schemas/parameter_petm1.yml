@@ -6,22 +6,27 @@ properties:
   PET_a_forest:
     $ref: parameter.yml#/$defs/parameter
     title: Potential evapotranspiration forest
+    default: [0.3, 1.3, 0.3, 1, 1]
     examples: [[0.3000, 1.3000, 0.3000, 1, 1]]
   PET_a_impervious:
     $ref: parameter.yml#/$defs/parameter
     title: Potential evapotranspiration impervious
+    default: [0.3, 1.3, 0.8, 1, 1]
     examples: [[0.3000, 1.3000, 0.8000, 1, 1]]
   PET_a_pervious:
     $ref: parameter.yml#/$defs/parameter
     title: Potential evapotranspiration pervious
+    default: [0.3, 1.3, 1.3, 1, 1]
     examples: [[0.3000, 1.3000, 1.3000, 1, 1]]
   PET_b:
     $ref: parameter.yml#/$defs/parameter
     title: Potential evapotranspiration b
+    default: [0.0, 1.5, 1.5, 1, 1]
     examples: [[0.0000, 1.5000, 1.5000, 1, 1]]
   PET_c:
     $ref: parameter.yml#/$defs/parameter
     title: Potential evapotranspiration c
+    default: [-2.0, 0.0, -0.7, 1, 1]
     examples: [[-2.000, 0.0000, -0.700, 1, 1]]
 required:
   - PET_a_forest

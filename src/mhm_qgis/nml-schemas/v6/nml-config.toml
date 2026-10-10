@@ -25,15 +25,15 @@ doc = "String buffer length."
 
 [dimensions]
 [dimensions.max_layers]
-default = 10
+default = 6
 doc = "Maximum number of soil-layer entries stored per domain in a namelist file."
 
 [dimensions.n_domains]
-default = 100
+default = 3
 doc = "Number of domains."
 
 [dimensions.n_geo_units]
-default = 25
+default = 16
 doc = "Number of geological units."
 
 [documentation]
@@ -329,6 +329,18 @@ namelists = [
   "baseflow_1",
   "river_temperature_1",
 ]
+
+[[project_profiles]]
+name = "classic"
+title = "Single Domain Setup or classic Multi Domain Setup"
+description = "For single independent domain setup or classic multi domain setup."
+file_profiles = ["main", "parameter", "output"]
+
+[[project_profiles]]
+name = "combine"
+title = "Multi Domain Setup based on independent Single Domain Setup"
+description = "For running multi domain setup based on independent single domain setups"
+file_profiles = ["meta", "parameter", "output"]
 
 [[templates]]
 path = "mhm-template.nml"

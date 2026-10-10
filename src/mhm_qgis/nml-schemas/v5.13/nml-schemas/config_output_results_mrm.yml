@@ -1,0 +1,43 @@
+title: mRM output configuration
+description: NetCDF encoding, temporal frequency, and gridded flux selection for mRM outputs.
+x-fortran-namelist: NLoutputResults_mrm
+type: object
+properties:
+  output_deflate_level_mrm:
+    description: NetCDF4 compression level, from 0 for no compression to 9 for maximum compression.
+    type: integer
+    minimum: 0
+    maximum: 9
+    default: 6
+  output_double_precision_mrm:
+    description: Write floating-point NetCDF output variables in double precision.
+    type: boolean
+    default: true
+  output_time_reference_mrm:
+    description: |-
+      Reference point assigned to each output interval.
+      0: start of interval; 1: center of interval; 2: end of interval.
+    type: integer
+    enum: [0, 1, 2]
+    default: 0
+  timeStep_model_outputs_mrm:
+    description: |-
+      Write frequency for gridded mRM outputs.
+      Positive values write after that many model time steps; 0 writes only at the end;
+      -1 writes daily, -2 monthly, and -3 yearly.
+    type: integer
+    minimum: -3
+    default: -2
+  outputFlxState_mrm:
+    description: |-
+      Enable individual gridded mRM outputs by one-based index:
+      1 routed streamflow (Qrouted, L11_qMod) [m3 s-1];
+      2 routed river temperature (only with river temperature routing) [K].
+    type: array
+    items:
+      type: boolean
+    x-fortran-shape: 2
+    default: [true, true]
+    examples:
+      - [true, true]
+required: [outputFlxState_mrm]

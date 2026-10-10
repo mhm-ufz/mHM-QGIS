@@ -21,11 +21,11 @@ def build_dimensions(dialog: Any) -> dict[str, int]:
     multi = multi_values(dialog, "6")
     if multi:
         return multi[1]
-    return {
-        "max_layers": 10,
-        "n_domains": domain_count(dialog),
-        "n_geo_units": geology_count(dialog),
-    }
+    dimensions = {"n_domains": domain_count(dialog), "n_geo_units": geology_count(dialog)}
+    depths = _lower_depths(namelist_settings(dialog))
+    if depths:  # otherwise nml-tools keeps the saved extent or its default (6)
+        dimensions["max_layers"] = len(depths)
+    return dimensions
 
 
 def build_initial_values(dialog: Any) -> dict[str, Any]:
@@ -49,7 +49,6 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
             "config_project": {
                 "n_domains": count,
                 "n_geo_units": geo_count,
-                "max_layers": 10,
             },
             "config_resolution": resolution_values,
             "config_input": {},
@@ -136,16 +135,10 @@ def _apply_soil(main, settings, count):
     if not horizons:
         main["config_mpr"]["soil_db_mode"] = repeat(mode, count)
         return
-    lower_depths = []
-    for horizon in horizons[:10]:
-        if not isinstance(horizon, dict):
-            continue
-        try:
-            lower_depths.append(int(round(float(horizon["lower_depth"]))))
-        except (KeyError, TypeError, ValueError):
-            continue
+    lower_depths = _lower_depths(settings)
     if not lower_depths:
         return
+    main["config_project"]["max_layers"] = len(lower_depths)  # = the `max_layers` dimension
     main["config_mpr"].update(
         {
             "soil_db_mode": repeat(mode, count),
@@ -153,12 +146,22 @@ def _apply_soil(main, settings, count):
                 int(soil.get("tillage_depth") or lower_depths[0]), count
             ),
             "n_layers": repeat(len(lower_depths), count),
-            "soil_depth": [
-                repeat(depth, count) for depth in lower_depths
-            ]
-            + [repeat(0, count) for _ in range(10 - len(lower_depths))],
+            "soil_depth": [repeat(depth, count) for depth in lower_depths],
         }
     )
+
+
+def _lower_depths(settings) -> list[int]:
+    """The soil horizons' lower depths (mm), at most ten; [] when soil isn't set up."""
+    soil = settings.get("soil", {})
+    horizons = soil.get("horizons", []) if isinstance(soil, dict) else []
+    depths = []
+    for horizon in horizons[:10]:
+        try:
+            depths.append(int(round(float(horizon["lower_depth"]))))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return depths
 
 
 def _apply_lai(main, settings, count, data):

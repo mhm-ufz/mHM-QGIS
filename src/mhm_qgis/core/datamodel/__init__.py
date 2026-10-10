@@ -12,7 +12,12 @@ from pathlib import Path
 import yaml
 
 from ..handlers.store import layout, registry
-from ..handlers.store.paths import data_folder, schemas_folder, version_key
+from ..handlers.store.paths import (
+    data_folder,
+    namelist_project,
+    schemas_folder,
+    version_key,
+)
 
 Finding = namedtuple("Finding", "input label ok reasons message")
 
@@ -138,10 +143,13 @@ def feasible_cases(version, available) -> dict[str, list[int]]:
 
 
 def read_namelists(project_folder) -> dict:
-    """The setup's saved namelists, read through its version's schemas."""
+    """The setup's saved namelists, read through its version's schemas and project."""
     from ...externals.nml_tools_handler import read_namelists as read
+    from ..handlers.file import json as jsonio
 
-    return read(project_folder, schemas_folder(layout.project_version(project_folder)))
+    version = layout.project_version(project_folder)
+    combined = jsonio.read_mapping(layout.input_state_path(project_folder)).get("setup") == "multi"
+    return read(project_folder, schemas_folder(version), project=namelist_project(version, combined))
 
 
 def current_processes(project_folder) -> dict[str, int] | None:
@@ -241,10 +249,11 @@ def switch_key(version, output) -> str | None:
     if "switch" not in spec:
         return None
     switches = output_registry(version)["switches"][version_key(version)]
+    if output in switches.get("keys", {}):
+        return switches["keys"][output]
     if version_key(version) == "v5.13":
-        # mrm_outputs.nml has no profile in our v5.13 schemas, so Qrouted is not checkable.
         return f"{switches['key']}({spec['switch']})" if isinstance(spec["switch"], int) else None
-    return switches.get("keys", {}).get(output) or switches["key"].format(name=spec["nc"])
+    return switches["key"].format(name=spec["nc"])
 
 
 def output_switches(version, analyses) -> dict[str, bool]:
@@ -258,9 +267,11 @@ def _switch_on(version, values, output) -> bool | None:
     if key is None:
         return None
     switches = output_registry(version)["switches"][version_key(version)]
-    if version_key(version) == "v5.13":
-        flags = values.get(switches["namelist"], {}).get(switches["key"]) or []
-        index = output_registry(version)["outputs"][output]["switch"] - 1
+    if version_key(version) == "v5.13":  # `[namelist.]key(index)`, one-based
+        namelist, _, name = key.rpartition(".")
+        name, _, index = name.partition("(")
+        flags = values.get(namelist or switches["namelist"], {}).get(name) or []
+        index = int(index.rstrip(")")) - 1
         return bool(flags[index]) if index < len(flags) else False
     namelist, _, name = key.rpartition(".")
     return bool(values.get(namelist or switches["namelist"], {}).get(name.lower(), False))

@@ -9,9 +9,8 @@ properties:
     items:
       type: number
     x-fortran-shape: 12
-    x-nml-tools-ui:
-      axes:
-        "1":
-          title: Month
-          labels: [January, February, March, April, May, June, July, August, September, October, November, December]
+    axes:
+      "1":
+        title: Month
+        labels: [January, February, March, April, May, June, July, August, September, October, November, December]
     examples: [[1.3, 1.2, 0.72, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5]]

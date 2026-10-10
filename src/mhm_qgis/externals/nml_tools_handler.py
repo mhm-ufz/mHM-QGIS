@@ -6,17 +6,19 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 
-def read_namelists(folder, schemas_dir, *, lower=True) -> dict:
+def read_namelists(folder, schemas_dir, *, lower=True, project=None) -> dict:
     """Read every profile file present in *folder* as ``{group: {key: value}}``.
 
     Values are typed by the schemas (arrays as lists). Group and key names are lower
     case, since Fortran namelist names are case-insensitive; ``lower=False`` keeps the
-    schema's spelling, which initial values for the editor need.
+    schema's spelling, which initial values for the editor need. ``project`` names
+    the nml-tools project profile (``paths.namelist_project``); ``None`` reads every
+    file profile, which mixes v6's ``main`` and ``meta``.
     """
     from nml_tools.gui.model import load_profile, load_project, recover_dimensions
 
     try:
-        project = load_project(schemas_dir, folder, None)
+        project = load_project(schemas_dir, folder, project)
         dimensions = recover_dimensions(project)
         values = {}
         for profile in project.profiles:
@@ -30,17 +32,22 @@ def read_namelists(folder, schemas_dir, *, lower=True) -> dict:
     return values
 
 
-def launch_profile_editor(schemas_dir, output_dir, initial_values=None,
-                          initial_dimensions=None, *, file_profiles=None, log=None):
+def launch_editor(schemas_dir, output_dir, project, *, namelists=None, initial_values=None,
+                  initial_dimensions=None, log=None):
+    """Open nml-tools' editor on one project profile (``classic``, ``combine``, ``v5``),
+    or on some of its namelists (``{file profile: [namelist, ...]}``, ``[]`` = all).
+
+    Modal inside QGIS; returns when the dialog closes, saved or not.
+    """
     from nml_tools import gui
 
     from .mhm_tools_handler import capture_messages
 
-    profiles = file_profiles or {"main": [], "parameter": [], "output": []}
+    selection = project if namelists is None else {project: namelists}
     with capture_messages(log, logger_names=("nml_tools",)), _editor_folder(
-        schemas_dir, output_dir, profiles, initial_values or {}, initial_dimensions or {}, log
+        schemas_dir, output_dir, selection, initial_values or {}, initial_dimensions or {}, log
     ) as folder:
-        return gui.launch_gui(schemas_dir, folder, profiles,
+        return gui.launch_gui(schemas_dir, folder, selection,
                               initial_values=initial_values,
                               initial_dimensions=initial_dimensions)
 
@@ -106,4 +113,4 @@ def _editor_folder(schemas, output, profiles, initial, dimensions, log=None):
             os.replace(path, target)
 
 
-__all__ = ["launch_profile_editor"]
+__all__ = ["launch_editor", "read_namelists"]

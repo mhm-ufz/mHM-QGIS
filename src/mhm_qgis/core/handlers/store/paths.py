@@ -63,6 +63,14 @@ def schemas_folder(version_text: str | None) -> Path:
     return Path(plugin_root()) / "nml-schemas" / version_key(version_text)
 
 
+def namelist_project(version_text: str | None, combined: bool = False) -> str:
+    """The nml-tools project profile of a setup (`nml-config.toml` `project_profiles`):
+    `v5` for v5.13, `combine` for a v6 multi-domain setup, `classic` otherwise."""
+    if version_key(version_text) == "v5.13":
+        return "v5"
+    return "combine" if combined else "classic"
+
+
 def temp_folder(project_folder) -> str:
     """Return the hidden folder for temporary artifacts and plugin state."""
     return os.path.join(workspace_folder(project_folder), ".temp")

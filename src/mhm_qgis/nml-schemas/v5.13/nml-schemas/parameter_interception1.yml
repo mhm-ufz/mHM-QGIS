@@ -6,6 +6,7 @@ properties:
   canopyInterceptionFactor:
     $ref: parameter.yml#/$defs/parameter
     title: Multiplier to relate LAI to interception storage
+    default: [0.15, 0.4, 0.15, 1, 1]
     examples: [[0.1500, 0.4000, 0.15, 1, 1]]
 required:
   - canopyInterceptionFactor

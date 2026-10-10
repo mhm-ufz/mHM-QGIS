@@ -89,7 +89,9 @@ files:
 
 switches:
   # Where an output's on/off switch lives in the saved output namelist.
-  v5.13: {namelist: nloutputresults, key: outputflxstate, step: timestep_model_outputs}
+  # v5.13 keys are 1-based indices; Qrouted's switch is in mrm_outputs.nml (profile mrm_output).
+  v5.13: {namelist: nloutputresults, key: outputflxstate, step: timestep_model_outputs,
+          keys: {Qrouted: nloutputresults_mrm.outputflxstate_mrm(1)}}
   v6:    {namelist: output_mhm, key: "out_{name}", step: output_frequency,
           keys: {SWC_L: out_SWC, SM_L: out_SM, SM_Lall: out_SM_all, aET: out_aET_all, soil_infil_L: out_soil_infil, aET_L: out_aET_layer,
                  Qrouted: output_mrm.out_Qrouted}}

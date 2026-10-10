@@ -9,38 +9,47 @@ properties:
   COSMIC_N0:
     $ref: parameter.yml#/$defs/parameter
     title: Cosmic N0 parameter
+    default: [300.0, 2000.0, 1500.0, 0, 1]
     examples: [[300.0, 2000.0, 1500.0, 0, 1]]
   COSMIC_N1:
     $ref: parameter.yml#/$defs/parameter
     title: Cosmic N1 parameter
+    default: [0.01, 10.0, 1.0, 0, 1]
     examples: [[0.01, 10.0, 1.0, 0, 1]]
   COSMIC_N2:
     $ref: parameter.yml#/$defs/parameter
     title: Cosmic N2 parameter
+    default: [0.01, 10.0, 1.0, 0, 1]
     examples: [[0.01, 10.0, 1.0, 0, 1]]
   COSMIC_alpha0:
     $ref: parameter.yml#/$defs/parameter
     title: Cosmic alpha0 parameter
+    default: [0.01, 10.0, 1.0, 0, 1]
     examples: [[0.01, 10.0, 1.0, 0, 1]]
   COSMIC_alpha1:
     $ref: parameter.yml#/$defs/parameter
     title: Cosmic alpha1 parameter
+    default: [0.01, 10.0, 1.0, 0, 1]
     examples: [[0.01, 10.0, 1.0, 0, 1]]
   COSMIC_L30:
     $ref: parameter.yml#/$defs/parameter
     title: Cosmic L30 parameter
+    default: [26.56, 424.78, 106.1942, 0, 1]
     examples: [[26.56, 424.78, 106.1942, 0, 1]]
   COSMIC_L31:
     $ref: parameter.yml#/$defs/parameter
     title: Cosmic L31 parameter
+    default: [-118.3, 200.28, 40.9879, 0, 1]
     examples: [[-118.3, 200.28, 40.9879, 0, 1]]
   COSMIC_LW0:
     $ref: parameter.yml#/$defs/parameter
     title: Cosmic LW0 parameter
+    default: [0.0, 0.2, 0.1783, 0, 1]
     examples: [[0.0, 0.2, 0.1783, 0, 1]]
   COSMIC_LW1:
     $ref: parameter.yml#/$defs/parameter
     title: Cosmic LW1 parameter
+    default: [0.0, 0.05, 0.0, 0, 1]
     examples: [[0.0, 0.05, 0.0, 0, 1]]
 required:
   - COSMIC_N0

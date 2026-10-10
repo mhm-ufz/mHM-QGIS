@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from ..datamodel import output_registry, switch_key
-from ..handlers.store.paths import schemas_folder, version_key
+from ..handlers.store.paths import namelist_project, schemas_folder, version_key
 from .runs import RunRef
 
 AREA_TOLERANCE = 0.005  # F15: the domain area agrees with ConfigFile.log within 0.5 %
@@ -210,7 +210,8 @@ def open_run(ref: RunRef, values=None) -> Run:
     if values is None:
         from ...externals.nml_tools_handler import read_namelists
 
-        values = read_namelists(ref.namelists, schemas_folder(ref.version))
+        # A v6 run's namelists are a domain's own (`classic`); a v5.13 multi run's the combined mhm.nml.
+        values = read_namelists(ref.namelists, schemas_folder(ref.version), project=namelist_project(ref.version))
     specs = output_registry(ref.version)["files"][version_key(ref.version)]
     located = {kind: (spec, path) for kind, spec in specs.items() if (path := _locate(ref, values, spec))}
     return Run(ref, values, {kind: path for kind, (spec, path) in located.items() if not spec.get("input")},

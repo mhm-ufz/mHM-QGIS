@@ -6,18 +6,22 @@ properties:
   minCorrectionFactorPET:
     $ref: parameter.yml#/$defs/parameter
     title: minimum correction factor for PET
+    default: [0.7, 1.3, 0.93, 1, 1]
     examples: [[0.7000, 1.3000, 0.9300, 1, 1]]
   maxCorrectionFactorPET:
     $ref: parameter.yml#/$defs/parameter
     title: maximum correction factor for PET
+    default: [0.0, 0.2, 0.19, 1, 1]
     examples: [[0.0000, 0.2000, 0.1900, 1, 1]]
   aspectTresholdPET:
     $ref: parameter.yml#/$defs/parameter
     title: aspect threshold for PET
+    default: [160.0, 200.0, 171.0, 1, 1]
     examples: [[160.00, 200.00, 171.00, 1, 1]]
   HargreavesSamaniCoeff:
     $ref: parameter.yml#/$defs/parameter
     title: Hargreaves-Samani coefficient
+    default: [0.0016, 0.003, 0.0023, 1, 1]
     examples: [[0.0016, 0.0030, 0.0023, 1, 1]]
 required:
   - minCorrectionFactorPET

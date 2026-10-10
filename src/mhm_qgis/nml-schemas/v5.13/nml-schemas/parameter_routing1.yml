@@ -6,22 +6,27 @@ properties:
   muskingumTravelTime_constant:
     $ref: parameter.yml#/$defs/parameter
     title: Muskingum travel time constant
+    default: [0.31, 0.35, 0.325, 1, 1]
     examples: [[0.3100, 0.3500, 0.325, 1, 1]]
   muskingumTravelTime_riverLength:
     $ref: parameter.yml#/$defs/parameter
     title: Muskingum travel time river length
+    default: [0.07, 0.08, 0.075, 1, 1]
     examples: [[0.0700, 0.0800, 0.075, 1, 1]]
   muskingumTravelTime_riverSlope:
     $ref: parameter.yml#/$defs/parameter
     title: Muskingum travel time river slope
+    default: [1.95, 2.1, 2.0, 1, 1]
     examples: [[1.9500, 2.1000, 2.0, 1, 1]]
   muskingumTravelTime_impervious:
     $ref: parameter.yml#/$defs/parameter
     title: Muskingum travel time impervious
+    default: [0.09, 0.11, 0.1, 1, 1]
     examples: [[0.0900, 0.1100, 0.1, 1, 1]]
   muskingumAttenuation_riverSlope:
     $ref: parameter.yml#/$defs/parameter
     title: Muskingum attenuation river slope
+    default: [0.01, 0.5, 0.3, 1, 1]
     examples: [[0.0100, 0.5000, 0.3, 1, 1]]
 required:
   - muskingumTravelTime_constant

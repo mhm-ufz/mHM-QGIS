@@ -6,6 +6,7 @@ properties:
   imperviousStorageCapacity:
     $ref: parameter.yml#/$defs/parameter
     title: Capacity of impervious storage [mm]
+    default: [0.0, 5.0, 0.5, 1, 1]
     examples: [[0.0000, 5.0000, 0.5, 1, 1]]
 required:
   - imperviousStorageCapacity

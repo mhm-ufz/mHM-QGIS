@@ -6,14 +6,17 @@ properties:
   rechargeCoefficient:
     $ref: parameter.yml#/$defs/parameter
     title: Recharge coefficient
+    default: [0.0, 50.0, 35.0, 1, 1]
     examples: [[0.0000, 50.000, 35.0, 1, 1]]
   rechargeFactor_karstic:
     $ref: parameter.yml#/$defs/parameter
     title: Recharge factor karstic
+    default: [-5.0, 5.0, -1.0, 1, 1]
     examples: [[-5.0000, 5.0000, -1.0, 1, 1]]
   gain_loss_GWreservoir_karstic:
     $ref: parameter.yml#/$defs/parameter
     title: Gain/loss GW reservoir karstic
+    default: [1.0, 1.0, 1.0, 0, 1]
     examples: [[1.0000, 1.0000, 1.0, 0, 1]]
 required:
   - rechargeCoefficient

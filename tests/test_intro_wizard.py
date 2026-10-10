@@ -66,10 +66,10 @@ def test_saving_namelists_retires_the_wizard_values(tmp_path, monkeypatch):
     dialog = _dialog(tmp_path)
     nml_settings.update_section(tmp_path, "intro_values", {"main": {"config_processes": {"pet": 1}}})
 
-    def editor(**_kwargs):
+    def editor(*_args, **_kwargs):
         (tmp_path / "mhm.nml").write_text("&config_processes\n  pet = 1\n/\n")
 
-    monkeypatch.setattr("mhm_qgis.externals.nml_tools_handler.launch_profile_editor", editor)
+    monkeypatch.setattr("mhm_qgis.externals.nml_tools_handler.launch_editor", editor)
     assert model.edit_namelists(dialog)
     assert nml_settings.load_settings(tmp_path)["intro_values"] == {}
     _close(dialog)

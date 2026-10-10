@@ -6,21 +6,21 @@ properties:
   desilets_n0:
     $ref: parameter.yml#/$defs/parameter
     title: Desilets dry neutron count N0
-    default: {min: 300.0, max: 2000.0}
+    default: {value: 1500.0, min: 300.0, max: 2000.0}
     properties:
       value: {examples: [1500.0]}
       optimize: {examples: [false]}
   desilets_lw0:
     $ref: parameter.yml#/$defs/parameter
     title: Desilets lattice-water parameter LW0
-    default: {min: 0.0, max: 0.2}
+    default: {value: 0.1783, min: 0.0, max: 0.2}
     properties:
       value: {examples: [0.1783]}
       optimize: {examples: [false]}
   desilets_lw1:
     $ref: parameter.yml#/$defs/parameter
     title: Desilets lattice-water parameter LW1
-    default: {min: 0.0, max: 0.05}
+    default: {value: 0.0, min: 0.0, max: 0.05}
     properties:
       value: {examples: [0.0]}
       optimize: {examples: [false]}

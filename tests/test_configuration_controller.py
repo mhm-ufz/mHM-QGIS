@@ -86,7 +86,7 @@ def test_edit_namelists_forwards_project_values_and_dimensions(
     monkeypatch.setattr(
         nml_tools.gui,
         "launch_gui",
-        lambda schemas, folder, profiles, **kwargs: calls.append(dict(schemas_dir=schemas, output_dir=str(folder), file_profiles=profiles, **kwargs)) or 0,
+        lambda schemas, folder, profiles, **kwargs: calls.append(dict(schemas_dir=schemas, output_dir=str(folder), project_profiles=profiles, **kwargs)) or 0,
     )
 
     assert controller_module.edit_namelists(dialog) is True
@@ -98,9 +98,42 @@ def test_edit_namelists_forwards_project_values_and_dimensions(
             "main": {"config_project": {"project_details": "5.13"}}
         },
         "initial_dimensions": {"n_domains": 2},
-        "file_profiles": {"main": [], "parameter": [], "output": []},
+        "project_profiles": "v5",
     }]
 
+
+
+@pytest.mark.parametrize(("setup", "namelists", "expected"), [
+    ("single", None, "classic"),
+    ("single", {"parameter": []}, {"classic": {"parameter": []}}),
+    ("multi", None, "combine"),
+    ("multi", {"main": ["config_optimize"]}, {"combine": {"meta": ["config_optimize"]}}),
+])
+def test_edit_namelists_opens_the_setups_v6_project(tmp_path: Path, monkeypatch, setup, namelists, expected) -> None:
+    """A v6 single setup edits `classic` (mhm.nml), a combined one `combine` (combine.nml)."""
+    import json
+
+    from mhm_qgis.core.handlers.store.layout import (
+        forget_project_version,
+        input_state_path,
+    )
+
+    state = Path(input_state_path(tmp_path))
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(json.dumps({"mhm_version": "6.0", **({"setup": "multi"} if setup == "multi" else {})}))
+    forget_project_version(tmp_path)
+    dialog = Dialog(tmp_path, "6.0")
+    adapter = types.ModuleType("mhm_qgis.vSpecific")
+    adapter.build_initial_values = lambda version, owner: {}
+    adapter.build_dimensions = lambda version, owner: {"n_domains": 1}
+    monkeypatch.setitem(sys.modules, "mhm_qgis.vSpecific", adapter)
+    for name in ("ensure_project_structure", "ensure_multi_structure"):
+        monkeypatch.setattr(controller_module, name, lambda *_args: None)
+    selections = []
+    monkeypatch.setattr(nml_tools.gui, "launch_gui",
+                        lambda schemas, folder, profiles, **_kwargs: selections.append(profiles) or 0)
+    assert controller_module.edit_namelists(dialog, namelists, update_inputs=False) is True
+    assert selections == [expected]
 
 def _no_buttons(monkeypatch):
     from mhm_qgis.qt.controllers import workflow_state
