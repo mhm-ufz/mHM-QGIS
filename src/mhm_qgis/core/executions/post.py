@@ -30,10 +30,11 @@ def _save(root, name, array):
 
 
 def scan_job(ref, *, file="mhm", variables=None, series=SERIES_DEFAULT, budget_mb=256, values=None,
-             precipitation=True) -> dict:
-    """The primitive `post-scan` job for one output file of `ref`; raises when the
-    series cache would not fit on the disk. `job["variables"]` is empty when all are fresh."""
-    run = catalog.open_run(ref, values)
+             precipitation=True, run=None) -> dict:
+    """The primitive `post-scan` job for one output file of `ref` (or of the open `run`);
+    raises when the series cache would not fit on the disk. `job["variables"]` is empty
+    when all are fresh."""
+    run = run or catalog.open_run(ref, values)
     if not run.exists(file):
         raise ValueError(f"This run has no {file} output file ({run.files.get(file) or 'not set'}).")
     root = cache.folder(ref)
@@ -50,7 +51,8 @@ def scan_job(ref, *, file="mhm", variables=None, series=SERIES_DEFAULT, budget_m
               "aggregate": list(v.aggregate), "amount": bool(registry.get(v.output, {}).get("balance"))}
              for v in run.variables if v.present and v.file == file and (variables is None or v.name in variables)]
     job = {"kind": "post-scan", "file": file, "path": str(path), "cache": str(root),
-           "shape": list(axes.shape), "budget_mb": budget_mb, "basins": [], "sealed": False, "problems": []}
+           "shape": list(axes.shape), "budget_mb": budget_mb, "basins": [], "sealed": False, "problems": [],
+           "geographic": axes.geographic}
     if file == "mhm":
         domain, source = grid.domain_weights(run, axes)
         gauges, job["problems"] = grid.gauge_weights(run, axes)

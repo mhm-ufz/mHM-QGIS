@@ -9,7 +9,6 @@ from qgis.core import QgsProject
 
 from ...qgis_bridge.display import grid as grid_display
 from ...qgis_bridge.display import meteo as meteo_display
-from ...qgis_bridge.display import output as output_display
 from .. import tooltip
 from ..controllers import (
     categorical,
@@ -19,6 +18,7 @@ from ..controllers import (
     main,
     model,
     multi_domain,
+    post_context,
     project,
     time,
     version,
@@ -163,17 +163,8 @@ def bind(dialog):
         lambda value=None: meteo_display.date_changed(dialog, value)
     )
 
-    # Model output display: same three controls over an irregular step list.
-    # pushButton_outputVarDisplay → output_display.display_selected_layer
-    dialog.pushButton_outputVarDisplay.clicked.connect(
-        lambda checked=False: output_display.display_selected_layer(dialog)
-    )
-    dialog.horizontalSlider_ouputTimeSelector.valueChanged.connect(
-        lambda value: output_display.slider_moved(dialog, value)
-    )
-    dialog.dateTimeEdit_outputVarDisplay.dateTimeChanged.connect(
-        lambda value=None: output_display.date_changed(dialog, value)
-    )
+    # Outputs tab: the post-processing context bar, pages and time bar
+    post_context.bind(dialog)
 
     # Batch morphology workflows
     # pushButton_executeAllMorphology → morphology.start_execute_all

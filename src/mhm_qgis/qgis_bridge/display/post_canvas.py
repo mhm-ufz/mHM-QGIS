@@ -123,16 +123,27 @@ def style(layer, low, high, *, diverging=False, band=1) -> None:
     layer.triggerRepaint()
 
 
-def variable_layer(root, path, variable, axes, crs, bounds, value_range, *, name=None, diverging=False):
-    """A styled, time-aware layer of one output variable, from its VRT."""
+def variable_layer(vrt, name, bounds, value_range, *, diverging=False):
+    """A styled, time-aware layer from a VRT made by `build_vrt` (on a task: it reads
+    netCDF), opened here on the GUI thread."""
     from qgis.core import QgsRasterLayer
 
-    crs = crs_for(axes, crs)
-    layer = QgsRasterLayer(str(build_vrt(root, path, variable, axes, crs.toWkt())), name or variable, "gdal")
+    layer = QgsRasterLayer(str(vrt), name, "gdal")
     if not layer.isValid():
-        raise ValueError(f"Could not open the {variable} layer.")
+        raise ValueError(f"Could not open {Path(vrt).name}.")
     style(layer, *value_range, diverging=diverging)
     set_time_ranges(layer, bounds)
+    return layer
+
+
+def raster_layer(path, name, value_range, *, diverging=False):
+    """A styled layer of a derived GeoTIFF."""
+    from qgis.core import QgsRasterLayer
+
+    layer = QgsRasterLayer(str(path), name, "gdal")
+    if not layer.isValid():
+        raise ValueError(f"Could not open {Path(path).name}.")
+    style(layer, *value_range, diverging=diverging)
     return layer
 
 

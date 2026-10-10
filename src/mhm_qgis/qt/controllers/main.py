@@ -477,8 +477,8 @@ def on_tab_changed(dialog, index):
     """Refresh results when their tab is selected."""
     dialog.log_message(f"Switched to '{dialog.tabWidget_steps.tabText(index)}' tab.")
     # mHM reports nothing when it finishes, so the Outputs tab re-reads the
-    # output folder each time it is shown.
+    # runs each time it is shown.
     if dialog.tabWidget_steps.widget(index) is dialog.tab_outputs:
-        from ...qgis_bridge.display import output as output_display
+        from . import post_context
 
-        output_display.refresh(dialog)
+        post_context.populate(dialog)

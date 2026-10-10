@@ -2842,106 +2842,544 @@
         <number>4</number>
        </property>
        <item>
-        <widget class="QGroupBox" name="groupBox_outputDisplay">
-         <property name="title">
-          <string>Display</string>
+        <layout class="QHBoxLayout" name="horizontalLayout_postContext">
+         <item>
+          <widget class="QLabel" name="label_postRun">
+           <property name="text">
+            <string>Run</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="comboBox_postRun">
+           <property name="contextMenuPolicy">
+            <enum>Qt::CustomContextMenu</enum>
+           </property>
+           <property name="toolTip">
+            <string>The run to analyse: the current output/ or an archived run. Right-click to archive the current run.</string>
+           </property>
+           <property name="sizeAdjustPolicy">
+            <enum>QComboBox::AdjustToContents</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="label_postBasin">
+           <property name="text">
+            <string>Basin</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="comboBox_postBasin">
+           <property name="toolTip">
+            <string>The domain or a gauge catchment; basin series and balances use it.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="label_postPeriod">
+           <property name="text">
+            <string>Period</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDateEdit" name="dateEdit_postStart">
+           <property name="displayFormat">
+            <string>yyyy-MM-dd</string>
+           </property>
+           <property name="calendarPopup">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDateEdit" name="dateEdit_postEnd">
+           <property name="displayFormat">
+            <string>yyyy-MM-dd</string>
+           </property>
+           <property name="calendarPopup">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="label_postResolution">
+           <property name="text">
+            <string>Resolution</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="comboBox_postResolution">
+           <property name="toolTip">
+            <string>Aggregation of series and balance tables; finer than the output step is refused.</string>
+           </property>
+           <item>
+            <property name="text">
+             <string>Native</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Day</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Month</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Year</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_postContext">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_postRefresh">
+           <property name="toolTip">
+            <string>Re-read the runs and rescan what changed.</string>
+           </property>
+           <property name="text">
+            <string>Refresh</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QSplitter" name="splitter_post">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
          </property>
-         <layout class="QGridLayout" name="gridLayout_8">
-          <item row="2" column="0">
-           <layout class="QHBoxLayout" name="horizontalLayout_outputDisplayTimeSlider" stretch="0,0,0">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <widget class="QListWidget" name="listWidget_postNavigation">
+          <property name="maximumSize">
+           <size>
+            <width>170</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <item>
+           <property name="text">
+            <string>A · Basics</string>
+           </property>
+           <property name="font">
+            <font>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="flags">
+            <set>ItemIsEnabled</set>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Overview</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Map Explorer</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Hydrograph</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Water balance</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Processes</string>
+           </property>
+          </item>
+         </widget>
+         <widget class="QStackedWidget" name="stackedWidget_post">
+          <widget class="QWidget" name="page_postOverview">
+           <layout class="QVBoxLayout" name="verticalLayout_postOverview">
             <item>
-             <widget class="QLabel" name="label_startTimeSimulationPeriod">
-              <property name="minimumSize">
-               <size>
-                <width>25</width>
-                <height>0</height>
-               </size>
-              </property>
-              <property name="text">
-               <string/>
-              </property>
-             </widget>
+             <widget class="QTextBrowser" name="textBrowser_postOverview"/>
             </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="page_postMap">
+           <layout class="QHBoxLayout" name="horizontalLayout_postMap">
             <item>
-             <widget class="QSlider" name="horizontalSlider_ouputTimeSelector">
+             <widget class="QSplitter" name="splitter_postMap">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>
+              <widget class="QWidget" name="widget_postMapControls">
+               <layout class="QVBoxLayout" name="verticalLayout_postMapControls">
+                <item>
+                 <widget class="QTreeWidget" name="treeWidget_postVariables">
+                  <property name="headerHidden">
+                   <bool>true</bool>
+                  </property>
+                  <column>
+                   <property name="text">
+                    <string>Variable</string>
+                   </property>
+                  </column>
+                 </widget>
+                </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout_postStatistic">
+                  <item>
+                   <widget class="QComboBox" name="comboBox_postStatistic">
+                    <property name="toolTip">
+                     <string>Instant shows the time step; the others summarise the period, limited by the variable's kind.</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QSpinBox" name="spinBox_postPercentile">
+                    <property name="suffix">
+                     <string> %</string>
+                    </property>
+                    <property name="minimum">
+                     <number>1</number>
+                    </property>
+                    <property name="maximum">
+                     <number>99</number>
+                    </property>
+                    <property name="value">
+                     <number>50</number>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="pushButton_postBuildCache">
+                  <property name="toolTip">
+                   <string>Store this variable's series per cell, so cell plots and percentiles are instant.</string>
+                  </property>
+                  <property name="text">
+                   <string>Build series cache</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="pushButton_postOpenInQgis">
+                  <property name="toolTip">
+                   <string>Copy the shown layer, with its style and time, into the QGIS project.</string>
+                  </property>
+                  <property name="text">
+                   <string>Open in QGIS</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+              <widget class="QgsMapCanvas" name="mapCanvas_post">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                 <horstretch>3</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+              </widget>
+              <widget class="QWidget" name="widget_postInspector">
+               <layout class="QVBoxLayout" name="verticalLayout_postInspector">
+                <item>
+                 <widget class="QLabel" name="label_postCell">
+                  <property name="text">
+                   <string>Click a cell on the map.</string>
+                  </property>
+                  <property name="wordWrap">
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QTableWidget" name="tableWidget_postCellInspector">
+                  <property name="editTriggers">
+                   <set>QAbstractItemView::NoEditTriggers</set>
+                  </property>
+                  <attribute name="horizontalHeaderStretchLastSection">
+                   <bool>true</bool>
+                  </attribute>
+                  <attribute name="verticalHeaderVisible">
+                   <bool>false</bool>
+                  </attribute>
+                  <column>
+                   <property name="text">
+                    <string>Variable</string>
+                   </property>
+                  </column>
+                  <column>
+                   <property name="text">
+                    <string>Value</string>
+                   </property>
+                  </column>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QWidget" name="widget_postCellPlot">
+                  <property name="minimumSize">
+                   <size>
+                    <width>0</width>
+                    <height>160</height>
+                   </size>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="page_postHydrograph">
+           <layout class="QVBoxLayout" name="verticalLayout_postHydrograph">
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_postGauge">
+              <item>
+               <widget class="QLabel" name="label_postGauge">
+                <property name="text">
+                 <string>Gauge</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QComboBox" name="comboBox_postGauge"/>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="checkBox_postLogY">
+                <property name="text">
+                 <string>Log scale</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_postGauge">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>20</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QSplitter" name="splitter_postHydrograph">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <widget class="QWidget" name="widget_postHydrographPlot">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                 <horstretch>0</horstretch>
+                 <verstretch>2</verstretch>
+                </sizepolicy>
+               </property>
+              </widget>
+              <widget class="QSplitter" name="splitter_postHydrographDetails">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <widget class="QTableWidget" name="tableWidget_postHydrographMetrics">
+                <property name="editTriggers">
+                 <set>QAbstractItemView::NoEditTriggers</set>
+                </property>
+                <attribute name="horizontalHeaderStretchLastSection">
+                 <bool>true</bool>
+                </attribute>
+                <attribute name="verticalHeaderVisible">
+                 <bool>false</bool>
+                </attribute>
+                <column>
+                 <property name="text">
+                  <string>Metric</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>Value</string>
+                 </property>
+                </column>
+               </widget>
+               <widget class="QWidget" name="widget_postHydrographScatter"/>
+               <widget class="QWidget" name="widget_postHydrographResiduals"/>
+              </widget>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="page_postWaterBalance">
+           <layout class="QVBoxLayout" name="verticalLayout_postWaterBalance">
+            <item>
+             <widget class="QLabel" name="label_postBalanceNotes">
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item>
-             <widget class="QLabel" name="label_endTimeSimulationPeriod">
-              <property name="minimumSize">
-               <size>
-                <width>25</width>
-                <height>0</height>
-               </size>
+             <widget class="QSplitter" name="splitter_postWaterBalance">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
               </property>
-              <property name="text">
-               <string/>
+              <widget class="QTableWidget" name="tableWidget_postWaterBalance">
+               <property name="editTriggers">
+                <set>QAbstractItemView::NoEditTriggers</set>
+               </property>
+              </widget>
+              <widget class="QSplitter" name="splitter_postWaterBalanceViews">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <widget class="QWidget" name="widget_postWaterBalancePlot"/>
+               <widget class="QWidget" name="widget_postBalanceMap">
+                <layout class="QVBoxLayout" name="verticalLayout_postBalanceMap">
+                 <item>
+                  <widget class="QComboBox" name="comboBox_postBalanceMap">
+                   <property name="toolTip">
+                    <string>A per-cell term or ratio over the whole run; cells with a ratio above 1 break the mHM check protocol.</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QgsMapCanvas" name="mapCanvas_postBalance"/>
+                 </item>
+                </layout>
+               </widget>
+              </widget>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="page_postProcesses">
+           <layout class="QVBoxLayout" name="verticalLayout_postProcesses">
+            <item>
+             <widget class="QLabel" name="label_postProcessesNotes">
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QWidget" name="widget_postProcessesPlot">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>1</verstretch>
+               </sizepolicy>
               </property>
              </widget>
             </item>
            </layout>
-          </item>
-          <item row="3" column="0">
-           <spacer name="verticalSpacer_3">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>40</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-          <item row="1" column="0">
-           <layout class="QHBoxLayout" name="horizontalLayout_outputVarDisplay" stretch="1,3,1">
-            <item>
-             <widget class="QComboBox" name="comboBox_outputVarDisplay">
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>16777215</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QDateTimeEdit" name="dateTimeEdit_outputVarDisplay"/>
-            </item>
-            <item>
-             <widget class="QPushButton" name="pushButton_outputVarDisplay">
-              <property name="maximumSize">
-               <size>
-                <width>40</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="toolTip">
-               <string>Display meteo variable.</string>
-              </property>
-              <property name="text">
-               <string>➤</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item row="4" column="0">
-           <widget class="QLabel" name="label_placeholder_execution">
-            <property name="text">
-             <string>Output controls and run status will go here.</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-         </layout>
+          </widget>
+         </widget>
         </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_postTime">
+         <item>
+          <widget class="QToolButton" name="toolButton_postStepBack">
+           <property name="toolTip">
+            <string>Previous output interval</string>
+           </property>
+           <property name="text">
+            <string>|◀</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="toolButton_postPlay">
+           <property name="toolTip">
+            <string>Play through the period</string>
+           </property>
+           <property name="text">
+            <string>▶</string>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="toolButton_postStepForward">
+           <property name="toolTip">
+            <string>Next output interval</string>
+           </property>
+           <property name="text">
+            <string>▶|</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSlider" name="horizontalSlider_postTime">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDateTimeEdit" name="dateTimeEdit_postTime">
+           <property name="toolTip">
+            <string>The start of the shown output interval</string>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::NoButtons</enum>
+           </property>
+           <property name="displayFormat">
+            <string>yyyy-MM-dd HH:mm</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="label_postStatus"/>
+         </item>
+         <item>
+          <widget class="QProgressBar" name="progressBar_postTask">
+           <property name="maximumSize">
+            <size>
+             <width>160</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="value">
+            <number>0</number>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
       </layout>
      </widget>
@@ -3031,6 +3469,11 @@
   </layout>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>QgsMapCanvas</class>
+   <extends>QGraphicsView</extends>
+   <header>qgsmapcanvas.h</header>
+  </customwidget>
   <customwidget>
    <class>QgsProjectionSelectionWidget</class>
    <extends>QWidget</extends>

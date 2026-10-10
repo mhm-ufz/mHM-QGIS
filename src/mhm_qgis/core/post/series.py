@@ -55,6 +55,19 @@ def precipitation(root, name="domain", period=None) -> pd.Series | None:
     return basin(root, "pre", name, period)
 
 
+def gauges(run) -> list[int]:
+    """The gauge ids in the run's discharge file (v5.13 `Qsim_<id>`, v6 POI stations)."""
+    import netCDF4
+
+    path = run.files.get("discharge")
+    if path is None or not path.is_file() or path.suffix != ".nc":
+        return []
+    with netCDF4.Dataset(path) as handle:
+        if "station" in handle.dimensions:
+            return [int(value) for value in handle["station"][:]]
+        return sorted(int(name[5:]) for name in handle.variables if name.startswith("Qsim_"))
+
+
 def gauge(run, gauge_id, period=None) -> pd.DataFrame:
     """Observed and simulated discharge (m³ s⁻¹) at a gauge; gaps are NaN.
 

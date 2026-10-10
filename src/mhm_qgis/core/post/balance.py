@@ -42,9 +42,10 @@ def notes(index) -> list[str]:
     return found
 
 
-def basin(root, name="domain", freq="period", exact=False) -> pd.DataFrame:
+def basin(root, name="domain", freq="period", exact=False, period=None) -> pd.DataFrame:
     """Balance terms in mm per group (period, year or month), with ΔS, R, the averaging
-    bound, `days` and the ratios. `exact`: the output step is the model step."""
+    bound, `days` and the ratios. `exact`: the output step is the model step;
+    `period` (start, end) keeps the intervals inside it."""
     root = Path(root)
     index = cache.load_index(root)
     intervals = series.bounds(root)
@@ -54,6 +55,10 @@ def basin(root, name="domain", freq="period", exact=False) -> pd.DataFrame:
         terms[column] = values.to_numpy() if values is not None else np.full(len(intervals), np.nan)
     parts = [series.basin(root, variable, name) for variable in storages(index)]
     storage = np.sum([part.to_numpy() for part in parts], axis=0) if parts else np.full(len(intervals), np.nan)
+    if period is not None:
+        keep = (intervals[:, 0] >= np.datetime64(period[0])) & (intervals[:, 1] <= np.datetime64(period[1]))
+        intervals, storage = intervals[keep], storage[keep]
+        terms = {column: values[keep] for column, values in terms.items()}
     days = (intervals[:, 1] - intervals[:, 0]) / np.timedelta64(1, "D")
     starts = intervals[1:, 0]
     labels = (np.zeros(len(starts), int) if freq == "period"

@@ -242,6 +242,7 @@ def run_scan(job, progress=None) -> dict:
     for name, info in summary.items():
         index["variables"][name] = {**info, "fingerprint": job.get("fingerprints", {}).get(name), "file": job["file"]}
     index["problems"], index["domain_source"] = job.get("problems", []), job.get("domain_source")
+    index["geographic"] = job.get("geographic", False)
     cache.save_index(root, index)
     if progress:
         progress(100)

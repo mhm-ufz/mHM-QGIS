@@ -747,13 +747,10 @@ Four JSON files live under each domain's `.temp/` directory.
 - Every display ends in `qgis_bridge/display/canvas.py` (`show_raster`,
   `show_dataarray`). After a successful load, it calls the dialog's one-line
   `map_displayed(when)` hook, which opens the standalone map window and sets its time
-  label. Meteo and output pass `when=`; morphology and grid pass nothing, which clears it.
-- Three group boxes share one render path: `groupBox_displayMorphLayers`,
-  `groupBox_meteoDisplay` and `groupBox_outputDisplay`. Each picks a variable and a time,
-  then `qgis_bridge/display` puts a 2-D raster on the canvas.
-- `core/handlers/file/netcdf` reads the file; `core/post` resolves which variable and
-  time step; `qgis_bridge/display` renders. Keep that order -- the resolver is Qt-free
-  and testable, the renderer is not.
+  label. Meteo passes `when=`; morphology and grid pass nothing, which clears it.
+- Two group boxes share one render path: `groupBox_displayMorphLayers` and
+  `groupBox_meteoDisplay`. Each picks a variable and a time, then `qgis_bridge/display`
+  puts a 2-D raster on the canvas. mHM output has its own tab (below).
 - `show_raster` reuses the layer already loaded under the same name, refreshing its
   provider when its source or file stamp changes. A time scrubber
   calls it on every step and `layers.load` does not uniquify names, so reloading would
@@ -761,9 +758,23 @@ Four JSON files live under each domain's `.temp/` directory.
 - Prepared forcing can be addressed through a `NETCDF:"path":var` URI with
   `band = time index + 1`. **mHM output cannot**: it carries no CRS and GDAL returns the
   identity geotransform `(0,1,0,0,0,1)`, which would place it at the origin with unit
-  pixels. Output therefore goes through `show_dataarray`, which attaches a CRS and writes
-  a scratch raster. The two paths cost the same per tick (measured 220.3 ms vs 224.7 ms),
-  so correctness decides, not speed.
+  pixels. The Outputs tab therefore wraps it in a VRT (`post_canvas`, below).
+- **Outputs tab** (`tab_outputs` in `mhm_qgis_main.ui`, so Designer shows it): context bar
+  (run, basin, period, resolution), navigation list, `stackedWidget_post` pages and a time
+  bar. `qt/controllers/post_context.py` owns `dialog._post` and its `AnalysisContext`
+  (`qt/objects/analysis_context.py`, one `changed(field)` signal; unchanged values emit
+  nothing). Only the visible page refreshes; hidden pages collect the changed fields and
+  refresh when shown. Pages: `post_balance` (Overview, Water balance, Processes),
+  `post_map` (Map Explorer), `post_hydro` (Hydrograph).
+  - **No netCDF read on the GUI thread** (a test patches `netCDF4.Dataset` to fail there):
+    opening a run, building VRTs, gauge series, scores and derive passes go through
+    `qt/workflows/post.submit` (coordinator, resource `post-io`; a request that arrives
+    while the same job runs waits and then runs, latest wins). The open task reads
+    `run.variables` so the pages can use them; `scan_job(run=...)` reuses that run.
+  - **pyqtgraph and teardown:** a dialog holding pyqtgraph items must be deleted by Qt
+    (`deleteLater`), not left to Python's cycle collector, or the session teardown
+    segfaults. Pages make their plots only once a run is open; tests that open one end
+    with `deleteLater` + `sendPostedEvents(DeferredDelete)`.
 - **Post-processing engine** (`core/post`, Qt-free; plan `.development/.post`):
   - `runs.py`: the current `output/` plus archived runs in `runs/<name>/`. Archiving
     moves `output/` with `os.replace` (no copy), moves output files the namelists put

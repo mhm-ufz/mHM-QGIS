@@ -37,7 +37,8 @@ def _layer(tmp_path, geographic=False, path=None):
     path = path or make_run(tmp_path, geographic=geographic, days=10).files["mhm"]
     axes = grid.axes(path)
     bounds = catalog.read_bounds(path)
-    return post_canvas.variable_layer(tmp_path / "cache", path, "aET", axes, UTM, bounds, (0.0, 5.0)), axes, path
+    vrt = post_canvas.build_vrt(tmp_path / "cache", path, "aET", axes, post_canvas.crs_for(axes, UTM).toWkt())
+    return post_canvas.variable_layer(vrt, "aET", bounds, (0.0, 5.0)), axes, path
 
 
 def _stored(path, step):

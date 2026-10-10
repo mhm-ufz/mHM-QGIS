@@ -60,6 +60,14 @@ def axes(path) -> Axes:
     return Axes(x, y, x_bnds, y_bnds, geographic)
 
 
+def axes_from_cache(root) -> Axes:
+    """The scanned L1 axes, from the cache only (no netCDF read: GUI-safe)."""
+    from .cache import load_index
+
+    x, y = (np.load(Path(root) / f"{name}.npy") for name in ("x", "y"))
+    return Axes(x, y, _edges(x), _edges(y), bool(load_index(root).get("geographic")))
+
+
 def cell_index(grid: Axes, x, y):
     """(iy, ix) of the L1 cell holding a map point, or None outside the grid."""
     ix = int(np.floor((x - grid.x_bnds.min()) / grid.cell))

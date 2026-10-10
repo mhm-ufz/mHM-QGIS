@@ -15,11 +15,10 @@ from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 from ...core.handlers.store.paths import workspace_folder
 from ...qgis_bridge import layers as qgis_layers
 from ...qgis_bridge.display import meteo as meteo_display
-from ...qgis_bridge.display import output as output_display
 from ..bindings.main import bind as bind_main_form
 from ..controllers import categorical, grid, input_state
 from ..controllers import main as main_controller
-from ..controllers import workflow_state
+from ..controllers import post_context, workflow_state
 from ..threads.task_coordinator import TaskCoordinator
 from ..ui import load_form
 from ..workflows.morphology import MorphologyTaskBridge
@@ -101,7 +100,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.refresh_input_sources()
         self.update_gauged_outlet_count()
         meteo_display.refresh(self)
-        output_display.refresh(self)
+        post_context.clear(self)
         grid.refresh_precipitation_folder(self)
         grid.refresh_grid_resolution_controls(self)
 

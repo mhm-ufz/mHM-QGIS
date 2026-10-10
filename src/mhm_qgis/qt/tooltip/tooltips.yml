@@ -176,12 +176,21 @@ pages:
       text: Runs mHM in the setup folder and shows its output in the terminal.
 
   tab_outputs:
-    - widget: comboBox_outputVarDisplay
-      title: Output variable
-      text: Pick a variable mHM wrote.
-    - widget: dateTimeEdit_outputVarDisplay
-      title: Output time
-      text: The time step to show.
-    - widget: pushButton_outputVarDisplay
-      title: Show the output
-      text: Displays the chosen variable and time on the map.
+    - widget: comboBox_postRun
+      title: Run
+      text: The current output/ or an archived run. Opening a run scans its output once in the background; right-click to archive the current run before the next one overwrites it.
+    - widget: comboBox_postBasin
+      title: Basin
+      text: The domain or a gauge catchment; basin series and the water balance use it.
+    - widget: dateEdit_postStart
+      title: Period
+      text: Restricts every page to whole output intervals inside these dates.
+    - widget: comboBox_postResolution
+      title: Resolution
+      text: Aggregates series and balance tables; fluxes are summed, states averaged.
+    - widget: listWidget_postNavigation
+      title: Pages
+      text: Overview, Map Explorer, Hydrograph, Water balance and Processes share the run, basin, period and time above.
+    - widget: horizontalSlider_postTime
+      title: Time
+      text: The shown output interval; the map and the hydrograph cursor follow it.

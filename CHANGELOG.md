@@ -33,6 +33,13 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   with a short explanation each.
 - Net radiation (`netrad`) as a meteorology input, so PET Priestley-Taylor and
   Penman-Monteith (process cases 2 and 3) can be prepared.
+- An Outputs tab for analysing finished runs: pick the current or an archived run, a
+  basin, a period and a resolution; Overview (water balance, ratios, gauge scores and
+  findings), Map Explorer (every output variable over time or as a period statistic,
+  click a cell for its values and series), Hydrograph (observed and simulated discharge
+  with precipitation and scores), Water balance (tables, monthly bars, per-cell maps) and
+  Processes. Each run is scanned once in the background; runs can be archived before
+  the next one overwrites `output/`.
 
 ### Changed
 - PyYAML is a declared dependency; the plugin reads its own YAML schemas.

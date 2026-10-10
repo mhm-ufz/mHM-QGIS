@@ -15,7 +15,7 @@ def test_each_step_owns_its_controls():
         (dialog.tab_meteo, dialog.pushButton_executeAllMeteo),
         (dialog.tab_hydro, dialog.pushButton_observationDisplay_discharge),
         (dialog.tab_execution, dialog.pushButton_execute_mHM),
-        (dialog.tab_outputs, dialog.pushButton_outputVarDisplay),
+        (dialog.tab_outputs, dialog.pushButton_postRefresh),
     ):
         dialog.tabWidget_steps.setCurrentWidget(tab)
         assert tab.isAncestorOf(button)

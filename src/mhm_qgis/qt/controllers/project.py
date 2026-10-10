@@ -8,9 +8,8 @@ from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 from ...core.handlers.store.layout import ensure_project_structure
 from ...qgis_bridge.display import meteo as meteo_display
-from ...qgis_bridge.display import output as output_display
 from ..dialogs.file_picker import open_directory
-from . import grid, input_state, intro, multi_domain, workflow_state
+from . import grid, input_state, intro, multi_domain, post_context, workflow_state
 from .version import selected as selected_version
 from .workflow_state import set_status, switch_busy
 
@@ -91,7 +90,7 @@ def create_structure(dialog):
         ensure_project_structure(path, selected_version(dialog))
         grid.update_l2_resolution_from_metadata(dialog)
         meteo_display.refresh(dialog)
-        output_display.refresh(dialog)
+        post_context.clear(dialog)
         workflow_state.refresh_all(dialog)
         dialog.save_input_state()
         populate_domains(dialog, path.name)
@@ -146,7 +145,7 @@ def select_folder(dialog):
     populate_domains(dialog)
     multi_domain.populate_setups(dialog)
     meteo_display.refresh(dialog)
-    output_display.refresh(dialog)
+    post_context.clear(dialog)
     dialog.log_message(
         "Select a domain and press Create Project Structure to open it."
     )
