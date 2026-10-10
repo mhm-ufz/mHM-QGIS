@@ -12,3 +12,25 @@ events:
   merge_gap: 2
   min_peak: 0.0
   max_lag: 3
+
+# Plausibility rules (the mHM check protocol). `check` names the test in checks.py;
+# the other keys are its parameters; `message` is formatted with what it found.
+rules:
+  - {id: et_over_pet, check: ratio_map, ratio: ET/PET, above: 1.0, severity: warning,
+     message: "ET exceeds PET over the run in {count} cells."}
+  - {id: q_over_p, check: ratio_map, ratio: Q/P, above: 1.0, severity: warning,
+     message: "Runoff exceeds precipitation over the run in {count} cells."}
+  - {id: negative_storage, check: negative, severity: error,
+     message: "{variable} is negative in {count} cells."}
+  - {id: non_finite, check: missing, severity: error,
+     message: "{variable} has missing values inside the domain in {count} cells."}
+  - {id: zero_flux, check: all_zero, variables: [snowpack, Qsm, QD, QIf, QIs, QB, recharge], severity: warning,
+     message: "{variable} is written but zero everywhere: is its process switched on?"}
+  - {id: winter_snow, check: winter_snow, severity: info,
+     message: "Winter snowpack is not above summer's in {count} cells with snow."}
+  - {id: residual, check: residual, above_percent: 5.0, severity: warning,
+     message: "The unaccounted residual is {percent:.1f} % of P (incl. karstic loss)."}
+  - {id: anomaly, check: anomaly, variable: Q, z: 3.0, severity: info,
+     message: "{count} cell-months of {variable} lie {z:g} or more standard deviations from their monthly mean."}
+  - {id: gauge_nse, check: gauge_nse, below: 0.0, severity: warning,
+     message: "Gauge {gauge}: NSE {value:.2f} is below {below:g}."}

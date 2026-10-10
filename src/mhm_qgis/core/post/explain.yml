@@ -1,0 +1,14 @@
+# Why here? Each rule names conditions on a cell's deviation from the basin (z, in
+# standard deviations) or on its runoff shares (`*_share`, 0-1); a rule that holds
+# says its phrase. Matching rules are ranked by the summed |z| of their terms.
+version: 1
+rules:
+  - {when: {Q: "> 1", P: "> 1", ET: "< 0"}, says: "High precipitation with below-average evapotranspiration drives above-average runoff."}
+  - {when: {Q: "> 1", slope: "> 1"}, says: "Steep terrain sheds water quickly: runoff is above the basin average."}
+  - {when: {Q: "< -1", ET: "> 1"}, says: "Evapotranspiration above the basin average leaves less water for runoff."}
+  - {when: {P: "< -1", Q: "< -1"}, says: "Below-average precipitation gives below-average runoff."}
+  - {when: {recharge: "> 1", QB_share: "> 0.4"}, says: "Above-average recharge feeds a baseflow-dominated cell."}
+  - {when: {snowpack: "> 1", elevation: "> 1"}, says: "High elevation keeps more snow than the basin average."}
+  - {when: {SM_Lall: "< -1", ET: "< 0"}, says: "Dry soils limit evapotranspiration."}
+  - {when: {QD_share: "> 0.3"}, says: "Sealed or saturated surfaces turn much of the rain into direct runoff."}
+  - {when: {PET: "> 1", ET: "< 0"}, says: "High evaporative demand is not met: evapotranspiration is water-limited here."}

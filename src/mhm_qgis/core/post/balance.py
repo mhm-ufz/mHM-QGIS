@@ -133,3 +133,31 @@ def _storage_maps(root, index, stats):
         return sum(stats[name][key] * factors[index["variables"][name].get("weight", "cell")] for name in names)
 
     return total("first", 0), total("second", 1), total("last", steps - 1), total("penultimate", steps - 2)
+
+
+def summary(root, run, gauges=(), exact=False) -> pd.DataFrame:
+    """One row per basin (the domain, then each gauge): area (km²), P, ET, Q (mm/yr),
+    Q/P, ET/P, and at gauges BFI, NSE, KGE, PBIAS and observation coverage (%).
+    Missing data stay blank (NaN), never zero. Reads the gauge files: a task."""
+    from . import metrics, series, signatures
+
+    root = Path(root)
+    basins = next(iter(cache.load_index(root)["variables"].values()), {}).get("basins", ["domain"])
+    area = np.load(root / "area.npy")
+    rows = {}
+    for name in dict.fromkeys(["domain", *basins, *(str(g) for g in gauges)]):
+        row = {"area (km²)": np.nan}
+        if name in basins:
+            row["area (km²)"] = float((np.load(root / "weights" / f"{name}.npy") * area).sum()) / 1e6
+            frame = per_year(basin(root, name, exact=exact))
+            if len(frame):
+                row |= {column: frame[column].iloc[0] for column in ("P", "ET", "Q", "Q/P", "ET/P")}
+        if name != "domain" and name.isdigit() and int(name) in set(map(int, gauges)):
+            pair = series.gauge(run, int(name))
+            scores = metrics.evaluate(pair["sim"], pair["obs"])
+            reference = pair["obs"] if pair["obs"].notna().any() else pair["sim"]
+            row |= {"BFI": float(signatures.baseflow(reference.fillna(0).to_numpy()).sum() / reference.sum()),
+                    "NSE": scores["NSE"], "KGE": scores["KGE"], "PBIAS": scores["PBIAS"],
+                    "observed (%)": 100 * float(pair["obs"].notna().mean())}
+        rows["Domain" if name == "domain" else f"Gauge {name}"] = row
+    return pd.DataFrame.from_dict(rows, orient="index")

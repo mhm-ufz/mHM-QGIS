@@ -300,3 +300,16 @@ def write_observation(truth, path, units="mm", scale=1.0, coarsen=2):
         var.units = units
         var[:] = coarse
     return labels
+
+
+def write_mrm(truth, path):
+    """A v5.13 `mRM_Fluxes_States.nc`: routed discharge `Qrouted` (m3 s-1) per cell, daily."""
+    import netCDF4 as nc
+
+    with nc.Dataset(truth.files["mhm"]) as source, nc.Dataset(path, "w") as handle:
+        x, y = source["easting"][:], source["northing"][:]
+        names = _axes(handle, False, len(y), len(x), float(abs(x[1] - x[0])))
+        _time(handle, truth.days, truth.intervals, "start", "hours")
+        flow = truth.q * truth.cell_area_km2 / 86.4 + 1.0
+        _grid_var(handle, "Qrouted", ("time", names[1], names[0]), flow, truth.mask, "f8", "m3 s-1")
+    return path

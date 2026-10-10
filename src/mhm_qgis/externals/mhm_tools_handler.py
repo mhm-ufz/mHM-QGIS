@@ -636,7 +636,17 @@ def snow_cover(model, reference, output_dir, ref_var=None, threshold=0.0) -> dic
                            input_snow_threshold=threshold, write_gif=False, regions="none")
 
 
+def bankfull(routed_file, out_file, return_period=1.5, var="Qrouted"):
+    """Bankfull discharge (`Q_bkfl`) and Lacey's wetted perimeter (`P_bkfl`) from
+    mRM's routed discharge, by mhm-tools; returns the output file."""
+    from mhm_tools.post.bankfull import bankfull_discharge
+
+    bankfull_discharge(routed_file, out_file, return_period=return_period, wetted_perimeter=True, var=var)
+    return out_file
+
+
 __all__ = [
+    "bankfull",
     "capture_messages",
     "copy_lai_file_to_grid",
     "create_dem_derivative_files",
