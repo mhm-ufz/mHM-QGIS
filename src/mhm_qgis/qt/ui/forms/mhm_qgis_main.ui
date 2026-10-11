@@ -2961,6 +2961,19 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QToolButton" name="toolButton_postExport">
+           <property name="toolTip">
+            <string>Export the shown view (its tables, plots and maps) to a folder, or archive the current run.</string>
+           </property>
+           <property name="text">
+            <string>Export</string>
+           </property>
+           <property name="popupMode">
+            <enum>QToolButton::InstantPopup</enum>
+           </property>
+          </widget>
+         </item>
         </layout>
        </item>
        <item>

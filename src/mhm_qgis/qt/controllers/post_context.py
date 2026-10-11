@@ -115,6 +115,10 @@ def bind(dialog) -> None:
     # pushButton_postWorkspace → workspace on/off; pushButton_postResetLayout → reset_layout
     dialog.pushButton_postWorkspace.toggled.connect(lambda on: workspace(dialog, on))
     dialog.pushButton_postResetLayout.clicked.connect(lambda: reset_layout(dialog))
+    # toolButton_postExport → its menu: export the shown view, archive the current run
+    from . import post_export
+
+    post_export.bind(dialog)
     dialog.task_coordinator.changed.connect(lambda: work.show_progress(dialog))
     context.set("resolution", "native")
 

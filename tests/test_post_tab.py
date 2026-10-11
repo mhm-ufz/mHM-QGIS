@@ -343,3 +343,42 @@ def test_tier_c_views(opened_long, monkeypatch):
     assert state.docks["why_here"].isVisible()
     _page(dialog, "Hydrograph")
     assert not state.docks["why_here"].isVisible()  # not part of the view: hidden with it
+
+
+def test_export_writes_the_shown_view(opened, tmp_path):
+    """Tables re-read as numbers, plots as PNG/SVG/CSV, the map as a georeferenced
+    GeoTIFF and a CF netCDF holding the shown time step."""
+    import pandas as pd
+    from osgeo import gdal
+
+    from mhm_qgis.qt.controllers import post_export
+
+    dialog, truth = opened
+    _open(dialog)
+    _page(dialog, "Hydrograph")
+    _wait(lambda: dialog._post.ui.tableWidget_postHydrographMetrics.rowCount() > 0)
+    out = tmp_path / "export"
+    written = post_export.export_view(dialog, out)
+    _wait(lambda: not dialog.task_coordinator.is_busy())
+    metrics = pd.read_csv(out / "hydrograph_HydrographMetrics.csv").set_index("Metric")["Value"]
+    assert float(metrics["NSE"]) < 1
+    assert {"hydrograph_HydrographPlot.png", "hydrograph_HydrographPlot.svg",
+            "hydrograph_HydrographPlot.csv"} <= {path.name for path in written}
+    _page(dialog, "Map Explorer")
+    _wait(lambda: dialog._post.widgets.get("map_layer") is not None)
+    dialog._post.ui.horizontalSlider_postTime.setValue(3)
+    _wait(lambda: dialog._post.context.get("current_time") == 3)
+    post_export.export_view(dialog, out)
+    _wait(lambda: not dialog.task_coordinator.is_busy())
+    tif = out / "map_aET_2000-01-04T00_00.tif"  # the shown step, 4th interval
+    handle = gdal.Open(str(tif))
+    assert handle.GetGeoTransform()[1] == pytest.approx(2000.0)
+    assert "32644" in handle.GetProjection() or "UTM" in handle.GetProjection()
+    with netCDF4.Dataset(truth.files["mhm"]) as source:
+        expected = np.ma.filled(source["aET"][3], np.nan)
+    shown = handle.ReadAsArray().astype(float)
+    shown[shown == handle.GetRasterBand(1).GetNoDataValue()] = np.nan
+    np.testing.assert_allclose(shown, expected, rtol=1e-6)
+    with netCDF4.Dataset(tif.with_suffix(".nc")) as exported:
+        assert "CF" in exported.getncattr("Conventions")
+        assert any(getattr(var, "grid_mapping_name", None) for var in exported.variables.values())

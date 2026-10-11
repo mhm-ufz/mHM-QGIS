@@ -799,6 +799,11 @@ Four JSON files live under each domain's `.temp/` directory.
     tabbed with the Cell inspector (`post_context.open_dock`), outside every view's
     layout, so it hides on a view switch. A layer shown on a canvas other than the shared
     Map must be kept referenced (`state.widgets`): canvases do not own their layers.
+  - **Export** (`post_export`, the context bar's Export menu; no report): the visible
+    docks' tables (CSV, as shown minus thousands separators), plots (pyqtgraph PNG, SVG
+    and each plot's curves as CSV) and maps (every raster on a visible canvas, the shown
+    band of an instant map, as GeoTIFF and CF netCDF by `gdal.Translate` on a task: the
+    VRT reads the netCDF output). The menu also archives the current run.
   - **Observation operators** (`core/post/observe.py`, a `derive("observe")` worker
     job): windows are the coarser record's intervals, used only when the finer one covers
     them completely; fluxes are summed and states time-weighted. mhm-tools'

@@ -194,3 +194,6 @@ pages:
     - widget: pushButton_postWorkspace
       title: Analysis layout
       text: Turns the arranged window on; turning it off removes the docks and restores your own layout. The time toolbar steps through the output intervals.
+    - widget: toolButton_postExport
+      title: Export
+      text: Writes the shown view's tables (CSV), plots (PNG, SVG and their data as CSV) and maps (GeoTIFF and CF netCDF) to a folder; or archives the current run.
