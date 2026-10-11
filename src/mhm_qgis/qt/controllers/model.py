@@ -169,6 +169,25 @@ def inputs_ready(dialog, project_folder) -> bool:
     return answer == QMessageBox.StandardButton.Yes
 
 
+def outputs_ready(dialog, project_folder) -> bool:
+    """Ask before a run that would write no output variable (every output switch off)."""
+    from ...core import datamodel
+
+    try:
+        switched_on = datamodel.outputs_on(project_folder)
+    except ValueError:
+        return True
+    if switched_on is None or switched_on:
+        return True
+    answer = QMessageBox.question(
+        dialog, "No outputs switched on",
+        "Every output is switched off in the output namelist, so mHM would write only the grid "
+        "and the Outputs tab would have nothing to show. Turn outputs on in the namelist editor "
+        "(or the introduction wizard).\n\nRun mHM anyway?",
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+    return answer == QMessageBox.StandardButton.Yes
+
+
 def run(dialog) -> bool:
     if not require_active(dialog):
         return False
@@ -209,7 +228,7 @@ def run(dialog) -> bool:
             ensure_multi_structure(project_folder)
         else:
             ensure_project_structure(project_folder, version)
-        if not inputs_ready(dialog, project_folder):
+        if not inputs_ready(dialog, project_folder) or not outputs_ready(dialog, project_folder):
             return False
         if name and any(ref.name == name for ref in runs.list_runs(project_folder)) and QMessageBox.question(
                 dialog, "Run name", f"A run named {name} exists. Run again and overwrite its outputs?") \

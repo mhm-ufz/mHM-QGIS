@@ -35,7 +35,7 @@ dependencies = [
     "pyproj>=3.0.0",
     "pyqtgraph>=0.13.3",
     "pyflwdir>=0.5.12",
-    "mhm==5.13.4",
+    "mhm>=5.13.4,<5.14",  # the latest mHM 5.13 executable, as the `mhm` command
     "mhm-tools>=0.3.0,<0.4",
     "nml-tools[gui]>=0.6.0,<0.7",
     "qtpy",

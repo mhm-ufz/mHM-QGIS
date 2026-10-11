@@ -328,7 +328,10 @@ def run_selected(dialog, series=None) -> None:
 
         run = catalog.open_run(ref)
         findings = run.findings()
-        job = post_exec.scan_job(ref, run=run, **options) if run.exists("mhm") else None
+        try:
+            job = post_exec.scan_job(ref, run=run, **options) if run.exists("mhm") else None
+        except ValueError as error:  # no output variables, or no disk space for the cache
+            findings, job = list(dict.fromkeys([*findings, str(error)])), None
         step = run.model_step_days
         exact = bool(job and step and run.step_days <= step + 1e-9)
         run.variables  # read here: the pages use them on the GUI thread  # noqa: B018

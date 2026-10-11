@@ -50,12 +50,18 @@ def _installed_v5() -> Path:
     candidates.append(
         str(Path(site.getuserbase()) / ("Scripts" if os.name == "nt" else "bin") / name)
     )
-    for candidate in candidates:
-        if candidate and Path(candidate).is_file():
-            return _require_executable(candidate, r"\b5\.13\.4\b", "5.13.4")
+    problems = []
+    for candidate in dict.fromkeys(filter(None, candidates)):
+        if not Path(candidate).is_file():
+            continue
+        try:
+            return _require_executable(candidate, r"\b5\.13\.\d+\b", "5.13")
+        except (OSError, ValueError) as error:  # e.g. an old build on PATH missing its libraries
+            problems.append(str(error))
     raise FileNotFoundError(
-        f"mhm 5.13.4 is not installed for {sys.executable}. "
-        "Install it with: python -m pip install mhm==5.13.4"
+        f"mhm 5.13 is not installed for {sys.executable}. "
+        "Install it with: python -m pip install 'mhm>=5.13.4,<5.14'"
+        + "".join(f" Skipped: {problem}" for problem in problems)
     )
 
 

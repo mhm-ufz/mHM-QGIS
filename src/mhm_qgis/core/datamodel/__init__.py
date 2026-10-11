@@ -277,6 +277,15 @@ def _switch_on(version, values, output) -> bool | None:
     return bool(values.get(namelist or switches["namelist"], {}).get(name.lower(), False))
 
 
+def outputs_on(project_folder) -> list[str] | None:
+    """The outputs switched on in the saved output namelist; None without one."""
+    version = layout.project_version(project_folder)
+    values = read_namelists(project_folder)
+    if output_registry(version)["switches"][version_key(version)]["namelist"] not in values:
+        return None
+    return [output for output in output_registry(version)["outputs"] if _switch_on(version, values, output)]
+
+
 def _process_ok(processes, needs) -> bool:
     return all(int((processes or {}).get(name, 0)) in cases for name, cases in (needs or {}).items())
 

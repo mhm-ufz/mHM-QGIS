@@ -31,6 +31,25 @@ def test_executable_uses_installed_v5_and_supplied_v6(tmp_path, monkeypatch):
     assert mhm_handler.executable("6", v6_path=v6) == v6
 
 
+def test_a_broken_mhm_on_path_is_skipped_for_the_pip_installed_one(tmp_path, monkeypatch):
+    """An old build on PATH (missing its libraries) must not hide pip's `mhm`."""
+    for folder in ("broken", "user/bin"):
+        (tmp_path / folder).mkdir(parents=True)
+    broken = _executable(tmp_path / "broken" / "mhm")
+    good = _executable(tmp_path / "user" / "bin" / "mhm")
+    monkeypatch.setattr(mhm_handler.shutil, "which", lambda name: str(broken))
+    monkeypatch.setattr(mhm_handler.sysconfig, "get_path", lambda name: str(tmp_path / "none"))
+    monkeypatch.setattr(mhm_handler.site, "getuserbase", lambda: str(tmp_path / "user"))
+    monkeypatch.setattr(mhm_handler.subprocess, "run", lambda command, **options: SimpleNamespace(
+        returncode=0 if Path(command[0]) == good else 127,
+        stdout="5.13.5" if Path(command[0]) == good else "",
+        stderr="" if Path(command[0]) == good else "libnetcdf.so.19: cannot open shared object file"))
+    assert mhm_handler.executable("5.13") == good  # any 5.13.x
+    monkeypatch.setattr(mhm_handler.site, "getuserbase", lambda: str(tmp_path / "none"))
+    with pytest.raises(FileNotFoundError, match=r"Skipped: Expected mHM 5\.13"):
+        mhm_handler.executable("5.13")
+
+
 def test_v6_environment_override_is_validated(tmp_path, monkeypatch):
     v6 = _executable(tmp_path / "mhmv6")
     monkeypatch.setenv(mhm_handler.V6_ENVIRONMENT_VARIABLE, str(v6))

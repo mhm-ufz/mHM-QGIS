@@ -37,15 +37,16 @@ def scan_job(ref, *, file="mhm", variables=None, series=SERIES_DEFAULT, budget_m
     run = run or catalog.open_run(ref, values)
     if not run.exists(file):
         raise ValueError(f"This run has no {file} output file ({run.files.get(file) or 'not set'}).")
+    path = run.files[file]
+    bounds = run.bounds if file == "mhm" else catalog.read_bounds(path)  # first: says why a file can't be read
     root = cache.folder(ref)
     root.mkdir(parents=True, exist_ok=True)
-    path = run.files[file]
     axes = grid.axes(path)
     cells = np.nonzero(grid.valid_cells(path))
     sources = [_save(root, f"cells_{file}", np.array(cells, dtype="i4")), path]
     _save(root, "x", axes.x)
     _save(root, "y", axes.y)
-    _save(root, f"bounds_{file}", run.bounds if file == "mhm" else catalog.read_bounds(path))
+    _save(root, f"bounds_{file}", bounds)
     registry = output_registry(run.version)["outputs"]
     specs = [{"name": v.name, "output": v.output, "kind": v.kind or "state", "weight": v.weight,
               "aggregate": list(v.aggregate), "amount": bool(registry.get(v.output, {}).get("balance"))}

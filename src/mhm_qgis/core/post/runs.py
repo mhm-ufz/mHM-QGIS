@@ -90,6 +90,11 @@ def list_runs(folder) -> list[RunRef]:
     return refs
 
 
+def unlinked(path: str) -> str:
+    """An output path without a named run's `runs/<name>/` prefix."""
+    return re.sub(rf"^{RUNS}/[\w.-]+/", "", path)
+
+
 def _namelist_folders(folder) -> list[Path]:
     """The folders whose mhm.nml holds the output paths: each domain of a v6 combined setup."""
     folder = Path(folder)
@@ -115,7 +120,7 @@ def link_outputs(folder, name="") -> list[Path]:
             quote, text = match.groups()
             if not text or os.path.isabs(text):
                 return match.group(0)
-            new = prefix + re.sub(rf"^{RUNS}/[\w.-]+/", "", text)
+            new = prefix + unlinked(text)
             made.append(base / (new if new.endswith("/") else os.path.dirname(new) or "."))
             return f"{quote}{new}{quote}"
 

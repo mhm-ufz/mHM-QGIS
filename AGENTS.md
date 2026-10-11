@@ -102,8 +102,11 @@ decision.
 - `externals/`: one handler per external package or executable. Processing calls into
   `mhm_tools`, `nml_tools` and `pyflwdir` go through `mhm_tools_handler.py`,
   `nml_tools_handler.py` and `pyflwdir_handler.py`; `mhm_handler.py` resolves the
-  installed `mhm==5.13.4` command for v5 and validates the user-selected v6
-  executable. Heavy imports stay inside functions.
+  installed `mhm` command (`mhm>=5.13.4,<5.14`, the latest 5.13) for v5 and validates
+  the user-selected v6 executable. It tries PATH, the interpreter's scripts folder and
+  the user base (`pip --user` in QGIS), skipping a candidate that fails `--version`:
+  an old build in `/usr/local/bin` missing its libraries must not hide pip's.
+  Heavy imports stay inside functions.
 - `vSpecific/`: version-specific initial values handed to the namelist editor.
 
 Top-level modules that remain include `mhm_qgis.py` (plugin lifecycle, reload-safe
@@ -849,7 +852,12 @@ Four JSON files live under each domain's `.temp/` directory.
     folders; an unnamed run points them back to `output/`. After a successful run,
     `finish_named` copies the namelists and writes `run.json` with `linked: true`: its
     paths resolve from the setup folder (`RunRef.root` = setup), an archived run's from
-    its own folder. `run.json` is read beside the run's `namelists/`.
+    its own folder. `run.json` is read beside the run's `namelists/`. The current run
+    (`output/`) resolves its paths without a named run's `runs/<name>/` prefix, which the
+    setup's namelists keep after a named run (`runs.unlinked`).
+  - **A run with every output off** writes only the grid (no time axis): `read_bounds`
+    raises a `ValueError` saying so, the run's findings show it in the Overview, and Run
+    mHM asks before such a run (`datamodel.outputs_on`).
   - `catalog.py`: file locations come from the namelists that ran, through
     `outputs.yml` `files` (never globbed); variables are the file's joined with
     `outputs.yml` `outputs`; time comes from `time_bnds` only (units whitespace
@@ -1100,7 +1108,7 @@ Four JSON files live under each domain's `.temp/` directory.
 - Build PyPI artifacts from the repository root. Build the QGIS upload with
   `python tools/build_qgis_plugin.py`; its ZIP contains only the `mhm_qgis/` plugin
   root plus the repository `LICENSE` and `README.md`.
-- Never bundle mHM executables. v5 comes from `mhm==5.13.4`; the machine-local v6
+- Never bundle mHM executables. v5 comes from the `mhm` package (latest 5.13); the machine-local v6
   path lives in `QSettings` (`mhm_qgis/executables/v6`) or `MHM_QGIS_MHMV6`.
 - Keep package discovery recursive. Every package needs an `__init__.py` or setuptools
   drops it from the wheel. This bites every time a new subpackage is added -- a

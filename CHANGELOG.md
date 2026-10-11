@@ -13,8 +13,9 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
 - mHM 5.13 and v6 setups: domain delineation and outlet snapping, DEM derivatives,
   soil, land cover, geology and LAI, and meteorological forcing on aligned L0/L1/L11/L2
   grids.
-- Namelist editing through nml-tools, and running mHM: v5.13.4 from the `mhm` PyPI
-  package, v6 from a user-selected executable.
+- Namelist editing through nml-tools, and running mHM: v5.13 from the `mhm` PyPI
+  package (its latest 5.13 release, as the `mhm` command), v6 from a user-selected
+  executable.
 - A standalone `mhm-qgis` command that reuses an importable QGIS or installs a
   private, checksum-verified QGIS 3.44 runtime on first launch. `mhm-qgis-runtime
   install|status|remove` manages it.
@@ -67,6 +68,12 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   hand.
 
 ### Fixed
+- A run with every output switched off (mHM then writes only the grid) is explained in
+  the Outputs tab instead of failing with "time not found", and Run mHM asks before
+  starting such a run.
+- After a named run, the current `output/` run no longer opens the named run's files.
+- An old `mhm` build on PATH that cannot start (missing libraries) no longer hides the
+  `mhm` command installed by pip.
 - A background task whose result was empty or a table no longer stays "running" forever
   (QGIS tests a task's result for truth; results are now passed through unchanged).
 - The historical land-use dialog opens when saved periods lie outside the simulation

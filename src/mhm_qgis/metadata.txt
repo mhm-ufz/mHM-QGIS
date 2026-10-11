@@ -18,7 +18,7 @@ about=Builds mHM model setups: domain delineation and outlet snapping, DEM
  (on Windows from the OSGeo4W Shell; on Linux or macOS with QGIS's Python).
  Without QGIS Desktop, install the standalone app with pip install mhm-qgis and
  run mhm-qgis; its first launch installs a private QGIS runtime.
- mHM 5.13.4 comes from the mhm Python package; for mHM v6 select a compatible
+ mHM 5.13 comes from the mhm Python package (the mhm command); for mHM v6 select a compatible
  executable in the Configuration tab.
 tracker=https://git.ufz.de/mhm/mhm-qgis/-/issues
 repository=https://git.ufz.de/mhm/mhm-qgis

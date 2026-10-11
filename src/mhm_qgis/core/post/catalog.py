@@ -49,15 +49,22 @@ def value(values, dotted, index=1):
 
 
 def _locate(ref, values, spec) -> Path | None:
+    from .runs import unlinked
+
     if "switch" in spec and not value(values, spec["switch"], ref.index):
         return None
     root = ref.setup if spec.get("input") else ref.root
+
+    def path_value(key):  # the current run is output/'s: a named run's link in the setup's namelists isn't its
+        found = value(values, key, ref.index)
+        return unlinked(found) if isinstance(found, str) and not ref.name and not spec.get("input") else found
+
     if "name" in spec:
-        folder = root / (value(values, spec["dir"], ref.index) or "")
+        folder = root / (path_value(spec["dir"]) or "")
         names = spec["name"] if isinstance(spec["name"], list) else [spec["name"]]
         found = next((folder / name for name in names if (folder / name).is_file()), folder / names[0])
         return Path(os.path.normpath(found))
-    relative = value(values, spec["key"], ref.index)
+    relative = path_value(spec["key"])
     return Path(os.path.normpath(root / relative)) if relative else None
 
 
@@ -66,6 +73,9 @@ def read_bounds(path, variable="time"):
     import netCDF4
 
     with netCDF4.Dataset(path) as handle:
+        if variable not in handle.variables:  # mHM writes only the grid when every output is off
+            raise ValueError(f"{Path(path).name} has no time axis: the run wrote no output variable. "
+                             "Turn on outputs in the output namelist and run mHM again.")
         time = handle[variable]
         name = getattr(time, "bounds", f"{variable}_bnds")
         if name not in handle.variables:
@@ -185,7 +195,10 @@ class Run:
         from . import grid
 
         found = []
-        start, end = self.bounds[:, 0], self.bounds[:, 1]
+        try:
+            start, end = self.bounds[:, 0], self.bounds[:, 1]
+        except ValueError as error:  # no time axis: nothing else can be checked
+            return [str(error)]
         if not ((end > start).all() and (start[1:] >= end[:-1]).all()):
             found.append("time_bnds are not increasing intervals.")
         axes = grid.axes(self.files["mhm"])

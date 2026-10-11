@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from post_fixtures import make_run
 
+from mhm_qgis.core.executions import post as post_exec
 from mhm_qgis.core.handlers.store.layout import forget_project_version, input_state_path
 from mhm_qgis.core.post import catalog, grid, runs
 
@@ -208,7 +209,27 @@ def test_a_named_run_writes_into_its_folder_and_is_listed(tmp_path):
     assert runs.run_meta(ref)["linked"] is True
     values = {**V5, "directories_general": {**V5["directories_general"], "dir_out": ["runs/case1/output/"]}}
     assert catalog.open_run(ref, values).files["mhm"] == tmp_path / "runs" / "case1" / "output" / "mHM_Fluxes_States.nc"
+    make_run(tmp_path)  # an older unnamed run in output/, the setup's namelists still linked to case1
+    current = next(ref for ref in runs.list_runs(tmp_path) if not ref.name)
+    assert catalog.open_run(current, values).files["mhm"] == tmp_path / "output" / "mHM_Fluxes_States.nc"
     runs.link_outputs(tmp_path, "")  # an unnamed run writes to output/ again
     assert 'dir_Out(1) = "output/"' in nml.read_text()
     with pytest.raises(ValueError, match="letters"):
         runs.link_outputs(tmp_path, "a b")
+
+
+def test_a_run_that_wrote_no_output_variable_says_so(tmp_path):
+    """Every out_* switch off: mHM writes only the grid, without a time axis."""
+    truth = make_run(tmp_path, version="6")
+    _state(tmp_path, mhm_version="6")
+    with netCDF4.Dataset(truth.files["mhm"], "w") as handle:  # what mHM v6 then writes
+        handle.createDimension("x", 3)
+        handle.createDimension("y", 2)
+        handle.createVariable("x", "f8", ("x",))[:] = [0.5, 1.5, 2.5]
+        handle.createVariable("y", "f8", ("y",))[:] = [1.5, 0.5]
+    [ref] = runs.list_runs(tmp_path)
+    run = catalog.open_run(ref, V6)
+    [finding] = run.findings()
+    assert "no time axis" in finding
+    with pytest.raises(ValueError, match="Turn on outputs"):
+        post_exec.scan_job(ref, run=run)

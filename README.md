@@ -52,7 +52,8 @@ python -m pip install --user -r <plugin folder>/requirements.txt
 
 ### mHM executables
 
-mHM 5.13.4 is installed with the `mhm` Python package. For mHM v6, choose a
+mHM 5.13 (the latest 5.13 release) is installed with the `mhm` Python package, as the
+`mhm` command. For mHM v6, choose a
 compatible executable in the Configuration tab (or set `MHM_QGIS_MHMV6`).
 
 ## Workflow

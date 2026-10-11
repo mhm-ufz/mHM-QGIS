@@ -52,6 +52,16 @@ def test_a_switched_off_output_and_an_inactive_process_are_reported(tmp_path):
     assert "needs at least 365 days of output" in unavailable["climatology"]
 
 
+def test_outputs_on_lists_the_switched_on_outputs(tmp_path):
+    pytest.importorskip("nml_tools.gui.model")
+    project = _project(tmp_path, "6", outputs="&output_mhm\n  out_Q = .false.\n  out_aET_all = .false.\n/\n")
+    assert datamodel.outputs_on(project) == []  # Run mHM asks before writing only the grid
+    (project / "outputs.nml").write_text("&output_mhm\n  out_Q = .true.\n/\n")
+    assert datamodel.outputs_on(project) == ["Q"]
+    (project / "outputs.nml").unlink()
+    assert datamodel.outputs_on(project) is None  # no output namelist: nothing to judge
+
+
 def test_v513_output_step_counts_model_steps(tmp_path):
     pytest.importorskip("nml_tools.gui.model")
     project = _project(
