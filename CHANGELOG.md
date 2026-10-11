@@ -47,9 +47,11 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   (plausibility checks) and Summary (every basin in one table). Right-click a map cell
   for "Why here?". Export writes the shown view's tables, plots and maps (CSV, PNG, SVG,
   GeoTIFF and netCDF) to a folder. Each run is scanned once in the background; runs
-  can be archived before the next one overwrites `output/`. The views open as docks in
-  QGIS's main window (or the standalone map window), arranged per view; the layout you
-  adjust is remembered per view, and turning "Analysis layout" off restores your own.
+  can be archived before the next one overwrites `output/`. Each view opens in QGIS's
+  main window (or the standalone map window): its panel in the centre, over the map
+  canvas, and its side panels as tabs beside Layers and Browser; Map Explorer draws on
+  the main map canvas itself. The layout you adjust is remembered per view, and turning
+  "Analysis layout" off restores your own.
 
 ### Changed
 - The namelist editor opens nml-tools' project for the setup: `classic` for a v6 single

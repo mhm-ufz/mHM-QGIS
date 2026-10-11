@@ -766,17 +766,34 @@ Four JSON files live under each domain's `.temp/` directory.
   `changed(field)` signal; unchanged values emit nothing). Views: `post_balance`
   (Overview, Water balance, Processes), `post_map` (Map, Map controls, Cell inspector),
   `post_hydro` (Hydrograph, Signatures, Events, Climatology), `post_validation`.
-  - **The views are docks** (`qt/docks/host.py`, `layouts.yml`; one form per dock in
-    `ui/forms/post_*_dock.ui`, plus `post_time_toolbar.ui`). The host is QGIS's main
-    window (Desktop; docks are registered and removed through `iface`) or the standalone
-    `MapCanvasWindow` (a `QMainWindow`); the central widget is never replaced. Docks are
-    made on first use, and their widgets are reached as `dialog._post.ui.<name>`, never
-    `dialog.<name>`. Selecting a view applies its saved state (QSettings
-    `mhm_qgis/post/layout/<view>`) or builds its `layouts.yml` layout; the workspace keeps
-    the user's own layout (`mhm_qgis/post/user_layout`) and restores it when turned off
-    (the docks are then deleted). One shared Map dock: Water balance and Validation show
-    their maps on it (`post_map.set_view_layers`). Only visible docks refresh; hidden ones
-    collect the changed fields and refresh when shown (`visibilityChanged`).
+  - **Where the views go** (`qt/docks/host.py`, `layouts.yml`, post plan §0c): the
+    Overview stays in the tab (`textBrowser_postOverview`, refreshed whether or not the
+    analysis layout is on). Every other view has a **central panel**, a page added to the
+    `QStackedWidget` that holds the host's main canvas (QGIS 4.2.3: page 0 is
+    `theMapCanvas`; found as `iface.mapCanvas().parentWidget()`), and **left docks**
+    tabbed with QGIS's "Layers" panel (`add_left`; tabs at the bottom). The central widget
+    itself is never replaced. **QGIS shows the canvas again whenever a layer is added**
+    (verified): clicking the navigation entry again (`itemClicked`) brings the panel
+    back. The standalone `MapCanvasWindow` is built alike (canvas in a stacked widget,
+    the layer tree as a left dock named "Layers"), so there is one code path.
+  - **Map Explorer draws on the host's main canvas.** That canvas follows the project's
+    layer tree in both hosts, so a copy of the map and fresh overlays go into the
+    temporary group "mHM post (temporary)" (`post_map._sync_main`, only while Map Explorer
+    is shown: adding a layer would hide another view's panel), removed by
+    `post_map.leave` when the layout ends. Our click tool replaces the user's map tool
+    while the view is shown and gives it back after; clicks are transformed from the
+    canvas CRS (the project's) to the run's. "Keep in project" copies the map into the
+    permanent "mHM post" group. The other views draw on the Map dock, out of the project.
+  - Panels and docks are made on first use from their forms, and their widgets are
+    reached as `dialog._post.ui.<name>`, never `dialog.<name>`. Selecting a view applies
+    its saved state (QSettings `mhm_qgis/post/layout/<view>`, `STATE_VERSION` 2) or its
+    `layouts.yml` layout; the workspace keeps the user's own layout
+    (`mhm_qgis/post/user_layout`) and restores it when turned off (panels and docks are
+    deleted). In QGIS Desktop the visible layout comes back exactly; a few bytes of the
+    saved state differ, in hidden QGIS docks' remembered sizes. One shared Map dock: the
+    views with a map of their own show it there (`post_map.set_view_layers`); Compare's
+    three maps are its central panel. Only visible panels and docks refresh; hidden ones
+    collect the changed fields and refresh when shown.
   - **No netCDF read on the GUI thread** (a test patches `netCDF4.Dataset` to fail there):
     opening a run, building VRTs, gauge series, scores and derive passes go through
     `qt/workflows/post.submit` (coordinator, resource `post-io`; a request that arrives

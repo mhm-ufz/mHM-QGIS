@@ -78,24 +78,30 @@ def _plots(dock, out, name) -> list[Path]:
 
 
 def _rasters(dialog, dock, name) -> list[tuple]:
-    """(source, band, stem) of the raster layers on the dock's map canvases."""
+    """(source, band, stem) of the raster layers on the map canvases of a panel or dock."""
     from qgis.core import QgsMapLayer, QgsRasterLayer
     from qgis.gui import QgsMapCanvas
 
-    state, found = dialog._post, []
+    found = []
     for canvas in dock.findChildren(QgsMapCanvas):
         for layer in canvas.layers():
             if layer.type() != QgsMapLayer.LayerType.RasterLayer or not isinstance(layer, QgsRasterLayer):
                 continue
-            instant = layer.customProperty("mhm_qgis/instant", False)
-            band = layer.renderer().inputBand() if instant else 1
-            when = str(state.intervals[band - 1, 0])[:16] if instant else ""
-            found.append((layer.source(), band, _stem(name, layer.name(), when)))
+            found.append(_raster(dialog, layer, name))
     return found
 
 
+def _raster(dialog, layer, name) -> tuple:
+    """(source, band, stem) of a raster layer: an instant map's shown band, with its time."""
+    instant = layer.customProperty("mhm_qgis/instant", False)
+    band = layer.renderer().inputBand() if instant else 1
+    when = str(dialog._post.intervals[band - 1, 0])[:16] if instant else ""
+    return layer.source(), band, _stem(name, layer.name(), when)
+
+
 def export_view(dialog, folder=None) -> list[Path]:
-    """Write the visible docks' tables and plots now, and their maps on a task."""
+    """Write the shown panel's and docks' tables and plots now, and their maps (with
+    Map Explorer's, on the main canvas) on a task."""
     state = dialog._post
     if not state.workspace or state.root is None:
         dialog.label_postStatus.setText("Open a run and a view first: nothing is shown to export.")
@@ -107,13 +113,16 @@ def export_view(dialog, folder=None) -> list[Path]:
     out = Path(folder)
     out.mkdir(parents=True, exist_ok=True)
     written, rasters = [], []
-    for name, dock in state.docks.items():
-        if not dock.isVisible():
+    for name, shown in (*state.panels.items(), *state.docks.items()):
+        if not shown.isVisible():
             continue
         written += [write_table(table, out / f"{_stem(name, table.objectName().removeprefix('tableWidget_post'))}.csv")
-                    for table in dock.findChildren(QTableWidget) if table.rowCount() and table.isVisible()]
-        written += _plots(dock, out, name)
-        rasters += _rasters(dialog, dock, name)
+                    for table in shown.findChildren(QTableWidget) if table.rowCount() and table.isVisible()]
+        written += _plots(shown, out, name)
+        rasters += _rasters(dialog, shown, name)
+    explorer = state.widgets.get("map_layer")
+    if state.view == "map_explorer" and explorer is not None:
+        rasters += [_raster(dialog, explorer, "map_explorer")]
 
     def translate(_task):
         from osgeo import gdal

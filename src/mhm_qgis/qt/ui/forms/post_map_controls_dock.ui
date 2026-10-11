@@ -73,10 +73,10 @@
       <item>
        <widget class="QPushButton" name="pushButton_postOpenInQgis">
         <property name="toolTip">
-         <string>Copy the shown layer, with its style and time, into the QGIS project.</string>
+         <string>Keep a copy of the shown map, with its style and time, in the project ("mHM post" group); the map on the canvas is removed when the analysis layout ends.</string>
         </property>
         <property name="text">
-         <string>Open in QGIS</string>
+         <string>Keep in project</string>
         </property>
        </widget>
       </item>

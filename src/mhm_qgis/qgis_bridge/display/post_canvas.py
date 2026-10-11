@@ -310,8 +310,8 @@ def link_extents(canvases) -> None:
         canvas.extentsChanged.connect(lambda canvas=canvas: follow(canvas))
 
 
-def open_in_qgis(layer, name=None):
-    """Copy a layer, with its style, into the QGIS project under the "mHM post" group."""
+def open_in_qgis(layer, name=None, group_name=GROUP):
+    """Copy a layer, with its style, into the QGIS project under a group ("mHM post")."""
     from qgis.core import QgsMapLayerStyle, QgsProject
 
     clone = layer.clone()
@@ -321,7 +321,7 @@ def open_in_qgis(layer, name=None):
     style.writeToLayer(clone)
     project = QgsProject.instance()
     root = project.layerTreeRoot()
-    group = root.findGroup(GROUP) or root.insertGroup(0, GROUP)
+    group = root.findGroup(group_name) or root.insertGroup(0, group_name)
     project.addMapLayer(clone, False)
     group.addLayer(clone)
     return clone

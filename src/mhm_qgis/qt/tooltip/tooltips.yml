@@ -190,7 +190,10 @@ pages:
       text: Aggregates series and balance tables; fluxes are summed, states averaged.
     - widget: listWidget_postNavigation
       title: Views
-      text: Each view arranges the QGIS window (or the map window) for its kind of analysis, with maps and charts as docks; they share the run, basin, period and time.
+      text: Each view arranges the QGIS window (or the map window) for its kind of analysis, its panel in the centre over the map canvas and its side panels as tabs beside Layers; Map Explorer draws on the map canvas itself. They share the run, basin, period and time. Click a view again to bring its panel back.
+    - widget: textBrowser_postOverview
+      title: Overview
+      text: The selected run at a glance (water balance, ratios, the main gauge's scores) and what to check.
     - widget: pushButton_postWorkspace
       title: Analysis layout
       text: Turns the arranged window on; turning it off removes the docks and restores your own layout. The time toolbar steps through the output intervals.

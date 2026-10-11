@@ -2,10 +2,12 @@
 
 Owns `dialog._post` (a `PostState` and its `AnalysisContext`). Selecting a run opens
 it and scans what is stale on coordinator tasks (the scan itself runs in the native
-worker); after that the views read only the cache. The views are docks in QGIS's main
+worker); after that the views read only the cache. The Overview lives in the tab; the
+other views are a central panel (over the map canvas) and left docks in QGIS's main
 window or the standalone map window (`qt/docks/host.py`): selecting one in the
-navigation list arranges the window for it. Only visible docks refresh on `changed`;
-hidden ones collect the changed fields and refresh when shown (post plan §0b, §9.2).
+navigation list arranges the window for it. Only visible panels and docks refresh on
+`changed`; hidden ones collect the changed fields and refresh when shown (post plan
+§0c, §9.2).
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ from ..workflows import post as work
 
 PLAY_MS = 300
 MAP_DOCKS = ("map", "map_controls", "cell_inspector")  # one controller (post_map) drives all three
-TOGETHER = (MAP_DOCKS, ("compare", "map_b", "map_delta", "map"))  # docks made (and bound) together
+TOGETHER = (MAP_DOCKS, ("compare", "compare_maps"))  # parts made (and bound) together
 
 
 @dataclass
@@ -41,19 +43,20 @@ class PostState:
     exact: bool = False           # output step = model step: the balance is exact
     dirty: dict = field(default_factory=dict)      # refresh function -> fields changed while hidden
     widgets: dict = field(default_factory=dict)    # plots, layers, flags made by the controllers
-    ui: SimpleNamespace = field(default_factory=SimpleNamespace)  # the docks' widgets, by name
-    docks: dict = field(default_factory=dict)      # dock name -> QgsDockWidget
+    ui: SimpleNamespace = field(default_factory=SimpleNamespace)  # the panels' and docks' widgets, by name
+    panels: dict = field(default_factory=dict)     # central panel name -> page over the canvas
+    docks: dict = field(default_factory=dict)      # side dock name -> QgsDockWidget
     toolbar: object = None
     view: str | None = None
     workspace: bool = False
 
 
 def refreshers():
-    """(refresh(dialog, fields), the docks it draws on)."""
+    """(refresh(dialog, fields), the panels and docks it draws on; None: the tab's Overview)."""
     from . import post_advanced, post_balance, post_hydro, post_map, post_validation
 
     return ((post_map.refresh, MAP_DOCKS),
-            (post_balance.refresh_overview, ("overview",)),
+            (post_balance.refresh_overview, None),
             (post_hydro.refresh, ("hydrograph",)),
             (post_balance.refresh_balance, ("water_balance",)),
             (post_balance.refresh_processes, ("processes",)),
@@ -61,7 +64,7 @@ def refreshers():
             (post_hydro.refresh_events, ("events",)),
             (post_validation.refresh, ("validation",)),
             (post_hydro.refresh_climatology, ("climatology",)),
-            (post_advanced.refresh_compare, ("compare", "map_b", "map_delta")),
+            (post_advanced.refresh_compare, ("compare", "compare_maps")),
             (post_advanced.refresh_extremes, ("extremes",)),
             (post_advanced.refresh_drought, ("drought",)),
             (post_advanced.refresh_anomalies, ("anomalies",)),
@@ -112,6 +115,7 @@ def bind(dialog) -> None:
     dialog.pushButton_postRefresh.clicked.connect(lambda: populate(dialog, rescan=True))
     # listWidget_postNavigation → view_selected (arranges the host window for the view)
     dialog.listWidget_postNavigation.currentRowChanged.connect(lambda _row: view_selected(dialog))
+    dialog.listWidget_postNavigation.itemClicked.connect(lambda _item: view_selected(dialog))  # brings a panel back
     # pushButton_postWorkspace → workspace on/off; pushButton_postResetLayout → reset_layout
     dialog.pushButton_postWorkspace.toggled.connect(lambda on: workspace(dialog, on))
     dialog.pushButton_postResetLayout.clicked.connect(lambda: reset_layout(dialog))
@@ -123,15 +127,15 @@ def bind(dialog) -> None:
     context.set("resolution", "native")
 
 
-def _dock_created(dialog, name) -> None:
-    """Bind a new dock's widgets, and refresh it in full when it is first shown."""
+def _created(dialog, name) -> None:
+    """Bind a new panel's or dock's widgets, and refresh it in full when it is first shown."""
     from . import post_advanced, post_balance, post_hydro, post_map, post_validation
 
     state = dialog._post
     for group in TOGETHER:
         if name in group:
             for other in group:
-                host.dock(dialog, other, _dock_created)
+                host.part(dialog, other, _created)
     if name in MAP_DOCKS and not state.widgets.get("map_bound"):
         state.widgets["map_bound"] = True
         post_map.bind(dialog)
@@ -141,9 +145,10 @@ def _dock_created(dialog, name) -> None:
                "anomalies": post_advanced.bind_anomalies, "summary": post_advanced.bind_summary}
     if name in binders:
         binders[name](dialog)
-    state.docks[name].visibilityChanged.connect(lambda visible: visible and dock_shown(dialog, name))
+    if name in state.docks:  # a panel's showing is reported by _show_view
+        state.docks[name].visibilityChanged.connect(lambda visible: visible and dock_shown(dialog, name))
     for refresh, docks in refreshers():
-        if name in docks:
+        if docks and name in docks:
             state.dirty.setdefault(refresh, set()).add("run")
 
 
@@ -180,7 +185,10 @@ def workspace(dialog, on) -> None:
         if view:
             _show_view(dialog, view)
         return
+    from . import post_map
+
     host.save_view(dialog, state.view)
+    post_map.leave(dialog)
     host.end(dialog)
     state.workspace, state.view, state.dirty = False, None, {}
     state.ui = SimpleNamespace()
@@ -202,23 +210,23 @@ def _show_view(dialog, view) -> None:
     from . import post_map
 
     state = dialog._post
-    if state.view == view:
-        return
-    host.save_view(dialog, state.view)
-    host.apply(dialog, view, _dock_created)
-    state.view = view
+    if state.view == view:  # QGIS may have shown the canvas (a layer was added): back to the panel
+        host.show_central(dialog, view)
+    else:
+        host.save_view(dialog, state.view)
+        host.apply(dialog, view, _created)
+        state.view = view
     post_map.view_changed(dialog, view)
+    if host.central(view) != "canvas":
+        dock_shown(dialog, host.central(view))
 
 
 def open_dock(dialog, name, beside=None) -> None:
-    """Show a dock outside the view's layout ("Why here?"), tabbed with `beside` when shown."""
-    created = host.dock(dialog, name, _dock_created)
-    window, other = host.window(dialog), dialog._post.docks.get(beside)
-    if other is not None and other.isVisible():
-        window.tabifyDockWidget(other, created)
-    else:
-        window.addDockWidget(host.AREAS["right"], created)
-    created.show()
+    """Show a dock outside the view's layout ("Why here?") as a left tab, beside `beside`
+    when that is shown."""
+    created = host.part(dialog, name, _created)
+    other = dialog._post.docks.get(beside)
+    host.add_left(dialog, created, other if other is not None and other.isVisible() else None)
     created.raise_()
 
 
@@ -226,7 +234,7 @@ def reset_layout(dialog) -> None:
     state = dialog._post
     if state.workspace and state.view:
         host.forget_view(dialog, state.view)
-        host.apply(dialog, state.view, _dock_created, reset=True)
+        host.apply(dialog, state.view, _created, reset=True)
 
 
 def end_workspace(dialog) -> None:
@@ -235,17 +243,21 @@ def end_workspace(dialog) -> None:
         workspace(dialog, False)
 
 
+def _made(dialog, name):
+    return dialog._post.panels.get(name) or dialog._post.docks.get(name)
+
+
 def _visible(dialog, name) -> bool:
-    created = dialog._post.docks.get(name)
-    return created is not None and created.isVisible()
+    made = _made(dialog, name)
+    return made is not None and made.isVisible()
 
 
 def changed(dialog, name) -> None:
     state = dialog._post
-    for refresh, docks in refreshers():
-        if any(_visible(dialog, dock) for dock in docks):
+    for refresh, parts in refreshers():
+        if parts is None or any(_visible(dialog, part) for part in parts):
             refresh(dialog, {name})
-        elif any(dock in state.docks for dock in docks):
+        elif any(_made(dialog, part) is not None for part in parts):
             state.dirty.setdefault(refresh, set()).add(name)
     if name == "current_time":
         _sync_time_bar(dialog)
@@ -253,8 +265,8 @@ def changed(dialog, name) -> None:
 
 def dock_shown(dialog, name) -> None:
     state = dialog._post
-    for refresh, docks in refreshers():
-        if name in docks and state.dirty.get(refresh):
+    for refresh, parts in refreshers():
+        if parts and name in parts and state.dirty.get(refresh):
             refresh(dialog, state.dirty.pop(refresh))
 
 
@@ -270,6 +282,9 @@ def clear(dialog) -> None:
         state.context.set("resolution", dialog.comboBox_postResolution.currentText().lower())
     dialog.comboBox_postRun.clear()
     dialog.comboBox_postBasin.clear()
+    from . import post_balance
+
+    post_balance.refresh_overview(dialog, {"run"})
 
 
 def populate(dialog, rescan=False) -> None:
@@ -328,8 +343,7 @@ def _opened(dialog, ref, run, findings, job, gauges, exact) -> None:
     if job is None:
         dialog._post.findings = findings
         dialog.log_message("Post-processing: " + " ".join(findings))
-        if hasattr(dialog._post.ui, "textBrowser_postOverview"):
-            dialog._post.ui.textBrowser_postOverview.setHtml("<p>" + "<br>".join(findings) + "</p>")
+        dialog.textBrowser_postOverview.setHtml("<p>" + "<br>".join(findings) + "</p>")
         return
     if job["series_bytes"] > cache.ASK_ABOVE_BYTES and job["series"]:
         answer = QMessageBox.question(

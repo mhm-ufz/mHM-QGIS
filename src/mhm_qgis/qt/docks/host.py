@@ -1,13 +1,15 @@
-"""Post-processing docks around QGIS Desktop's main window or the standalone map window.
+"""Post-processing views in QGIS Desktop's main window or the standalone map window.
 
-Both hosts are `QMainWindow`s: docks are split, tabified, resized and their state
-saved the same way. Only registering and removing a dock goes through `iface` in
-Desktop, so QGIS's own panel bookkeeping sees it. The central widget (QGIS's main
-canvas, or the standalone window's tree and canvas) is never replaced.
+Each view of the Outputs tab's navigation list (`layouts.yml`, post plan §0c) has a
+**central panel**, a page added to the stacked widget that holds the main map canvas
+(QGIS 4.2's central widget holds one; the standalone window is built alike), or the
+**canvas itself** (Map Explorer), and **side docks on the left**, tabbed with QGIS's
+Layers and Browser panels. The central widget is never replaced: pages are added
+and removed. Registering and removing a dock goes through `iface` in Desktop, so
+QGIS's own panel bookkeeping sees it.
 
-Each view of the Outputs tab's navigation list has a layout in `layouts.yml`; the
-user's adjustments are saved per view (`saveState`), and the workspace keeps the
-user's own layout to restore when it is turned off (post plan §0b).
+The user's adjustments are saved per view (`saveState`), and the workspace keeps the
+user's own layout to restore when it is turned off.
 """
 from __future__ import annotations
 
@@ -15,16 +17,14 @@ from functools import cache
 from pathlib import Path
 
 import yaml
-from qgis.PyQt.QtCore import QSettings, Qt
-from qgis.PyQt.QtWidgets import QToolBar, QWidget
+from qgis.PyQt.QtCore import QSettings, Qt, QTimer
+from qgis.PyQt.QtWidgets import QDockWidget, QStackedWidget, QToolBar, QWidget
 
 from ..ui import load_form
 
-STATE_VERSION = 1
+STATE_VERSION = 2  # central panels and left tabs since P5e: older saved states are ignored
 SETTINGS = "mhm_qgis/post"
-AREAS = {"right": Qt.DockWidgetArea.RightDockWidgetArea, "bottom": Qt.DockWidgetArea.BottomDockWidgetArea}
-SPLIT = {"right": Qt.Orientation.Vertical, "bottom": Qt.Orientation.Horizontal}
-RESIZE = {"right": Qt.Orientation.Horizontal, "bottom": Qt.Orientation.Vertical}
+LEFT = Qt.DockWidgetArea.LeftDockWidgetArea
 
 
 @cache
@@ -46,6 +46,19 @@ def window(dialog):
     return dialog.iface.mainWindow() if dialog.iface is not None else dialog.map_canvas_window()
 
 
+def canvas(dialog):
+    """The host's main map canvas."""
+    return dialog.iface.mapCanvas() if dialog.iface is not None else dialog.map_canvas_window().canvas
+
+
+def stack(dialog) -> QStackedWidget:
+    """The stacked widget whose page 0 is the main canvas (verified on QGIS 4.2.3)."""
+    holder = canvas(dialog).parentWidget()
+    if not isinstance(holder, QStackedWidget):
+        raise RuntimeError("The map canvas is not in a stacked widget: this QGIS is laid out differently.")
+    return holder
+
+
 def _form(dialog, form_file):
     """A widget built from a Designer form; its child widgets join `dialog._post.ui`."""
     widget = QWidget()
@@ -56,26 +69,35 @@ def _form(dialog, form_file):
     return widget
 
 
-def dock(dialog, name, on_create=None):
-    """The named dock, built from its form on first use and registered with the host."""
+def _camel(name) -> str:
+    return "".join(part.title() for part in name.split("_"))
+
+
+def part(dialog, name, on_create=None):
+    """The named central panel or side dock, made from its form on first use."""
     from qgis.gui import QgsDockWidget
 
-    docks = dialog._post.docks
-    if name not in docks:
+    state = dialog._post
+    made = state.panels.get(name) or state.docks.get(name)
+    if made is not None:
+        return made
+    if name in layouts()["panels"]:
+        made = state.panels[name] = _form(dialog, layouts()["panels"][name][0])
+        made.setObjectName(f"mhmPost{_camel(name)}Panel")
+        stack(dialog).addWidget(made)
+    else:
         form_file, title = layouts()["docks"][name]
-        widget = _form(dialog, form_file)
-        created = QgsDockWidget(f"mHM post: {title}", window(dialog))
-        created.setObjectName("mhmPost" + "".join(part.title() for part in name.split("_")) + "Dock")
-        created.setWidget(widget)
-        docks[name] = created
+        made = state.docks[name] = QgsDockWidget(f"mHM post: {title}", window(dialog))
+        made.setObjectName(f"mhmPost{_camel(name)}Dock")
+        made.setWidget(_form(dialog, form_file))
         if dialog.iface is not None:
-            dialog.iface.addDockWidget(AREAS["right"], created)
+            dialog.iface.addDockWidget(LEFT, made)
         else:
-            window(dialog).addDockWidget(AREAS["right"], created)
-        created.hide()
-        if on_create is not None:
-            on_create(dialog, name)
-    return docks[name]
+            window(dialog).addDockWidget(LEFT, made)
+        made.hide()
+    if on_create is not None:
+        on_create(dialog, name)
+    return made
 
 
 def time_toolbar(dialog, on_create=None):
@@ -95,44 +117,54 @@ def time_toolbar(dialog, on_create=None):
     return state.toolbar
 
 
-def names(view) -> list[str]:
-    spec = layouts()["views"][view]
-    return [name for area in AREAS for stack in spec.get(area, []) for name in stack]
+def central(view) -> str:
+    """The view's central panel name, or "canvas"."""
+    return layouts()["views"][view]["central"]
+
+
+def show_central(dialog, view) -> None:
+    """Show the view's panel over the canvas, or the canvas itself."""
+    name = central(view)
+    stack(dialog).setCurrentWidget(canvas(dialog) if name == "canvas" else dialog._post.panels[name])
+
+
+def add_left(dialog, dock, beside=None) -> None:
+    """Tab a dock into the left area: beside `beside`, else with QGIS's Layers panel."""
+    host = window(dialog)
+    anchor = beside or host.findChild(QDockWidget, "Layers")
+    if anchor is not None and anchor is not dock and anchor.isVisible() and host.dockWidgetArea(anchor) == LEFT:
+        host.tabifyDockWidget(anchor, dock)
+    else:
+        host.addDockWidget(LEFT, dock)
+    dock.show()
 
 
 def apply(dialog, view, on_create=None, reset=False) -> None:
-    """Arrange the host for `view`: its saved state, or its declared layout."""
-    host, docks = window(dialog), dialog._post.docks
-    wanted = names(view)
-    for name in wanted:
-        dock(dialog, name, on_create)
+    """Arrange the host for `view`: its panel in the centre and its docks as left tabs,
+    as saved for the view or as declared."""
+    host, docks, spec = window(dialog), dialog._post.docks, layouts()["views"][view]
+    left = spec.get("left", [])
+    for name in left:
+        part(dialog, name, on_create)
+    if spec["central"] != "canvas":
+        part(dialog, spec["central"], on_create)
     for name, other in docks.items():
-        if name not in wanted:
+        if name not in left:
             other.hide()
+    show_central(dialog, view)
     saved = None if reset else settings().value(f"{SETTINGS}/layout/{view}")
     if saved is not None and host.restoreState(saved, STATE_VERSION):
-        for name in wanted:
+        for name in left:
             docks[name].show()
         return
-    spec = layouts()["views"][view]
-    for area, stacks in ((area, spec.get(area, [])) for area in AREAS):
-        previous = None
-        for stack in stacks:
-            first = docks[stack[0]]
-            if previous is None:
-                host.addDockWidget(AREAS[area], first)
-            else:
-                host.splitDockWidget(previous, first, SPLIT[area])
-            first.show()
-            for name in stack[1:]:
-                host.tabifyDockWidget(first, docks[name])
-                docks[name].show()
-            first.raise_()
-            previous = first
-        if len(stacks) > 1:  # split stacks share their area equally
-            host.resizeDocks([docks[stack[0]] for stack in stacks], [1000] * len(stacks), SPLIT[area])
-        if stacks and area in spec.get("sizes", {}):
-            host.resizeDocks([docks[stacks[0][0]]], [int(spec["sizes"][area])], RESIZE[area])
+    beside = None
+    for name in left:
+        add_left(dialog, docks[name], beside)
+        beside = beside or docks[name]
+    if left:
+        docks[left[0]].raise_()
+        QTimer.singleShot(0, docks[left[0]].raise_)  # again once the tab bar exists (QGIS Desktop)
+        host.resizeDocks([docks[left[0]]], [int(spec.get("width", 360))], Qt.Orientation.Horizontal)
 
 
 def save_view(dialog, view) -> None:
@@ -154,8 +186,13 @@ def begin(dialog) -> None:
 
 
 def end(dialog) -> None:
-    """Remove and delete our docks and toolbar, then restore the user's layout."""
+    """Remove our panels (the canvas comes back), docks and toolbar, then restore the
+    user's layout."""
     state, host = dialog._post, window(dialog)
+    for page in state.panels.values():
+        stack(dialog).removeWidget(page)
+        page.deleteLater()
+    stack(dialog).setCurrentWidget(canvas(dialog))
     for created in state.docks.values():
         if dialog.iface is not None:
             dialog.iface.removeDockWidget(created)
@@ -165,7 +202,7 @@ def end(dialog) -> None:
     if state.toolbar is not None:
         host.removeToolBar(state.toolbar)
         state.toolbar.deleteLater()
-    state.docks, state.toolbar = {}, None
+    state.panels, state.docks, state.toolbar = {}, {}, None
     store = settings()
     saved = store.value(f"{SETTINGS}/user_layout")
     if saved is not None:

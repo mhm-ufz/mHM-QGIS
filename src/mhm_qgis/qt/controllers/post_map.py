@@ -3,6 +3,12 @@
 Instant maps are VRT band switches (the VRT is built on a task: it reads netCDF);
 statistic maps come from the cache, or a `derive` pass in the native worker, and are
 shown as GeoTIFFs. A click picks an L1 cell; a gauge choice zooms to its catchment.
+
+Map Explorer draws on the host's main canvas (post plan §0c). That canvas follows the
+project's layer tree, so a copy of the map and its overlays goes into the temporary
+group "mHM post (temporary)" (removed by `leave`), and our click tool replaces the
+user's map tool while the view is shown. The other views use the Map dock, whose
+layers stay out of the project.
 """
 from __future__ import annotations
 
@@ -32,7 +38,8 @@ def bind(dialog) -> None:
     # pushButton_postOpenInQgis → post_canvas.open_in_qgis
     dialog._post.ui.pushButton_postOpenInQgis.clicked.connect(lambda: open_in_qgis(dialog))
     tool = QgsMapToolEmitPoint(dialog._post.ui.mapCanvas_post)
-    tool.canvasClicked.connect(lambda point, button: clicked(dialog, point.x(), point.y(), button))
+    tool.canvasClicked.connect(lambda point, button: clicked(dialog, point.x(), point.y(), button,
+                                                            dialog._post.ui.mapCanvas_post))
     dialog._post.ui.mapCanvas_post.setMapTool(tool)
     state.widgets["map_tool"] = tool
 
@@ -55,9 +62,10 @@ def refresh(dialog, fields) -> None:
     if fields & {"run", "variable", "statistic", "period"}:
         show_map(dialog)
     elif "current_time" in fields:
-        layer = state.widgets.get("map_layer")
-        if layer is not None and layer.customProperty("mhm_qgis/instant", False):
-            post_canvas.show_step(layer, int(state.context.get("current_time") or 0) + 1)
+        band = int(state.context.get("current_time") or 0) + 1
+        for layer in (state.widgets.get("map_layer"), _main_layer(dialog)):
+            if layer is not None and layer.customProperty("mhm_qgis/instant", False):
+                post_canvas.show_step(layer, band)
     if "gauge" in fields:
         _zoom_to_gauge(dialog)
     if fields & {"run", "cell", "current_time"}:
@@ -189,15 +197,20 @@ def show_map(dialog) -> None:
 
 
 # views that show their own map on the shared Map dock
-VIEW_MAPS = ("water_balance", "validation", "compare", "extremes", "drought", "anomalies", "summary")
+VIEW_MAPS = ("water_balance", "validation", "extremes", "drought", "anomalies", "summary")
+TEMPORARY = "mHM post (temporary)"  # Map Explorer's layers on the main canvas
 
 
 def _set_layer(dialog, layer) -> None:
-    """The Map Explorer's layer; shown unless the active view has a map of its own."""
+    """The Map Explorer's layer: on the main canvas while Map Explorer is shown (else
+    when it is next shown), and on the Map dock unless the view has its own map."""
     state = dialog._post
     state.widgets["map_layer"] = layer
+    state.widgets["main_stale"] = True
     if state.view not in VIEW_MAPS:
         show_layers(dialog, [layer])
+    if state.view == "map_explorer":
+        _sync_main(dialog)
 
 
 def set_view_layers(dialog, view, layers) -> None:
@@ -209,13 +222,115 @@ def set_view_layers(dialog, view, layers) -> None:
 
 
 def view_changed(dialog, view) -> None:
-    """Show the view's own map, or the Map Explorer layer."""
+    """Map Explorer: its map and our click tool on the main canvas. Other views: the
+    user's map tool back, and the view's own map (or the explorer's) on the Map dock."""
     state = dialog._post
-    if "map" not in state.docks:
+    _main_tool(dialog, view == "map_explorer")
+    if view == "map_explorer":
+        _sync_main(dialog)
+    if "map" in state.docks:
+        layers = state.widgets.get("view_layers", {}).get(view) if view in VIEW_MAPS else None
+        explorer = state.widgets.get("map_layer")
+        show_layers(dialog, layers or ([explorer] if explorer is not None else []))
+    if state.root is not None:
+        _highlight(dialog)
+
+
+def _main_layer(dialog):
+    """The main canvas's copy of the explorer map (None if absent or removed by the user)."""
+    from qgis.core import QgsProject
+
+    found = dialog._post.widgets.get("main_layer_id")
+    return QgsProject.instance().mapLayer(found) if found else None
+
+
+def _sync_main(dialog) -> None:
+    """Put the explorer map and fresh overlays in the temporary group (top of the tree)."""
+    from qgis.core import QgsProject
+
+    state = dialog._post
+    layer = state.widgets.get("map_layer")
+    if layer is None or not state.widgets.get("main_stale", True):
         return
-    layers = state.widgets.get("view_layers", {}).get(view) if view in VIEW_MAPS else None
-    explorer = state.widgets.get("map_layer")
-    show_layers(dialog, layers or ([explorer] if explorer is not None else []))
+    _clear_main(dialog)
+    project = QgsProject.instance()
+    group = project.layerTreeRoot().insertGroup(0, TEMPORARY)
+    overlays = _overlay_layers(dialog)
+    for overlay in overlays:  # drawn over the map
+        project.addMapLayer(overlay, False)
+        group.addLayer(overlay)
+    copy = post_canvas.open_in_qgis(layer, layer.name(), TEMPORARY)
+    copy.setCustomProperty("mhm_qgis/instant", layer.customProperty("mhm_qgis/instant", False))
+    if copy.customProperty("mhm_qgis/instant", False):
+        post_canvas.show_step(copy, layer.renderer().inputBand())
+    state.widgets.update(main_ids=[*(item.id() for item in overlays), copy.id()], main_layer_id=copy.id(),
+                         main_stale=False)
+    from qgis.core import QgsCoordinateTransform
+
+    from ..docks import host
+
+    main = host.canvas(dialog)  # layers added to a group don't zoom the canvas: show the run if it's out of view
+    extent = QgsCoordinateTransform(copy.crs(), main.mapSettings().destinationCrs(), project).transformBoundingBox(
+        copy.extent())
+    if not main.extent().intersects(extent) or main.extent().width() > 20 * extent.width():
+        main.setExtent(extent)
+        main.refresh()
+
+
+def _clear_main(dialog) -> None:
+    from qgis.core import QgsProject
+
+    project, widgets = QgsProject.instance(), dialog._post.widgets
+    project.removeMapLayers([found for found in widgets.pop("main_ids", []) if project.mapLayer(found)])
+    widgets.pop("main_layer_id", None)
+    widgets["main_stale"] = True
+    group = project.layerTreeRoot().findGroup(TEMPORARY)
+    if group is not None:
+        group.parent().removeChildNode(group)
+
+
+def _main_tool(dialog, on) -> None:
+    """Our click tool on the main canvas while Map Explorer is shown; the user's back after."""
+    from qgis.gui import QgsMapToolEmitPoint
+
+    from ..docks import host
+
+    widgets, main = dialog._post.widgets, host.canvas(dialog)
+    tool = widgets.get("main_tool")
+    if on:
+        if tool is None:
+            tool = widgets["main_tool"] = QgsMapToolEmitPoint(main)
+            tool.canvasClicked.connect(lambda point, button: clicked(dialog, point.x(), point.y(), button, main))
+        if main.mapTool() is not tool:
+            widgets["previous_tool"] = main.mapTool()
+            main.setMapTool(tool)
+    elif tool is not None and main.mapTool() is tool:
+        previous = widgets.pop("previous_tool", None)
+        try:
+            main.setMapTool(previous) if previous is not None else main.unsetMapTool(tool)
+        except RuntimeError:  # the user's tool was deleted meanwhile
+            main.unsetMapTool(tool)
+
+
+def leave(dialog) -> None:
+    """The analysis layout ends: the user's map tool back, our layers and marks gone."""
+    if getattr(dialog._post.ui, "mapCanvas_post", None) is None and "main_tool" not in dialog._post.widgets:
+        return
+    _main_tool(dialog, False)
+    _clear_main(dialog)
+    band = dialog._post.widgets.pop("cell_band", None)
+    if band is not None:
+        band.reset()
+        if band.scene() is not None:
+            band.scene().removeItem(band)
+
+
+def _cell_canvas(dialog):
+    """Where the cell is marked and gauges are shown: the main canvas in Map Explorer."""
+    from ..docks import host
+
+    state = dialog._post
+    return host.canvas(dialog) if state.view == "map_explorer" else getattr(state.ui, "mapCanvas_post", None)
 
 
 def array_layer(dialog, array, name, stem, *, diverging=False, value_range=None, axes=None):
@@ -244,8 +359,8 @@ def show_layers(dialog, layers, canvas=None) -> None:
     canvas.refresh()
 
 
-def _overlays(dialog) -> None:
-    """Basin outlines and the river network over every map."""
+def _overlay_layers(dialog) -> list:
+    """Fresh basin outlines and river network layers of the open run."""
     from ...core.handlers.store.paths import temp_morphology_folder
 
     state = dialog._post
@@ -253,9 +368,16 @@ def _overlays(dialog) -> None:
              for name in next(iter(state.index["variables"].values()), {}).get("basins", [])}
     layers = [post_canvas.outline_layer(masks, state.axes, dialog.get_crs())] if masks else []
     network = post_canvas.network_layer(f"{temp_morphology_folder(state.run.ref.domain)}/2_channel_network.shp")
-    state.widgets["overlays"] = [layer for layer in (*layers, network) if layer is not None]
+    return [layer for layer in (*layers, network) if layer is not None]
+
+
+def _overlays(dialog) -> None:
+    """Basin outlines and the river network over every map (a new run)."""
+    state = dialog._post
+    state.widgets["overlays"] = _overlay_layers(dialog)
     state.widgets.pop("map_layer", None)
     state.widgets.pop("view_layers", None)
+    _clear_main(dialog)
     state.ui.mapCanvas_post.setLayers([])  # a new run: zoom to its first map
 
 
@@ -265,22 +387,33 @@ def _zoom_to_gauge(dialog) -> None:
     outlines = next(iter(state.widgets.get("overlays", [])), None)
     if gauge is None or outlines is None:
         return
+    from qgis.core import QgsCoordinateTransform, QgsProject
+
+    canvas = _cell_canvas(dialog)
     for feature in outlines.getFeatures():
-        if feature["basin"] == str(gauge):
-            box = feature.geometry().boundingBox()
+        if feature["basin"] == str(gauge) and canvas is not None:
+            box = QgsCoordinateTransform(outlines.crs(), canvas.mapSettings().destinationCrs(),
+                                         QgsProject.instance()).transformBoundingBox(feature.geometry().boundingBox())
             box.scale(1.2)
-            dialog._post.ui.mapCanvas_post.setExtent(box)
-            dialog._post.ui.mapCanvas_post.flashGeometries([feature.geometry()], outlines.crs())
-            dialog._post.ui.mapCanvas_post.refresh()
+            canvas.setExtent(box)
+            canvas.flashGeometries([feature.geometry()], outlines.crs())
+            canvas.refresh()
 
 
-def clicked(dialog, x, y, button=None) -> None:
-    """A click picks the cell; a right click offers "Why here?" for it."""
+def clicked(dialog, x, y, button=None, canvas=None) -> None:
+    """A click (in `canvas`'s CRS, else the run's) picks the cell; a right click offers
+    "Why here?" for it."""
+    from qgis.core import QgsCoordinateTransform, QgsPointXY, QgsProject
+
     from ...core.post import grid
 
     state = dialog._post
     if state.axes is None:
         return
+    if canvas is not None and canvas.mapSettings().destinationCrs() != _crs(dialog):
+        point = QgsCoordinateTransform(canvas.mapSettings().destinationCrs(), _crs(dialog),
+                                       QgsProject.instance()).transform(QgsPointXY(x, y))
+        x, y = point.x(), point.y()
     cell = grid.cell_index(state.axes, x, y)
     if cell is None:
         return
@@ -291,7 +424,7 @@ def clicked(dialog, x, y, button=None) -> None:
 
         from . import post_advanced
 
-        menu = QMenu(state.ui.mapCanvas_post)
+        menu = QMenu(canvas or state.ui.mapCanvas_post)
         action = menu.addAction("Why here?")
         if menu.exec(QCursor.pos()) is action:
             post_advanced.why_here(dialog)
@@ -303,16 +436,12 @@ def _inspect(dialog) -> None:
     state = dialog._post
     table = dialog._post.ui.tableWidget_postCellInspector
     cell = state.context.get("cell")
-    band = state.widgets.pop("cell_band", None)
-    if band is not None:
-        band.reset()
+    _highlight(dialog)
     if cell is None:
         table.setRowCount(0)
         dialog._post.ui.label_postCell.setText("Click a cell on the map.")
         return
     iy, ix = cell
-    state.widgets["cell_band"] = post_canvas.highlight_cell(dialog._post.ui.mapCanvas_post, state.axes, iy, ix,
-                                                            dialog.get_crs())
     step = int(state.context.get("current_time") or 0)
     rows = [("Cell area (km²)", np.load(state.root / "area.npy")[iy, ix] / 1e6),
             ("Domain coverage", np.load(state.root / "weights" / "domain.npy")[iy, ix])]
@@ -328,6 +457,19 @@ def _inspect(dialog) -> None:
         table.setItem(row, 0, QTableWidgetItem(name))
         text = "no series cache" if value is None else f"{float(value):.4g}"
         table.setItem(row, 1, QTableWidgetItem(text))
+
+
+def _highlight(dialog) -> None:
+    """Outline the context's cell on the map in use (moved when the view changes)."""
+    state = dialog._post
+    band = state.widgets.pop("cell_band", None)
+    if band is not None:
+        band.reset()
+        if band.scene() is not None:
+            band.scene().removeItem(band)
+    cell, canvas = state.context.get("cell"), _cell_canvas(dialog)
+    if cell is not None and canvas is not None:
+        state.widgets["cell_band"] = post_canvas.highlight_cell(canvas, state.axes, *cell, dialog.get_crs())
 
 
 def _cell_plot(dialog) -> None:

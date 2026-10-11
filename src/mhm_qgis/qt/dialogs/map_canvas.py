@@ -1,8 +1,9 @@
 """Standalone map window: the project's layer tree beside one map canvas.
 
-A `QMainWindow`, so post-processing docks and toolbars can sit around it the way
-they do around QGIS Desktop's main window (`qt/docks/host.py`); its central widget
-is the tree and canvas, which docks never replace.
+Built like QGIS Desktop's main window, so post-processing (`qt/docks/host.py`) takes
+one path for both: the canvas is page 0 of a `QStackedWidget` (view panels are added
+as pages over it) and the layer tree is a left dock named "Layers" (side docks tab
+with it).
 """
 from __future__ import annotations
 
@@ -44,11 +45,13 @@ class MapCanvasWindow(QtWidgets.QMainWindow):
         status.addWidget(self.cursor_label)
         status.addPermanentWidget(self.time_label)
 
-        splitter = QtWidgets.QSplitter()
-        splitter.addWidget(self.tree)
-        splitter.addWidget(self.canvas)
-        splitter.setStretchFactor(1, 1)
-        self.setCentralWidget(splitter)
+        stack = QtWidgets.QStackedWidget()
+        stack.addWidget(self.canvas)
+        self.setCentralWidget(stack)
+        layers_dock = QtWidgets.QDockWidget("Layers", self)
+        layers_dock.setObjectName("Layers")
+        layers_dock.setWidget(self.tree)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, layers_dock)
         self.resize(1200, 800)
 
     def _follow_project_crs(self):

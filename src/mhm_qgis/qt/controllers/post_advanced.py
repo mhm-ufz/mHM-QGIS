@@ -16,6 +16,7 @@ from qgis.PyQt.QtCore import QSignalBlocker, Qt
 from qgis.PyQt.QtWidgets import QTableWidgetItem
 
 from ...core.post import aggregate, cache
+from ...qgis_bridge.display import post_canvas
 from ..workflows import post as work
 from . import post_map
 from .post_context import plot_widget, seconds
@@ -67,27 +68,7 @@ def bind_compare(dialog) -> None:
                                                                       refresh_compare(dialog, {"compare"})))
     ui.comboBox_postCompareStatistic.activated.connect(lambda _index: refresh_compare(dialog, {"compare"}))
     ui.comboBox_postDelta.activated.connect(lambda _index: _show_compare(dialog))
-    link_extents(dialog, (ui.mapCanvas_post, ui.mapCanvas_postB, ui.mapCanvas_postDelta))
-
-
-def link_extents(dialog, canvases) -> None:
-    """Panning or zooming one canvas moves the others."""
-    widgets = dialog._post.widgets
-
-    def follow(source):
-        if widgets.get("linking"):
-            return
-        widgets["linking"] = True
-        try:
-            for other in canvases:
-                if other is not source:
-                    other.setExtent(source.extent())
-                    other.refresh()
-        finally:
-            widgets["linking"] = False
-
-    for canvas in canvases:
-        canvas.extentsChanged.connect(lambda canvas=canvas: follow(canvas))
+    post_canvas.link_extents((ui.mapCanvas_postA, ui.mapCanvas_postB, ui.mapCanvas_postDelta))
 
 
 def _statistics(dialog) -> None:
@@ -107,7 +88,7 @@ def refresh_compare(dialog, fields) -> None:
     state, ui = dialog._post, dialog._post.ui
     if state.root is None:
         ui.tableWidget_postCompare.setRowCount(0)
-        for canvas in (ui.mapCanvas_postB, ui.mapCanvas_postDelta):
+        for canvas in (ui.mapCanvas_postA, ui.mapCanvas_postB, ui.mapCanvas_postDelta):
             canvas.setLayers([])
         return
     if "run" in fields:
@@ -127,7 +108,7 @@ def refresh_compare(dialog, fields) -> None:
             combo.setCurrentText(previous if previous in variables else
                                  next((name for name in ("aET", "Q") if name in variables), ""))
         _statistics(dialog)
-        for canvas in (ui.mapCanvas_postB, ui.mapCanvas_postDelta):
+        for canvas in (ui.mapCanvas_postA, ui.mapCanvas_postB, ui.mapCanvas_postDelta):
             canvas.setLayers([])
     if fields & {"run", "compare", "period", "basin", "gauge"}:
         _compare(dialog)
@@ -217,15 +198,16 @@ def _show_compare(dialog) -> None:
     d = np.where(domain, percent if relative else delta, np.nan)
     finite = np.abs(d[np.isfinite(d)])
     high = float(np.percentile(finite, 98)) if finite.size else 1.0
-    post_map.set_view_layers(dialog, "compare", [post_map.array_layer(dialog, a, f"A: {label}", "compare_a",
-                                                                      value_range=shared)])
     layers = state.widgets["compare_layers"] = (  # canvases don't own layers: keep them alive
+        post_map.array_layer(dialog, a, f"A: {label}", "compare_a", value_range=shared),
         post_map.array_layer(dialog, b, f"B: {label}", "compare_b", value_range=shared),
         post_map.array_layer(dialog, d, f"{'(B - A) / A, %' if relative else 'B - A'}: {label}",
                              "compare_delta" + ("_percent" if relative else ""), diverging=True,
                              value_range=(-high, high)))
-    post_map.show_layers(dialog, [layers[0]], ui.mapCanvas_postB)
-    post_map.show_layers(dialog, [layers[1]], ui.mapCanvas_postDelta)
+    for layer, canvas in zip(layers, (ui.mapCanvas_postA, ui.mapCanvas_postB, ui.mapCanvas_postDelta), strict=True):
+        post_map.show_layers(dialog, [layer], canvas)
+    ui.label_postMapA.setText(f"A: {state.run.ref.label}")
+    ui.label_postMapB.setText(f"B: {ui.comboBox_postCompareRun.currentText()}")
 
 
 # --- Extremes ---------------------------------------------------------------------

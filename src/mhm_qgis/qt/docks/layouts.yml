@@ -1,19 +1,16 @@
-# One window layout per post-processing view (post plan §0b). Selecting a view in the
-# Outputs tab's navigation list arranges the QGIS main window (or the standalone map
-# window) like this; the user's later adjustments are remembered per view.
+# One window layout per post-processing view (post plan §0b, revised §0c). Selecting a
+# view in the Outputs tab's navigation list arranges the QGIS main window (or the
+# standalone map window) like this; your later adjustments are remembered per view.
 #
-# Areas: right, bottom (left stays QGIS's own panels; the central canvas is never touched).
-# An area is a list of stacks: split top to bottom (right) or left to right (bottom);
-# a stack lists docks shown as tabs, the first raised. `sizes` are the areas' widths
-# (right) or heights (bottom) in pixels.
-version: 1
+# central: a panel shown as a page over the map canvas (the canvas's own stacked
+#          widget; the central widget is never replaced), or `canvas` for the map
+#          canvas itself (Map Explorer draws on it).
+# left:    side docks, tabbed with QGIS's Layers and Browser panels (tabs at the
+#          bottom); the first is raised. `width` is the left area's width in pixels.
+version: 2
 
-docks:
+panels:
   # name: [form, title]
-  map:            [post_map_dock.ui, Map]
-  map_controls:   [post_map_controls_dock.ui, Map controls]
-  cell_inspector: [post_cell_inspector_dock.ui, Cell inspector]
-  overview:       [post_overview_dock.ui, Overview]
   hydrograph:     [post_hydrograph_dock.ui, Hydrograph]
   water_balance:  [post_water_balance_dock.ui, Water balance]
   processes:      [post_processes_dock.ui, Processes]
@@ -21,84 +18,31 @@ docks:
   events:         [post_events_dock.ui, Events]
   validation:     [post_validation_dock.ui, Validation]
   climatology:    [post_climatology_dock.ui, Climatology]
-  compare:        [post_compare_dock.ui, Compare]
-  map_b:          [post_map_b_dock.ui, Map B]
-  map_delta:      [post_map_delta_dock.ui, Map Δ]
+  compare_maps:   [post_compare_maps.ui, Compare maps]
   extremes:       [post_extremes_dock.ui, Extremes]
   drought:        [post_drought_dock.ui, Drought]
   anomalies:      [post_anomalies_dock.ui, Anomalies]
   summary:        [post_summary_dock.ui, Summary]
-  why_here:       [post_why_here_dock.ui, "Why here?"]   # opened from the map's context menu
+
+docks:
+  map:            [post_map_dock.ui, Map]
+  map_controls:   [post_map_controls_dock.ui, Map controls]
+  cell_inspector: [post_cell_inspector_dock.ui, Cell inspector]
+  compare:        [post_compare_dock.ui, Compare]
+  why_here:       [post_why_here_dock.ui, "Why here?"]   # opened from a map's right-click menu
 
 views:
   # title: the navigation entry it answers to
-  overview:
-    title: Overview
-    right:  [[overview]]
-    bottom: [[map]]
-    sizes:  {right: 420, bottom: 360}
-  map_explorer:
-    title: Map Explorer
-    right:  [[map_controls], [cell_inspector]]
-    bottom: [[map]]
-    sizes:  {right: 340, bottom: 420}
-  hydrograph:
-    title: Hydrograph
-    right:  [[map]]
-    bottom: [[hydrograph]]
-    sizes:  {right: 360, bottom: 420}
-  water_balance:
-    title: Water balance
-    right:  [[water_balance]]
-    bottom: [[map]]
-    sizes:  {right: 460, bottom: 360}
-  processes:
-    title: Processes
-    right:  [[map], [cell_inspector]]
-    bottom: [[processes]]
-    sizes:  {right: 340, bottom: 420}
-  signatures:
-    title: Signatures
-    right:  [[map]]
-    bottom: [[signatures]]
-    sizes:  {right: 340, bottom: 380}
-  events:
-    title: Events
-    right:  [[map]]
-    bottom: [[events]]
-    sizes:  {right: 340, bottom: 420}
-  validation:
-    title: Validation
-    right:  [[validation]]
-    bottom: [[map]]
-    sizes:  {right: 460, bottom: 380}
-  climatology:
-    title: Climatology
-    right:  [[map]]
-    bottom: [[climatology]]
-    sizes:  {right: 340, bottom: 420}
-  compare:
-    title: Compare
-    right:  [[compare]]
-    bottom: [[map], [map_b], [map_delta]]
-    sizes:  {right: 420, bottom: 400}
-  extremes:
-    title: Extremes
-    right:  [[extremes]]
-    bottom: [[map]]
-    sizes:  {right: 460, bottom: 340}
-  drought:
-    title: Drought
-    right:  [[drought]]
-    bottom: [[map]]
-    sizes:  {right: 460, bottom: 340}
-  anomalies:
-    title: Anomalies
-    right:  [[anomalies]]
-    bottom: [[map]]
-    sizes:  {right: 460, bottom: 380}
-  summary:
-    title: Summary
-    right:  [[summary]]
-    bottom: [[map]]
-    sizes:  {right: 520, bottom: 380}
+  map_explorer:  {title: Map Explorer,  central: canvas,        left: [map_controls, cell_inspector], width: 340}
+  hydrograph:    {title: Hydrograph,    central: hydrograph,    left: [map], width: 380}
+  water_balance: {title: Water balance, central: water_balance, left: [map], width: 420}
+  processes:     {title: Processes,     central: processes,     left: [map, cell_inspector], width: 380}
+  signatures:    {title: Signatures,    central: signatures,    left: [map], width: 380}
+  events:        {title: Events,        central: events,        left: [map], width: 380}
+  validation:    {title: Validation,    central: validation,    left: [map], width: 420}
+  climatology:   {title: Climatology,   central: climatology,   left: [map], width: 380}
+  compare:       {title: Compare,       central: compare_maps,  left: [compare], width: 420}
+  extremes:      {title: Extremes,      central: extremes,      left: [map], width: 420}
+  drought:       {title: Drought,       central: drought,       left: [map], width: 420}
+  anomalies:     {title: Anomalies,     central: anomalies,     left: [map], width: 420}
+  summary:       {title: Summary,       central: summary,       left: [map], width: 420}

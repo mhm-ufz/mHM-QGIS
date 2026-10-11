@@ -82,18 +82,20 @@ def test_the_tab_links_its_views_without_reading_netcdf_on_the_gui_thread(opened
     _open(dialog)
     state = dialog._post
     assert dialog.comboBox_postRun.currentText().startswith("Current (output/)")
-    _page(dialog, "Overview")
-    assert dialog._post.ui.horizontalSlider_postTime.maximum() == 61
-    assert "mm/yr" in dialog._post.ui.textBrowser_postOverview.toPlainText()
+    _wait(lambda: "mm/yr" in dialog.textBrowser_postOverview.toPlainText())  # the Overview, in the tab
 
     _page(dialog, "Map Explorer")
     _wait(lambda: state.widgets.get("map_layer") is not None)
+    assert state.ui.horizontalSlider_postTime.maximum() == 61
     layer = state.widgets["map_layer"]
+    main = post_map._main_layer(dialog)  # the copy on the host's main canvas
+    assert main is not None
     assert state.context.get("variable") == "aET"
     assert layer.bandCount() == 62
     dialog._post.ui.horizontalSlider_postTime.setValue(5)
     _wait(lambda: state.context.get("current_time") == 5)
     assert layer.renderer().inputBand() == 6
+    assert main.renderer().inputBand() == 6
     post_map.clicked(dialog, 503000.0, 2997000.0)  # row 1, column 1
     assert state.context.get("cell") == (1, 1)
     with real(truth.files["mhm"]) as handle:
@@ -215,54 +217,102 @@ def test_tier_b_pages(opened_long, monkeypatch):
 
 
 def test_each_view_arranges_the_window_and_the_workspace_restores_it(opened):
+    """A view's panel is the centre (a page over the canvas), its docks are left tabs
+    beside Layers; Map Explorer draws on the main canvas with our tool; turning the
+    layout off leaves the window, the project and the map tool as they were."""
+    from qgis.core import QgsProject
+    from qgis.PyQt.QtWidgets import QDockWidget
+
+    left, right = Qt.DockWidgetArea.LeftDockWidgetArea, Qt.DockWidgetArea.RightDockWidgetArea
     dialog, _ = opened
     window = dialog.map_canvas_window()
     window.show()
     QgsApplication.processEvents()
     before = window.saveState(host.STATE_VERSION)
+    layers_dock = window.findChild(QDockWidget, "Layers")
     _open(dialog)
     _page(dialog, "Map Explorer")
-    docks = dialog._post.docks
+    _wait(lambda: dialog._post.widgets.get("map_layer") is not None)
+    docks, stack = dialog._post.docks, host.stack(dialog)
     assert dialog.pushButton_postWorkspace.isChecked()
-    assert window.dockWidgetArea(docks["map_controls"]) == Qt.DockWidgetArea.RightDockWidgetArea
-    assert window.dockWidgetArea(docks["map"]) == Qt.DockWidgetArea.BottomDockWidgetArea
-    assert docks["map"].isVisible()
-    assert docks["cell_inspector"].isVisible()
+    assert stack.currentWidget() is window.canvas
+    assert window.dockWidgetArea(docks["map_controls"]) == left
+    assert docks["map_controls"] in window.tabifiedDockWidgets(layers_dock)
+    assert docks["map_controls"].isVisible()
+    group = QgsProject.instance().layerTreeRoot().findGroup(post_map.TEMPORARY)
+    assert "aET" in {node.layer().name() for node in group.findLayers()}
+    assert window.canvas.mapTool() is dialog._post.widgets["main_tool"]
+    from qgis.core import QgsCoordinateTransform, QgsPointXY
+
+    project = QgsProject.instance()
+    project.setCrs(QgsCoordinateReferenceSystem("EPSG:3857"))  # the main canvas follows the project, not the run
+    point = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:32644"), project.crs(),
+                                   project).transform(QgsPointXY(503000.0, 2997000.0))
+    post_map.clicked(dialog, point.x(), point.y(), None, window.canvas)
+    assert dialog._post.context.get("cell") == (1, 1)
+    project.setCrs(QgsCoordinateReferenceSystem("EPSG:32644"))
+
     _page(dialog, "Hydrograph")
-    assert window.dockWidgetArea(docks["map"]) == Qt.DockWidgetArea.RightDockWidgetArea
-    assert window.dockWidgetArea(docks["hydrograph"]) == Qt.DockWidgetArea.BottomDockWidgetArea
+    assert stack.currentWidget() is dialog._post.panels["hydrograph"]
+    assert docks["map"].isVisible()
     assert not docks["map_controls"].isVisible()
-    assert not docks["cell_inspector"].isVisible()
+    assert window.canvas.mapTool() is None  # the user's (none here) is back
+    stack.setCurrentWidget(window.canvas)  # as QGIS does when a layer is added
+    nav = dialog.listWidget_postNavigation
+    nav.itemClicked.emit(nav.currentItem())
+    assert stack.currentWidget() is dialog._post.panels["hydrograph"]  # selecting the view brings it back
+
     _page(dialog, "Map Explorer")
-    window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, docks["cell_inspector"])  # the user moves it
+    window.addDockWidget(right, docks["cell_inspector"])  # the user moves it
     _page(dialog, "Water balance")
     _page(dialog, "Map Explorer")
-    assert window.dockWidgetArea(docks["cell_inspector"]) == Qt.DockWidgetArea.BottomDockWidgetArea  # remembered
+    assert window.dockWidgetArea(docks["cell_inspector"]) == right  # remembered
     dialog.pushButton_postResetLayout.click()
-    assert window.dockWidgetArea(docks["cell_inspector"]) == Qt.DockWidgetArea.RightDockWidgetArea  # declared
+    assert window.dockWidgetArea(docks["cell_inspector"]) == left  # declared
     dialog.pushButton_postWorkspace.setChecked(False)
     assert dialog._post.docks == {}
+    assert dialog._post.panels == {}
     assert dialog._post.toolbar is None
+    assert stack.count() == 1
+    assert stack.currentWidget() is window.canvas
+    assert QgsProject.instance().layerTreeRoot().findGroup(post_map.TEMPORARY) is None
+    assert window.canvas.mapTool() is None
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     assert window.saveState(host.STATE_VERSION) == before
     assert host.settings().value(f"{host.SETTINGS}/user_layout") is None
 
 
 def test_desktop_docks_go_through_iface(tmp_path, monkeypatch):
-    """In QGIS Desktop the docks join the main window through `iface` and leave it as found."""
+    """In QGIS Desktop the panels are pages of the canvas's stack, the docks join the
+    main window through `iface` as tabs beside Layers, and all leave it as found."""
     from types import SimpleNamespace
 
-    from qgis.PyQt.QtWidgets import QMainWindow, QTextEdit
+    from qgis.gui import QgsMapCanvas
+    from qgis.PyQt.QtWidgets import (
+        QDockWidget,
+        QMainWindow,
+        QStackedWidget,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
 
     monkeypatch.setattr(host, "settings", lambda: QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat))
     main = QMainWindow()
-    main.setCentralWidget(QTextEdit())
+    central, stack, canvas = QWidget(), QStackedWidget(), QgsMapCanvas()
+    stack.addWidget(canvas)  # as QGIS 4.2 holds its canvas
+    QVBoxLayout(central).addWidget(stack)
+    main.setCentralWidget(central)
+    layers = QDockWidget("Layers", main)
+    layers.setObjectName("Layers")
+    layers.setWidget(QTextEdit())
+    main.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, layers)
     main.resize(1200, 800)  # big enough that the docks do not grow it
     main.show()
     QgsApplication.processEvents()
     calls = []
     iface = SimpleNamespace(
-        mainWindow=lambda: main,
+        mainWindow=lambda: main, mapCanvas=lambda: canvas,
         addDockWidget=lambda area, dock: (calls.append("add"), main.addDockWidget(area, dock)),
         removeDockWidget=lambda dock: (calls.append("remove"), main.removeDockWidget(dock)),
         addToolBar=main.addToolBar)
@@ -271,11 +321,14 @@ def test_desktop_docks_go_through_iface(tmp_path, monkeypatch):
     host.begin(dialog)
     host.time_toolbar(dialog)
     host.apply(dialog, "processes")
-    assert main.dockWidgetArea(dialog._post.docks["processes"]) == Qt.DockWidgetArea.BottomDockWidgetArea
-    assert main.findChild(type(dialog._post.docks["map"]), "mhmPostMapDock") is dialog._post.docks["map"]
+    assert stack.currentWidget() is dialog._post.panels["processes"]
+    assert dialog._post.docks["map"] in main.tabifiedDockWidgets(layers)
+    assert main.findChild(QDockWidget, "mhmPostMapDock") is dialog._post.docks["map"]
     host.end(dialog)
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    assert calls == ["add"] * 3 + ["remove"] * 3
+    assert calls == ["add"] * 2 + ["remove"] * 2  # Map and Cell inspector
+    assert stack.count() == 1
+    assert stack.currentWidget() is canvas
     assert main.saveState(host.STATE_VERSION) == before
     main.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
@@ -302,19 +355,20 @@ def test_tier_c_views(opened_long, monkeypatch):
     state = dialog._post
     ui = state.ui
     _page(dialog, "Compare")
-    assert {"compare", "map", "map_b", "map_delta"} <= {name for name, dock in state.docks.items() if dock.isVisible()}
+    assert host.stack(dialog).currentWidget() is state.panels["compare_maps"]  # the three maps in the centre
+    assert state.docks["compare"].isVisible()
     combo = ui.comboBox_postCompareRun
     combo.setCurrentIndex(next(i for i in range(combo.count()) if combo.itemText(i).startswith("baseline")))
     combo.activated.emit(combo.currentIndex())
     _wait(lambda: ui.tableWidget_postCompare.rowCount() > 1 and not dialog.task_coordinator.is_busy())
     assert ui.tableWidget_postCompare.verticalHeaderItem(1).text().startswith("Gauge 398")
-    assert ui.mapCanvas_post.layers()[-1].name().startswith("A: ")
+    assert ui.mapCanvas_postA.layers()[-1].name().startswith("A: ")
     assert ui.mapCanvas_postB.layers()[-1].name().startswith("B: ")
     assert ui.mapCanvas_postDelta.layers()[-1].name().startswith("B - A")
     extent = ui.mapCanvas_postB.extent()
     extent.scale(0.5)
     ui.mapCanvas_postB.setExtent(extent)
-    assert ui.mapCanvas_post.extent().center() == ui.mapCanvas_postB.extent().center()  # linked
+    assert ui.mapCanvas_postA.extent().center() == ui.mapCanvas_postB.extent().center()  # linked
     assert ui.mapCanvas_postDelta.extent().width() == pytest.approx(ui.mapCanvas_postB.extent().width(), rel=0.2)
 
     _page(dialog, "Extremes")
@@ -370,7 +424,7 @@ def test_export_writes_the_shown_view(opened, tmp_path):
     _wait(lambda: dialog._post.context.get("current_time") == 3)
     post_export.export_view(dialog, out)
     _wait(lambda: not dialog.task_coordinator.is_busy())
-    tif = out / "map_aET_2000-01-04T00_00.tif"  # the shown step, 4th interval
+    tif = out / "map_explorer_aET_2000-01-04T00_00.tif"  # the main canvas's map at the shown step, 4th interval
     handle = gdal.Open(str(tif))
     assert handle.GetGeoTransform()[1] == pytest.approx(2000.0)
     assert "32644" in handle.GetProjection() or "UTM" in handle.GetProjection()

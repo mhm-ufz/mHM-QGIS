@@ -37,7 +37,7 @@ def _basin(dialog):
 def refresh_overview(dialog, fields) -> None:
     state = dialog._post
     if state.root is None:
-        dialog._post.ui.textBrowser_postOverview.setHtml(
+        dialog.textBrowser_postOverview.setHtml(
             "<p>Open a setup with a finished run; the Outputs tab lists its runs.</p>"
             + "".join(f"<p>{escape(text)}</p>" for text in state.findings))
         return
@@ -94,7 +94,7 @@ def _overview(dialog, table, gauge, gauge_scores) -> None:
     if state.index.get("domain_source") != "restart":
         notes.append("Set write_restart = .true. to use mHM's own cell areas and sealed fraction.")
     missing = [f"{v.name}: {v.message}" for v in state.run.variables if not v.present]
-    dialog._post.ui.textBrowser_postOverview.setHtml(
+    dialog.textBrowser_postOverview.setHtml(
         f"<table style='border-collapse:collapse'><tr>{cells}</tr></table>"
         + ("<h4>Findings</h4><ul>" + "".join(f"<li>{escape(n)}</li>" for n in notes) + "</ul>" if notes else "")
         + ("<h4>Not written by this run</h4><ul>" + "".join(f"<li>{escape(m)}</li>" for m in missing) + "</ul>"

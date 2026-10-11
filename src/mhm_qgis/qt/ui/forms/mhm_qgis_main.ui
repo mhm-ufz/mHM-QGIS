@@ -2977,122 +2977,123 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_postNavigation">
-         <item>
-          <widget class="QListWidget" name="listWidget_postNavigation">
-            <item>
-             <property name="text">
-              <string>A · Basics</string>
-             </property>
-             <property name="font">
-              <font>
-               <bold>true</bold>
-              </font>
-             </property>
-             <property name="flags">
-              <set>ItemIsEnabled</set>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Overview</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Map Explorer</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Hydrograph</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Water balance</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Processes</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>B · Diagnostics</string>
-             </property>
-             <property name="font">
-              <font>
-               <bold>true</bold>
-              </font>
-             </property>
-             <property name="flags">
-              <set>ItemIsEnabled</set>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Signatures</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Events</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Validation</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Climatology</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>C · Advanced</string>
-             </property>
-             <property name="font">
-              <font>
-               <bold>true</bold>
-              </font>
-             </property>
-             <property name="flags">
-              <set>ItemIsEnabled</set>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Compare</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Extremes</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Drought</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Anomalies</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>Summary</string>
-             </property>
-            </item>
-           </widget>
-         </item>
+        <layout class="QHBoxLayout" name="horizontalLayout_postNavigation" stretch="0,1">
          <item>
           <layout class="QVBoxLayout" name="verticalLayout_postLayoutButtons">
+           <item>
+            <widget class="QListWidget" name="listWidget_postNavigation">
+              <property name="maximumSize">
+               <size>
+                <width>220</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <item>
+               <property name="text">
+                <string>A · Basics</string>
+               </property>
+               <property name="font">
+                <font>
+                 <bold>true</bold>
+                </font>
+               </property>
+               <property name="flags">
+                <set>ItemIsEnabled</set>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Map Explorer</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Hydrograph</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Water balance</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Processes</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>B · Diagnostics</string>
+               </property>
+               <property name="font">
+                <font>
+                 <bold>true</bold>
+                </font>
+               </property>
+               <property name="flags">
+                <set>ItemIsEnabled</set>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Signatures</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Events</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Validation</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Climatology</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>C · Advanced</string>
+               </property>
+               <property name="font">
+                <font>
+                 <bold>true</bold>
+                </font>
+               </property>
+               <property name="flags">
+                <set>ItemIsEnabled</set>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Compare</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Extremes</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Drought</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Anomalies</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Summary</string>
+               </property>
+              </item>
+             </widget>
+           </item>
            <item>
             <widget class="QPushButton" name="pushButton_postWorkspace">
              <property name="toolTip">
@@ -3116,20 +3117,14 @@
              </property>
             </widget>
            </item>
-           <item>
-            <spacer name="verticalSpacer_postLayoutButtons">
-             <property name="orientation">
-              <enum>Qt::Vertical</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>20</width>
-               <height>20</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
           </layout>
+         </item>
+         <item>
+          <widget class="QTextBrowser" name="textBrowser_postOverview">
+           <property name="toolTip">
+            <string>Overview of the selected run: balance, ratios, the main gauge's scores and what to check.</string>
+           </property>
+          </widget>
          </item>
         </layout>
        </item>
