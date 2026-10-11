@@ -3038,6 +3038,44 @@
               <string>Climatology</string>
              </property>
             </item>
+            <item>
+             <property name="text">
+              <string>C · Advanced</string>
+             </property>
+             <property name="font">
+              <font>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="flags">
+              <set>ItemIsEnabled</set>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Compare</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Extremes</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Drought</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Anomalies</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Summary</string>
+             </property>
+            </item>
            </widget>
          </item>
          <item>

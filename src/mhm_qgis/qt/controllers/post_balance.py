@@ -10,7 +10,6 @@ from html import escape
 import numpy as np
 from qgis.PyQt.QtWidgets import QTableWidgetItem
 
-from ...qgis_bridge.display import post_canvas
 from ..workflows import post as work
 from . import post_map
 from .post_context import plot_widget, seconds
@@ -170,12 +169,8 @@ def show_balance_map(dialog) -> None:
     if name not in maps:
         return
     array = np.where(np.load(state.root / "weights" / "domain.npy") > 0, maps[name], np.nan)
-    crs = post_canvas.crs_for(state.axes, dialog.get_crs())
-    tif = post_canvas.write_geotiff(array, state.axes, crs.toWkt(),
-                                    state.root / "derived" / f"balance_{name.replace('/', '_per_')}.tif")
-    finite = array[np.isfinite(array)]
-    low, high = np.percentile(finite, [2, 98]) if finite.size else (0.0, 1.0)
-    layer = post_canvas.raster_layer(tif, name, (float(low), float(high)), diverging=name in ("dS", "R", "P-ET"))
+    layer = post_map.array_layer(dialog, array, name, f"balance_{name.replace('/', '_per_')}",
+                                 diverging=name in ("dS", "R", "P-ET"))
     post_map.set_view_layers(dialog, "water_balance", [layer])
 
 

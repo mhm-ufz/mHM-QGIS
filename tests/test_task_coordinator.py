@@ -99,6 +99,27 @@ def test_jobs_run_off_the_qgstask_thread_and_still_report_failures():
     assert "boom" in errors[0]
 
 
+class _Ambiguous:
+    """Like a pandas DataFrame: its truth value raises."""
+
+    def __bool__(self):
+        raise ValueError("ambiguous")
+
+
+def test_falsy_and_ambiguous_results_reach_on_success():
+    """QGIS's task wrapper tests the returned value's truth; results are boxed."""
+    _app()
+    coordinator = TaskCoordinator(max_threads=2)
+    results = []
+    ambiguous = _Ambiguous()
+    coordinator.submit("empty", "Empty", lambda _task: [], on_success=results.append)
+    coordinator.submit("frame", "Frame", lambda _task: ambiguous, on_success=results.append)
+    _wait(lambda: len(results) == 2)
+    assert [] in results
+    assert any(result is ambiguous for result in results)
+    assert not coordinator.is_busy()
+
+
 def _until_cancelled(task):
     """Block like a long job; give up after 5 s so a failing test cannot hang."""
     import time

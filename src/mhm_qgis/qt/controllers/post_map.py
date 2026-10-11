@@ -32,7 +32,7 @@ def bind(dialog) -> None:
     # pushButton_postOpenInQgis → post_canvas.open_in_qgis
     dialog._post.ui.pushButton_postOpenInQgis.clicked.connect(lambda: open_in_qgis(dialog))
     tool = QgsMapToolEmitPoint(dialog._post.ui.mapCanvas_post)
-    tool.canvasClicked.connect(lambda point, _button: clicked(dialog, point.x(), point.y()))
+    tool.canvasClicked.connect(lambda point, button: clicked(dialog, point.x(), point.y(), button))
     dialog._post.ui.mapCanvas_post.setMapTool(tool)
     state.widgets["map_tool"] = tool
 
@@ -188,7 +188,8 @@ def show_map(dialog) -> None:
     work.submit(dialog, "map", f"Computing the {LABELS[stat].lower()} of {name}", compute, done)
 
 
-VIEW_MAPS = ("water_balance", "validation")  # views that show their own map on the shared Map dock
+# views that show their own map on the shared Map dock
+VIEW_MAPS = ("water_balance", "validation", "compare", "extremes", "drought", "anomalies", "summary")
 
 
 def _set_layer(dialog, layer) -> None:
@@ -196,7 +197,7 @@ def _set_layer(dialog, layer) -> None:
     state = dialog._post
     state.widgets["map_layer"] = layer
     if state.view not in VIEW_MAPS:
-        _show(dialog, [layer])
+        show_layers(dialog, [layer])
 
 
 def set_view_layers(dialog, view, layers) -> None:
@@ -204,7 +205,7 @@ def set_view_layers(dialog, view, layers) -> None:
     state = dialog._post
     state.widgets.setdefault("view_layers", {})[view] = layers
     if state.view == view:
-        _show(dialog, layers)
+        show_layers(dialog, layers)
 
 
 def view_changed(dialog, view) -> None:
@@ -214,12 +215,25 @@ def view_changed(dialog, view) -> None:
         return
     layers = state.widgets.get("view_layers", {}).get(view) if view in VIEW_MAPS else None
     explorer = state.widgets.get("map_layer")
-    _show(dialog, layers or ([explorer] if explorer is not None else []))
+    show_layers(dialog, layers or ([explorer] if explorer is not None else []))
 
 
-def _show(dialog, layers) -> None:
+def array_layer(dialog, array, name, stem, *, diverging=False, value_range=None, axes=None):
+    """A GeoTIFF layer of a (ny, nx) map on the run's grid (or `axes`), styled 2-98 %."""
     state = dialog._post
-    canvas = getattr(state.ui, "mapCanvas_post", None)
+    axes = axes or state.axes
+    crs = post_canvas.crs_for(axes, dialog.get_crs())
+    tif = post_canvas.write_geotiff(np.asarray(array, float), axes, crs.toWkt(), state.root / "derived" / f"{stem}.tif")
+    if value_range is None:
+        finite = np.asarray(array, float)[np.isfinite(array)]
+        value_range = np.percentile(finite, [2, 98]).tolist() if finite.size else (0.0, 1.0)
+    return post_canvas.raster_layer(tif, name, tuple(map(float, value_range)), diverging=diverging)
+
+
+def show_layers(dialog, layers, canvas=None) -> None:
+    """Layers (under the basin outlines and rivers) on the shared Map, or on `canvas`."""
+    state = dialog._post
+    canvas = canvas or getattr(state.ui, "mapCanvas_post", None)
     if canvas is None or not layers:
         return
     first = not canvas.layers()
@@ -260,15 +274,27 @@ def _zoom_to_gauge(dialog) -> None:
             dialog._post.ui.mapCanvas_post.refresh()
 
 
-def clicked(dialog, x, y) -> None:
+def clicked(dialog, x, y, button=None) -> None:
+    """A click picks the cell; a right click offers "Why here?" for it."""
     from ...core.post import grid
 
     state = dialog._post
     if state.axes is None:
         return
     cell = grid.cell_index(state.axes, x, y)
-    if cell is not None:
-        state.context.set("cell", cell)
+    if cell is None:
+        return
+    state.context.set("cell", cell)
+    if button == Qt.MouseButton.RightButton:
+        from qgis.PyQt.QtGui import QCursor
+        from qgis.PyQt.QtWidgets import QMenu
+
+        from . import post_advanced
+
+        menu = QMenu(state.ui.mapCanvas_post)
+        action = menu.addAction("Why here?")
+        if menu.exec(QCursor.pos()) is action:
+            post_advanced.why_here(dialog)
 
 
 def _inspect(dialog) -> None:

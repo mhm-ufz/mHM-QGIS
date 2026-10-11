@@ -41,7 +41,11 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   Processes, Signatures (flow duration curve and hydrological signatures), Events (flood
   events ranked, with their errors), Validation (the run against gridded observations of
   ET, snow, soil moisture or neutrons, TWS anomalies and snow cover through mhm-tools, and
-  every gauge's scores) and Climatology. Each run is scanned once in the background; runs
+  every gauge's scores), Climatology, and the advanced views: Compare (two runs side by
+  side with their difference), Extremes (annual extremes and return periods, bankfull
+  discharge), Drought (streamflow droughts and the soil moisture index), Anomalies
+  (plausibility checks) and Summary (every basin in one table). Right-click a map cell
+  for "Why here?". Each run is scanned once in the background; runs
   can be archived before the next one overwrites `output/`. The views open as docks in
   QGIS's main window (or the standalone map window), arranged per view; the layout you
   adjust is remembered per view, and turning "Analysis layout" off restores your own.
@@ -57,6 +61,8 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   hand.
 
 ### Fixed
+- A background task whose result was empty or a table no longer stays "running" forever
+  (QGIS tests a task's result for truth; results are now passed through unchanged).
 - The historical land-use dialog opens when saved periods lie outside the simulation
   period: it shows them clamped to the period, with a note, so they can be corrected.
 - v5.13 setups no longer get v6 `config_input` entries in `nml-settings.json` from the

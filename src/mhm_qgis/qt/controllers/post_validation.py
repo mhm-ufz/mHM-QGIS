@@ -205,13 +205,8 @@ def _show_map(dialog) -> None:
     x, y = grid
     axes = Axes(np.asarray(x, float), np.asarray(y, float), _edges(np.asarray(x, float)), _edges(np.asarray(y, float)),
                 bool(state.index.get("geographic")))
-    crs = post_canvas.crs_for(axes, dialog.get_crs())
-    array = np.asarray(maps[name], float)
-    tif = post_canvas.write_geotiff(array, axes, crs.toWkt(), state.root / "derived" / f"validation_{name}.tif")
-    finite = array[np.isfinite(array)]
-    low, high = np.percentile(finite, [2, 98]) if finite.size else (0.0, 1.0)
-    diverging = name in ("bias", "relative bias")
-    layer = post_canvas.raster_layer(tif, name, (float(low), float(high)), diverging=diverging)
+    layer = post_map.array_layer(dialog, maps[name], name, f"validation_{name}", axes=axes,
+                                 diverging=name in ("bias", "relative bias"))
     _set(dialog, [layer])
 
 

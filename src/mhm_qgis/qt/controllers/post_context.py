@@ -24,6 +24,7 @@ from ..workflows import post as work
 
 PLAY_MS = 300
 MAP_DOCKS = ("map", "map_controls", "cell_inspector")  # one controller (post_map) drives all three
+TOGETHER = (MAP_DOCKS, ("compare", "map_b", "map_delta", "map"))  # docks made (and bound) together
 
 
 @dataclass
@@ -49,7 +50,7 @@ class PostState:
 
 def refreshers():
     """(refresh(dialog, fields), the docks it draws on)."""
-    from . import post_balance, post_hydro, post_map, post_validation
+    from . import post_advanced, post_balance, post_hydro, post_map, post_validation
 
     return ((post_map.refresh, MAP_DOCKS),
             (post_balance.refresh_overview, ("overview",)),
@@ -59,7 +60,13 @@ def refreshers():
             (post_hydro.refresh_signatures, ("signatures",)),
             (post_hydro.refresh_events, ("events",)),
             (post_validation.refresh, ("validation",)),
-            (post_hydro.refresh_climatology, ("climatology",)))
+            (post_hydro.refresh_climatology, ("climatology",)),
+            (post_advanced.refresh_compare, ("compare", "map_b", "map_delta")),
+            (post_advanced.refresh_extremes, ("extremes",)),
+            (post_advanced.refresh_drought, ("drought",)),
+            (post_advanced.refresh_anomalies, ("anomalies",)),
+            (post_advanced.refresh_summary, ("summary",)),
+            (post_advanced.refresh_why_here, ("why_here",)))
 
 
 def plot_widget(dialog, container, *, dates=True):
@@ -114,17 +121,20 @@ def bind(dialog) -> None:
 
 def _dock_created(dialog, name) -> None:
     """Bind a new dock's widgets, and refresh it in full when it is first shown."""
-    from . import post_balance, post_hydro, post_map, post_validation
+    from . import post_advanced, post_balance, post_hydro, post_map, post_validation
 
     state = dialog._post
-    if name in MAP_DOCKS:
-        for other in MAP_DOCKS:
-            host.dock(dialog, other, _dock_created)
-        if not state.widgets.get("map_bound"):
-            state.widgets["map_bound"] = True
-            post_map.bind(dialog)
+    for group in TOGETHER:
+        if name in group:
+            for other in group:
+                host.dock(dialog, other, _dock_created)
+    if name in MAP_DOCKS and not state.widgets.get("map_bound"):
+        state.widgets["map_bound"] = True
+        post_map.bind(dialog)
     binders = {"hydrograph": post_hydro.bind, "water_balance": post_balance.bind,
-               "validation": post_validation.bind}
+               "validation": post_validation.bind, "compare": post_advanced.bind_compare,
+               "extremes": post_advanced.bind_extremes, "drought": post_advanced.bind_drought,
+               "anomalies": post_advanced.bind_anomalies, "summary": post_advanced.bind_summary}
     if name in binders:
         binders[name](dialog)
     state.docks[name].visibilityChanged.connect(lambda visible: visible and dock_shown(dialog, name))
@@ -194,6 +204,18 @@ def _show_view(dialog, view) -> None:
     host.apply(dialog, view, _dock_created)
     state.view = view
     post_map.view_changed(dialog, view)
+
+
+def open_dock(dialog, name, beside=None) -> None:
+    """Show a dock outside the view's layout ("Why here?"), tabbed with `beside` when shown."""
+    created = host.dock(dialog, name, _dock_created)
+    window, other = host.window(dialog), dialog._post.docks.get(beside)
+    if other is not None and other.isVisible():
+        window.tabifyDockWidget(other, created)
+    else:
+        window.addDockWidget(host.AREAS["right"], created)
+    created.show()
+    created.raise_()
 
 
 def reset_layout(dialog) -> None:

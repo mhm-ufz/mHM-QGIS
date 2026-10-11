@@ -21,6 +21,14 @@ docks:
   events:         [post_events_dock.ui, Events]
   validation:     [post_validation_dock.ui, Validation]
   climatology:    [post_climatology_dock.ui, Climatology]
+  compare:        [post_compare_dock.ui, Compare]
+  map_b:          [post_map_b_dock.ui, Map B]
+  map_delta:      [post_map_delta_dock.ui, Map Δ]
+  extremes:       [post_extremes_dock.ui, Extremes]
+  drought:        [post_drought_dock.ui, Drought]
+  anomalies:      [post_anomalies_dock.ui, Anomalies]
+  summary:        [post_summary_dock.ui, Summary]
+  why_here:       [post_why_here_dock.ui, "Why here?"]   # opened from the map's context menu
 
 views:
   # title: the navigation entry it answers to
@@ -69,3 +77,28 @@ views:
     right:  [[map]]
     bottom: [[climatology]]
     sizes:  {right: 340, bottom: 420}
+  compare:
+    title: Compare
+    right:  [[compare]]
+    bottom: [[map], [map_b], [map_delta]]
+    sizes:  {right: 420, bottom: 400}
+  extremes:
+    title: Extremes
+    right:  [[extremes]]
+    bottom: [[map]]
+    sizes:  {right: 460, bottom: 340}
+  drought:
+    title: Drought
+    right:  [[drought]]
+    bottom: [[map]]
+    sizes:  {right: 460, bottom: 340}
+  anomalies:
+    title: Anomalies
+    right:  [[anomalies]]
+    bottom: [[map]]
+    sizes:  {right: 460, bottom: 380}
+  summary:
+    title: Summary
+    right:  [[summary]]
+    bottom: [[map]]
+    sizes:  {right: 520, bottom: 380}

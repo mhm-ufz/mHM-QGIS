@@ -226,7 +226,9 @@ class TaskCoordinator(QtCore.QObject):
         def run(task):
             if task.isCanceled():
                 return _CANCELLED
-            return _off_qthread(lambda: runner(task))
+            # Boxed: QGIS's task wrapper tests the returned value's truth, which drops a
+            # falsy result and raises (silently, leaving the task unfinished) on a DataFrame.
+            return [_off_qthread(lambda: runner(task))]
 
         def finished(exception, result=None):
             if task.isCanceled():
@@ -241,7 +243,7 @@ class TaskCoordinator(QtCore.QObject):
             elif result is _CANCELLED:
                 self._finish(record.key, False, "Task cancelled.", "cancelled")
             else:
-                self._finish(record.key, True, result)
+                self._finish(record.key, True, result[0])
 
         task = QgsTask.fromFunction(record.label, run, on_finished=finished)
         task.setProperty("mhm_qgis_task_key", record.key)

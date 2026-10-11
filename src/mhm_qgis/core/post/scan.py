@@ -263,6 +263,10 @@ def derive(job):
         from .observe import run_job
 
         return run_job(job)
+    if job["what"] == "bankfull":  # mhm-tools (xarray), out of process like the scan
+        from ...externals.mhm_tools_handler import bankfull
+
+        return bankfull(job["path"], job["out"], var=job["variable"])
     raise ValueError(f"Unknown derive product: {job['what']}")
 
 

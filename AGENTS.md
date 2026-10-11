@@ -786,6 +786,19 @@ Four JSON files live under each domain's `.temp/` directory.
     (`post_validation`). Signatures and events need daily or finer discharge and two
     years; rainfall joins an event only at the discharge's own step (monthly P is never
     spread onto days); the runoff ratio uses totals, so any P step works.
+  - Tier C views (`post_advanced`, navigation group "C · Advanced"): Compare (run B is
+    opened and scanned on its task, without a series cache when that would be large;
+    Map B and Map Δ docks beside the shared Map, extents linked by `link_extents`),
+    Extremes (annual maxima and minima, Gringorten and the GEV from ten years; maps: Q
+    maximum, mRM bankfull by mhm-tools as a `derive("bankfull")` worker job), Drought
+    (day-of-year Q80 events at the gauge; SMI from the `SM_Lall` series cache, the SMI of
+    the current month and the longest drought; no frequency map, it is uniform by
+    construction), Anomalies (`checks.run` findings, a row jumps to its cell, gauge or
+    month; the z map of the current month), Summary (`balance.summary`, basins coloured
+    by a column, smallest on top). "Why here?" is the map's right-click menu: a dock
+    tabbed with the Cell inspector (`post_context.open_dock`), outside every view's
+    layout, so it hides on a view switch. A layer shown on a canvas other than the shared
+    Map must be kept referenced (`state.widgets`): canvases do not own their layers.
   - **Observation operators** (`core/post/observe.py`, a `derive("observe")` worker
     job): windows are the coarser record's intervals, used only when the finer one covers
     them completely; fluxes are summed and states time-weighted. mhm-tools'
@@ -1002,6 +1015,10 @@ Four JSON files live under each domain's `.temp/` directory.
   runs every submitted job on a short-lived `threading.Thread`; do not remove that
   hop or call pyproj from a `QgsTask` body directly. This crashed Execute All between
   the hydrology and gauge-position stages.
+- **A `QgsTask.fromFunction` result is tested for truth** (`if self.returned_values:` in
+  QGIS's wrapper): a falsy result reaches the callback as nothing, and a DataFrame raises
+  there, silently, leaving the task unfinished and the coordinator busy for good. The
+  coordinator boxes every result (`[result]`) and unboxes it in `finished`; keep that.
 
 - **Worker-side modules must not import Qt or QGIS.** Morphology commands live under
   `core/executions/morphology`; QGIS layer extraction/materialization stays under

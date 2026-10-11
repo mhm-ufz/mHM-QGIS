@@ -279,3 +279,67 @@ def test_desktop_docks_go_through_iface(tmp_path, monkeypatch):
     assert main.saveState(host.STATE_VERSION) == before
     main.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def test_tier_c_views(opened_long, monkeypatch):
+    """Compare (Map B and Map Δ, extents linked), Extremes, Drought, Anomalies, Summary, Why here."""
+    from post_fixtures import make_run
+
+    from mhm_qgis.core.post import runs
+    from mhm_qgis.qt.controllers import post_advanced
+
+    dialog, _, folder = opened_long
+    runs.archive(folder, "baseline")
+    make_run(folder, days=800, seed=1)  # the current run, B's twin with other weather
+    real = netCDF4.Dataset
+
+    def guarded(*args, **kwargs):
+        assert threading.current_thread() is not threading.main_thread(), "netCDF read on the GUI thread"
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(netCDF4, "Dataset", guarded)
+    _open(dialog)
+    state = dialog._post
+    ui = state.ui
+    _page(dialog, "Compare")
+    assert {"compare", "map", "map_b", "map_delta"} <= {name for name, dock in state.docks.items() if dock.isVisible()}
+    combo = ui.comboBox_postCompareRun
+    combo.setCurrentIndex(next(i for i in range(combo.count()) if combo.itemText(i).startswith("baseline")))
+    combo.activated.emit(combo.currentIndex())
+    _wait(lambda: ui.tableWidget_postCompare.rowCount() > 1 and not dialog.task_coordinator.is_busy())
+    assert ui.tableWidget_postCompare.verticalHeaderItem(1).text().startswith("Gauge 398")
+    assert ui.mapCanvas_post.layers()[-1].name().startswith("A: ")
+    assert ui.mapCanvas_postB.layers()[-1].name().startswith("B: ")
+    assert ui.mapCanvas_postDelta.layers()[-1].name().startswith("B - A")
+    extent = ui.mapCanvas_postB.extent()
+    extent.scale(0.5)
+    ui.mapCanvas_postB.setExtent(extent)
+    assert ui.mapCanvas_post.extent().center() == ui.mapCanvas_postB.extent().center()  # linked
+    assert ui.mapCanvas_postDelta.extent().width() == pytest.approx(ui.mapCanvas_postB.extent().width(), rel=0.2)
+
+    _page(dialog, "Extremes")
+    _wait(lambda: "ten or more years" in ui.label_postExtremesNotes.text())  # 2 full years in 800 days
+    assert state.widgets["widget_postExtremesAnnual"].listDataItems()
+    assert "Q maximum" in ui.mapCanvas_post.layers()[-1].name()
+
+    _page(dialog, "Drought")
+    _wait(lambda: state.widgets.get("smi") is not None and not dialog.task_coordinator.is_busy())
+    assert "streamflow droughts" in ui.label_postDroughtNotes.text()
+    assert ui.mapCanvas_post.layers()[-1].name().startswith("SMI 2000-01")
+
+    _page(dialog, "Anomalies")
+    _wait(lambda: ui.label_postAnomaliesNotes.text() != "")
+    if ui.tableWidget_postFindings.rowCount():
+        ui.tableWidget_postFindings.selectRow(0)
+    assert "anomaly z" in ui.mapCanvas_post.layers()[-1].name()
+
+    _page(dialog, "Summary")
+    _wait(lambda: ui.tableWidget_postSummary.rowCount() == 2)
+    assert "by basin" in ui.mapCanvas_post.layers()[-1].name()
+
+    state.context.set("cell", (1, 1))
+    post_advanced.why_here(dialog)
+    _wait(lambda: "Row 1, column 1" in ui.textBrowser_postWhyHere.toPlainText())
+    assert state.docks["why_here"].isVisible()
+    _page(dialog, "Hydrograph")
+    assert not state.docks["why_here"].isVisible()  # not part of the view: hidden with it
