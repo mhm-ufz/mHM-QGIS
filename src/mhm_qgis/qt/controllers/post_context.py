@@ -222,11 +222,11 @@ def _show_view(dialog, view) -> None:
 
 
 def open_dock(dialog, name, beside=None) -> None:
-    """Show a dock outside the view's layout ("Why here?") as a left tab, beside `beside`
-    when that is shown."""
+    """Show a dock outside the view's layout ("Why here?"): a tab beside `beside` when that
+    is shown, else a left tab."""
     created = host.part(dialog, name, _created)
     other = dialog._post.docks.get(beside)
-    host.add_left(dialog, created, other if other is not None and other.isVisible() else None)
+    host.add_dock(dialog, created, other if other is not None and other.isVisible() else None)
     created.raise_()
 
 

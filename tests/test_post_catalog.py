@@ -185,3 +185,30 @@ def test_rapti_run_is_sound():
     run = catalog.open_run(ref)
     assert grid.domain_weights(run, grid.axes(run.files["mhm"]))[1] == "dem"
     assert run.findings() == []
+
+
+def test_a_named_run_writes_into_its_folder_and_is_listed(tmp_path):
+    """The namelists point a named run's outputs into runs/<name>/; afterwards it is
+    listed by name and its files resolve from the setup folder."""
+    make_run(tmp_path)
+    nml = tmp_path / "mhm.nml"
+    nml.write_text('&directories_general\n  dirConfigOut = "output/"\n  dir_Out(1) = "output/"\n'
+                   '  dir_Total_Runoff(1) = "output/"\n  mhm_file_RestartOut(1) = "restart/r.nc"\n/\n')
+    made = runs.link_outputs(tmp_path, "case1")
+    text = nml.read_text()
+    assert 'dir_Out(1) = "runs/case1/output/"' in text
+    assert 'dirConfigOut = "runs/case1/output/"' in text
+    assert 'dir_Total_Runoff(1) = "output/"' in text  # an input
+    assert 'mhm_file_RestartOut(1) = "restart/r.nc"' in text
+    assert (tmp_path / "runs" / "case1" / "output") in made
+    (tmp_path / "output").rename(tmp_path / "runs" / "case1" / "output")  # as mHM would have written it
+    [ref] = runs.finish_named(tmp_path, "case1")
+    assert ref.label == f"case1 · {tmp_path.name}"
+    assert ref.root == tmp_path
+    assert runs.run_meta(ref)["linked"] is True
+    values = {**V5, "directories_general": {**V5["directories_general"], "dir_out": ["runs/case1/output/"]}}
+    assert catalog.open_run(ref, values).files["mhm"] == tmp_path / "runs" / "case1" / "output" / "mHM_Fluxes_States.nc"
+    runs.link_outputs(tmp_path, "")  # an unnamed run writes to output/ again
+    assert 'dir_Out(1) = "output/"' in nml.read_text()
+    with pytest.raises(ValueError, match="letters"):
+        runs.link_outputs(tmp_path, "a b")

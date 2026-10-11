@@ -4,7 +4,7 @@ Each view of the Outputs tab's navigation list (`layouts.yml`, post plan §0c) h
 **central panel**, a page added to the stacked widget that holds the main map canvas
 (QGIS 4.2's central widget holds one; the standalone window is built alike), or the
 **canvas itself** (Map Explorer), and **side docks on the left**, tabbed with QGIS's
-Layers and Browser panels. The central widget is never replaced: pages are added
+Layers and Browser panels (a few on the right, as `layouts.yml` says). The central widget is never replaced: pages are added
 and removed. Registering and removing a dock goes through `iface` in Desktop, so
 QGIS's own panel bookkeeping sees it.
 
@@ -25,6 +25,7 @@ from ..ui import load_form
 STATE_VERSION = 2  # central panels and left tabs since P5e: older saved states are ignored
 SETTINGS = "mhm_qgis/post"
 LEFT = Qt.DockWidgetArea.LeftDockWidgetArea
+RIGHT = Qt.DockWidgetArea.RightDockWidgetArea
 
 
 @cache
@@ -128,14 +129,14 @@ def show_central(dialog, view) -> None:
     stack(dialog).setCurrentWidget(canvas(dialog) if name == "canvas" else dialog._post.panels[name])
 
 
-def add_left(dialog, dock, beside=None) -> None:
-    """Tab a dock into the left area: beside `beside`, else with QGIS's Layers panel."""
+def add_dock(dialog, dock, beside=None, area=LEFT) -> None:
+    """Tab a dock beside `beside`; else into `area` (on the left, with QGIS's Layers panel)."""
     host = window(dialog)
-    anchor = beside or host.findChild(QDockWidget, "Layers")
-    if anchor is not None and anchor is not dock and anchor.isVisible() and host.dockWidgetArea(anchor) == LEFT:
+    anchor = beside or (host.findChild(QDockWidget, "Layers") if area == LEFT else None)
+    if anchor is not None and anchor is not dock and anchor.isVisible() and host.dockWidgetArea(anchor) == area:
         host.tabifyDockWidget(anchor, dock)
     else:
-        host.addDockWidget(LEFT, dock)
+        host.addDockWidget(area, dock)
     dock.show()
 
 
@@ -143,28 +144,29 @@ def apply(dialog, view, on_create=None, reset=False) -> None:
     """Arrange the host for `view`: its panel in the centre and its docks as left tabs,
     as saved for the view or as declared."""
     host, docks, spec = window(dialog), dialog._post.docks, layouts()["views"][view]
-    left = spec.get("left", [])
-    for name in left:
+    left, right = spec.get("left", []), spec.get("right", [])
+    for name in (*left, *right):
         part(dialog, name, on_create)
     if spec["central"] != "canvas":
         part(dialog, spec["central"], on_create)
     for name, other in docks.items():
-        if name not in left:
+        if name not in (*left, *right):
             other.hide()
     show_central(dialog, view)
     saved = None if reset else settings().value(f"{SETTINGS}/layout/{view}")
     if saved is not None and host.restoreState(saved, STATE_VERSION):
-        for name in left:
+        for name in (*left, *right):
             docks[name].show()
         return
-    beside = None
-    for name in left:
-        add_left(dialog, docks[name], beside)
-        beside = beside or docks[name]
-    if left:
-        docks[left[0]].raise_()
-        QTimer.singleShot(0, docks[left[0]].raise_)  # again once the tab bar exists (QGIS Desktop)
-        host.resizeDocks([docks[left[0]]], [int(spec.get("width", 360))], Qt.Orientation.Horizontal)
+    for area, names, width in ((LEFT, left, spec.get("width", 360)), (RIGHT, right, spec.get("right_width", 340))):
+        beside = None
+        for name in names:
+            add_dock(dialog, docks[name], beside, area)
+            beside = beside or docks[name]
+        if names:
+            docks[names[0]].raise_()
+            QTimer.singleShot(0, docks[names[0]].raise_)  # again once the tab bar exists (QGIS Desktop)
+            host.resizeDocks([docks[names[0]]], [int(width)], Qt.Orientation.Horizontal)
 
 
 def save_view(dialog, view) -> None:

@@ -27,6 +27,9 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
 - An introduction wizard (Launch on the Configuration tab): a few questions about the study
   and the available data set the work type, resolutions and PET method, and pre-fill the
   process and output choices in the namelist editor.
+- Named runs: give a run a name on the Execute tab and mHM writes its outputs to
+  `runs/<name>/` in the setup (the namelists point there); the Outputs tab lists the run
+  by name, so cases can be told apart and compared.
 - Run mHM lists inputs that the selected processes read but are not prepared yet, and
   asks before running.
 - A guided tour from the Help button: it steps through the visible page's main inputs

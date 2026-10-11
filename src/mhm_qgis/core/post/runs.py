@@ -6,9 +6,14 @@ setup folder: the moved `output/`, any output file the namelists put elsewhere
 (moved), the restart file (copied), plus `namelists/` (copies) and `run.json`.
 A run's files therefore resolve the same way, current or archived (`catalog`).
 
+A **named run** (the Execute tab's run name) writes straight into `runs/<name>/`:
+`link_outputs` points the namelists' output paths there before mHM starts, and
+`finish_named` copies the namelists and writes `run.json` with `linked: true`, so
+its paths resolve from the setup folder (an archived run's resolve from its own).
+
 A v5.13 multi-domain run writes every domain into one `output/` (`output/<domain>/`),
 so it lists one run per domain; v6 domains write to their own folders and are
-listed, and archived, domain by domain.
+listed, archived and named domain by domain.
 """
 from __future__ import annotations
 
@@ -26,6 +31,11 @@ from ..handlers.state.nml_settings import load_settings
 from ..handlers.store.layout import project_version
 
 RUNS = "runs"
+NAME = re.compile(r"[\w.-]+")
+# The namelist keys that hold output paths (v5.13 and v6), one `key(i) = "path"` per line.
+_OUTPUT_KEYS = re.compile(r"^(\s*(?:dir_out|dirconfigout|output_path|output_node_path|output_poi_path|"
+                          r"diagnostics_path)\s*(?:\(\s*\d+\s*\))?\s*=)(.*)$", re.IGNORECASE | re.MULTILINE)
+_QUOTED = re.compile(r"""(["'])(.*?)\1""")
 
 
 @dataclass(frozen=True)
@@ -74,16 +84,87 @@ def list_runs(folder) -> list[RunRef]:
             continue
     for meta, root in sorted(metas, key=lambda item: str(item[0].get("created", "")), reverse=True):
         stored = meta.get("domains")
-        refs += _refs(folder, root, root / "namelists", meta.get("version", version), root.name,
+        refs += _refs(folder, folder if meta.get("linked") else root, root / "namelists",
+                      meta.get("version", version), root.name,
                       None if stored is None else multi_domain.resolve(folder, stored))
     return refs
 
 
+def _namelist_folders(folder) -> list[Path]:
+    """The folders whose mhm.nml holds the output paths: each domain of a v6 combined setup."""
+    folder = Path(folder)
+    if multi_domain.is_multi(folder) and project_version(folder) == "v6":
+        return list(_domains(folder)[0])
+    return [folder]
+
+
+def link_outputs(folder, name="") -> list[Path]:
+    """Point the namelists' output paths into `runs/<name>/` (back to the setup for "")
+    and create the folders they need; returns those folders."""
+    if name and not NAME.fullmatch(name):
+        raise ValueError("Name the run with letters, digits, '.', '_' or '-'.")
+    prefix, made = f"{RUNS}/{name}/" if name else "", []
+    for base in _namelist_folders(folder):
+        path = base / "mhm.nml"
+        if not path.is_file():
+            if name:
+                raise ValueError(f"{base.name} has no mhm.nml: save its namelists first.")
+            continue  # nothing to point back to output/
+
+        def relink(match, base=base):
+            quote, text = match.groups()
+            if not text or os.path.isabs(text):
+                return match.group(0)
+            new = prefix + re.sub(rf"^{RUNS}/[\w.-]+/", "", text)
+            made.append(base / (new if new.endswith("/") else os.path.dirname(new) or "."))
+            return f"{quote}{new}{quote}"
+
+        old = path.read_text(encoding="utf-8")
+        new = _OUTPUT_KEYS.sub(lambda match: match.group(1) + _QUOTED.sub(relink, match.group(2)), old)
+        if new != old:
+            path.write_text(new, encoding="utf-8")
+    for created in made:
+        created.mkdir(parents=True, exist_ok=True)
+    return made
+
+
+def finish_named(folder, name, note="") -> list[RunRef]:
+    """After a named run: its namelists and `run.json` into `runs/<name>/`."""
+    for base in _namelist_folders(folder):
+        target = base / RUNS / name
+        (target / "namelists").mkdir(parents=True, exist_ok=True)
+        for path in base.glob("*.nml"):
+            shutil.copy2(path, target / "namelists" / path.name)
+        _write_meta(base, target, name, note, None, linked=True)
+    return [ref for ref in list_runs(folder) if ref.name == name]
+
+
+def _write_meta(folder, target, name, note, period, linked=False) -> None:
+    from ..datamodel import current_processes
+
+    try:
+        processes = current_processes(folder)
+    except ValueError:
+        processes = None
+    meta = {
+        "name": name,
+        "created": datetime.now(UTC).isoformat(timespec="seconds"),
+        "version": project_version(folder),
+        "period": period,
+        "processes": processes,
+        "fingerprint": fingerprint(sorted(p for p in target.rglob("*") if p.is_file())),
+        "note": note,
+        "domains": _domains(folder)[1] if multi_domain.is_multi(folder) else None,
+        "linked": linked,  # paths resolve from the setup folder (a named run), not from `target`
+    }
+    (target / "run.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+
 def run_meta(ref: RunRef) -> dict:
-    """`run.json` of an archived run; {} for the current one."""
+    """`run.json` of an archived or named run; {} for the current one."""
     if not ref.name:
         return {}
-    return json.loads((ref.root / "run.json").read_text(encoding="utf-8"))
+    return json.loads((ref.namelists.parent / "run.json").read_text(encoding="utf-8"))
 
 
 def archive(folder, name, note="", values=None) -> list[RunRef]:
@@ -100,7 +181,7 @@ def archive(folder, name, note="", values=None) -> list[RunRef]:
         if any((domain / RUNS / name).exists() for domain in domains):
             raise ValueError(f"A run named {name} is already archived.")
         return [ref for domain in domains for ref in archive(domain, name, note)]
-    if not re.fullmatch(r"[\w.-]+", name or ""):
+    if not NAME.fullmatch(name or ""):
         raise ValueError("Name the run with letters, digits, '.', '_' or '-'.")
     target = folder / RUNS / name
     if target.exists():
@@ -114,12 +195,6 @@ def archive(folder, name, note="", values=None) -> list[RunRef]:
         period = [str(moment) for moment in runs[0].period]
     except (OSError, ValueError, KeyError):
         period = None
-    from ..datamodel import current_processes
-
-    try:
-        processes = current_processes(folder)
-    except ValueError:
-        processes = None
     target.mkdir(parents=True)
     (target / "namelists").mkdir()
     for path in folder.glob("*.nml"):
@@ -136,15 +211,5 @@ def archive(folder, name, note="", values=None) -> list[RunRef]:
     for sub in (target / "output").iterdir():
         if sub.is_dir():
             (output / sub.name).mkdir()  # v5.13 multi: mHM needs every dir_Out to exist
-    meta = {
-        "name": name,
-        "created": datetime.now(UTC).isoformat(timespec="seconds"),
-        "version": version,
-        "period": period,
-        "processes": processes,
-        "fingerprint": fingerprint(sorted(p for p in target.rglob("*") if p.is_file())),
-        "note": note,
-        "domains": _domains(folder)[1] if multi_domain.is_multi(folder) else None,
-    }
-    (target / "run.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    _write_meta(folder, target, name, note, period)
     return [ref for ref in list_runs(folder) if ref.name == name]

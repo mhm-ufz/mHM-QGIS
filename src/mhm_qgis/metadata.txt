@@ -8,7 +8,9 @@ author=Sanjeev Bashyal
 email=sanjeev.bashyal@ufz.de
 about=Builds mHM model setups: domain delineation and outlet snapping, DEM
  derivatives, soil, land cover, geology and LAI, meteorological forcing on
- aligned model grids, namelist editing with nml-tools, and running mHM.
+ aligned model grids, namelist editing with nml-tools, multi-domain runs, and
+ running mHM as named cases. The Outputs tab analyses runs: water balance,
+ hydrographs, signatures, events, validation, comparison, extremes and droughts.
  Python dependencies are listed in requirements.txt in the plugin folder. On
  first start the plugin offers to install missing ones with pip --user into the
  Python that QGIS uses. If that fails, install them manually with that Python:
@@ -22,7 +24,8 @@ tracker=https://git.ufz.de/mhm/mhm-qgis/-/issues
 repository=https://git.ufz.de/mhm/mhm-qgis
 homepage=https://git.ufz.de/mhm/mhm-qgis
 changelog=0.1.0 First public release: mHM 5.13 and v6 setup preparation,
- namelist editing, mHM execution, and a standalone map window.
+ namelist editing, multi-domain runs, mHM execution as named cases, output
+ analysis in the QGIS window, and a standalone map window.
 tags=hydrology,mhm,hydrological model,catchment,raster,modeling
 category=Raster
 icon=qt/ui/forms/Resources/icon.png

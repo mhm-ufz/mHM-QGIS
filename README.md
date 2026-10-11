@@ -6,7 +6,11 @@ or as a standalone application.
 - Delineate domains, snap outlets, and assign discharge observations.
 - Prepare DEM derivatives, soil, land cover, geology, and LAI.
 - Align morphology and meteorology on compatible model grids.
-- Edit namelists with nml-tools and inspect rasters or discharge time series.
+- Edit namelists with nml-tools, guided by an introduction wizard, and combine prepared
+  domains into one multi-domain run.
+- Run mHM as named cases, each in its own `runs/<name>/` folder, and analyse them in the
+  Outputs tab: water balance, hydrographs and scores, signatures, events, validation
+  against observations, run comparison, extremes, droughts and plausibility checks.
 
 ## Install
 
@@ -69,6 +73,11 @@ disconnected catchments. Meteorology preparation preserves input cadence,
 converts units and optionally deaccumulates running totals. Historical land-use
 periods share exact datetime boundaries (v5 changes must fall on year boundaries).
 Both model versions can generate L0/L1/L11/L2 coordinates in `data/latlon.nc`.
+
+In **5. Outputs**, pick a run (the current `output/`, a named run or an archived one)
+and a view. Each view arranges the QGIS main window (or the standalone map window): its
+panel in the centre, its side panels as tabs beside Layers; Map Explorer draws on the
+map canvas itself. **Export** writes the shown tables, plots and maps to a folder.
 
 Displayed layers appear on QGIS Desktop's map canvas. In the standalone application
 they appear in its own map window, which has a layer tree and accepts dropped raster

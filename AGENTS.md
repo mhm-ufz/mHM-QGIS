@@ -771,7 +771,7 @@ Four JSON files live under each domain's `.temp/` directory.
     analysis layout is on). Every other view has a **central panel**, a page added to the
     `QStackedWidget` that holds the host's main canvas (QGIS 4.2.3: page 0 is
     `theMapCanvas`; found as `iface.mapCanvas().parentWidget()`), and **left docks**
-    tabbed with QGIS's "Layers" panel (`add_left`; tabs at the bottom). The central widget
+    tabbed with QGIS's "Layers" panel (`add_dock`; tabs at the bottom; Map Explorer's Cell inspector on the right). The central widget
     itself is never replaced. **QGIS shows the canvas again whenever a layer is added**
     (verified): clicking the navigation entry again (`itemClicked`) brings the panel
     back. The standalone `MapCanvasWindow` is built alike (canvas in a stacked widget,
@@ -842,6 +842,14 @@ Four JSON files live under each domain's `.temp/` directory.
     files resolve alike current or archived. A v5.13 multi run lists one run per
     domain (`output/<domain>/`); v6 domains are listed and archived one by one. The
     caller refuses archiving while mHM runs.
+  - **Named runs** (the Execute tab's `lineEdit_runName`): before mHM starts,
+    `runs.link_outputs` rewrites the output keys of `mhm.nml` (`dir_Out`, `dirConfigOut`,
+    `output_path`, `output_node_path`, `output_poi_path`, `diagnostics_path`; never
+    `dir_Total_Runoff`, an input, nor restart paths) to `runs/<name>/…` and creates the
+    folders; an unnamed run points them back to `output/`. After a successful run,
+    `finish_named` copies the namelists and writes `run.json` with `linked: true`: its
+    paths resolve from the setup folder (`RunRef.root` = setup), an archived run's from
+    its own folder. `run.json` is read beside the run's `namelists/`.
   - `catalog.py`: file locations come from the namelists that ran, through
     `outputs.yml` `files` (never globbed); variables are the file's joined with
     `outputs.yml` `outputs`; time comes from `time_bnds` only (units whitespace

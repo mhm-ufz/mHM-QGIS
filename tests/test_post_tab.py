@@ -263,12 +263,13 @@ def test_each_view_arranges_the_window_and_the_workspace_restores_it(opened):
     assert stack.currentWidget() is dialog._post.panels["hydrograph"]  # selecting the view brings it back
 
     _page(dialog, "Map Explorer")
-    window.addDockWidget(right, docks["cell_inspector"])  # the user moves it
+    assert window.dockWidgetArea(docks["cell_inspector"]) == right  # declared on the right
+    window.addDockWidget(left, docks["cell_inspector"])  # the user moves it
     _page(dialog, "Water balance")
     _page(dialog, "Map Explorer")
-    assert window.dockWidgetArea(docks["cell_inspector"]) == right  # remembered
+    assert window.dockWidgetArea(docks["cell_inspector"]) == left  # remembered
     dialog.pushButton_postResetLayout.click()
-    assert window.dockWidgetArea(docks["cell_inspector"]) == left  # declared
+    assert window.dockWidgetArea(docks["cell_inspector"]) == right  # declared again
     dialog.pushButton_postWorkspace.setChecked(False)
     assert dialog._post.docks == {}
     assert dialog._post.panels == {}

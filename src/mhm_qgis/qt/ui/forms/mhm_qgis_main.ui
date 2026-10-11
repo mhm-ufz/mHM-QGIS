@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>816</width>
+    <width>888</width>
     <height>917</height>
    </rect>
   </property>
@@ -2581,6 +2581,36 @@
         <number>4</number>
        </property>
        <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_runName">
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="label_runName">
+           <property name="text">
+            <string>Name of Case Run:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="lineEdit_runName"/>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="horizontalLayout_nmlFinal">
          <property name="topMargin">
           <number>0</number>
@@ -2737,77 +2767,95 @@
         </widget>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_run_mHM" stretch="0,0,0">
-         <item>
-          <widget class="QLabel" name="label_run_mHM">
-           <property name="minimumSize">
-            <size>
-             <width>20</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="text">
-            <string>Run mHM</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer_run_mHM">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QPushButton" name="pushButton_execute_mHM">
-           <property name="minimumSize">
-            <size>
-             <width>23</width>
-             <height>23</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>23</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="toolTip">
-            <string>Runs mHM in the project directory</string>
-           </property>
-           <property name="autoFillBackground">
-            <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">    QPushButton {
+        <widget class="QGroupBox" name="groupBox_executemHM">
+         <property name="title">
+          <string>Execute mHM</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_14">
+          <property name="spacing">
+           <number>2</number>
+          </property>
+          <property name="topMargin">
+           <number>2</number>
+          </property>
+          <property name="bottomMargin">
+           <number>2</number>
+          </property>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_run_mHM" stretch="0,0,0">
+            <item>
+             <widget class="QLabel" name="label_run_mHM">
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Run mHM</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="pushButton_execute_mHM">
+              <property name="minimumSize">
+               <size>
+                <width>23</width>
+                <height>23</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>23</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>Runs mHM in the project directory</string>
+              </property>
+              <property name="autoFillBackground">
+               <bool>false</bool>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">    QPushButton {
         text-align: left;
     }</string>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset>
-             <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
-           </property>
-          </widget>
-         </item>
-        </layout>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_run_mHM">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
        </item>
        <item>
-        <spacer name="verticalSpacer_4">
+        <spacer name="verticalSpacer_execution">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
          </property>
@@ -2982,117 +3030,117 @@
           <layout class="QVBoxLayout" name="verticalLayout_postLayoutButtons">
            <item>
             <widget class="QListWidget" name="listWidget_postNavigation">
-              <property name="maximumSize">
-               <size>
-                <width>220</width>
-                <height>16777215</height>
-               </size>
+             <property name="maximumSize">
+              <size>
+               <width>220</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <item>
+              <property name="text">
+               <string>A · Basics</string>
               </property>
-              <item>
-               <property name="text">
-                <string>A · Basics</string>
-               </property>
-               <property name="font">
-                <font>
-                 <bold>true</bold>
-                </font>
-               </property>
-               <property name="flags">
-                <set>ItemIsEnabled</set>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Map Explorer</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Hydrograph</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Water balance</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Processes</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>B · Diagnostics</string>
-               </property>
-               <property name="font">
-                <font>
-                 <bold>true</bold>
-                </font>
-               </property>
-               <property name="flags">
-                <set>ItemIsEnabled</set>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Signatures</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Events</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Validation</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Climatology</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>C · Advanced</string>
-               </property>
-               <property name="font">
-                <font>
-                 <bold>true</bold>
-                </font>
-               </property>
-               <property name="flags">
-                <set>ItemIsEnabled</set>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Compare</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Extremes</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Drought</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Anomalies</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>Summary</string>
-               </property>
-              </item>
-             </widget>
+              <property name="font">
+               <font>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="flags">
+               <set>ItemIsEnabled</set>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Map Explorer</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Hydrograph</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Water balance</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Processes</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>B · Diagnostics</string>
+              </property>
+              <property name="font">
+               <font>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="flags">
+               <set>ItemIsEnabled</set>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Signatures</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Events</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Validation</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Climatology</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>C · Advanced</string>
+              </property>
+              <property name="font">
+               <font>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="flags">
+               <set>ItemIsEnabled</set>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Compare</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Extremes</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Drought</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Anomalies</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Summary</string>
+              </property>
+             </item>
+            </widget>
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_postWorkspace">

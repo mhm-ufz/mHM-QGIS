@@ -172,7 +172,10 @@ def inputs_ready(dialog, project_folder) -> bool:
 def run(dialog) -> bool:
     if not require_active(dialog):
         return False
+    from ...core.post import runs
+
     project_folder = dialog.project_folder
+    name = dialog.lineEdit_runName.text().strip()  # "" writes to output/ as before
 
     def finished(exit_code):
         if exit_code == 0:
@@ -180,6 +183,13 @@ def run(dialog) -> bool:
             if dialog.project_folder == project_folder:
                 set_button_state(dialog, "run_mhm", "completed")
             dialog.log_message("mHM completed successfully.")
+            if name:
+                runs.finish_named(project_folder, name)
+                dialog.log_message(f"Run {name} is in runs/{name}/; the Outputs tab lists it.")
+                if dialog.project_folder == project_folder:
+                    from . import post_context
+
+                    post_context.populate(dialog)
             return
         message = f"mHM exited with code {exit_code}."
         processing.mark_workflow(project_folder, "run_mhm", "failed", message)
@@ -201,6 +211,11 @@ def run(dialog) -> bool:
             ensure_project_structure(project_folder, version)
         if not inputs_ready(dialog, project_folder):
             return False
+        if name and any(ref.name == name for ref in runs.list_runs(project_folder)) and QMessageBox.question(
+                dialog, "Run name", f"A run named {name} exists. Run again and overwrite its outputs?") \
+                != QMessageBox.StandardButton.Yes:
+            return False
+        runs.link_outputs(project_folder, name)  # the namelists' output paths: runs/<name>/ or output/
         workspace = workspace_folder(project_folder)
         terminal = dialog.open_project_terminal()
         if terminal is None:

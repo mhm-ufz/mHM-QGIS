@@ -56,6 +56,8 @@ class Dialog:
         self.terminal = Terminal()
         self._loading_input_state = False
         self.groupBox_editCalibrationNamelists = SimpleNamespace(setEnabled=lambda _enabled: None)
+        self.run_name = ""
+        self.lineEdit_runName = SimpleNamespace(text=lambda: self.run_name)
 
     def log_message(self, message) -> None:
         self.messages.append(message)
@@ -175,6 +177,28 @@ def test_run_mhm_uses_project_terminal(tmp_path: Path, monkeypatch) -> None:
     assert processing.workflow(tmp_path, "run_mhm")["status"] == "running"
     callback(0)
     assert processing.workflow(tmp_path, "run_mhm")["status"] == "completed"
+
+
+def test_a_named_run_points_the_namelists_at_its_folder(tmp_path: Path, monkeypatch) -> None:
+    from mhm_qgis.core.post import runs
+    from mhm_qgis.qt.controllers import post_context
+
+    dialog = Dialog(tmp_path)
+    dialog.run_name = "case1"
+    _no_buttons(monkeypatch)
+    monkeypatch.setattr(controller_module, "ensure_project_structure", lambda path, version: [])
+    monkeypatch.setattr(controller_module, "require_v6_executable", lambda owner: str(tmp_path / "mhmv6"))
+    monkeypatch.setattr(controller_module, "inputs_ready", lambda owner, folder: True)
+    monkeypatch.setattr(post_context, "populate", lambda _dialog: None)
+    from mhm_qgis.externals import mhm_handler
+    monkeypatch.setattr(mhm_handler, "executable", lambda version, v6_path=None: Path(v6_path))
+    (tmp_path / "mhm.nml").write_text('&config_mhm\n  output_path(1) = "output/mhm_output.nc"\n/\n')
+
+    assert controller_module.run(dialog) is True
+    assert 'output_path(1) = "runs/case1/output/mhm_output.nc"' in (tmp_path / "mhm.nml").read_text()
+    assert (tmp_path / "runs" / "case1" / "output").is_dir()
+    dialog.terminal.calls[0][1]["on_finished"](0)
+    assert [ref.name for ref in runs.list_runs(tmp_path)] == ["case1"]
 
 
 def test_version_change_prepares_project_and_saves_state(

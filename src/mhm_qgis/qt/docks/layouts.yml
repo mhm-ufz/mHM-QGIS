@@ -7,6 +7,7 @@
 #          canvas itself (Map Explorer draws on it).
 # left:    side docks, tabbed with QGIS's Layers and Browser panels (tabs at the
 #          bottom); the first is raised. `width` is the left area's width in pixels.
+# right:   side docks on the right (tabbed together), `right_width` wide.
 version: 2
 
 panels:
@@ -33,7 +34,7 @@ docks:
 
 views:
   # title: the navigation entry it answers to
-  map_explorer:  {title: Map Explorer,  central: canvas,        left: [map_controls, cell_inspector], width: 340}
+  map_explorer:  {title: Map Explorer,  central: canvas,        left: [map_controls], width: 340, right: [cell_inspector], right_width: 340}
   hydrograph:    {title: Hydrograph,    central: hydrograph,    left: [map], width: 380}
   water_balance: {title: Water balance, central: water_balance, left: [map], width: 420}
   processes:     {title: Processes,     central: processes,     left: [map, cell_inspector], width: 380}
