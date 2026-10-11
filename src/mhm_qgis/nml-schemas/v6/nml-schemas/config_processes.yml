@@ -6,7 +6,7 @@ properties:
   interception:
     type: integer
     x-fortran-kind: i4
-    default: 0
+    default: 1
     examples: [1]
     enum: [-1, 0, 1]
     title: Interception process case
@@ -18,7 +18,7 @@ properties:
   snow:
     type: integer
     x-fortran-kind: i4
-    default: 0
+    default: 1
     examples: [1]
     enum: [-1, 0, 1]
     title: Snow process case
@@ -30,7 +30,7 @@ properties:
   soil_moisture:
     type: integer
     x-fortran-kind: i4
-    default: 0
+    default: 1
     examples: [1]
     enum: [0, 1, 2, 3, 4]
     title: Soil moisture process case
@@ -44,7 +44,7 @@ properties:
   direct_runoff:
     type: integer
     x-fortran-kind: i4
-    default: 0
+    default: 1
     examples: [1]
     enum: [0, 1]
     title: Direct runoff process case
@@ -55,7 +55,7 @@ properties:
   pet:
     type: integer
     x-fortran-kind: i4
-    default: 0
+    default: 1
     examples: [-2]
     enum: [-2, -1, 0, 1, 2, 3]
     title: Potential evapotranspiration (PET) process case
@@ -70,7 +70,7 @@ properties:
   interflow:
     type: integer
     x-fortran-kind: i4
-    default: 0
+    default: 1
     examples: [1]
     enum: [0, 1]
     title: Interflow process case
@@ -81,7 +81,7 @@ properties:
   percolation:
     type: integer
     x-fortran-kind: i4
-    default: 0
+    default: 1
     examples: [1]
     enum: [0, 1]
     title: Percolation process case
@@ -92,7 +92,7 @@ properties:
   baseflow:
     type: integer
     x-fortran-kind: i4
-    default: 0
+    default: 1
     examples: [1]
     enum: [0, 1]
     title: Baseflow process case
@@ -116,7 +116,7 @@ properties:
   routing:
     type: integer
     x-fortran-kind: i4
-    default: 0
+    default: 1
     examples: [3]
     enum: [0, 1, 2, 3]
     title: Routing process case

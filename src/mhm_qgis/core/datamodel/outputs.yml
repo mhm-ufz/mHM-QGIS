@@ -10,27 +10,30 @@ outputs:
   # kind: flux values are summed over the output interval, states averaged.
   # weight: how a basin mean treats the value. cell = per cell area (as written);
   #   pervious = multiply by (1 - fSealed); sealed = multiply by fSealed.
-  interception:  {nc: interception, switch: 1, file: mhm, kind: state, weight: cell, group: interception, aggregate: [mean, max], balance: storage}
-  snowpack:      {nc: snowpack, switch: 2, file: mhm, kind: state, weight: cell, group: snow, aggregate: [mean, max], balance: storage, needs: {snow: [1]}}
-  SWC_L:         {nc: "SWC_L{layer:02d}", switch: 3, file: mhm, kind: state, weight: pervious, layered: true, group: soil, aggregate: [mean, min, max], balance: storage}
-  SM_L:          {nc: "SM_L{layer:02d}", switch: 4, file: mhm, kind: state, weight: pervious, layered: true, group: soil, aggregate: [mean, min, max]}
-  SM_Lall:       {nc: SM_Lall, switch: 5, file: mhm, kind: state, weight: pervious, group: soil, aggregate: [mean, min, max]}
-  sealedSTW:     {nc: sealedSTW, switch: 6, file: mhm, kind: state, weight: sealed, group: runoff, aggregate: [mean, max], balance: storage}
-  unsatSTW:      {nc: unsatSTW, switch: 7, file: mhm, kind: state, weight: pervious, group: groundwater, aggregate: [mean, max], balance: storage}
-  satSTW:        {nc: satSTW, switch: 8, file: mhm, kind: state, weight: pervious, group: groundwater, aggregate: [mean, max], balance: storage, needs: {baseflow: [1]}}
+  # needs: process cases that must all be active; needs_any: one of them is enough.
+  #   They mirror mHM v6's `mhm_filter_output` (mo_mhm_container.F90), which drops a
+  #   switched-on output while no active process provides its field (v6: case /= 0).
+  interception:  {nc: interception, switch: 1, file: mhm, kind: state, weight: cell, group: interception, aggregate: [mean, max], balance: storage, needs: {interception: [-1, 1]}}
+  snowpack:      {nc: snowpack, switch: 2, file: mhm, kind: state, weight: cell, group: snow, aggregate: [mean, max], balance: storage, needs: {snow: [-1, 1]}}
+  SWC_L:         {nc: "SWC_L{layer:02d}", switch: 3, file: mhm, kind: state, weight: pervious, layered: true, group: soil, aggregate: [mean, min, max], balance: storage, needs: {soil_moisture: [1, 2, 3, 4]}}
+  SM_L:          {nc: "SM_L{layer:02d}", switch: 4, file: mhm, kind: state, weight: pervious, layered: true, group: soil, aggregate: [mean, min, max], needs: {soil_moisture: [1, 2, 3, 4]}}
+  SM_Lall:       {nc: SM_Lall, switch: 5, file: mhm, kind: state, weight: pervious, group: soil, aggregate: [mean, min, max], needs: {soil_moisture: [1, 2, 3, 4]}}
+  sealedSTW:     {nc: sealedSTW, switch: 6, file: mhm, kind: state, weight: sealed, group: runoff, aggregate: [mean, max], balance: storage, needs: {direct_runoff: [1]}}
+  unsatSTW:      {nc: unsatSTW, switch: 7, file: mhm, kind: state, weight: pervious, group: groundwater, aggregate: [mean, max], balance: storage, needs: {interflow: [1]}}
+  satSTW:        {nc: satSTW, switch: 8, file: mhm, kind: state, weight: pervious, group: groundwater, aggregate: [mean, max], balance: storage, needs_any: {interflow: [1], baseflow: [1]}}
   PET:           {nc: PET, switch: 9, file: mhm, kind: flux, weight: cell, group: evapotranspiration, aggregate: [sum, mean]}
-  aET:           {nc: aET, switch: 10, file: mhm, kind: flux, weight: cell, group: evapotranspiration, aggregate: [sum, mean], balance: et}
-  Q:             {nc: Q, switch: 11, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], balance: runoff}
+  aET:           {nc: aET, switch: 10, file: mhm, kind: flux, weight: cell, group: evapotranspiration, aggregate: [sum, mean], balance: et, needs_any: {interception: [-1, 1], direct_runoff: [1], soil_moisture: [1, 2, 3, 4]}}
+  Q:             {nc: Q, switch: 11, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], balance: runoff, needs_any: {direct_runoff: [1], interflow: [1], baseflow: [1]}}
   QD:            {nc: QD, switch: 12, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], needs: {direct_runoff: [1]}}
   QIf:           {nc: QIf, switch: 13, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], needs: {interflow: [1]}}
   QIs:           {nc: QIs, switch: 14, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], needs: {interflow: [1]}}
   QB:            {nc: QB, switch: 15, file: mhm, kind: flux, weight: cell, group: runoff, aggregate: [sum, mean], needs: {baseflow: [1]}}
   recharge:      {nc: recharge, switch: 16, file: mhm, kind: flux, weight: cell, group: groundwater, aggregate: [sum, mean], needs: {percolation: [1]}}
-  soil_infil_L:  {nc: "soil_infil_L{layer:02d}", switch: 17, file: mhm, kind: flux, weight: cell, layered: true, group: soil, aggregate: [sum, mean]}
+  soil_infil_L:  {nc: "soil_infil_L{layer:02d}", switch: 17, file: mhm, kind: flux, weight: cell, layered: true, group: soil, aggregate: [sum, mean], needs: {soil_moisture: [1, 2, 3, 4]}}
   neutrons:      {nc: neutrons, switch: 18, file: mhm, kind: state, weight: cell, group: soil, aggregate: [mean], needs: {neutrons: [1, 2]}}
-  aET_L:         {nc: "aET_L{layer:02d}", switch: 19, file: mhm, kind: flux, weight: cell, layered: true, group: evapotranspiration, aggregate: [sum, mean]}
-  preEffect:     {nc: preEffect, switch: 20, file: mhm, kind: flux, weight: cell, group: meteorology, aggregate: [sum, mean]}
-  Qsm:           {nc: Qsm, switch: 21, file: mhm, kind: flux, weight: cell, group: snow, aggregate: [sum, mean], needs: {snow: [1]}}
+  aET_L:         {nc: "aET_L{layer:02d}", switch: 19, file: mhm, kind: flux, weight: cell, layered: true, group: evapotranspiration, aggregate: [sum, mean], needs: {soil_moisture: [1, 2, 3, 4]}}
+  preEffect:     {nc: preEffect, switch: 20, file: mhm, kind: flux, weight: cell, group: meteorology, aggregate: [sum, mean], needs: {snow: [-1, 1]}}
+  Qsm:           {nc: Qsm, switch: 21, file: mhm, kind: flux, weight: cell, group: snow, aggregate: [sum, mean], needs: {snow: [-1, 1]}}
   # Routed discharge on L11; the v6 app names it `discharge` and switches it in &output_mrm.
   Qrouted:       {nc: Qrouted, nc_v6: discharge, switch: mrm, file: mrm, kind: flux, weight: cell, group: routing, aggregate: [mean, max], needs: {routing: [1, 2, 3]}}
   # Gauge series: v5.13 discharge.nc (daily only; subdaily_discharge.nc when the

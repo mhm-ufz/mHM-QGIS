@@ -170,20 +170,31 @@ def inputs_ready(dialog, project_folder) -> bool:
 
 
 def outputs_ready(dialog, project_folder) -> bool:
-    """Ask before a run that would write no output variable (every output switch off)."""
+    """Ask before a run that would write no output variable (every output switch off), or
+    whose switched-on outputs mHM would drop because their process is off."""
     from ...core import datamodel
 
     try:
         switched_on = datamodel.outputs_on(project_folder)
+        dropped = datamodel.dropped_outputs(project_folder) if switched_on else []
     except ValueError:
         return True
-    if switched_on is None or switched_on:
+    if switched_on is None or (switched_on and not dropped):
         return True
+    if not switched_on:
+        title, text = "No outputs switched on", (
+            "Every output is switched off in the output namelist, so mHM would write only the grid "
+            "and the Outputs tab would have nothing to show. Turn outputs on in the namelist editor "
+            "(or the introduction wizard).")
+    else:
+        for item in dropped:
+            dialog.log_message(f"WARNING: mHM will drop output {item}.")
+        title, text = "Outputs without their process", (
+            f"mHM will drop {len(dropped)} switched-on output(s) because their process is off "
+            f"(the log lists them): {', '.join(item.split(' ')[0] for item in dropped)}. Set the process "
+            "cases (config_processes) in the namelist editor or the introduction wizard.")
     answer = QMessageBox.question(
-        dialog, "No outputs switched on",
-        "Every output is switched off in the output namelist, so mHM would write only the grid "
-        "and the Outputs tab would have nothing to show. Turn outputs on in the namelist editor "
-        "(or the introduction wizard).\n\nRun mHM anyway?",
+        dialog, title, text + "\n\nRun mHM anyway?",
         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
     return answer == QMessageBox.StandardButton.Yes
 

@@ -154,7 +154,11 @@ def read_namelists(project_folder) -> dict:
 
 def current_processes(project_folder) -> dict[str, int] | None:
     """Process cases from the saved main namelist, or None before it is saved."""
-    values = read_namelists(project_folder)
+    return _processes(read_namelists(project_folder))
+
+
+def _processes(values) -> dict[str, int] | None:
+    """Process cases from read namelists (v6 `config_processes`, v5.13 `processCase`)."""
     if "config_processes" in values:
         return {name: int(case) for name, case in values["config_processes"].items()}
     cases = values.get("processselection", {}).get("processcase")
@@ -286,8 +290,18 @@ def outputs_on(project_folder) -> list[str] | None:
     return [output for output in output_registry(version)["outputs"] if _switch_on(version, values, output)]
 
 
-def _process_ok(processes, needs) -> bool:
-    return all(int((processes or {}).get(name, 0)) in cases for name, cases in (needs or {}).items())
+def _process_problems(processes, spec) -> list[str]:
+    """Why an output's process is off ([] when on): every `needs` and one of `needs_any`
+    (mHM v6 drops an output whose field no active process provides, `mhm_filter_output`)."""
+    def on(name, cases):
+        return int((processes or {}).get(name, 0)) in cases
+
+    problems = [f"{_name(name)} must be case {' or '.join(map(str, cases))}"
+                for name, cases in (spec.get("needs") or {}).items() if not on(name, cases)]
+    alternatives = spec.get("needs_any") or {}
+    if alternatives and not any(on(name, cases) for name, cases in alternatives.items()):
+        problems.append(f"one of {', '.join(map(_name, alternatives))} must be on")
+    return problems
 
 
 def _output_problems(version, values, processes, output) -> list[str]:
@@ -295,10 +309,25 @@ def _output_problems(version, values, processes, output) -> list[str]:
     problems = []
     if _switch_on(version, values, output) is False:
         problems.append(f"enable output `{output}` ({switch_key(version, output)})")
-    if spec.get("needs") and not _process_ok(processes, spec["needs"]):
-        problems.extend(f"{_name(name)} must be case {' or '.join(map(str, cases))}"
-                        for name, cases in spec["needs"].items())
-    return problems
+    return problems + _process_problems(processes, spec)
+
+
+def dropped_outputs(project_folder) -> list[str]:
+    """Switched-on outputs whose process is off, which mHM drops: "output (why)"."""
+    version = layout.project_version(project_folder)
+    values = read_namelists(project_folder)
+    processes, outputs = _processes(values) or {}, output_registry(version)["outputs"]
+    return [f"{output} ({'; '.join(problems)})" for output, spec in outputs.items()
+            if _switch_on(version, values, output) and (problems := _process_problems(processes, spec))]
+
+
+def why_not_written(version, values, output) -> str:
+    """Why a run lacks `output`: its switch is off, or it was on but its process was off."""
+    key = switch_key(version, output)
+    problems = _process_problems(_processes(values), output_registry(version)["outputs"][output])
+    if _switch_on(version, values, output) and problems:
+        return f"Not written: mHM drops it while its process is off ({'; '.join(problems)})."
+    return f"Not written by this run. Turn on {key} in the output namelist." if key else "Not written by this run."
 
 
 def check_outputs(project_folder, analyses=None) -> list[Finding]:

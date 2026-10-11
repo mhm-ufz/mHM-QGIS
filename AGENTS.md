@@ -858,6 +858,12 @@ Four JSON files live under each domain's `.temp/` directory.
   - **A run with every output off** writes only the grid (no time axis): `read_bounds`
     raises a `ValueError` saying so, the run's findings show it in the Overview, and Run
     mHM asks before such a run (`datamodel.outputs_on`).
+  - **mHM v6 drops a switched-on output while no active process provides its field**
+    (`mhm_filter_output` in `exchange/mo_mhm_container.F90`; v6 defaults every process
+    case to 0). `outputs.yml` mirrors that contract: `needs` (all) and `needs_any` (one
+    of, e.g. aET, Q, satSTW), v6's rule "case /= 0" as case lists that v5.13's cases also
+    pass. Run mHM lists the outputs mHM would drop (`datamodel.dropped_outputs`), and the
+    Outputs tab says why one is missing (`datamodel.why_not_written`).
   - `catalog.py`: file locations come from the namelists that ran, through
     `outputs.yml` `files` (never globbed); variables are the file's joined with
     `outputs.yml` `outputs`; time comes from `time_bnds` only (units whitespace

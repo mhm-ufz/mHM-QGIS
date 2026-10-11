@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..datamodel import output_registry, switch_key
+from ..datamodel import output_registry, why_not_written
 from ..handlers.store.paths import namelist_project, schemas_folder, version_key
 from .runs import RunRef
 
@@ -172,9 +172,7 @@ class Run:
                                        int(found.group(1)) if found.groups() else None, units, fill))
         for output, spec, _ in patterns:
             if output not in written:
-                key = switch_key(self.version, output)
-                message = f"Not written by this run. Turn on {key} in the output namelist." if key \
-                    else "Not written by this run."
+                message = why_not_written(self.version, self.values, output)
                 result.append(Variable(output, output, output, spec["group"], spec["kind"],
                                        tuple(spec["aggregate"]), spec["weight"], spec["file"],
                                        present=False, message=message))

@@ -71,6 +71,9 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
 - A run with every output switched off (mHM then writes only the grid) is explained in
   the Outputs tab instead of failing with "time not found", and Run mHM asks before
   starting such a run.
+- mHM v6 silently dropping switched-on outputs whose process is off (every v6 process
+  defaults to off): Run mHM now lists them before the run, and the Outputs tab says a
+  missing output's process was off instead of asking to turn its switch on.
 - After a named run, the current `output/` run no longer opens the named run's files.
 - An old `mhm` build on PATH that cannot start (missing libraries) no longer hides the
   `mhm` command installed by pip.

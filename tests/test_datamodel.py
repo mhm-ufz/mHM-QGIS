@@ -44,7 +44,7 @@ def test_a_switched_off_output_and_an_inactive_process_are_reported(tmp_path):
     findings = {f.input: f for f in datamodel.check_outputs(project, ["water_balance"])}
     assert not findings["satSTW"].ok
     assert "enable output `satSTW` (out_satSTW)" in findings["satSTW"].message
-    assert "baseflow must be case 1" in findings["satSTW"].message
+    assert "one of interflow, baseflow must be on" in findings["satSTW"].message
     assert datamodel.output_step_days(project) == 1
     unavailable = datamodel.available_analyses(project, period_days=200)
     assert unavailable["water_balance"]
@@ -60,6 +60,26 @@ def test_outputs_on_lists_the_switched_on_outputs(tmp_path):
     assert datamodel.outputs_on(project) == ["Q"]
     (project / "outputs.nml").unlink()
     assert datamodel.outputs_on(project) is None  # no output namelist: nothing to judge
+
+
+def test_outputs_mhm_v6_drops_are_listed_before_the_run(tmp_path):
+    """mHM v6 drops a switched-on output while no active process provides its field
+    (mhm_filter_output): the Rapti-v6 case, every process 0 but PET."""
+    pytest.importorskip("nml_tools.gui.model")
+    off = "".join(f"  {name} = 0\n" for name in ("interception", "snow", "soil_moisture", "direct_runoff",
+                                                 "interflow", "percolation", "baseflow"))
+    outputs = "".join(f"  out_{name} = .true.\n" for name in ("interception", "snowpack", "SM_all", "aET_all",
+                                                              "Q", "QB", "PET"))
+    project = _project(tmp_path, "6", mhm=f"&config_processes\n{off}  pet = 1\n/\n",
+                       outputs=f"&output_mhm\n{outputs}/\n")
+    dropped = datamodel.dropped_outputs(project)
+    assert [item.split(" ")[0] for item in dropped] == ["interception", "snowpack", "SM_Lall", "aET", "Q", "QB"]
+    assert "aET (one of interception, direct runoff, soil moisture must be on)" in dropped  # PET kept
+    values = datamodel.read_namelists(project)
+    assert "drops it while its process is off (baseflow must be case 1)" in datamodel.why_not_written("v6", values, "QB")
+    assert "Turn on out_QD" in datamodel.why_not_written("v6", values, "QD")  # switched off, not dropped
+    (project / "mhm.nml").write_text(f"&config_processes\n{off.replace('= 0', '= 1')}  pet = 1\n/\n")
+    assert datamodel.dropped_outputs(project) == []
 
 
 def test_v513_output_step_counts_model_steps(tmp_path):
