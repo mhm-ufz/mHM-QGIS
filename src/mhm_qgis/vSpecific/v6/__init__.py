@@ -52,18 +52,9 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
             },
             "config_resolution": resolution_values,
             "config_input": {},
+            # Input paths come only from what the setup prepared (nml-settings.json
+            # sections and `namelist_values`); here only outputs and restarts.
             "config_mpr": {
-                "land_cover_path": repeat(f"{data}/morph/lc_periods.nc", count),
-                "lai_path": repeat(f"{data}/morph/lai.nc", count),
-                "soil_lut_path": repeat(
-                    f"{data}/morph/soil_classdefinition.txt", count
-                ),
-                "geo_lut_path": repeat(
-                    f"{data}/morph/geology_classdefinition.txt", count
-                ),
-                "lai_lut_path": repeat(
-                    f"{data}/morph/LAI_classdefinition.txt", count
-                ),
                 "restart_input_path": repeat("restart/mpr_restart_in.nc", count),
                 "restart_output_path": repeat("restart/mpr_restart_out.nc", count),
             },
@@ -72,8 +63,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
                 "restart_input_path": repeat("restart/mhm_restart_in.nc", count),
                 "restart_output_path": repeat("restart/mhm_restart_out.nc", count),
             },
-            "config_mrm": {
-                "scc_gauges_path": repeat(f"{data}/morph/idgauges.asc", count),
+            "config_mrm": {  # scc_gauges_path is a station NetCDF in v6; nothing prepares one yet
                 "output_path": repeat("output/mrm_output.nc", count),
                 "output_node_path": repeat("output/mrm_node_output.nc", count),
                 "restart_input_path": repeat("restart/mrm_restart_in.nc", count),
@@ -98,6 +88,7 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
             for name, value in validate_times(settings["time"]).items()
         })
     _apply_land_cover(values["main"], settings, count)
+    _apply_geology(values["main"], settings, count)
     _apply_soil(values["main"], settings, count)
     _apply_lai(values["main"], settings, count, data)
     apply_registered(values, settings, v6=True)
@@ -116,11 +107,18 @@ def _apply_land_cover(main, settings, count):
         main["config_mpr"]["land_cover_var"] = repeat(str(variable), count)
 
 
+def _apply_geology(main, settings, count):
+    geology = settings.get("geology", {})
+    lookup = geology.get("classdefinition_path") if isinstance(geology, dict) else None
+    if lookup:
+        main["config_mpr"]["geo_lut_path"] = repeat(str(lookup), count)
+
+
 def _apply_soil(main, settings, count):
     soil = settings.get("soil", {})
-    horizons = soil.get("horizons", []) if isinstance(soil, dict) else []
-    if not isinstance(soil, dict):
+    if not isinstance(soil, dict) or not soil:  # soil not set up: nothing to hand over
         return
+    horizons = soil.get("horizons", [])
     mode = int(soil.get("soil_db_mode", 1 if horizons else 0))
     path = soil.get("output_path") or soil.get("path")
     if path:

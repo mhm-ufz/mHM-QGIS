@@ -68,6 +68,9 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   hand.
 
 ### Fixed
+- The v6 namelist editor no longer receives input paths for data the setup never
+  prepared (an `idgauges.asc` as SCC gauges, land-cover, LAI and lookup-table files):
+  only the prepared inputs are handed over.
 - A run with every output switched off (mHM then writes only the grid) is explained in
   the Outputs tab instead of failing with "time not found", and Run mHM asks before
   starting such a run.

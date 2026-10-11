@@ -148,12 +148,23 @@ def test_the_v6_namelist_points_at_the_new_locations(tmp_path):
             return "m"
 
     values = build_initial_values("6.0", _Dialog())["main"]
-    # Input paths come only from registered outputs; none are registered here.
+    # Input paths come only from what the setup prepared; nothing is registered here,
+    # so the editor gets no input path (only outputs and restarts).
     assert values["config_input"] == {}
-    mpr = values["config_mpr"]
-    assert mpr["land_cover_path"][0] == "data/morph/lc_periods.nc"
-    assert mpr["soil_lut_path"][0] == "data/morph/soil_classdefinition.txt"
-    assert mpr["geo_lut_path"][0] == "data/morph/geology_classdefinition.txt"
+    assert {key for key in values["config_mpr"] if not key.startswith("restart")} == set()
+    assert "scc_gauges_path" not in values["config_mrm"]
+
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+
+    _project(tmp_path, "6.0")
+    update_section(tmp_path, "land_cover", {"output_path": "data/morph/lc.nc", "variable": "land_cover"})
+    update_section(tmp_path, "geology", {"classdefinition_path": "data/morph/geology_classdefinition.txt"})
+    update_section(tmp_path, "soil", {"classdefinition_path": "data/morph/soil_classdefinition.txt"})
+    mpr = build_initial_values("6.0", _Dialog())["main"]["config_mpr"]
+    assert mpr["land_cover_path"] == ["data/morph/lc.nc"]
+    assert mpr["geo_lut_path"] == ["data/morph/geology_classdefinition.txt"]
+    assert mpr["soil_lut_path"] == ["data/morph/soil_classdefinition.txt"]
+    assert not {"lai_lut_path", "lai_path"} & set(mpr)  # no LAI prepared
 
 
 def test_v6_ready_lai_points_at_the_morphology_bundle(tmp_path):

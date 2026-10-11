@@ -108,6 +108,10 @@ decision.
   an old build in `/usr/local/bin` missing its libraries must not hide pip's.
   Heavy imports stay inside functions.
 - `vSpecific/`: version-specific initial values handed to the namelist editor.
+  v6 hands over input paths only from what the setup prepared (`nml-settings.json`
+  sections and `namelist_values`), never hard-coded defaults; only output and restart
+  paths are the plugin's own. The editor keeps values already saved in `mhm.nml`
+  (initial values can add or change a field, not unset it).
 
 Top-level modules that remain include `mhm_qgis.py` (plugin lifecycle, reload-safe
 imports) and `dependency_bootstrap.py`. The main form's controllers are split by
