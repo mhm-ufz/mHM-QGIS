@@ -58,6 +58,10 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   "Analysis layout" off restores your own.
 
 ### Changed
+- Morphology publication masks the flow direction to the domain (v5.13 `fdir.asc`; v6
+  `data/morph/fdir.nc`, registered as `fdir_path`, while `input.nc` keeps the full one):
+  mHM v6 builds its grid from fdir's cells, so a full fdir ran MPR over the whole DEM
+  extent and could exhaust memory.
 - v6 namelist defaults: mHM's standard process set (routing case 3), the output
   switches on for every output those processes provide (as mHM v6 writes them), and
   monthly night fractions repeated for each domain.

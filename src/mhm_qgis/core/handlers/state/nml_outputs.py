@@ -71,7 +71,8 @@ def register_morphology(project_folder, *, bundle, dem, mask, latlon):
     Registers what the published files hold: a bundle field only when `input.nc` has
     that variable, and for multi-horizon soil (`soil_db_mode` 1) the published
     `soil_horizon_class.nc` with its class variable, which mHM v6 reads through
-    `soil_class_var` (it has no own variable name)."""
+    `soil_class_var` (it has no own variable name). A published `fdir.nc` (fdir masked
+    to the domain) replaces the bundle's fdir: mHM v6 builds its L0 grid from fdir's cells."""
     held = _variables(bundle)  # None when unreadable: register as declared
     horizons = Path(bundle).with_name("soil_horizon_class.nc")
     soil = load_settings(project_folder).get("soil") or {}
@@ -87,6 +88,9 @@ def register_morphology(project_folder, *, bundle, dem, mask, latlon):
         if (held is None or variable in held) and not (layered and field == "soil_class"):
             values[f"{field}_path"] = [_relative(project_folder, bundle)]
             values[f"{field}_var"] = [variable]
+    fdir = Path(bundle).with_name("fdir.nc")
+    if "fdir" in (_variables(fdir) or {}):
+        values.update(fdir_path=[_relative(project_folder, fdir)], fdir_var=["fdir"])
     if layered:
         variable = next((name for name, ndim in (_variables(horizons) or {}).items() if ndim == 3), "soil_class")
         values.update(soil_horizon_class_path=[_relative(project_folder, horizons)], soil_class_var=[variable])

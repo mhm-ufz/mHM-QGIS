@@ -63,14 +63,15 @@ def _derivative_sources(folder, suffix=""):
 
 
 def _model_sources(folder):
-    """Only the DEM is watershed-masked; the rest are already model-ready."""
+    """The DEM and fdir are watershed-masked; the rest are already model-ready."""
     layers = _derivative_sources(folder)
     layers.update(_derivative_sources(folder, "_masked"))
     return layers
 
 
 def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
-    """Write the saved-domain mask and a masked DEM; leave all other layers whole."""
+    """Write the saved-domain mask, a masked DEM and fdir (mHM takes fdir's cells as
+    its grid); leave all other layers whole."""
     l0 = dict(request.headers["L0"])
     folder = Path(temp_morphology_folder(request.project_folder))
     filled = folder / "filled_dem.nc"
@@ -92,7 +93,7 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     _progress(task, 30)
     masked = copy_rasters(
         folder / "dem_derivatives_masked.nc",
-        {"dem": derivatives["dem"]},
+        {name: derivatives[name] for name in ("dem", "fdir") if name in derivatives},
         l0,
         reference_path=filled,
         mask=keep,
@@ -183,13 +184,24 @@ def write(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         # v6 keeps the common-extent DEM whole; morph_mask.nc defines the domain.
         dem = copy_rasters(destination / "dem.nc", {"dem": layers["dem"]},
                            request.headers["L0"], reference_path=folder / "filled_dem.nc", task=task)
-        _progress(task, 80)
         _record(request.project_folder, dem)
+        outputs = [Path(output), Path(dem)]
+        # mHM v6 builds its L0 grid (cells, axes, lat/lon) from the fdir file: the namelist
+        # takes the domain-masked fdir, written like input.nc.
+        masked = folder / "dem_derivatives_masked.nc"
+        if "fdir" in variables(masked):
+            fdir = write_morph_input_nc(
+                destination / "fdir.nc", {"fdir": source(masked, "fdir")}, request.headers["L0"],
+                crs_string=request.crs or None, reference_path=folder / "filled_dem.nc",
+                title="Domain-masked flow direction prepared by mhm_qgis", log=log)
+            _record(request.project_folder, fdir)
+            outputs.append(Path(fdir))
+        _progress(task, 80)
         latlon_path = Path(data_folder(request.project_folder)) / "latlon.nc"
         morph_mask = destination / "morph_mask.nc"
         if not morph_mask.is_file():
             raise FileNotFoundError("Prepare morph_mask.nc before publication.")
-        outputs = [Path(output), Path(dem), morph_mask]
+        outputs.append(morph_mask)
         gauge = layers.get("idgauges")
         if gauge:
             idgauges = write_domain_dem_ascii(

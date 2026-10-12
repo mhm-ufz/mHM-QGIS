@@ -244,6 +244,18 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
         assert "idgauges" not in variables(master / "input.nc")
         assert gdal.Open(str(master / "idgauges.asc")).ReadAsArray()[5, 3] == 280
         classes = gdal.Open(source(master / "input.nc", "soil_class")).ReadAsArray()
+    # mHM takes fdir's cells as its grid: the published fdir is masked, input.nc keeps it whole.
+    full_fdir = gdal.Open(source(result["dem_derivatives"], "fdir")).ReadAsArray()
+    if version == "5.13":
+        fdir = gdal.Open(str(master / "fdir.asc")).ReadAsArray()
+    else:
+        fdir = gdal.Open(source(master / "fdir.nc", "fdir")).ReadAsArray()
+        np.testing.assert_array_equal(gdal.Open(source(master / "input.nc", "fdir")).ReadAsArray(), full_fdir)
+        registered = nml_settings.load_settings(tmp_path)["namelist_values"]["main"]["config_input"]
+        assert registered["fdir_path"][0].endswith("fdir.nc")
+        assert registered["fdir_var"] == ["fdir"]
+    np.testing.assert_array_equal(fdir[keep], full_fdir[keep])
+    assert np.all(fdir[~keep] == -9999)
     assert classes[0, 0] == -9999
     assert classes[5, 5] == 2  # Full class coverage, even outside selected catchments.
     expected_suffix = "soil_class.asc" if version == "5.13" else "soil_class.nc"

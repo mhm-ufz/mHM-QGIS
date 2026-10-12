@@ -119,7 +119,8 @@ def test_v6_prepared_outputs_are_registered_for_namelists(tmp_path):
 def test_v6_registration_follows_what_the_published_files_hold(tmp_path):
     """Multi-horizon soil: the published horizon file is registered with its class
     variable (mHM v6 reads it through soil_class_var), the bundle's absent soil_class
-    is not, and a stale soil_class_path is removed."""
+    is not, and a stale soil_class_path is removed. A published fdir.nc (domain-masked)
+    replaces the bundle's fdir."""
     netCDF4 = pytest.importorskip("netCDF4")
     root = paths.domain_folder(tmp_path, "Rapti")
     morph = root / "data" / "morph"
@@ -147,8 +148,10 @@ def test_v6_registration_follows_what_the_published_files_hold(tmp_path):
     assert registered["soil_class_var"] == ["soil_class"]
     assert "soil_class_path" not in registered
     assert registered["geo_class_var"] == ["geology_class"]
+    assert registered["fdir_path"] == ["data/morph/input.nc"]
 
     write(morph / "input.nc", {"slope": ("y", "x"), "soil_class": ("y", "x")})  # classic soil
+    write(morph / "fdir.nc", {"fdir": ("y", "x")})
     nml_settings.update_section(root, "soil", {"mode": "lookup_table", "soil_db_mode": 0})
     register_morphology(root, bundle=morph / "input.nc", dem=morph / "dem.nc",
                         mask=morph / "morph_mask.nc", latlon=root / "data/latlon.nc")
@@ -156,6 +159,8 @@ def test_v6_registration_follows_what_the_published_files_hold(tmp_path):
     assert registered["soil_class_path"] == ["data/morph/input.nc"]
     assert "soil_horizon_class_path" not in registered
     assert "aspect_path" not in registered  # not in this bundle
+    assert registered["fdir_path"] == ["data/morph/fdir.nc"]
+    assert registered["fdir_var"] == ["fdir"]
 
 
 def test_v513_setups_get_no_v6_namelist_values(tmp_path):

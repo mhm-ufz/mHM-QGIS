@@ -424,9 +424,14 @@ Four JSON files live under each domain's `.temp/` directory.
   filled-DEM cells, not the padded rectangle. Cached per-outlet masks and gauge
   metadata are retained, but all active catchments and gauge memberships map to
   model domain 1. The namelist handoff contains one `master` domain.
-- Publication watershed-masks **only the DEM**, into a single-variable
-  `dem_derivatives_masked.nc`. Slope, aspect, facc, fdir and idgauges go into
-  `input.nc` (v6) or the ASCII set (v5) straight from `dem_derivatives.nc`;
+- Publication watershed-masks **only the DEM and fdir**, into
+  `dem_derivatives_masked.nc`. mHM v6 takes fdir's valid cells as its L0 grid and
+  does not narrow it by `morph_mask`, so an unmasked fdir runs MPR over the whole DEM
+  extent. v5 writes both `.asc` files masked (fdir matching `dem.asc`); v6 keeps the
+  full fdir in `input.nc` and writes the masked one to `data/morph/fdir.nc` (variable
+  `fdir`, written like `input.nc`: projected axes and 2-D lat/lon, which mHM reads with
+  the grid), which `register_morphology` registers as `fdir_path`. Slope, aspect, facc and idgauges go
+  into `input.nc` (v6) or the ASCII set (v5) straight from `dem_derivatives.nc`;
   `setup._model_sources()` is the one place that composes the two bundles, and
   `write_morph_mask` still reads the mask off the masked DEM's nodata.
   Soil, geology and land cover keep full class coverage (fill value 1); LAI keeps

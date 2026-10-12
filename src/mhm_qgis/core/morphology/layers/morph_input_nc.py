@@ -113,7 +113,7 @@ def write_morph_input_nc(
                     rows, columns, gdal, np,
                 )
                 if log:
-                    log(f"input.nc: wrote {name} from {Path(source_path).name}.")
+                    log(f"{output.name}: wrote {name} from {Path(source_path).name}.")
 
             handle.Conventions = "CF-1.8"
             handle.title = str(title)
