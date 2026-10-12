@@ -142,6 +142,21 @@ def test_mhm_tools_window_resampler_averages_so_fluxes_use_our_own():
     assert float(averaged["et"][0]) == pytest.approx(1.0)  # a mean, not the 31 mm total
 
 
+def _mhm_tools_drops_last_month() -> bool:
+    """mhm-tools 0.3 ends a monthly record at `Period.end_time + 1 ns`, which pandas 3
+    (`end_time` in microseconds) leaves inside the month, so the last month counts as
+    not covered. Remove with the mhm-tools fix (the next period's start)."""
+    try:
+        import xarray as xr
+        from mhm_tools.common.time_utils import get_data_coverage
+    except ImportError:
+        return False
+    stamps = pd.to_datetime(["2003-11-16", "2003-12-16"])
+    return get_data_coverage(xr.DataArray([0.0, 0.0], {"time": stamps}, ("time",)))[1] < pd.Timestamp("2004-01-01")
+
+
+@pytest.mark.xfail(_mhm_tools_drops_last_month(), raises=ValueError, strict=True,
+                   reason="mhm-tools 0.3 under pandas 3 drops a record's last month")
 def test_tws_anomaly_and_snow_cover_need_a_geographic_run(tmp_path, monkeypatch):
     monkeypatch.setenv("MPLBACKEND", "Agg")
     projected = make_run(tmp_path / "p", days=60)

@@ -38,9 +38,10 @@ def maps(root, variable):
     labels = np.array(load_index(root)["variables"][variable]["months"], dtype="datetime64[M]")
     totals = np.load(root / "monthly" / f"{variable}.npy").astype("f8")
     calendar = labels.astype(int) % 12
-    mean = np.stack([np.nanmean(totals[calendar == m], axis=0) if (calendar == m).any()
+    totals = np.ma.masked_invalid(totals)  # cells without a value (off the mask) stay NaN, without warnings
+    mean = np.stack([totals[calendar == m].mean(axis=0).filled(np.nan) if (calendar == m).any()
                      else np.full(totals.shape[1:], np.nan) for m in range(12)])
-    std = np.stack([np.nanstd(totals[calendar == m], axis=0) if (calendar == m).sum() > 1
+    std = np.stack([totals[calendar == m].std(axis=0).filled(np.nan) if (calendar == m).sum() > 1
                     else np.full(totals.shape[1:], np.nan) for m in range(12)])
     return mean, std
 

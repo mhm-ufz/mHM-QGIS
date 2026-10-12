@@ -125,6 +125,10 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+filterwarnings = [
+    # rioxarray 0.19's own `Affine * Affine` under affine 3; not our code
+    "ignore::PendingDeprecationWarning:rioxarray",
+]
 
 [tool.isort]
 profile = "black"
