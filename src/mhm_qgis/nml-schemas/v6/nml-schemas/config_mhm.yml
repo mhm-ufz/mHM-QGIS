@@ -51,6 +51,8 @@ properties:
       type: number
       x-fortran-kind: dp
     x-fortran-shape: [12, n_domains]
+    default: [1.3, 1.2, 0.72, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5]
+    x-fortran-default-repeat: true
     examples: [[1.3, 1.2, 0.72, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5]]
     title: Evaporation coefficients
     description: |-
