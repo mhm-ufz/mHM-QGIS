@@ -58,6 +58,9 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   "Analysis layout" off restores your own.
 
 ### Changed
+- v6 namelist defaults: mHM's standard process set (routing case 3), the output
+  switches on for every output those processes provide (as mHM v6 writes them), and
+  monthly night fractions repeated for each domain.
 - The namelist editor opens nml-tools' project for the setup: `classic` for a v6 single
   domain (mhm.nml), `combine` for a v6 multi-domain run (combine.nml) and `v5` for mHM 5.13,
   which now includes the mRM output namelist (`mrm_outputs.nml`); the routed-discharge
@@ -68,6 +71,8 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   hand.
 
 ### Fixed
+- The LAI time step chosen in the LAI dialog (`lai_time_step`) reaches the namelist
+  editor; Execute All writes the LAI handoff again from that choice.
 - Multi-horizon soil reaches the v6 namelist editor: the prepared
   `soil_horizon_class.nc` is registered with its variable name, and its paths survive
   accepting the soil dialog again (no `soil_class_path` pointing at a bundle without

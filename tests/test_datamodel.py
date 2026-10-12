@@ -1,5 +1,6 @@
 """The data model: what a run needs (rules.yml) and what it writes (outputs.yml)."""
 import json
+from pathlib import Path
 
 import pytest
 
@@ -80,6 +81,32 @@ def test_outputs_mhm_v6_drops_are_listed_before_the_run(tmp_path):
     assert "Turn on out_QD" in datamodel.why_not_written("v6", values, "QD")  # switched off, not dropped
     (project / "mhm.nml").write_text(f"&config_processes\n{off.replace('= 0', '= 1')}  pet = 1\n/\n")
     assert datamodel.dropped_outputs(project) == []
+
+
+def test_v6_output_switches_default_on_where_the_default_processes_provide_them():
+    """mHM v6 drops a switched-on output whose process is off (mhm_filter_output), so
+    the schema's output defaults follow its process defaults, by the same rules."""
+    import yaml
+
+    from mhm_qgis.core.handlers.store.paths import schemas_folder
+
+    root = Path(schemas_folder("6.0")) / "nml-schemas"
+
+    def properties(name):
+        return yaml.safe_load((root / name).read_text(encoding="utf-8"))["properties"]
+
+    processes = {name: spec.get("default", 0) for name, spec in properties("config_processes.yml").items()}
+    switches = {f"{name}.{key}": spec.get("default") for name in ("output_mhm", "output_mrm")
+                for key, spec in properties(f"{name}.yml").items() if key.startswith("out_")}
+    checked = 0
+    for output, spec in datamodel.output_registry("v6")["outputs"].items():
+        key = datamodel.switch_key("v6", output)
+        if key:
+            expected = not datamodel._process_problems(processes, spec)
+            assert switches[key if "." in key else f"output_mhm.{key}"] is expected, output
+            checked += 1
+    assert checked >= 20
+    assert switches["output_mhm.out_neutrons"] is False  # neutrons default 0
 
 
 def test_v513_output_step_counts_model_steps(tmp_path):

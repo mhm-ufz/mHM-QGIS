@@ -116,7 +116,7 @@ properties:
   routing:
     type: integer
     x-fortran-kind: i4
-    default: 1
+    default: 3
     examples: [3]
     enum: [0, 1, 2, 3]
     title: Routing process case

@@ -178,6 +178,11 @@ def test_lai_stage_submits_a_background_task_when_selected(tmp_path, monkeypatch
     assert "LAI" in label
     # It must run on the file resource and be cancellable like the other stages.
     assert options["resource"] == "morphology-files"
+    from mhm_qgis.core.handlers.state.nml_settings import load_settings
+
+    # The LAI dialog's time step reaches the namelist handoff (mHM lai_time_step).
+    assert load_settings(tmp_path)["lai"]["time_step"] == -2
+    assert load_settings(tmp_path)["lai"]["target_timestep"] == "Monthly Gridded Data"
     dialog.close()
 
 

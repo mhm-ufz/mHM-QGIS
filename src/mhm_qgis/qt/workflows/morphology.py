@@ -31,7 +31,11 @@ from ...core.morphology.layers.categorical import SPECS
 from ...externals.mhm_tools_handler import categorical_output_suffix
 from ...qgis_bridge import layers
 from ..controllers import grid
-from ..controllers.categorical import advanced_input, record_standard_soil_output
+from ..controllers.categorical import (
+    advanced_input,
+    record_standard_soil_output,
+    save_lai_nml_input,
+)
 from ..controllers.version import selected as selected_version
 from . import hydrology, lifecycle
 
@@ -187,6 +191,7 @@ class MorphologyTaskBridge:
             if done is not None:
                 done(None)
             return True
+        save_lai_nml_input(self.dialog.project_folder, config)  # the time step chosen in the LAI dialog
         os.makedirs(os.path.dirname(options["output_path"]), exist_ok=True)
         digest = commands.stage_digest(
             (options["source_path"], options["filled_dem"]),

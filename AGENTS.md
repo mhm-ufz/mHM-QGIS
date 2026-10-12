@@ -108,6 +108,10 @@ decision.
   an old build in `/usr/local/bin` missing its libraries must not hide pip's.
   Heavy imports stay inside functions.
 - `vSpecific/`: version-specific initial values handed to the namelist editor.
+  The shipped v6 schema's output-switch defaults follow its process defaults by
+  mHM v6's rules (`outputs.yml` `needs`/`needs_any`); a test keeps them in step. Array
+  defaults are flat lists in Fortran order, with `x-fortran-default-repeat: true` to
+  repeat per domain (nml-tools rejects nested ones).
   Morphology publication registers what the published files hold
   (`register_morphology`): a bundle field only when `input.nc` has that variable, and
   for multi-horizon soil the published `soil_horizon_class.nc` with its class variable

@@ -177,8 +177,6 @@ def _configure_lookup(dialog, kind, previous):
 
 
 def _configure_lai_netcdf(dialog, previous):
-    from ...externals.mhm_tools_handler import lai_time_step
-
     config = _accepted(dialog, "lai", previous, LaiNetcdfInputDialog(
         dialog.project_folder, dialog, initial=dialog._lai_input_config,
     ))
@@ -191,18 +189,28 @@ def _configure_lai_netcdf(dialog, previous):
         "source_crs": getattr(config, "source_crs", ""),
     }
     dialog._categorical_lookup_configs.pop("lai", None)
-    update_section(dialog.project_folder, "lai", {
+    save_lai_nml_input(dialog.project_folder, dialog._lai_input_config)
+    return True
+
+
+def save_lai_nml_input(project_folder, config):
+    """The LAI NetCDF handoff from the dialog's choice: comboBox_timestepLAIInput's
+    text becomes `time_step` (mHM `lai_time_step`). Execute All writes it again from
+    the saved choice, so a lost section comes back."""
+    from ...externals.mhm_tools_handler import lai_time_step
+
+    target = config.get("target_timestep") or "Long Term Mean Monthly Gridded Data"
+    update_section(project_folder, "lai", {
         "mode": "netcdf",
-        "source_path": config.input_path,
-        "source_variable": config.variable,
-        "target_timestep": config.target_timestep,
-        "time_step": lai_time_step(config.target_timestep),
+        "source_path": config.get("input_path", ""),
+        "source_variable": config.get("variable", ""),
+        "target_timestep": target,
+        "time_step": lai_time_step(target),
         "output_path": relative_workspace_path(
-            dialog.project_folder, os.path.join(lai_folder(dialog.project_folder), "lai.nc")
+            project_folder, os.path.join(lai_folder(project_folder), "lai.nc")
         ),
         "variable": "lai",
     })
-    return True
 
 
 def _configure_historical_land_use(dialog, text, previous):

@@ -105,6 +105,8 @@ properties:
       type: number
       x-fortran-kind: dp
     x-fortran-shape: [12, n_domains]
+    default: [0.46, 0.5, 0.52, 0.51, 0.48, 0.5, 0.49, 0.48, 0.52, 0.56, 0.5, 0.47]
+    x-fortran-default-repeat: true
     examples: [[0.46, 0.5, 0.52, 0.51, 0.48, 0.5, 0.49, 0.48, 0.52, 0.56, 0.5, 0.47]]
     title: Fraction of nightly precipitation
     description: |-
@@ -117,6 +119,8 @@ properties:
       type: number
       x-fortran-kind: dp
     x-fortran-shape: [12, n_domains]
+    default: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    x-fortran-default-repeat: true
     examples: [[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]]
     title: Fraction of nightly potential evapotranspiration
     description: |-
@@ -129,6 +133,8 @@ properties:
       type: number
       x-fortran-kind: dp
     x-fortran-shape: [12, n_domains]
+    default: [-0.76, -1.3, -1.88, -2.38, -2.72, -2.75, -2.74, -3.04, -2.44, -1.6, -0.94, -0.53]
+    x-fortran-default-repeat: true
     examples: [[-0.76, -1.3, -1.88, -2.38, -2.72, -2.75, -2.74, -3.04, -2.44, -1.6, -0.94, -0.53]]
     title: Fraction of nightly temperature
     description: |-
@@ -141,6 +147,8 @@ properties:
       type: number
       x-fortran-kind: dp
     x-fortran-shape: [12, n_domains]
+    default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    x-fortran-default-repeat: true
     examples: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
     title: Fraction of nightly surface downward shortwave radiation
     description: |-
@@ -153,6 +161,8 @@ properties:
       type: number
       x-fortran-kind: dp
     x-fortran-shape: [12, n_domains]
+    default: [0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45]
+    x-fortran-default-repeat: true
     examples: [[0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45]]
     title: Fraction of nightly surface downward longwave radiation
     description: |-
