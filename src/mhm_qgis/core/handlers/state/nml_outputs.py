@@ -58,9 +58,24 @@ def register_meteo(project_folder, outputs, mask=None, *, v6):
         project_folder, "main", "config_input", values, managed=managed, v6=v6)
 
 
+BUNDLE_FIELDS = (("slope", "slope"), ("aspect", "aspect"), ("fdir", "fdir"), ("facc", "facc"),
+                 ("geo_class", "geology_class"), ("soil_class", "soil_class"))
+MORPHOLOGY_FIELDS = {"latlon_path", "dem_path", "dem_var", "morph_mask_path", "morph_mask_var", "morph_lat_var",
+                     "morph_lon_var", "soil_horizon_class_path",
+                     *(f"{field}_{suffix}" for field, _ in BUNDLE_FIELDS for suffix in ("path", "var"))}
+
+
 def register_morphology(project_folder, *, bundle, dem, mask, latlon):
-    """v6 only: its caller is the v6 branch of the publication stage."""
-    bundle = _relative(project_folder, bundle)
+    """v6 only: its caller is the v6 branch of the publication stage.
+
+    Registers what the published files hold: a bundle field only when `input.nc` has
+    that variable, and for multi-horizon soil (`soil_db_mode` 1) the published
+    `soil_horizon_class.nc` with its class variable, which mHM v6 reads through
+    `soil_class_var` (it has no own variable name)."""
+    held = _variables(bundle)  # None when unreadable: register as declared
+    horizons = Path(bundle).with_name("soil_horizon_class.nc")
+    soil = load_settings(project_folder).get("soil") or {}
+    layered = isinstance(soil, dict) and int(soil.get("soil_db_mode") or 0) == 1 and horizons.is_file()
     values = {
         "latlon_path": [_relative(project_folder, latlon)],
         "dem_path": [_relative(project_folder, dem)], "dem_var": ["dem"],
@@ -68,13 +83,25 @@ def register_morphology(project_folder, *, bundle, dem, mask, latlon):
         "morph_mask_var": ["mask"], "morph_lat_var": ["lat"],
         "morph_lon_var": ["lon"],
     }
-    for field, variable in (
-            ("slope", "slope"), ("aspect", "aspect"), ("fdir", "fdir"),
-            ("facc", "facc"), ("geo_class", "geology_class"),
-            ("soil_class", "soil_class")):
-        values[f"{field}_path"] = [bundle]
-        values[f"{field}_var"] = [variable]
-    register_values(project_folder, "main", "config_input", values)
+    for field, variable in BUNDLE_FIELDS:
+        if (held is None or variable in held) and not (layered and field == "soil_class"):
+            values[f"{field}_path"] = [_relative(project_folder, bundle)]
+            values[f"{field}_var"] = [variable]
+    if layered:
+        variable = next((name for name, ndim in (_variables(horizons) or {}).items() if ndim == 3), "soil_class")
+        values.update(soil_horizon_class_path=[_relative(project_folder, horizons)], soil_class_var=[variable])
+    register_values(project_folder, "main", "config_input", values, managed=MORPHOLOGY_FIELDS)
+
+
+def _variables(path) -> dict[str, int] | None:
+    """A NetCDF file's variables and their ranks; None when it can't be read."""
+    try:
+        import netCDF4
+
+        with netCDF4.Dataset(path) as handle:
+            return {name: variable.ndim for name, variable in handle.variables.items()}
+    except (OSError, ImportError):
+        return None
 
 
 def register_observations(project_folder, outputs, specs=(), *, v6):

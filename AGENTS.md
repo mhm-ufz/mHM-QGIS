@@ -108,6 +108,13 @@ decision.
   an old build in `/usr/local/bin` missing its libraries must not hide pip's.
   Heavy imports stay inside functions.
 - `vSpecific/`: version-specific initial values handed to the namelist editor.
+  Morphology publication registers what the published files hold
+  (`register_morphology`): a bundle field only when `input.nc` has that variable, and
+  for multi-horizon soil the published `soil_horizon_class.nc` with its class variable
+  as `soil_class_var` (mHM v6 reads the horizon file through it) and no
+  `soil_class_path`. A finished soil or land-cover stage, fresh or reused, records its
+  products in its section (`advanced_inputs.record_products`): accepting the input
+  dialog again replaces the section with its inputs only.
   v6 hands over input paths only from what the setup prepared (`nml-settings.json`
   sections and `namelist_values`), never hard-coded defaults; only output and restart
   paths are the plugin's own. The editor keeps values already saved in `mhm.nml`

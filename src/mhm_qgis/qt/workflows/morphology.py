@@ -529,8 +529,13 @@ class MorphologyTaskBridge:
             done(result)
 
     def _advanced_ready(self, result, done, digest=None):
+        from ...core.morphology.layers.advanced_inputs import record_products
+
         if digest:
             commands.record_stage(self.dialog.project_folder, result["kind"], digest, result["outputs"])
+        # fresh or reused: the handoff names the products (as _lookup_ready's record_namelist)
+        record_products(self.dialog.project_folder, result["kind"], result["outputs"],
+                        selected_version(self.dialog))
         for output in result["outputs"]:
             lifecycle.register(self.dialog, output)
         self.dialog.log_message(

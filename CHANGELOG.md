@@ -68,6 +68,10 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   hand.
 
 ### Fixed
+- Multi-horizon soil reaches the v6 namelist editor: the prepared
+  `soil_horizon_class.nc` is registered with its variable name, and its paths survive
+  accepting the soil dialog again (no `soil_class_path` pointing at a bundle without
+  soil classes).
 - The v6 namelist editor no longer receives input paths for data the setup never
   prepared (an `idgauges.asc` as SCC gauges, land-cover, LAI and lookup-table files):
   only the prepared inputs are handed over.

@@ -116,6 +116,48 @@ def test_v6_prepared_outputs_are_registered_for_namelists(tmp_path):
     assert observations["sm_time_step"] == -1
 
 
+def test_v6_registration_follows_what_the_published_files_hold(tmp_path):
+    """Multi-horizon soil: the published horizon file is registered with its class
+    variable (mHM v6 reads it through soil_class_var), the bundle's absent soil_class
+    is not, and a stale soil_class_path is removed."""
+    netCDF4 = pytest.importorskip("netCDF4")
+    root = paths.domain_folder(tmp_path, "Rapti")
+    morph = root / "data" / "morph"
+    morph.mkdir(parents=True)
+    state_path = Path(layout.input_state_path(root))
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text('{"mhm_version": "6"}')
+
+    def write(path, variables):
+        with netCDF4.Dataset(path, "w") as handle:
+            for name, size in (("z", 2), ("y", 2), ("x", 3)):
+                handle.createDimension(name, size)
+            for name, dims in variables.items():
+                handle.createVariable(name, "i4", dims)
+
+    write(morph / "input.nc", dict.fromkeys(("slope", "aspect", "fdir", "facc", "geology_class"), ("y", "x")))
+    write(morph / "soil_horizon_class.nc", {"soil_class": ("z", "y", "x")})
+    nml_settings.update_section(root, "namelist_values", {"main": {"config_input": {
+        "soil_class_path": ["data/morph/input.nc"], "soil_class_var": ["soil_class"]}}})  # before the fix
+    nml_settings.update_section(root, "soil", {"mode": "multi_horizon", "soil_db_mode": 1, "variable": "soil_class"})
+    register_morphology(root, bundle=morph / "input.nc", dem=morph / "dem.nc",
+                        mask=morph / "morph_mask.nc", latlon=root / "data/latlon.nc")
+    registered = nml_settings.load_settings(root)["namelist_values"]["main"]["config_input"]
+    assert registered["soil_horizon_class_path"] == ["data/morph/soil_horizon_class.nc"]
+    assert registered["soil_class_var"] == ["soil_class"]
+    assert "soil_class_path" not in registered
+    assert registered["geo_class_var"] == ["geology_class"]
+
+    write(morph / "input.nc", {"slope": ("y", "x"), "soil_class": ("y", "x")})  # classic soil
+    nml_settings.update_section(root, "soil", {"mode": "lookup_table", "soil_db_mode": 0})
+    register_morphology(root, bundle=morph / "input.nc", dem=morph / "dem.nc",
+                        mask=morph / "morph_mask.nc", latlon=root / "data/latlon.nc")
+    registered = nml_settings.load_settings(root)["namelist_values"]["main"]["config_input"]
+    assert registered["soil_class_path"] == ["data/morph/input.nc"]
+    assert "soil_horizon_class_path" not in registered
+    assert "aspect_path" not in registered  # not in this bundle
+
+
 def test_v513_setups_get_no_v6_namelist_values(tmp_path):
     from mhm_qgis.vSpecific.common import apply_registered
 

@@ -82,9 +82,8 @@ def process_land_cover_input(
             "source_path": str(period.file_path),
         }
         if str(version).startswith("5"):
-            name = f"lc_{period.start_year}_{period.end_year}.asc"
             scene["output_path"] = relative_workspace_path(
-                project_folder, Path(morph_folder(project_folder)) / name
+                project_folder, Path(morph_folder(project_folder)) / _v5_scene_name(period.start_year, period.end_year)
             )
         scenes.append(scene)
     shared = next(
@@ -172,6 +171,44 @@ def process_soil_input(
     return data_path, definition_path
 
 
+def _v5_scene_name(start_year, end_year) -> str:
+    """The ASCII grid v5.13 reads for one land-cover period."""
+    return f"lc_{start_year}_{end_year}.asc"
+
+
+def record_products(project_folder, kind, outputs, version) -> None:
+    """Point the soil or land-cover handoff at a finished stage's products, fresh or reused.
+
+    Accepting the input dialog again replaces the section with its inputs only, and an
+    unchanged stage is then reused without running, so its products are recorded here
+    (`output_path`, soil's `classdefinition_path`, `manifest_path`, v5.13 scene paths).
+    Paths name the published copy when it exists; publication repoints staged ones."""
+    section = "soil" if kind == "soil" else "land_cover"
+    record = dict(load_settings(project_folder).get(section) or {})
+    master = Path(morph_folder(project_folder))
+
+    def located(path):
+        published = master / path.name
+        return relative_workspace_path(project_folder, published if published.is_file() else path)
+
+    paths = [Path(path) for path in outputs]
+    data = next((path for path in paths if path.suffix.lower() == ".nc"), None)
+    definition = next((path for path in paths if path.suffix.lower() == ".txt"), None)
+    if data is not None:
+        record["output_path"] = located(data)
+    if definition is not None and section == "soil":
+        record["classdefinition_path"] = located(definition)
+    manifest = Path(temp_morphology_folder(project_folder)) / "format-data" / section / "format-data.csv"
+    if manifest.is_file():
+        record["manifest_path"] = relative_workspace_path(project_folder, manifest)
+    if section == "land_cover" and str(version).startswith("5"):
+        for scene in record.get("scenes") or []:
+            if isinstance(scene, dict) and scene.get("start_year") and not scene.get("output_path"):
+                scene["output_path"] = relative_workspace_path(
+                    project_folder, master / _v5_scene_name(scene["start_year"], scene["end_year"]))
+    update_section(project_folder, section, record)
+
+
 def _manifest_path(project_folder, name):
     folder = Path(temp_morphology_folder(project_folder)) / "format-data" / name
     folder.mkdir(parents=True, exist_ok=True)
@@ -201,4 +238,5 @@ def _published_match(outputs, name):
 __all__ = [
     "process_land_cover_input",
     "process_soil_input",
+    "record_products",
 ]

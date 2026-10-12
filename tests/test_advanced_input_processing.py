@@ -181,3 +181,37 @@ def test_soil_state_projects_horizons_to_v5_soildata(tmp_path):
     assert soil["iFlag_soilDB"] == 1
     assert soil["nSoilHorizons_mHM"] == 2
     assert soil["soil_Depth"] == [100, 300]
+
+
+def test_a_reused_stage_records_its_products_again(tmp_path):
+    """Accepting the soil dialog again replaces the section with its inputs only; the
+    reused stage's completion records the products again (published copy first)."""
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+    from mhm_qgis.core.handlers.store.layout import morph_folder
+    from mhm_qgis.core.handlers.store.paths import (
+        morph_staging_folder,
+        temp_morphology_folder,
+    )
+
+    ensure_project_structure(tmp_path, "6.0")
+    staging = Path(morph_staging_folder(tmp_path))
+    outputs = (_touch(staging / "soil_horizon_class.nc"), _touch(staging / "soil_classdefinition_iFlag_soilDB_1.txt"))
+    _touch(Path(morph_folder(tmp_path)) / "soil_horizon_class.nc")  # published already
+    _touch(Path(temp_morphology_folder(tmp_path)) / "format-data" / "soil" / "format-data.csv")
+    update_section(tmp_path, "soil", {"mode": "multi_horizon", "soil_db_mode": 1, "variable": "soil_class",
+                                      "lower_depths": [50.0, 150.0]})  # what the dialog leaves
+    processing.record_products(tmp_path, "soil", outputs, "6.0")
+    soil = load_settings(tmp_path)["soil"]
+    morph = Path(morph_folder(tmp_path)).relative_to(tmp_path).as_posix()  # data/static/morph in v6
+    assert soil["output_path"] == f"{morph}/soil_horizon_class.nc"
+    assert soil["classdefinition_path"].endswith("soil_classdefinition_iFlag_soilDB_1.txt")
+    assert soil["manifest_path"].endswith("format-data/soil/format-data.csv")
+    assert soil["lower_depths"] == [50.0, 150.0]  # the dialog's inputs stay
+
+    update_section(tmp_path, "land_cover", {"mode": "historical", "variable": "land_cover", "scenes": [
+        {"start_year": 1990, "end_year": 1999}, {"start_year": 2000, "end_year": 2009}]})
+    processing.record_products(tmp_path, "lc", (_touch(staging / "lc_periods.nc"),), "5.13")
+    land_cover = load_settings(tmp_path)["land_cover"]
+    assert land_cover["output_path"].endswith("lc_periods.nc")
+    assert [scene["output_path"] for scene in land_cover["scenes"]] == [
+        f"{morph}/lc_1990_1999.asc", f"{morph}/lc_2000_2009.asc"]
