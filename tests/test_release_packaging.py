@@ -37,7 +37,9 @@ def test_qgis_zip_contains_only_the_plugin(tmp_path):
             "mhm_qgis/metadata.txt",
         } <= names
         assert all(name.startswith("mhm_qgis/") for name in names)
-        assert not any(name.startswith("mhm_qgis/runtime/") for name in names)
+        # the standalone launcher (micromamba runtime, app start-up) is not plugin code
+        assert "mhm_qgis/qt/__main__.py" not in names
+        assert not any(b"micromamba" in archive.read(name) for name in names if name.endswith(".py"))
         assert not any(
             "__pycache__" in name
             or name.endswith((".ipynb", ".pyc", ".qrc"))

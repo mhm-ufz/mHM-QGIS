@@ -3,7 +3,7 @@ name=mHM QGIS
 qgisMinimumVersion=3.44
 qgisMaximumVersion=4.99
 description=Prepare, configure and run the mesoscale Hydrological Model (mHM) 5.13 and v6.
-version=0.1.0
+version=0.0.1
 author=Sanjeev Bashyal
 email=sanjeev.bashyal@ufz.de
 about=Builds mHM model setups: domain delineation and outlet snapping, DEM
@@ -23,7 +23,7 @@ about=Builds mHM model setups: domain delineation and outlet snapping, DEM
 tracker=https://git.ufz.de/mhm/mhm-qgis/-/issues
 repository=https://git.ufz.de/mhm/mhm-qgis
 homepage=https://git.ufz.de/mhm/mhm-qgis
-changelog=0.1.0 First public release: mHM 5.13 and v6 setup preparation,
+changelog=0.0.1 First public experimental release: mHM 5.13 and v6 setup preparation,
  namelist editing, multi-domain runs, mHM execution as named cases, output
  analysis in the QGIS window, and a standalone map window.
 tags=hydrology,mhm,hydrological model,catchment,raster,modeling

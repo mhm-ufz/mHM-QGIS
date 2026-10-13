@@ -50,7 +50,7 @@ test:
     - *qt_libs
     - *unreleased
   script:
-    - pip install -e .[test]
+    - pip install -e .[full,test]
     - python -m pytest --cov mhm_qgis --cov-report term-missing --cov-report xml:cov.xml -o addopts="" -q tests/
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
   artifacts:
@@ -69,7 +69,8 @@ build:
     - python -m build
     - twine check dist/*
     - python tools/build_qgis_plugin.py
-    # wheelhouse for test-qgis; drop with the unreleased block
+    # nml-tools for test-qgis (installed beside mhm-qgis, so the runtime repacks it);
+    # drop with the unreleased block
     - SETUPTOOLS_SCM_PRETEND_VERSION=0.6.0 pip wheel --no-deps -w dist "$NML_TOOLS_GIT"
   artifacts:
     paths:
@@ -92,12 +93,12 @@ test-qgis:
     - *qt_libs
   script:
     - pip install dist/*.whl
-    - mhm-qgis-runtime install --yes --wheelhouse dist
+    - mhm-qgis-runtime install --yes
     - python tools/run_in_runtime.py python -m pip install pytest
     - python tools/run_in_runtime.py python -m pytest tests -q -o addopts="" -p no:cacheprovider
   cache:
     key:
       files:
-        - src/mhm_qgis/runtime/locks/linux-64.lock
+        - src/mhm_qgis_runtime/locks/linux-64.lock
     paths:
       - .runtime/mhm-qgis/mamba/pkgs

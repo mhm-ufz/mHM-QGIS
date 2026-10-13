@@ -6,7 +6,7 @@
 import subprocess
 import sys
 
-from mhm_qgis import runtime
+import mhm_qgis_runtime as runtime
 
 
 def main(argv=None) -> int:

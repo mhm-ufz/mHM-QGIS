@@ -28,7 +28,13 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 requires-python = ">=3.11"
-dependencies = [
+# `pip install mhm-qgis` is the launcher only (standard library): its first run installs a
+# private QGIS runtime with `mhm-qgis[full]`. An environment that already has QGIS needs
+# `pip install 'mhm-qgis[full]'`. The QGIS plugin reads requirements.txt instead.
+dependencies = []
+
+[project.optional-dependencies]
+full = [
     "numpy>=1.20.0",
     "scipy>=1.7.0",
     "pandas>=1.3.0",
@@ -45,8 +51,6 @@ dependencies = [
     "xarray>=0.19.0",
     "rioxarray>=0.13.0",
 ]
-
-[project.optional-dependencies]
 check = [
     "isort[colors]>=5.13",
     "ruff>=0.16,<0.17",
@@ -58,7 +62,7 @@ test = [
 dev = [
     "build",
     "twine",
-    "mhm-qgis[check,test]",
+    "mhm-qgis[full,check,test]",
 ]
 docs = [
     "sphinx",
@@ -70,8 +74,8 @@ Repository = "https://git.ufz.de/mhm/mhm-qgis"
 "Bug Tracker" = "https://git.ufz.de/mhm/mhm-qgis/-/issues"
 
 [project.scripts]
-mhm-qgis = "mhm_qgis.runtime:launch"
-mhm-qgis-runtime = "mhm_qgis.runtime:main"
+mhm-qgis = "mhm_qgis_runtime:launch"
+mhm-qgis-runtime = "mhm_qgis_runtime:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -90,12 +94,11 @@ mhm_qgis = [
     "settings.yaml",
     "nml-schemas/**/*.toml",
     "**/*.yml",
-    "runtime/*.json",
-    "runtime/locks/*.lock",
     "**/*.png",
     "**/*.qm",
     "**/*.ui",
 ]
+mhm_qgis_runtime = ["*.json", "locks/*.lock"]
 
 [tool.setuptools.exclude-package-data]
 mhm_qgis = ["**/*.ipynb", "**/*.qrc"]
@@ -158,7 +161,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "src/mhm_qgis/mhm_qgis.py" = ["E402"]           # sys.path is cleaned before the imports
 "src/mhm_qgis/core/grid/__init__.py" = ["F401"] # facade re-exporting core/grid
-"src/mhm_qgis/runtime/*" = ["T201"]             # console entry points
+"src/mhm_qgis_runtime/*" = ["T201"]             # console entry points
 "tools/*" = ["T201"]
 "tests/*" = ["T201", "PLW0603"]                 # subprocess scripts; QApplication singletons
 

@@ -8,8 +8,8 @@ include tools/runtime/*.yml
 prune tests
 graft src/mhm_qgis/nml-schemas
 recursive-include src/mhm_qgis *.yml
-graft src/mhm_qgis/runtime/locks
-include src/mhm_qgis/runtime/micromamba.json
+graft src/mhm_qgis_runtime/locks
+include src/mhm_qgis_runtime/micromamba.json
 recursive-include src/mhm_qgis/qt/ui/forms *.ui
 recursive-include src/mhm_qgis/qt/ui/forms/Resources *.png
 recursive-exclude src/mhm_qgis *.ipynb *.qrc

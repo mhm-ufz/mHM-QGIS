@@ -1,27 +1,33 @@
-"""Install and launch the private QGIS runtime used by the PyPI command."""
+"""The standalone `mhm-qgis` command: run the app with an importable QGIS, or install a
+private micromamba QGIS runtime and relaunch the app inside it.
+
+Only in the PyPI wheel. The QGIS plugin (`mhm_qgis`) never imports this package."""
 from __future__ import annotations
 
 import argparse
+import base64
 import contextlib
 import hashlib
 import importlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
+from importlib import metadata
 from importlib.resources import as_file, files
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from .._version import __version__
-from ..core.handlers.file.json import read_mapping, write
+from mhm_qgis._version import __version__
+from mhm_qgis.core.handlers.file.json import read_mapping, write
 
 APP_NAME = "mhm-qgis"
 IN_RUNTIME = "MHM_QGIS_IN_RUNTIME"
-WHEELHOUSE = "MHM_QGIS_WHEELHOUSE"
 MARKER = "runtime.json"
 RECOVERY = "mhm-qgis-runtime remove && mhm-qgis-runtime install"
 
@@ -77,8 +83,8 @@ def _lock_digest(tag: str) -> str:
     return hashlib.sha256(_lock_resource(tag).read_bytes()).hexdigest()
 
 
-def _prefix(root: Path, tag: str, digest: str) -> Path:
-    return root / "envs" / f"{__version__}-{tag}-{digest[:12]}"
+def _prefix(root: Path) -> Path:
+    return root / "envs" / f"{APP_NAME}-{__version__}"
 
 
 def _micromamba(root: Path, tag: str) -> Path:
@@ -130,7 +136,7 @@ def active_runtime(root=None, tag=None) -> dict | None:
     tag = tag or platform_tag()
     digest = _lock_digest(tag)
     marker = _marker(root)
-    prefix = _prefix(root, tag, digest)
+    prefix = _prefix(root)
     expected = {
         "app_version": __version__,
         "platform": tag,
@@ -222,7 +228,8 @@ def _confirm(root: Path, tag: str, yes: bool) -> None:
         f"Micromamba download: {spec['size'] / 1024 / 1024:.1f} MiB\n"
         "QGIS environment: approximately 1 GiB download and several GiB installed.\n"
         "Sources: conda-forge and PyPI. Licenses include QGIS GPL-2.0 and each "
-        "dependency's own license."
+        "dependency's own license.",
+        flush=True,  # before micromamba's own output, also in a log file
     )
     if yes:
         return
@@ -243,7 +250,46 @@ def _safe_remove(path: Path, root: Path) -> None:
         shutil.rmtree(path)
 
 
-def install_runtime(*, yes=False, wheelhouse=None, root=None) -> dict:
+def _repack(dist, target: Path) -> Path:
+    """Write an installed pure-Python distribution back into a wheel."""
+    skipped = {"RECORD", "INSTALLER", "REQUESTED", "direct_url.json"}
+    files = [file for file in dist.files
+             if file.parts[0] != ".." and "__pycache__" not in file.parts and file.name not in skipped]
+    info = next(file.parent for file in dist.files if file.name == "METADATA").as_posix()
+    wheel = target / f"{re.sub(r'[-_.]+', '_', dist.metadata['Name'])}-{dist.version}-py3-none-any.whl"
+    record = []
+    with zipfile.ZipFile(wheel, "w", zipfile.ZIP_DEFLATED) as archive:
+        for file in files:
+            data = dist.locate_file(file).read_bytes()
+            archive.writestr(file.as_posix(), data)
+            digest = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode()
+            record.append(f"{file.as_posix()},sha256={digest},{len(data)}")
+        archive.writestr(f"{info}/RECORD", "\n".join([*record, f"{info}/RECORD,,"]) + "\n")
+    return wheel
+
+
+def _local_wheels(target: Path) -> Path:
+    """Repack the installed mhm-qgis and the pure-Python packages it requires, so the
+    runtime gets exactly these, wherever they came from (TestPyPI, a local wheel, an
+    editable checkout, an unreleased dependency). Compiled ones come from the lock or PyPI."""
+    seen, names = set(), [APP_NAME]
+    while names:
+        key = re.sub(r"[-_.]+", "-", names.pop()).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            dist = metadata.distribution(key)
+        except metadata.PackageNotFoundError:
+            continue  # an extra or a marker that does not apply here
+        names += [re.match(r"[A-Za-z0-9._-]+", line).group() for line in dist.requires or ()]
+        if dist.files and "Root-Is-Purelib: true" in (dist.read_text("WHEEL") or ""):
+            with contextlib.suppress(OSError, StopIteration):  # a damaged install: from the index
+                _repack(dist, target)
+    return target
+
+
+def install_runtime(*, yes=False, root=None) -> dict:
     """Install and verify the current private runtime."""
     root = Path(root) if root is not None else runtime_root()
     tag = platform_tag()
@@ -251,13 +297,10 @@ def install_runtime(*, yes=False, wheelhouse=None, root=None) -> dict:
     if current:
         return current
 
-    wheelhouse = wheelhouse or os.environ.get(WHEELHOUSE)
-    if wheelhouse and not Path(wheelhouse).is_dir():
-        raise RuntimeSetupError(f"Wheelhouse directory does not exist: {wheelhouse}")
     _confirm(root, tag, yes)
     micromamba = ensure_micromamba(root, tag)
     digest = _lock_digest(tag)
-    prefix = _prefix(root, tag, digest)
+    prefix = _prefix(root)
     _safe_remove(prefix, root)
 
     try:
@@ -270,16 +313,15 @@ def install_runtime(*, yes=False, wheelhouse=None, root=None) -> dict:
                 ],
                 root=root,
             )
-        pip_command = [
-            micromamba,
-            "--root-prefix", root / "mamba",
-            "run", "--prefix", prefix,
-            "python", "-m", "pip", "install",
-        ]
-        if wheelhouse:
-            pip_command.extend(["--find-links", Path(wheelhouse).absolute()])
-        pip_command.append(f"mhm-qgis=={__version__}")
-        _run(pip_command, root=root)
+        # under the runtime root: /tmp can be small (an HPC)
+        with tempfile.TemporaryDirectory(dir=root) as wheels:
+            _run([
+                micromamba,
+                "--root-prefix", root / "mamba",
+                "run", "--prefix", prefix,
+                "python", "-m", "pip", "install",
+                "--find-links", _local_wheels(Path(wheels)), f"{APP_NAME}[full]=={__version__}",
+            ], root=root)
         qgis_version = _smoke_test(micromamba, root, prefix)
     except Exception:
         _safe_remove(prefix, root)
@@ -319,7 +361,7 @@ def relaunch(marker: dict, argv=None, root=None) -> int:
         _micromamba(root, tag),
         "--root-prefix", root / "mamba",
         "run", "--prefix", marker["prefix"],
-        "python", "-m", "mhm_qgis.qt",
+        "python", "-m", "mhm_qgis_runtime.app",
         *(sys.argv[1:] if argv is None else argv),
     ]
     environment = _environment(root)
@@ -338,13 +380,25 @@ def _qgis_available() -> bool:
         return False
 
 
+def _missing_packages() -> list[str]:
+    from mhm_qgis.dependency_bootstrap import can_import, read_qgis_requirements
+
+    return [dependency.package_name for dependency in read_qgis_requirements() if not can_import(dependency)]
+
+
 def launch(argv=None) -> int:
     """Console entry point: use current QGIS or provision/relaunch privately."""
     try:
         if _qgis_available():
-            from ..qt.__main__ import main as qt_main
+            missing = _missing_packages()
+            if missing:
+                raise RuntimeSetupError(
+                    f"QGIS is in this environment, but the app's packages are not ({', '.join(missing)}). "
+                    "Install them with: pip install 'mhm-qgis[full]'"
+                )
+            from .app import main as app_main
 
-            return qt_main(argv)
+            return app_main(argv)
         if os.environ.get(IN_RUNTIME):
             raise RuntimeSetupError(
                 f"QGIS could not import inside the private runtime {sys.prefix}. "
@@ -364,13 +418,12 @@ def main(argv=None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     install = commands.add_parser("install")
     install.add_argument("--yes", action="store_true")
-    install.add_argument("--wheelhouse", type=Path)
     commands.add_parser("status")
     commands.add_parser("remove")
     args = parser.parse_args(argv)
     try:
         if args.command == "install":
-            marker = install_runtime(yes=args.yes, wheelhouse=args.wheelhouse)
+            marker = install_runtime(yes=args.yes)
             print(f"Private QGIS {marker['qgis_version']} runtime ready: {marker['prefix']}")
             return 0
         if args.command == "status":

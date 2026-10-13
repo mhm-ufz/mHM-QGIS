@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - Unreleased
+## [0.0.1] - Unreleased
 
 First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgis`).
 
@@ -16,9 +16,12 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
 - Namelist editing through nml-tools, and running mHM: v5.13 from the `mhm` PyPI
   package (its latest 5.13 release, as the `mhm` command), v6 from a user-selected
   executable.
-- A standalone `mhm-qgis` command that reuses an importable QGIS or installs a
-  private, checksum-verified QGIS 3.44 runtime on first launch. `mhm-qgis-runtime
-  install|status|remove` manages it.
+- A standalone `mhm-qgis` command: `pip install mhm-qgis` installs the launcher only, and
+  its first launch installs a private, checksum-verified QGIS 3.44 runtime with the app
+  and its packages (the same mhm-qgis that was installed, also from TestPyPI or a local
+  wheel). An environment that already has QGIS uses it with `pip install
+  'mhm-qgis[full]'`. `mhm-qgis-runtime install|status|remove` manages the runtime. The
+  QGIS plugin ZIP carries none of this.
 - A standalone map window with a layer tree (visibility, ordering), cursor and time
   read-outs, and file drops. In QGIS Desktop, Map Canvas focuses Desktop's canvas.
 - Supports QGIS 3.44+ (Qt5) and QGIS 4 (Qt6).

@@ -21,14 +21,26 @@ python -m pip install mhm-qgis
 mhm-qgis
 ```
 
-`pip install` changes nothing outside the Python environment. On first launch,
-`mhm-qgis` uses the QGIS of the current Python if one is importable. Otherwise, after
-you confirm, it installs a private QGIS 3.44 runtime. That runtime needs about a 1 GB
-download and several GB of disk, and needs no administrator rights. It goes into:
+This works in any Python 3.11+: plain, a virtual environment or a conda environment.
+`pip install mhm-qgis` installs only the small launcher. On first launch, after you
+confirm, it installs a private QGIS 3.44 runtime with the app and everything it needs
+(conda-forge and PyPI), then opens the app; later launches open it directly. Your own
+environment is not changed. The runtime needs about a 1 GB download and several GB of
+disk, and no administrator rights. It goes into:
 
-- Linux: `~/.local/share/mhm-qgis`
+- Linux: `~/.local/share/mhm-qgis` (or `$XDG_DATA_HOME/mhm-qgis`)
 - macOS: `~/Library/Application Support/mhm-qgis`
 - Windows: `%LOCALAPPDATA%\mhm-qgis`
+
+If the environment already has QGIS (for example `conda install -c conda-forge qgis`),
+install the app's packages there instead and `mhm-qgis` uses that QGIS:
+
+```bash
+python -m pip install "mhm-qgis[full]"
+```
+
+On an HPC, run the first launch on a login node (it downloads), set `XDG_DATA_HOME` if
+the home quota is small, and use a desktop session or X11 forwarding for the window.
 
 Manage the runtime without opening the GUI:
 

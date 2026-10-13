@@ -25,7 +25,7 @@ def test_binding_selection_uses_qgis_qt_version(monkeypatch, version, api, plot_
 def test_launcher_requires_real_qgis():
     result = subprocess.run(
         [sys.executable, "-c", ("import sys; sys.modules['qgis'] = None; "
-         "from mhm_qgis.qt.__main__ import main; main([])")],
+         "from mhm_qgis_runtime.app import main; main([])")],
         env=dict(os.environ, PYTHONPATH=str(Path(__file__).parents[1] / "src")),
         check=False, capture_output=True, text=True, timeout=10,
     )
@@ -41,7 +41,7 @@ def test_launcher_opens_and_closes_the_real_application():
 import sys
 from qgis.PyQt.QtCore import QTimer
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
-from mhm_qgis.qt.__main__ import main
+from mhm_qgis_runtime.app import main
 exec_ = MhmQgisDialog.exec
 def exec_once(self):
     self.open_map_canvas()

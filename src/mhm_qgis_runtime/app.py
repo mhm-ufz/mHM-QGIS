@@ -12,8 +12,8 @@ def main(argv=None):
     except ImportError as error:
         parser.exit(1, f"QGIS runtime libraries are required. Run with QGIS's Python environment.\n{error}\n")
 
-    from ..dependency_bootstrap import configure_qtpy_api
-    from ..qgis_bridge.processing import initialize
+    from mhm_qgis.dependency_bootstrap import configure_qtpy_api
+    from mhm_qgis.qgis_bridge.processing import initialize
 
     configure_qtpy_api()
     app = QgsApplication.instance()
@@ -23,7 +23,7 @@ def main(argv=None):
         app.initQgis()
     try:
         initialize()
-        from .dialogs.mhm_qgis_main import MhmQgisDialog
+        from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
         dialog = MhmQgisDialog()
         dialog.exec()

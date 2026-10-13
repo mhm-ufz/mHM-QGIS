@@ -17,14 +17,19 @@ whether hosted by QGIS Desktop or launched directly.
 ## Repository Shape
 
 - `src/mhm_qgis/`: the QGIS plugin folder **and** the Python package. Both at once --
-  QGIS loads this directory directly, and it is what the wheel ships.
+  QGIS loads this directory directly, and it is what the wheel ships. It holds no
+  standalone code: the plugin ZIP is this folder as it is.
+- `src/mhm_qgis_runtime/`: the standalone app, only in the PyPI wheel (never in the
+  plugin ZIP; it imports `mhm_qgis`, never the reverse). `mhm-qgis` and
+  `mhm-qgis-runtime` console entry points. With an importable QGIS it runs `app.main`
+  (`python -m mhm_qgis_runtime.app`: a real `QgsApplication` without Desktop) there;
+  otherwise it installs a private micromamba QGIS runtime (`envs/mhm-qgis-<version>`)
+  and relaunches inside it. The runtime gets `mhm-qgis[full]` with this install's
+  mhm-qgis and pure-Python dependencies repacked as wheels (`_local_wheels`), so a
+  TestPyPI, local-wheel, editable or unreleased-dependency install needs no index for
+  them. `pip install mhm-qgis` installs the launcher only (no dependencies); the app's
+  packages are the `full` extra, and the plugin reads `requirements.txt` instead.
 - `src/mhm_qgis/metadata.txt`, `__init__.py`, `mhm_qgis.py`: QGIS plugin entry points.
-- `src/mhm_qgis/qt/__main__.py`: `python -m mhm_qgis.qt`; initializes a real
-  `QgsApplication` without Desktop. QGIS Python/runtime and Processing libraries
-  must already be importable.
-- `src/mhm_qgis/runtime/`: the `mhm-qgis` and `mhm-qgis-runtime` console entry points.
-  Uses an importable QGIS, otherwise installs a private micromamba QGIS runtime and
-  relaunches `python -m mhm_qgis.qt` inside it. Excluded from the QGIS ZIP.
 - `src/mhm_qgis/nml-schemas/`: versioned by mHM version, currently `v5.13` and `v6`.
 - `pyproject.toml`, `MANIFEST.in`: PyPI packaging metadata.
 - `tests/`: core checks run in plain Python; GUI checks require real QGIS and
@@ -240,7 +245,7 @@ Rules that follow from it:
   binding through the platform's QGIS packages; never add a pip `qgis` or fixed
   `PyQt5`/`PyQt6` dependency to this plugin.
 - `QgsApplication` takes bytes argv: `QgsApplication(sys.argv, ...)` raises
-  `TypeError: expected bytes`. Pass `[]`, as `qt/__main__.py` and `conftest.py` do.
+  `TypeError: expected bytes`. Pass `[]`, as `mhm_qgis_runtime/app.py` and `conftest.py` do.
   `test_launcher_opens_and_closes_the_real_application` is the only test in which `main()`
   owns its application.
 - Use `qgis.PyQt`, scoped enums and `exec()`. `configure_qtpy_api()` selects the
@@ -1168,10 +1173,10 @@ Four JSON files live under each domain's `.temp/` directory.
   per-package `SETUPTOOLS_SCM_PRETEND_VERSION_FOR_*` variables (measured: they installed
   as `0.2.4.dev57` and `0.1.dev285`). Move a pin when the local checkout the
   suites ran against moves; delete the block at the PyPI release.
-- The private runtime is `runtime/locks/<platform>.lock`, generated from
+- The private runtime is `src/mhm_qgis_runtime/locks/<platform>.lock`, generated from
   `tools/runtime/environment.yml` with `uvx conda-lock lock -f tools/runtime/environment.yml
   --virtual-package-spec tools/runtime/virtual-packages.yml --kind explicit
-  --filename-template 'src/mhm_qgis/runtime/locks/{platform}.lock' -p <platform>`.
+  --filename-template 'src/mhm_qgis_runtime/locks/{platform}.lock' -p <platform>`.
   Lock one platform per run: a failing platform makes conda-lock write nothing, and a
   solve needs ~4 GB RAM and ~10 min. Every compiled dependency of mhm-qgis, mhm-tools
   and nml-tools belongs in `environment.yml`; pip may add only the pure/self-contained
@@ -1250,7 +1255,7 @@ is not found, this is why.
 | `mhm_qgis_main.py`, `advanced_input_dialogs.py`, `domain_delineator_dialog.py` | `qt/dialogs/*.py`, one per form |
 | `mhm_qgis_dialog_base.ui` | `qt/ui/forms/mhm_qgis_main.ui` |
 | `ui/`, generated `pyui/` | runtime-loaded `qt/ui/forms/`; generated modules removed |
-| `standalone/` shim and launcher | real-QGIS launcher in `qt/__main__.py`; shim removed |
+| `standalone/` shim and launcher | real-QGIS launcher in `mhm_qgis_runtime/app.py`; shim removed |
 | `mhm_tools_adapter.py` | `externals/mhm_tools_handler.py` |
 | `project_layout.py` | `core/handlers/store/{paths,layout,registry}.py` |
 | `state_cache.py`, `nml_settings.py` | `core/handlers/state/{cache,nml_settings}.py` |

@@ -50,7 +50,7 @@ jobs:
       - run: sudo apt-get install -y -qq libegl1 libxkbcommon0 libdbus-1-3
       - run: |
           SETUPTOOLS_SCM_PRETEND_VERSION=0.6.0 python -m pip install "$NML_TOOLS_GIT"
-      - run: python -m pip install -e .[test]
+      - run: python -m pip install -e .[full,test]
       - run: python -m pytest tests -q
         env:
           QT_QPA_PLATFORM: offscreen
@@ -76,12 +76,12 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install dist/*.whl
       - id: root
-        run: echo "path=$(python -c 'from mhm_qgis.runtime import runtime_root; print(runtime_root())')" >> "$GITHUB_OUTPUT"
+        run: echo "path=$(python -c 'from mhm_qgis_runtime import runtime_root; print(runtime_root())')" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: ${{ steps.root.outputs.path }}/mamba/pkgs
-          key: runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/mhm_qgis/runtime/locks/*.lock') }}
-      - run: mhm-qgis-runtime install --yes --wheelhouse dist
+          key: runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/mhm_qgis_runtime/locks/*.lock') }}
+      - run: mhm-qgis-runtime install --yes
       - run: mhm-qgis-runtime status
       - run: mhm-qgis --help
       - name: mHM and the GUI inside the runtime
@@ -90,7 +90,7 @@ jobs:
             import sys
             from qgis.PyQt.QtCore import QTimer
             from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
-            from mhm_qgis.qt.__main__ import main
+            from mhm_qgis_runtime.app import main
             exec_ = MhmQgisDialog.exec
             def exec_once(self):
                 assert self.tabWidget_steps.count() == 6
