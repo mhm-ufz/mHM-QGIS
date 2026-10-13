@@ -31,7 +31,7 @@ def import_dependencies():
             __import__(backend)
             backend_available = True
             break
-        except Exception:
+        except ImportError:
             continue
     if not backend_available:
         missing.append("netCDF4, h5netcdf, or scipy")

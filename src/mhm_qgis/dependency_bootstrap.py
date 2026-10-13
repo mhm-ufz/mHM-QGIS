@@ -200,7 +200,7 @@ def install_missing_dependencies(parent, missing: list[Dependency]) -> Bootstrap
                 progress.setValue(index - 1)
 
             command = pip_install_command(dependency.requirement, break_system_packages)
-            completed = subprocess.run(
+            completed = subprocess.run(  # nosec B603: this Python's pip, a requirement from the plugin's requirements.txt, no shell
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -270,7 +270,7 @@ def pip_supports_break_system_packages() -> bool:
     if not sys.platform.startswith("linux"):
         return False
     try:
-        completed = subprocess.run(
+        completed = subprocess.run(  # nosec B603: fixed arguments, no shell
             [sys.executable, "-m", "pip", "install", "--help"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -338,7 +338,7 @@ def set_wait_cursor(enabled: bool) -> None:
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         else:
             QApplication.restoreOverrideCursor()
-    except Exception:
+    except (ImportError, RuntimeError):  # no QGIS/Qt here
         pass
 
 

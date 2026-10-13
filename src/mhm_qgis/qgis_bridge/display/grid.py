@@ -34,7 +34,8 @@ def _grid_raster(level: str, header, crs: str):
                 header["cellsize"],
                 crs,
             )
-        ).encode("utf-8")
+        ).encode("utf-8"),
+        usedforsecurity=False,
     ).hexdigest()
     path = _materialised_path(f"mHM {level} grid")
     existing = gdal.Open(str(path), gdal.GA_ReadOnly) if path.exists() else None

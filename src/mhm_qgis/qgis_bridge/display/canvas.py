@@ -76,7 +76,7 @@ def _materialised_path(name: str) -> Path:
     Reusing the same file per layer keeps the scratch directory bounded while a
     slider is scrubbed, instead of leaving one raster behind per step.
     """
-    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(name.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     folder = Path(tempfile.gettempdir()) / "mhm_qgis_display"
     folder.mkdir(parents=True, exist_ok=True)
     return folder / f"{digest}.tif"

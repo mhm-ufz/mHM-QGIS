@@ -31,6 +31,7 @@ test_domain/
 build/
 develop-eggs/
 dist/
+*.zip
 downloads/
 eggs/
 .eggs/

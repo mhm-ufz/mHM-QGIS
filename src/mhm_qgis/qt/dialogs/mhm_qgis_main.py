@@ -110,7 +110,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             console = getattr(sys, "__stdout__", None)
             if console is not None:
                 print(message, file=console)
-        except Exception:
+        except (OSError, ValueError):  # the console is closed or can't encode the text
             pass
         self.LogText.append(message)
 

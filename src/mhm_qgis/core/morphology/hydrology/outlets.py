@@ -140,7 +140,7 @@ def station_id_text(value) -> str:
         numeric = float(text)
         if numeric.is_integer():
             return str(int(numeric))
-    except Exception:
+    except ValueError:  # not a number: keep the text
         pass
 
     return text

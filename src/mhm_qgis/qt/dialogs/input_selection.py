@@ -162,7 +162,7 @@ def qgis_layer_item(layer, kind: str) -> InputItem | None:
         crs = layer.crs()
         if crs is not None and crs.isValid():
             authid = crs.authid()
-    except Exception:
+    except (RuntimeError, AttributeError):  # a deleted layer, or not a map layer
         pass
     label = f"{name} [{authid or 'unknown CRS'}]"
     try:
@@ -205,13 +205,13 @@ def _project_layer(layer_id):
             layer = getter(layer_id)
             if layer is not None:
                 return layer
-        except Exception:
+        except (RuntimeError, AttributeError):  # a deleted layer
             pass
     try:
         for layer in project.mapLayers().values():
             if _layer_id(layer) == layer_id:
                 return layer
-    except Exception:
+    except (RuntimeError, AttributeError):  # a deleted layer
         pass
     return None
 

@@ -23,7 +23,7 @@ def _require_executable(path, version_pattern: str, version_label: str) -> Path:
     if os.name != "nt" and not os.access(path, os.X_OK):
         raise PermissionError(f"mHM executable is not executable: {path}")
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603: a checked, existing executable file; fixed arguments, no shell
             [str(path), "--version"],
             capture_output=True,
             text=True,

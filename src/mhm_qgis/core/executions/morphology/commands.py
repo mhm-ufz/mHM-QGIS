@@ -181,7 +181,7 @@ def native_worker(task, payload, working_folder):
         )
         log_file = temporary / "worker.log"
         with log_file.open("w", encoding="utf-8") as log_stream:
-            process = subprocess.Popen(
+            process = subprocess.Popen(  # nosec B603: this Python running the plugin's own worker on its own files
                 [
                     sys.executable,
                     "-m",

@@ -635,7 +635,7 @@ def _coordinate_unit(ds, x_name: str, crs: str | None) -> str:
             from pyproj import CRS
 
             return _crs_unit(CRS.from_user_input(crs))
-        except Exception:
+        except (ImportError, RuntimeError):  # no pyproj, or a CRS it can't read (CRSError)
             pass
     return units or ""
 

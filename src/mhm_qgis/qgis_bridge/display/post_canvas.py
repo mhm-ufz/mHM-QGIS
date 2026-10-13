@@ -11,8 +11,8 @@ both north-up (checked in P4). Time is a renderer band switch, no file I/O.
 from __future__ import annotations
 
 import os
+from html import escape
 from pathlib import Path
-from xml.sax.saxutils import escape
 
 import numpy as np
 
@@ -54,13 +54,13 @@ def build_vrt(root, path, variable, axes, crs_wkt) -> Path:
     left = float(axes.x_bnds.min())
     transform = ((left, axes.cell, 0, float(axes.y_bnds.min()), 0, dy) if _served_flipped(path, variable)
                  else (left, axes.cell, 0, float(axes.y_bnds.max()), 0, -dy))
-    source = escape(f'NETCDF:"{path}":{variable}')
+    source = escape(f'NETCDF:"{path}":{variable}', quote=False)
     bands = "".join(
         f'<VRTRasterBand dataType="{dtype}" band="{i}">{nodata}<SimpleSource>'
         f'<SourceFilename relativeToVRT="0">{source}</SourceFilename><SourceBand>{i}</SourceBand>'
         f"</SimpleSource></VRTRasterBand>\n" for i in range(1, steps + 1))
     ny, nx = axes.shape
-    text = (f'<VRTDataset rasterXSize="{nx}" rasterYSize="{ny}">\n<SRS>{escape(crs_wkt)}</SRS>\n'
+    text = (f'<VRTDataset rasterXSize="{nx}" rasterYSize="{ny}">\n<SRS>{escape(crs_wkt, quote=False)}</SRS>\n'
             f"<GeoTransform>{', '.join(f'{float(v):.17g}' for v in transform)}</GeoTransform>\n"
             f"{bands}</VRTDataset>\n")
     target.parent.mkdir(parents=True, exist_ok=True)
