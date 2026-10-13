@@ -19,6 +19,8 @@ SKIP_NAMES = {
     "Makefile", "data_prep_mhm_workshop_2026_practise.ipynb",
     "mhmv5", "mhmv6", "pb_tool.cfg", "plugin_upload.py", "pylintrc",
 }
+# The plugin folder's license and the files it refers to (copies of the repository's).
+LICENSE_FILES = {"LICENSE", "COPYING", "COPYING.LESSER", "AUTHORS.md"}
 BINARY_MAGICS = (b"\x7fELF", b"MZ", b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf")
 
 
@@ -41,7 +43,7 @@ def runtime_files():
             continue
         if path.name in SKIP_NAMES or "__pycache__" in path.parts:
             continue
-        if path.suffix.lower() in RUNTIME_SUFFIXES:
+        if path.suffix.lower() in RUNTIME_SUFFIXES or path.relative_to(PACKAGE).as_posix() in LICENSE_FILES:
             yield path
 
 
@@ -74,8 +76,7 @@ def build(output_dir: Path) -> Path:
             if relative == "metadata.txt":
                 data = _metadata(data, version)
             _write(archive, f"mhm_qgis/{relative}", data)
-        for name in ("LICENSE", "README.md"):
-            _write(archive, f"mhm_qgis/{name}", (ROOT / name).read_bytes())
+        _write(archive, "mhm_qgis/README.md", (ROOT / "README.md").read_bytes())
     if target.stat().st_size > MAX_SIZE:
         target.unlink()
         raise ValueError("QGIS plugin ZIP exceeds the 20 MiB repository limit.")

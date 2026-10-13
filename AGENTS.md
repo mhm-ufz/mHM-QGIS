@@ -1138,7 +1138,10 @@ Four JSON files live under each domain's `.temp/` directory.
   dynamically; `tools/build_qgis_plugin.py` writes it into the staged QGIS metadata.
 - Build PyPI artifacts from the repository root. Build the QGIS upload with
   `python tools/build_qgis_plugin.py`; its ZIP contains only the `mhm_qgis/` plugin
-  root plus the repository `LICENSE` and `README.md`.
+  root (with its `LICENSE`, `COPYING`, `COPYING.LESSER`, `AUTHORS.md`) plus the
+  repository `README.md`. The license is LGPLv3+, like mhm-tools: those four files exist
+  at the repository root and as identical copies in `src/mhm_qgis/` (a test keeps them
+  equal), so the plugin folder zipped by hand carries them too.
 - Never bundle mHM executables. v5 comes from the `mhm` package (latest 5.13); the machine-local v6
   path lives in `QSettings` (`mhm_qgis/executables/v6`) or `MHM_QGIS_MHMV6`.
 - Keep package discovery recursive. Every package needs an `__init__.py` or setuptools

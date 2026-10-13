@@ -33,6 +33,9 @@ def test_qgis_zip_contains_only_the_plugin(tmp_path):
         assert {
             "mhm_qgis/__init__.py",
             "mhm_qgis/LICENSE",
+            "mhm_qgis/COPYING",
+            "mhm_qgis/COPYING.LESSER",
+            "mhm_qgis/AUTHORS.md",
             "mhm_qgis/README.md",
             "mhm_qgis/metadata.txt",
         } <= names
@@ -50,6 +53,12 @@ def test_qgis_zip_contains_only_the_plugin(tmp_path):
         metadata.read_file(io.StringIO(archive.read("mhm_qgis/metadata.txt").decode()))
         assert metadata["general"]["version"] == __version__
         assert metadata["general"]["category"] == "Raster"
+
+
+def test_plugin_folder_carries_the_repository_license():
+    """The plugin folder, zipped as it is, carries the license and the files it refers to."""
+    for name in ("LICENSE", "COPYING", "COPYING.LESSER", "AUTHORS.md"):
+        assert (ROOT / "src" / "mhm_qgis" / name).read_bytes() == (ROOT / name).read_bytes(), name
 
 
 def test_runtime_requirement_files_match():

@@ -113,3 +113,11 @@ UI or resource compilation is needed.
 
 See [CONTRIBUTING.md](https://git.ufz.de/mhm/mhm-qgis/-/blob/main/CONTRIBUTING.md) and
 [CHANGELOG.md](https://git.ufz.de/mhm/mhm-qgis/-/blob/main/CHANGELOG.md).
+
+## License
+
+mHM-QGIS is free software under the GNU Lesser General Public License, version 3 or
+later; see [LICENSE](LICENSE), [COPYING](COPYING) and [COPYING.LESSER](COPYING.LESSER).
+Copyright © 2025 - 2026, the mHM-QGIS developers from the Helmholtz-Zentrum für
+Umweltforschung GmbH - UFZ ([AUTHORS.md](AUTHORS.md)). Its dependencies, such as QGIS,
+mHM, mhm-tools and nml-tools, are not included and keep their own licenses.

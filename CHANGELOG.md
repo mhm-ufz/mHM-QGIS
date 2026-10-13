@@ -61,6 +61,9 @@ First public release, as a PyPI package (`mhm-qgis`) and a QGIS plugin (`mhm_qgi
   "Analysis layout" off restores your own.
 
 ### Changed
+- Licensed under the GNU LGPL, version 3 or later, like mhm-tools (UFZ copyright,
+  `AUTHORS.md`); the plugin folder carries the same license files. Dependencies keep their
+  own licenses.
 - Morphology publication masks the flow direction to the domain (v5.13 `fdir.asc`; v6
   `data/morph/fdir.nc`, registered as `fdir_path`, while `input.nc` keeps the full one):
   mHM v6 builds its grid from fdir's cells, so a full fdir ran MPR over the whole DEM
