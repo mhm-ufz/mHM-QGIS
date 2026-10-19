@@ -3,8 +3,8 @@
 import os
 from pathlib import Path
 
-from qgis.PyQt.QtCore import QSettings
-from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.PyQt.QtCore import QSettings, QSignalBlocker
+from qgis.PyQt.QtWidgets import QInputDialog, QMessageBox
 
 from ...core import multi_domain
 from ...core.handlers.state import processing
@@ -26,6 +26,53 @@ from .version import selected as selected_version
 from .workflow_state import invalidate, require_active, set_button_state, set_status
 
 MHM_V6_SETTINGS_KEY = "mhm_qgis/executables/v6"
+NEW_RUN = "<new>"
+
+
+def populate_run_names(dialog, selected=None) -> None:
+    """List named runs while retaining an entered name until it is first run."""
+    from ...core.post import runs
+
+    if selected is None:
+        selected = getattr(dialog, "_selected_run_name", "")
+    names = []
+    if dialog.project_folder:
+        try:
+            names = list(dict.fromkeys(
+                ref.name for ref in runs.list_runs(dialog.project_folder) if ref.name
+            ))
+        except (OSError, ValueError):
+            names = []
+    if selected and selected != NEW_RUN and selected not in names:
+        names.insert(0, selected)
+    combo = dialog.comboBox_runName
+    with QSignalBlocker(combo):
+        combo.clear()
+        combo.addItems([*names, NEW_RUN])
+        combo.setCurrentIndex(combo.findText(selected) if selected else -1)
+    dialog._selected_run_name = selected if selected in names else ""
+
+
+def select_run_name(dialog, index) -> bool:
+    """Prompt when the user selects the `<new>` run entry."""
+    combo = dialog.comboBox_runName
+    if combo.itemText(index) != NEW_RUN:
+        dialog._selected_run_name = combo.currentText().strip()
+        return True
+    previous = getattr(dialog, "_selected_run_name", "")
+    name, accepted = QInputDialog.getText(dialog, "New run", "Run name:")
+    name = name.strip()
+    from ...core.post import runs
+
+    if not accepted or not name or not runs.NAME.fullmatch(name):
+        if accepted:
+            QMessageBox.warning(
+                dialog, "Run name", "Use letters, digits, '.', '_' or '-'."
+            )
+        populate_run_names(dialog, previous)
+        return False
+    populate_run_names(dialog, name)
+    return True
 
 
 def configured_v6_executable() -> str:
@@ -200,12 +247,15 @@ def outputs_ready(dialog, project_folder) -> bool:
 
 
 def run(dialog) -> bool:
-    if not require_active(dialog):
+    if not require_active(dialog) or (
+        dialog.comboBox_runName.currentText().strip() == NEW_RUN
+        and not select_run_name(dialog, dialog.comboBox_runName.currentIndex())
+    ):
         return False
     from ...core.post import runs
 
     project_folder = dialog.project_folder
-    name = dialog.lineEdit_runName.text().strip()  # "" writes to output/ as before
+    name = dialog.comboBox_runName.currentText().strip()
 
     def finished(exit_code):
         if exit_code == 0:
@@ -220,6 +270,7 @@ def run(dialog) -> bool:
                     from . import post_context
 
                     post_context.populate(dialog)
+                    populate_run_names(dialog, name)
             return
         message = f"mHM exited with code {exit_code}."
         processing.mark_workflow(project_folder, "run_mhm", "failed", message)

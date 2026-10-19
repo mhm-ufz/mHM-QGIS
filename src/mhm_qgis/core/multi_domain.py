@@ -258,8 +258,8 @@ def v5_values(paths, root, values=None) -> tuple[dict, dict]:
 def prepare(paths, version, root) -> list[str]:
     """Create the multi folder's output and restart folders and seed its shared namelists.
 
-    The parameter and output namelists are copied from the first domain when the
-    multi folder has none yet; afterwards they are edited in the multi folder only.
+    Each parameter or output namelist is copied from the first domain that has it
+    when the multi folder has none yet; afterwards it is edited there only.
     Returns the copied file names.
     """
     layout.ensure_multi_structure(root)
@@ -269,8 +269,9 @@ def prepare(paths, version, root) -> list[str]:
         (Path(root) / "restart" / name).mkdir(parents=True, exist_ok=True)
     copied = []
     for file in SHARED_FILES[version_key(version)]:
-        source, target = Path(paths[0]) / file, Path(root) / file
-        if source.is_file() and not target.exists():
+        source = next((Path(path) / file for path in paths if (Path(path) / file).is_file()), None)
+        target = Path(root) / file
+        if source is not None and not target.exists():
             shutil.copy2(source, target)
             copied.append(file)
     return copied

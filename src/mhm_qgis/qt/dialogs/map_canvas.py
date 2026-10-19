@@ -10,15 +10,49 @@ from __future__ import annotations
 from pathlib import Path
 
 from qgis.core import QgsLayerTreeModel, QgsProject
-from qgis.gui import QgsLayerTreeMapCanvasBridge, QgsLayerTreeView, QgsMapCanvas
-from qgis.PyQt import QtCore, QtWidgets
+from qgis.gui import (
+    QgsLayerTreeMapCanvasBridge,
+    QgsLayerTreeView,
+    QgsLayerTreeViewMenuProvider,
+    QgsMapCanvas,
+)
+from qgis.PyQt import QtCore, QtGui, QtWidgets
 
 from ...qgis_bridge import layers
 
 
+class _LayerMenu(QgsLayerTreeViewMenuProvider):
+    """Right-click menu from the QGIS libraries' own layer actions (Desktop's fuller
+    menu is QGIS application code, not library code)."""
+
+    def __init__(self, view, canvas):
+        super().__init__()
+        self.view, self.canvas = view, canvas
+
+    def createContextMenu(self):
+        actions = self.view.defaultActions()
+        menu = QtWidgets.QMenu()
+        # Keep Python references to the factory actions for the menu's lifetime.
+        menu._qgis_actions = []
+        if self.view.currentNode() is not None:
+            menu._qgis_actions.extend(
+                (
+                    actions.actionZoomToLayers(self.canvas, menu),
+                    actions.actionRenameGroupOrLayer(menu),
+                    actions.actionMoveToTop(menu),
+                    actions.actionRemoveGroupOrLayer(menu),
+                )
+            )
+        menu._qgis_actions.append(actions.actionAddGroup(menu))
+        menu.addActions(menu._qgis_actions)
+        return menu
+
+
 class MapCanvasWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
-        super().__init__(parent, QtCore.Qt.WindowType.Window)
+        # A window of its own, not the dialog's child, so either can come to the front.
+        super().__init__(None, QtCore.Qt.WindowType.Window)
+        self.dialog = parent
         self.setObjectName("mhmQgisMapWindow")
         self.setWindowTitle("mHM QGIS Map")
         self.setAcceptDrops(True)
@@ -31,6 +65,15 @@ class MapCanvasWindow(QtWidgets.QMainWindow):
         model.setFlag(QgsLayerTreeModel.Flag.AllowNodeChangeVisibility)
         self.tree.setModel(model)
         self.canvas = QgsMapCanvas()
+        self.tree.setMenuProvider(_LayerMenu(self.tree, self.canvas))
+        self.remove_action = self.tree.defaultActions().actionRemoveGroupOrLayer(
+            self.tree
+        )
+        self.remove_action.setShortcut(
+            QtGui.QKeySequence(QtGui.QKeySequence.StandardKey.Delete)
+        )
+        self.remove_action.setShortcutContext(QtCore.Qt.ShortcutContext.WidgetShortcut)
+        self.tree.addAction(self.remove_action)
         # Follows tree order and visibility, and zooms to the first layer added.
         self.bridge = QgsLayerTreeMapCanvasBridge(root, self.canvas, self)
         self._follow_project_crs()
@@ -71,7 +114,7 @@ class MapCanvasWindow(QtWidgets.QMainWindow):
     dragMoveEvent = dragEnterEvent
 
     def dropEvent(self, event):
-        log = getattr(self.parent(), "log_message", None)
+        log = getattr(self.dialog, "log_message", None)
         for url in event.mimeData().urls():
             path = url.toLocalFile()
             if not path or layers.find_by_source(path) is not None:

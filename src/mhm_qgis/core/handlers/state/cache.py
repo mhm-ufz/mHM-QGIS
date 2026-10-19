@@ -44,7 +44,9 @@ def fingerprint(paths=(), config=None) -> str:
     """
     digest = hashlib.sha256()
     digest.update(f"v{CACHE_VERSION}\n".encode())
-    for value in sorted(str(path) for path in paths if str(path)):
+    for value in sorted(
+        str(Path(path).expanduser().resolve()) for path in paths if str(path)
+    ):
         try:
             status = os.stat(value)
             digest.update(

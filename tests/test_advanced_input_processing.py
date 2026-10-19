@@ -2,13 +2,15 @@
 
 from pathlib import Path
 
+import pytest
+
 from mhm_qgis.core.handlers.lookup import (
     LandUseInput,
     LandUsePeriod,
     SoilHorizon,
     SoilInput,
 )
-from mhm_qgis.core.handlers.state.nml_settings import load_settings
+from mhm_qgis.core.handlers.state.nml_settings import load_settings, update_section
 from mhm_qgis.core.handlers.store.layout import ensure_project_structure
 from mhm_qgis.core.morphology.layers import advanced_inputs as processing
 from mhm_qgis.vSpecific import build_initial_values
@@ -79,6 +81,39 @@ def test_land_cover_processing_writes_period_state(tmp_path, monkeypatch):
         "lc_1990_1999.asc",
         "lc_2000_2010.asc",
     ]
+
+
+@pytest.mark.parametrize("version", ["5.13", "6"])
+def test_last_land_cover_scene_uses_the_simulation_end_year(
+    tmp_path, monkeypatch, version
+):
+    root = tmp_path / version
+    ensure_project_structure(root, version)
+    raster = _touch(root / "lc.tif")
+    lookup = _touch(root / "lookup.csv", b"source,class\n1,2\n")
+    dem = _touch(root / "dem.tif")
+    update_section(root, "time", {
+        "sim_start": "2010-01-01T00:00",
+        "eval_start": "2015-01-01T00:00",
+        "sim_end": "2020-01-01T00:00",
+    })
+    value = LandUseInput(
+        (LandUsePeriod("2010-01-01", "2020-01-01", raster),),
+        lookup,
+        "source",
+        "class",
+    )
+
+    def fake_formatter(_manifest, _dem, output_path, *_args, **_kwargs):
+        return (_touch(Path(output_path) / "lc_periods.nc"),)
+
+    monkeypatch.setattr(processing, "prepare_land_cover_periods", fake_formatter)
+    processing.process_land_cover_input(root, version, value, dem)
+
+    scene = load_settings(root)["land_cover"]["scenes"][0]
+    assert scene["end_year"] == 2020
+    if version == "5.13":
+        assert scene["output_path"] == "data/static/morph/lc_2010_2020.asc"
 
 
 def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch):

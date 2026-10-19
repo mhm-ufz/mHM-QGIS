@@ -284,6 +284,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Return the standalone map window, created on first use."""
         if self._map_window is None:
             self._map_window = MapCanvasWindow(self)
+            self.finished.connect(self._map_window.close)
         return self._map_window
 
     def open_map_canvas(self, checked=False):

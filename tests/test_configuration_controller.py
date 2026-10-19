@@ -5,6 +5,7 @@ import os
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
 import nml_tools.gui
 import pytest
@@ -47,7 +48,6 @@ class Dialog:
     def __init__(self, project_folder: Path, version: str = "6.0") -> None:
         self.project_folder = str(project_folder)
         self.comboBox_mHMversion = ComboBox(version)
-        from types import SimpleNamespace
         stamp = SimpleNamespace(toString=lambda _format: "2001-01-01T00:00")
         for name in TIME_WIDGETS.values():
             setattr(self, name, SimpleNamespace(dateTime=lambda: stamp))
@@ -57,7 +57,7 @@ class Dialog:
         self._loading_input_state = False
         self.groupBox_editCalibrationNamelists = SimpleNamespace(setEnabled=lambda _enabled: None)
         self.run_name = ""
-        self.lineEdit_runName = SimpleNamespace(text=lambda: self.run_name)
+        self.comboBox_runName = SimpleNamespace(currentText=lambda: self.run_name)
 
     def log_message(self, message) -> None:
         self.messages.append(message)
@@ -142,6 +142,7 @@ def _no_buttons(monkeypatch):
 
     monkeypatch.setattr(workflow_state, "set_button_state", lambda *_args: None)
     monkeypatch.setattr(controller_module, "set_button_state", lambda *_args: None)
+    monkeypatch.setattr(controller_module, "populate_run_names", lambda *_args: None)
 
 
 def test_run_mhm_uses_project_terminal(tmp_path: Path, monkeypatch) -> None:
@@ -199,6 +200,30 @@ def test_a_named_run_points_the_namelists_at_its_folder(tmp_path: Path, monkeypa
     assert (tmp_path / "runs" / "case1" / "output").is_dir()
     dialog.terminal.calls[0][1]["on_finished"](0)
     assert [ref.name for ref in runs.list_runs(tmp_path)] == ["case1"]
+
+
+def test_run_name_combo_lists_runs_and_prompts_for_new_name(tmp_path, monkeypatch):
+    from qgis.PyQt.QtWidgets import QComboBox
+
+    from mhm_qgis.core.post import runs
+
+    dialog = SimpleNamespace(project_folder=str(tmp_path), comboBox_runName=QComboBox())
+    monkeypatch.setattr(
+        runs,
+        "list_runs",
+        lambda _folder: [SimpleNamespace(name="latest"), SimpleNamespace(name="older")],
+    )
+    controller_module.populate_run_names(dialog, "")
+    combo = dialog.comboBox_runName
+    assert [combo.itemText(index) for index in range(combo.count())] == [
+        "latest", "older", "<new>"
+    ]
+
+    monkeypatch.setattr(controller_module.QInputDialog, "getText", lambda *_args: ("trial", True))
+    index = combo.findText("<new>")
+    combo.setCurrentIndex(index)
+    assert controller_module.select_run_name(dialog, index)
+    assert combo.currentText() == "trial"
 
 
 def test_version_change_prepares_project_and_saves_state(

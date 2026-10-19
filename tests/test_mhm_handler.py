@@ -84,3 +84,25 @@ def test_run_uses_selected_v6_binary(tmp_path, monkeypatch):
         str(binary),
         {"cwd": str(tmp_path), "show": True},
     )]
+
+
+def test_v5_multi_run_uses_the_real_mrm_group_only_while_running(tmp_path, monkeypatch):
+    binary = _executable(tmp_path / "mhm")
+    root = tmp_path / "mhm-qgis-multi" / "combined"
+    root.mkdir(parents=True)
+    outputs = root / "mrm_outputs.nml"
+    outputs.write_text("&NLoutputResults_mrm\n  timeStep = -2\n/\n", encoding="utf-8")
+    callbacks = []
+    finished = []
+    monkeypatch.setattr(mhm_handler, "executable", lambda *_args, **_kwargs: binary)
+
+    def launch(_command, **options):
+        assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults\n")
+        callbacks.append(options["on_finished"])
+        return True
+
+    assert mhm_handler.run("5.13", root, launch, on_finished=finished.append)
+    assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults\n")
+    callbacks[0](0)
+    assert finished == [0]
+    assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults_mrm\n")

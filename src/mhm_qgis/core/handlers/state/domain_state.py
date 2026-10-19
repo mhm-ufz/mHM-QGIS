@@ -147,6 +147,14 @@ def _absolute_path(base: Path, value: PathInput) -> Path:
     return path.resolve()
 
 
+def _output_path(workspace: Path, value: PathInput) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = workspace / path
+    path = path.parent.resolve() / path.name
+    return path.resolve() if path.is_dir() else path
+
+
 def serialize_input_path(project_folder: PathInput, value: PathInput) -> str:
     """Serialize an input path relative to the outer project when possible."""
     if not str(value):
@@ -169,7 +177,7 @@ def serialize_output_path(project_folder: PathInput, value: PathInput) -> str:
     if not str(value):
         return ""
     workspace = Path(workspace_folder(project_folder)).resolve()
-    path = _absolute_path(workspace, value)
+    path = _output_path(workspace, value)
     try:
         return path.relative_to(workspace).as_posix()
     except ValueError as error:
@@ -180,7 +188,7 @@ def serialize_output_path(project_folder: PathInput, value: PathInput) -> str:
 def resolve_output_path(project_folder: PathInput, value: PathInput) -> Path:
     """Resolve a stored output path, rejecting paths outside the workspace."""
     workspace = Path(workspace_folder(project_folder)).resolve()
-    path = _absolute_path(workspace, value)
+    path = _output_path(workspace, value)
     try:
         path.relative_to(workspace)
     except ValueError as error:

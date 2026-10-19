@@ -221,6 +221,12 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     assert "dem_domain" not in state
     assert state["domain_definition_type"] == "Single Domain [DEM extent]"
 
+    from mhm_qgis.core.handlers.state.domain_state import save_state
+
+    state["pour_point_outlet_id_field"] = ""
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    save_state(tmp_path, {"outlet_id_field": "outlet_name"})
+
     restored = MhmQgisDialog()
     restored.project_folder = str(tmp_path)
     restored.load_input_state()

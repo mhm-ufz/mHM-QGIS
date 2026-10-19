@@ -472,8 +472,11 @@ def archive(dialog) -> None:
     folder = dialog.project_folder
 
     def done(refs):
+        from . import model
+
         dialog.log_message(f"Archived the current run as {name.strip()}.")
         populate(dialog)
+        model.populate_run_names(dialog, name.strip())
         if refs:
             dialog.comboBox_postRun.setCurrentIndex(dialog._post.refs.index(refs[0]))
             run_selected(dialog)

@@ -254,9 +254,10 @@ Rules that follow from it:
 - The direct launcher initializes Processing through `qgis_bridge/processing`.
 - One map host, chosen by `MhmQgisDialog.iface`. Desktop passes its real `iface`, and
   Map Canvas raises Desktop's canvas; the Desktop dialog is shown non-modally (no
-  `exec()`) so that canvas stays usable. Standalone (`iface=None`) lazily creates
-  `qt/dialogs/map_canvas.py`, parented to the dialog. The parent keeps it alive, keeps it
-  interactive under the dialog's modal `exec()`, and deletes it before `exitQgis()`.
+  `exec()`) so that canvas stays usable. Standalone (`iface=None`) lazily creates an
+  independent top-level `qt/dialogs/map_canvas.py` window. A local event loop waits for
+  the non-modal dialog, and the dialog's `finished` signal closes the map before
+  `exitQgis()`.
   Its canvas follows `QgsProject` through `QgsLayerTreeMapCanvasBridge` (tree order,
   visibility checkboxes, zoom to the first layer); never add a second sync path or
   a fake `iface`. Domain Delineator keeps its own canvas.

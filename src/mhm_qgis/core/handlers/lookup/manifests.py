@@ -148,10 +148,10 @@ def validate_land_use_input(value: LandUseInput, *, simulation_start=None, simul
             raise ValueError("Land-use periods must be ordered and gap-free.")
         _require_file(period.file_path, f"land-use layer {number}")
         previous_end = period.end_time
-    if simulation_start is not None and value.periods[0].start_time < period_datetime(simulation_start):
-        raise ValueError("Land-use periods start before the simulation.")
-    if simulation_end is not None and value.periods[-1].end_time > period_datetime(simulation_end):
-        raise ValueError("Land-use periods end after the simulation.")
+    if simulation_start is not None and value.periods[0].start_time != period_datetime(simulation_start):
+        raise ValueError("Land-use periods must start with the simulation.")
+    if simulation_end is not None and value.periods[-1].end_time != period_datetime(simulation_end):
+        raise ValueError("Land-use periods must end with the simulation.")
     _require_file(value.lookup_table, "land-use lookup table")
     if not value.mapping_field.strip() or not value.class_field.strip():
         raise ValueError("Select both the land-use mapping and class fields.")

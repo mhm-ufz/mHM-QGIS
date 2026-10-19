@@ -41,7 +41,14 @@ def _touch(path, text="raster"):
 
 
 def test_land_use_dialog_reuses_first_row_and_extracts_periods(tmp_path):
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+
     _app()
+    update_section(tmp_path, "time", {
+        "sim_start": "1990-01-01T00:00",
+        "eval_start": "2000-01-01T00:00",
+        "sim_end": "2011-01-01T00:00",
+    })
     first = _touch(tmp_path / "first.tif")
     second = _touch(tmp_path / "second.tif")
     lookup = _touch(tmp_path / "lookup.csv", "source,class\n1,2\n")

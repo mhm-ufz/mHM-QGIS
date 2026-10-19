@@ -203,6 +203,9 @@ def bind(dialog):
     dialog.groupBox_editCalibrationNamelists.setEnabled(
         version.selected(dialog).startswith("6"))
     dialog.pushButton_execute_mHM.setToolTip("Run mHM")
+    dialog.comboBox_runName.activated.connect(
+        lambda index: model.select_run_name(dialog, index)
+    )
     # pushButton_execute_mHM → model.run
     dialog.pushButton_execute_mHM.clicked.connect(lambda: model.run(dialog))
     # pushButton_mapCanvas → dialog.open_map_canvas

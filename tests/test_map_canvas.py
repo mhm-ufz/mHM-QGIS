@@ -49,6 +49,7 @@ def test_standalone_window_shares_the_project(project, tmp_path):
     dialog = MhmQgisDialog()
     window = dialog.open_map_canvas()
     assert dialog.open_map_canvas() is window
+    assert window.parent() is None
 
     raster = _raster(tmp_path / "dem.tif")
     vector = tmp_path / "gauges.geojson"
@@ -88,6 +89,26 @@ def test_standalone_window_shares_the_project(project, tmp_path):
     assert window.time_label.text() == "2000-01-02T03:00:00"
     show_raster(dialog, raster, "dem")
     assert window.time_label.text() == ""
+    dialog.show()
+    dialog.close()
+    QtWidgets.QApplication.processEvents()
+    assert not window.isVisible()
+
+
+def test_layer_menu_removes_selected_layer(project, tmp_path):
+    dialog = MhmQgisDialog()
+    window = dialog.open_map_canvas()
+    show_raster(dialog, _raster(tmp_path / "dem.tif"), "dem")
+
+    layer = next(iter(project.mapLayers().values()))
+    node = project.layerTreeRoot().findLayer(layer.id())
+    window.tree.setCurrentIndex(window.tree.node2index(node))
+    menu = window.tree.menuProvider().createContextMenu()
+    remove = next(action for action in menu.actions() if "Remove" in action.text())
+    remove.trigger()
+    QtWidgets.QApplication.processEvents()
+
+    assert not project.mapLayers()
     dialog.close()
 
 

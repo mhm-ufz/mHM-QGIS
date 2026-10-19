@@ -199,7 +199,7 @@ class MorphologyTaskBridge:
                 "source_variable": options["source_variable"],
                 "target_timestep": options["target_timestep"],
                 "method": options.get("method") or "bilinear",
-                "output_path": options["output_path"],
+                "output_path": str(Path(options["output_path"]).resolve()),
             },
         )
         if self._reusable_stage(
@@ -366,7 +366,9 @@ class MorphologyTaskBridge:
         reusable = self._reusable_stage(kind, digest) if reuse_existing else None
         if reusable:
             result = {"kind": kind, "outputs": reusable["outputs"]}
-            QtCore.QTimer.singleShot(0, lambda: self._advanced_ready(result, done))
+            QtCore.QTimer.singleShot(
+                0, lambda: self._advanced_ready(result, done, reused=True)
+            )
             return True
         return (
             partial(commands.advanced, job=job),
@@ -533,7 +535,7 @@ class MorphologyTaskBridge:
         if done is not None:
             done(result)
 
-    def _advanced_ready(self, result, done, digest=None):
+    def _advanced_ready(self, result, done, digest=None, reused=False):
         from ...core.morphology.layers.advanced_inputs import record_products
 
         if digest:
@@ -546,7 +548,7 @@ class MorphologyTaskBridge:
         self.dialog.log_message(
             f'Advanced {"land-cover" if result["kind"] == "lc" else "soil"} data prepared.'
         )
-        self._categorical_complete(result["kind"], result["outputs"])
+        self._categorical_complete(result["kind"], result["outputs"], reused=reused)
         if done is not None:
             done(result)
 

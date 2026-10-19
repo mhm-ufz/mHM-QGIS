@@ -42,12 +42,12 @@ import sys
 from qgis.PyQt.QtCore import QTimer
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 from mhm_qgis_runtime.app import main
-exec_ = MhmQgisDialog.exec
-def exec_once(self):
+show_ = MhmQgisDialog.show
+def show_once(self):
     self.open_map_canvas()
     QTimer.singleShot(0, self.reject)
-    return exec_(self)
-MhmQgisDialog.exec = exec_once
+    return show_(self)
+MhmQgisDialog.show = show_once
 sys.exit(main([]))
 '''
     paths = (str(Path(__file__).parents[1] / "src"), os.environ.get("PYTHONPATH", ""))

@@ -66,6 +66,32 @@ def test_path_serialization_uses_project_and_workspace_roots(
         resolve_output_path(project, "../outside.tif")
 
 
+def test_output_paths_keep_cloned_file_links_inside_the_new_domain(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source" / ".temp" / "Morphology" / "mask.tif"
+    source.parent.mkdir(parents=True)
+    source.write_text("source", encoding="utf-8")
+    project = tmp_path / "target"
+    linked = project / ".temp" / "Morphology" / "mask.tif"
+    linked.parent.mkdir(parents=True)
+    linked.symlink_to(source)
+
+    assert serialize_output_path(project, linked) == ".temp/Morphology/mask.tif"
+    assert resolve_output_path(project, ".temp/Morphology/mask.tif") == linked
+    saved = save_state(project, {"outlets": {"1": {"mask_path": str(linked)}}})
+    assert json.loads(saved.read_text())["outlets"]["1"]["mask_path"] == (
+        ".temp/Morphology/mask.tif"
+    )
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    escaped = project / ".temp" / "escaped"
+    escaped.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="plugin workspace"):
+        resolve_output_path(project, ".temp/escaped/mask.tif")
+
+
 def test_save_is_atomic_normalized_and_does_not_mutate_input(
     tmp_path: Path,
 ) -> None:

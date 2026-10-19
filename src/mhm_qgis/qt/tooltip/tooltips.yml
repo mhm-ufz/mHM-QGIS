@@ -171,7 +171,7 @@ pages:
     - widget: pushButton_editOptimizationOptions
       title: Optimization
       text: Edits the calibration settings.
-    - widget: lineEdit_runName
+    - widget: comboBox_runName
       title: Run name
       text: Optional. A named run writes its outputs to runs/<name>/ in the setup (the namelists point there) and the Outputs tab lists it by name; without a name, mHM writes to output/.
     - widget: pushButton_execute_mHM

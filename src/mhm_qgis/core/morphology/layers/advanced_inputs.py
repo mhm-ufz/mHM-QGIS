@@ -73,17 +73,24 @@ def process_land_cover_input(
     if not data_outputs:
         raise RuntimeError("Land-cover formatting did not create model input files.")
     scenes = []
-    for period in value.periods:
+    for index, period in enumerate(value.periods):
+        end_year = (
+            period.end_time.year
+            if times.get("sim_end") and index == len(value.periods) - 1
+            else period.end_year
+        )
         scene = {
             "start_time": period.start_time.isoformat(),
             "end_time": period.end_time.isoformat(),
             "start_year": period.start_year,
-            "end_year": period.end_year,
+            "end_year": end_year,
             "source_path": str(period.file_path),
         }
         if str(version).startswith("5"):
             scene["output_path"] = relative_workspace_path(
-                project_folder, Path(morph_folder(project_folder)) / _v5_scene_name(period.start_year, period.end_year)
+                project_folder,
+                Path(morph_folder(project_folder))
+                / _v5_scene_name(period.start_year, end_year),
             )
         scenes.append(scene)
     shared = next(
@@ -184,7 +191,8 @@ def record_products(project_folder, kind, outputs, version) -> None:
     (`output_path`, soil's `classdefinition_path`, `manifest_path`, v5.13 scene paths).
     Paths name the published copy when it exists; publication repoints staged ones."""
     section = "soil" if kind == "soil" else "land_cover"
-    record = dict(load_settings(project_folder).get(section) or {})
+    settings = load_settings(project_folder)
+    record = dict(settings.get(section) or {})
     master = Path(morph_folder(project_folder))
 
     def located(path):
@@ -202,10 +210,17 @@ def record_products(project_folder, kind, outputs, version) -> None:
     if manifest.is_file():
         record["manifest_path"] = relative_workspace_path(project_folder, manifest)
     if section == "land_cover" and str(version).startswith("5"):
-        for scene in record.get("scenes") or []:
-            if isinstance(scene, dict) and scene.get("start_year") and not scene.get("output_path"):
+        scenes = record.get("scenes") or []
+        if scenes and settings.get("time", {}).get("sim_end"):
+            scenes[-1]["end_year"] = int(settings["time"]["sim_end"][:4])
+        for scene in scenes:
+            if isinstance(scene, dict) and scene.get("start_year") and scene.get("end_year"):
                 scene["output_path"] = relative_workspace_path(
                     project_folder, master / _v5_scene_name(scene["start_year"], scene["end_year"]))
+    elif section == "land_cover":
+        scenes = record.get("scenes") or []
+        if scenes and settings.get("time", {}).get("sim_end"):
+            scenes[-1]["end_year"] = int(settings["time"]["sim_end"][:4])
     update_section(project_folder, section, record)
 
 

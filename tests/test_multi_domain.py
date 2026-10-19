@@ -123,9 +123,15 @@ def test_prepare_seeds_shared_namelists_and_output_folders(tmp_path):
     root = tmp_path / "mhm-qgis-multi" / "M"
     a, b = _v5(tmp_path, "A"), _v5(tmp_path, "B", ids="7")
     (a / "mhm_parameter.nml").write_text("&interception1\n/\n")
-    assert multi_domain.prepare([a, b], "5.13", root) == ["mhm_parameter.nml"]
+    (a / "mhm_outputs.nml").write_text("&NLoutputResults\n/\n")
+    (b / "mrm_outputs.nml").write_text("&NLoutputResults_mrm\n/\n")
+    assert multi_domain.prepare([a, b], "5.13", root) == [
+        "mhm_parameter.nml", "mhm_outputs.nml", "mrm_outputs.nml"]
+    assert (root / "mrm_outputs.nml").read_text() == "&NLoutputResults_mrm\n/\n"
     assert (root / "output" / "B").is_dir()
+    (b / "mrm_outputs.nml").write_text("changed")
     assert multi_domain.prepare([a, b], "5.13", root) == []  # never overwrites the multi copy
+    assert (root / "mrm_outputs.nml").read_text() == "&NLoutputResults_mrm\n/\n"
 
 
 def test_multi_page_creates_lists_prepares_and_runs(tmp_path, monkeypatch):

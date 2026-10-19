@@ -14,7 +14,7 @@ from ...core.handlers.file import json as jsonio
 from ...core.handlers.store.layout import input_state_path
 from ...core.handlers.store.paths import portable_path, project_path
 from ...qgis_bridge import layers as qgis_layers
-from . import categorical, forcing, grid, main, time
+from . import categorical, forcing, grid, main, model, time
 
 _PATH_KEYS = ("input_path", "lookup_table", "classdefinition_path")
 
@@ -182,6 +182,7 @@ def load(dialog):
         grid.refresh_grid_resolution_controls(dialog)
     finally:
         dialog._loading_input_state = False
+        model.populate_run_names(dialog, "")
         main.refresh_observation_stations(dialog)
         if dialog._discharge_plot is not None:
             dialog._discharge_plot.close()
@@ -342,8 +343,13 @@ def _find_or_load_layer(dialog, layer_info):
 
 def _restore_domain_inputs(dialog, state):
     """Restore the selected outlet ID field and domain mode."""
+    preferred = str(state.get("pour_point_outlet_id_field", "") or "")
+    if not preferred:
+        from ...core.handlers.state.domain_state import load_state
+
+        preferred = str(load_state(dialog.project_folder).get("outlet_id_field", ""))
     main.populate_pour_point_outlet_fields(
-        dialog, preferred=str(state.get("pour_point_outlet_id_field", "") or "")
+        dialog, preferred=preferred
     )
     combo = dialog.comboBox_domainDefinitionType
     text = str(state.get("domain_definition_type", "") or "")

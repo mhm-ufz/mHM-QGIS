@@ -55,6 +55,15 @@ def test_configuration_is_part_of_the_fingerprint(tmp_path):
     assert fingerprint([path], {"method": "bilinear"}) == base
 
 
+def test_a_symlink_to_the_same_input_keeps_the_fingerprint(tmp_path):
+    source = _input(tmp_path, "source.tif")
+    linked = tmp_path / "clone" / "source.tif"
+    linked.parent.mkdir()
+    linked.symlink_to(source)
+
+    assert fingerprint([linked]) == fingerprint([source])
+
+
 def test_a_payload_is_returned_only_for_a_matching_fingerprint(tmp_path):
     digest = fingerprint([_input(tmp_path, "in.tif")])
     store_payload(tmp_path, "stages", "geology", digest, {"outputs": ["a.asc"]})
