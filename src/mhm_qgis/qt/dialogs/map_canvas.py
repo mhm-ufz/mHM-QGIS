@@ -95,6 +95,9 @@ class MapCanvasWindow(QtWidgets.QMainWindow):
         layers_dock.setObjectName("Layers")
         layers_dock.setWidget(self.tree)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, layers_dock)
+        # Every dock and toolbar, so a closed Layers panel can be reopened.
+        view = self.menuBar().addMenu("&View")
+        view.aboutToShow.connect(lambda: (view.clear(), view.addActions(self.createPopupMenu().actions())))
         self.resize(1200, 800)
 
     def _follow_project_crs(self):

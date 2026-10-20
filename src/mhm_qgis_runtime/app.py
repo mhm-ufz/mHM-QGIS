@@ -8,7 +8,7 @@ def main(argv=None):
     parser.parse_args(argv)
     try:
         from qgis.core import QgsApplication, QgsProject
-        from qgis.PyQt.QtCore import QCoreApplication, QEvent, QEventLoop
+        from qgis.PyQt.QtCore import QCoreApplication, QEvent, QEventLoop, Qt
     except ImportError as error:
         parser.exit(1, f"QGIS runtime libraries are required. Run with QGIS's Python environment.\n{error}\n")
 
@@ -29,6 +29,8 @@ def main(argv=None):
         # not exec(): a modal dialog would stay above the map window
         loop = QEventLoop()
         dialog.finished.connect(loop.quit)
+        # a normal window: a parentless dialog is kept above the app's other windows
+        dialog.setWindowFlags(Qt.WindowType.Window)
         dialog.show()
         loop.exec()
         dialog.deleteLater()

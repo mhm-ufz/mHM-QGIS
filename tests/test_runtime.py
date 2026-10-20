@@ -70,7 +70,7 @@ def test_install_records_exact_commands(monkeypatch, tmp_path):
 
     marker = runtime.install_runtime(yes=True, root=tmp_path)
     assert not previous.exists()
-    assert marker["prefix"] == str(tmp_path / f"envs/mhm-qgis-{runtime.__version__}")
+    assert marker["prefix"] == str(tmp_path / "envs/mhm-qgis")
 
     assert "create" in commands[0]
     assert commands[0][-2] == "--file"
@@ -80,6 +80,30 @@ def test_install_records_exact_commands(monkeypatch, tmp_path):
     assert commands[1][-1] == f"mhm-qgis[full]=={runtime.__version__}"
     assert marker["qgis_version"] == "3.44.14"
     assert json.loads((tmp_path / runtime.MARKER).read_text()) == marker
+
+
+def test_an_unchanged_lock_only_reinstalls_mhm_qgis(monkeypatch, tmp_path):
+    """An upgrade with the same lock keeps the environment: no create, no download."""
+    commands = []
+    monkeypatch.setattr(runtime, "platform_tag", lambda: "linux-64")
+    monkeypatch.setattr(runtime, "active_runtime", lambda *args: None)
+    monkeypatch.setattr(runtime, "_confirm", lambda *args: pytest.fail("no download to confirm"))
+    monkeypatch.setattr(runtime, "ensure_micromamba", lambda *args: tmp_path / "bin/micromamba")
+    monkeypatch.setattr(runtime, "_smoke_test", lambda *args: "3.44.14")
+    monkeypatch.setattr(runtime, "_local_wheels", lambda target: target)
+    monkeypatch.setattr(runtime, "_run", lambda command, **kwargs: commands.append(list(command)))
+    prefix = tmp_path / "envs/mhm-qgis"
+    (prefix / "bin").mkdir(parents=True)
+    (prefix / "bin/python").touch()
+    (tmp_path / runtime.MARKER).write_text(json.dumps(
+        {"app_version": "0.0.0", "lock_sha256": runtime._lock_digest("linux-64"), "prefix": str(prefix)}))
+
+    marker = runtime.install_runtime(yes=True, root=tmp_path)
+    assert len(commands) == 1
+    assert "pip" in commands[0]
+    assert "create" not in commands[0]
+    assert (prefix / "bin/python").is_file()
+    assert marker["app_version"] == runtime.__version__
 
 
 def test_relaunch_uses_private_prefix(monkeypatch, tmp_path):

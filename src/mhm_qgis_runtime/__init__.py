@@ -84,7 +84,12 @@ def _lock_digest(tag: str) -> str:
 
 
 def _prefix(root: Path) -> Path:
-    return root / "envs" / f"{APP_NAME}-{__version__}"
+    """One environment, reused while the lock is unchanged (an upgrade only reinstalls mhm-qgis)."""
+    return root / "envs" / APP_NAME
+
+
+def _python(prefix: Path, tag: str) -> Path:
+    return prefix / ("python.exe" if tag == "win-64" else "bin/python")
 
 
 def _micromamba(root: Path, tag: str) -> Path:
@@ -145,7 +150,7 @@ def active_runtime(root=None, tag=None) -> dict | None:
     }
     if not all(marker.get(key) == value for key, value in expected.items()):
         return None
-    python = prefix / ("python.exe" if tag == "win-64" else "bin/python")
+    python = _python(prefix, tag)
     micromamba = _micromamba(root, tag)
     return marker if python.is_file() and micromamba.is_file() else None
 
@@ -297,22 +302,29 @@ def install_runtime(*, yes=False, root=None) -> dict:
     if current:
         return current
 
-    _confirm(root, tag, yes)
-    micromamba = ensure_micromamba(root, tag)
     digest = _lock_digest(tag)
     prefix = _prefix(root)
-    _safe_remove(prefix, root)
+    previous = _marker(root)
+    # Same lock, environment in place: only mhm-qgis changes, no download or relinking.
+    reuse = (previous.get("lock_sha256") == digest and previous.get("prefix") == str(prefix)
+             and _python(prefix, tag).is_file())
+    if not reuse:
+        _confirm(root, tag, yes)
+    micromamba = ensure_micromamba(root, tag)
+    if not reuse:
+        _safe_remove(prefix, root)
 
     try:
-        with as_file(_lock_resource(tag)) as lock:
-            _run(
-                [
-                    micromamba,
-                    "--root-prefix", root / "mamba",
-                    "create", "--yes", "--prefix", prefix, "--file", lock,
-                ],
-                root=root,
-            )
+        if not reuse:
+            with as_file(_lock_resource(tag)) as lock:
+                _run(
+                    [
+                        micromamba,
+                        "--root-prefix", root / "mamba",
+                        "create", "--yes", "--prefix", prefix, "--file", lock,
+                    ],
+                    root=root,
+                )
         # under the runtime root: /tmp can be small (an HPC)
         with tempfile.TemporaryDirectory(dir=root) as wheels:
             _run([
@@ -324,7 +336,8 @@ def install_runtime(*, yes=False, root=None) -> dict:
             ], root=root)
         qgis_version = _smoke_test(micromamba, root, prefix)
     except Exception:
-        _safe_remove(prefix, root)
+        if not reuse:
+            _safe_remove(prefix, root)
         raise
 
     marker = {
@@ -334,12 +347,11 @@ def install_runtime(*, yes=False, root=None) -> dict:
         "prefix": str(prefix),
         "qgis_version": qgis_version,
     }
-    previous = _marker(root).get("prefix")
     write(root / MARKER, marker, newline=True, fsync=True)
-    if previous and previous != marker["prefix"]:
-        # A still-running older runtime is left for `mhm-qgis-runtime remove`.
+    if previous.get("prefix") and previous["prefix"] != marker["prefix"]:
+        # An older per-version environment; a still-running one is left for `remove`.
         with contextlib.suppress(OSError, RuntimeSetupError):
-            _safe_remove(Path(previous), root)
+            _safe_remove(Path(previous["prefix"]), root)
     return marker
 
 

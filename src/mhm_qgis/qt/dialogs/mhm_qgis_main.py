@@ -295,7 +295,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             self.iface.mapCanvas().setFocus()
             return self.iface.mapCanvas()
         window = self.map_canvas_window()
-        window.show()
+        if not window.isVisible():
+            window.showMaximized()
         window.raise_()
         window.activateWindow()
         return window
