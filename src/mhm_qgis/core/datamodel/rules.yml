@@ -120,5 +120,5 @@ overrides:
         cases: {0: {}, 1: {inputs: [ssrd, strd, tann], needs: {routing: [1, 2, 3]}}}
 
 sources:
-  v6: "/home/bashyal/Codes/mhm/src: exchange/mo_mpr_container.F90, mo_meteo_container.F90, mo_mhm_container.F90, mo_mrm_container.F90, mo_input_container.F90; nml/nml_config_processes.f90"
-  v5.13: "/home/bashyal/Works/mhm-debug/src: MPR/mo_read_wrapper.f90, meteo/mo_meteo_handler.f90, mRM/mo_mrm_read_data.f90, mRM/mo_mrm_riv_temp_class.f90, common/mo_common_variables.F90"
+  v6: "mHM v6 (https://git.ufz.de/mhm/mhm), src/: exchange/mo_mpr_container.F90, exchange/mo_meteo_container.F90, exchange/mo_mhm_container.F90, exchange/mo_mrm_container.F90, exchange/mo_input_container.F90; nml/nml_config_processes.f90"
+  v5.13: "mHM v5.13 (https://git.ufz.de/mhm/mhm, tag v5.13.x), src/: MPR/mo_read_wrapper.f90, meteo/mo_meteo_handler.f90, mRM/mo_mrm_read_data.f90, mRM/mo_mrm_riv_temp_class.f90, common/mo_common_variables.F90"

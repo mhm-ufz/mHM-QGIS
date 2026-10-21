@@ -9,7 +9,7 @@ graphify-out/
 
 # Doxy files
 src/mhm_qgis/docs/sphinx/
-src/mhm_qgis/docs/doxy/
+docs/doxy/
 src/mhm_qgis/html/
 src/mhm_qgis/latex/
 src/mhm_qgis/xml/
