@@ -18,16 +18,13 @@ LAT = np.array([51.0, 50.0])
 LON = np.array([10.0, 11.0])
 
 
-def test_legacy_era5land_apis_are_removed():
-    from mhm_qgis.core.meteorology import ERA5Land
+def test_the_source_specific_era5land_package_is_gone():
+    """Preparation is source-independent; an old saved "ERA5Land" label loads as auto."""
+    from mhm_qgis.core.meteorology.forcing.types import AUTO, normalize_source
 
-    assert not hasattr(ERA5Land, "process_era5_to_swat")
-    assert not hasattr(ERA5Land, "process_era5_to_mhm")
-    assert not hasattr(ERA5Land, "inspect_era5_folder")
-    for module in ("mhm_forcing", "mhm.api"):
-        with pytest.raises(ModuleNotFoundError):
-            importlib.import_module(
-                f"mhm_qgis.core.meteorology.ERA5Land.{module}")
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("mhm_qgis.core.meteorology.ERA5Land")
+    assert normalize_source("ERA5Land") == AUTO
 
 
 def _write_nc(

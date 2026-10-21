@@ -15,8 +15,8 @@ from mhm_qgis.core.grid import (
     assert_header_file_matches,
     assert_matches_header,
 )
-from mhm_qgis.core.meteorology.ERA5Land.mhm.io import write_header
 from mhm_qgis.core.meteorology.forcing.api import _resample_ready
+from mhm_qgis.core.meteorology.forcing.io import write_header
 
 xr = pytest.importorskip("xarray")
 
@@ -125,79 +125,4 @@ def test_prepared_grid_and_written_header_are_validated(tmp_path):
     with pytest.raises(ValueError, match="Written L2 header"):
         assert_header_file_matches(
             header_file, {**L2_HEADER, "cellsize": 200.0}
-        )
-
-
-def _era5_file(path, days=31, rows=4, cols=5):
-    """Write one hourly ERA5-Land style monthly file."""
-    times = np.arange(
-        np.datetime64("1980-01-01T00"),
-        np.datetime64("1980-01-01T00") + np.timedelta64(24 * days, "h"),
-        np.timedelta64(1, "h"),
-    )
-    xr.DataArray(
-        np.zeros((times.size, rows, cols), dtype="float32"),
-        dims=("valid_time", "latitude", "longitude"),
-        coords={
-            "valid_time": times,
-            "latitude": np.linspace(31.0, 30.0, rows),
-            "longitude": np.linspace(79.0, 80.0, cols),
-        },
-        name="t2m",
-    ).to_dataset().to_netcdf(path)
-
-
-def test_a_long_record_falls_back_to_one_variable_at_a_time(tmp_path, monkeypatch):
-    """Reading files once for tavg/tmin/tmax must not multiply the peak memory."""
-    from mhm_qgis.core.meteorology.ERA5Land.mhm.build import (
-        METEO_MAX_BYTES_ENV,
-        estimated_single_pass_bytes,
-        single_pass_byte_limit,
-    )
-
-    path = tmp_path / "ERA5_Land_2m_temperature_1980_01.nc"
-    _era5_file(path)
-    lat = np.linspace(31.0, 30.0, 51)
-    lon = np.linspace(79.0, 90.0, 111)
-
-    # 31 days x 552 files x 3 variables x 51 x 111 cells x 8 bytes x 2 copies.
-    estimate = estimated_single_pass_bytes([path] * 552, 3, lat, lon)
-    assert estimate == 31 * 552 * 3 * 51 * 111 * 8 * 2
-    assert estimate > single_pass_byte_limit()
-
-    # A short record still gets the single-pass read.
-    assert estimated_single_pass_bytes([path] * 12, 3, lat, lon) < single_pass_byte_limit()
-
-    # The budget is operator-tunable.
-    monkeypatch.setenv(METEO_MAX_BYTES_ENV, str(64 * 1024 ** 3))
-    assert estimate < single_pass_byte_limit()
-
-
-def test_the_single_pass_and_sequential_paths_agree(tmp_path, monkeypatch):
-    from mhm_qgis.core.meteorology.ERA5Land.mhm.build import (
-        METEO_MAX_BYTES_ENV,
-        build_daily_datasets,
-    )
-    from mhm_qgis.core.meteorology.ERA5Land.mhm.specs import FORCING_SPECS
-
-    files = []
-    for month in (1, 2):
-        path = tmp_path / f"ERA5_Land_2m_temperature_1980_{month:02d}.nc"
-        _era5_file(path, days=5)
-        files.append(path)
-    specs = [s for s in FORCING_SPECS if s.output_variable in ("tavg", "tmin", "tmax")]
-    lat = np.linspace(31.0, 30.0, 4)
-    lon = np.linspace(79.0, 80.0, 5)
-    kwargs = {"bounds": None, "target_lat": lat, "target_lon": lon}
-
-    monkeypatch.setenv(METEO_MAX_BYTES_ENV, str(64 * 1024 ** 3))
-    single = build_daily_datasets(files, specs, **kwargs)
-    monkeypatch.setenv(METEO_MAX_BYTES_ENV, "1")
-    sequential = build_daily_datasets(files, specs, **kwargs)
-
-    assert sorted(single) == sorted(sequential) == ["tavg", "tmax", "tmin"]
-    for variable in single:
-        np.testing.assert_allclose(
-            single[variable][variable].values,
-            sequential[variable][variable].values,
         )

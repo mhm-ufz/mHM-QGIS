@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ....grid import header_from_coordinate_axes, write_header_file
+from ...grid import header_from_coordinate_axes, write_header_file
 
 
 def write_netcdf(ds, variable: str, output_file: Path, *, unlimited_dims=None) -> None:

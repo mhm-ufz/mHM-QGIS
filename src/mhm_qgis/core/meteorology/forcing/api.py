@@ -23,8 +23,7 @@ from ...grid import (
     nearest_rectilinear,
     slice_and_pad,
 )
-from ..ERA5Land.mhm.io import write_header, write_netcdf
-from ..ERA5Land.mhm.types import MeteoForcingResult
+from .io import write_header, write_netcdf
 from .temporal import (
     VARIABLES,
     complete_window,
@@ -40,6 +39,7 @@ from .temporal import (
 from .types import (
     AUTO,
     MeteoFolderSpec,
+    MeteoForcingResult,
     SpatialMetadata,
 )
 

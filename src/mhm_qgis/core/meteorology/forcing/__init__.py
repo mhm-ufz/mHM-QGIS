@@ -13,7 +13,6 @@ from .cache import (
     preparation_fingerprint,
 )
 from .types import (
-    ERA5LAND,
     MHM_READY,
     MeteoFolderSpec,
     SpatialMetadata,
@@ -22,7 +21,6 @@ from .types import (
 )
 
 __all__ = [
-    "ERA5LAND",
     "MHM_READY",
     "MeteoFolderSpec",
     "MeteoForcingResult",

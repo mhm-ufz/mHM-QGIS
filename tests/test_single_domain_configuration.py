@@ -18,9 +18,8 @@ def precipitation(path, *, variable="pre", units="mm", hours=24, start="2001-01-
     ds.to_netcdf(path)
 
 
-@pytest.mark.parametrize(("variable", "units", "hours", "expected"), [
-    ("pre", "mm", 24, "mHM ready"), ("tp", "m", 1, "ERA5Land")])
-def test_glob_scan_detects_metadata_and_ignores_unmatched_files(tmp_path, variable, units, hours, expected):
+@pytest.mark.parametrize(("variable", "units", "hours"), [("pre", "mm", 24), ("tp", "m", 1)])
+def test_glob_scan_detects_metadata_and_ignores_unmatched_files(tmp_path, variable, units, hours):
     precipitation(tmp_path / "wanted.nc", variable=variable, units=units, hours=hours)
     (tmp_path / "unrelated.nc").write_bytes(b"not a NetCDF")
     metadata = inspect_meteo_folder(MeteoFolderSpec("pre", tmp_path, unit=units, temporal_resolution="Hourly" if hours == 1 else "Daily", pattern="wanted*.nc"))

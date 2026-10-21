@@ -6,7 +6,6 @@ from pathlib import Path
 
 MHM_READY = "mHM ready"
 AUTO = "auto"
-ERA5LAND = "ERA5Land"
 _KINDS = {
     "pre": "pre",
     "precipitation": "pre",
@@ -35,8 +34,8 @@ def normalize_source(source: str) -> str:
         return AUTO
     if compact == "mhmready":
         return MHM_READY
-    if compact == "era5land":
-        return ERA5LAND
+    if compact == "era5land":  # an older saved label; processing never depended on it
+        return AUTO
     raise ValueError(f"Unsupported meteorology data source: {source}")
 
 
@@ -79,6 +78,15 @@ class MeteoFolderSpec:
         )
 
 
+@dataclass
+class MeteoForcingResult:
+    """Final files prepared for mHM."""
+
+    outputs: dict[str, Path]
+    headers: dict[str, Path]
+    files_used: dict[str, int]
+
+
 @dataclass(frozen=True)
 class SpatialMetadata:
     """Spatial metadata shared by all NetCDF files in an input folder."""
@@ -100,9 +108,9 @@ class SpatialMetadata:
 
 
 __all__ = [
-    "ERA5LAND",
     "MHM_READY",
     "MeteoFolderSpec",
+    "MeteoForcingResult",
     "SpatialMetadata",
     "normalize_kind",
     "normalize_source",

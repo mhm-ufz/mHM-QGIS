@@ -215,8 +215,3 @@ def convert_units(values, bounds, spec, source_name, *, input_seconds=None):
         np.maximum(result, 0, out=result)
     return result
 
-
-def convert_values(values, bounds, spec, source_name, previous=None):
-    """Backward-compatible native-cadence conversion."""
-    result, previous = deaccumulate_values(values, bounds, spec, previous)
-    return convert_units(result, bounds, spec, source_name), previous
