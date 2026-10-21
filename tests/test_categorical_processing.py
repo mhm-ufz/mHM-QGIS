@@ -203,3 +203,76 @@ def test_saved_outputs_requires_the_complete_recorded_set(tmp_path):
     assert categorical.saved_outputs(tmp_path, "soil") == ()
     _touch(definition)
     assert categorical.saved_outputs(tmp_path, "soil") == (output, definition)
+
+
+L0 = {"ncols": 6, "nrows": 6, "xllcorner": -100, "yllcorner": -100, "cellsize": 100}
+
+
+def _stack(path, name, dim, edges, units):
+    """A ready NetCDF with one layer per period/horizon on a coarser, offset grid (200 m)."""
+    import numpy as np
+    from netCDF4 import Dataset
+
+    with Dataset(path, "w") as handle:
+        for axis, size in ((dim, len(edges)), ("bnds", 2), ("y", 2), ("x", 2)):
+            handle.createDimension(axis, size)
+        for axis, values in (("x", [100.0, 300.0]), ("y", [300.0, 100.0])):
+            var = handle.createVariable(axis, "f8", (axis,))
+            var.setncatts({"standard_name": f"projection_{axis}_coordinate", "units": "m", "axis": axis.upper()})
+            var[:] = values
+        middle = handle.createVariable(dim, "f8", (dim,))
+        middle.setncatts({"units": units, "bounds": f"{dim}_bnds"})
+        middle[:] = [sum(pair) / 2 for pair in edges]
+        handle.createVariable(f"{dim}_bnds", "f8", (dim, "bnds"))[:] = edges
+        layers = handle.createVariable(name, "i4", (dim, "y", "x"), fill_value=-9999)
+        layers[:] = np.stack([np.full((2, 2), 10 + index) for index in range(len(edges))])
+
+
+@pytest.mark.parametrize("version", ["5.13", "6"])
+def test_ready_periods_and_horizons_are_warped_onto_l0(tmp_path, version):
+    """Multi-layer ready NetCDFs are warped like a single layer (nearest, -9999 outside),
+    keeping every period or horizon, and publication splits them for v5.13."""
+    pytest.importorskip("osgeo")
+    import numpy as np
+    from netCDF4 import Dataset
+
+    from mhm_qgis.core.handlers.file.json import write as write_json
+    from mhm_qgis.core.handlers.store.layout import input_state_path
+    from mhm_qgis.core.morphology.layers.advanced_l0 import publish_model_inputs
+
+    ensure_project_structure(tmp_path, version)
+    write_json(input_state_path(tmp_path), {"mhm_version": version})
+    folder = tmp_path / "input"
+    folder.mkdir()
+    days = [[3652, 11321], [11321, 14974], [14974, 18262]]  # 1980-01-01, 2000-12-30, 2010-12-30, 2020-01-01
+    _stack(folder / "lc_periods.nc", "lc", "time", days, "days since 1970-01-01")
+    _stack(folder / "horizons.nc", "classes", "z", [[0, 50], [50, 150], [150, 300]], "mm")
+    (folder / "soil.txt").write_text("soil classes")
+    grid = {"source_crs": "EPSG:32632", "target_crs": "EPSG:32632", "target_header": L0}
+
+    land = categorical.copy_ready(tmp_path, "lc", folder / "lc_periods.nc", variable="lc", **grid)[0]
+    soil = categorical.copy_ready(tmp_path, "soil", folder / "horizons.nc", variable="classes",
+                                  definition_source=folder / "soil.txt", **grid)[0]
+
+    assert land.name == "lc_periods.nc"
+    assert soil.name == "soil_horizon_class.nc"
+    with Dataset(land) as handle:
+        values = handle["land_cover"][:].filled(-9999)
+        assert values.shape == (3, 6, 6)
+        assert handle["time_bnds"][:].tolist() == days
+    np.testing.assert_array_equal(values[:, 1:5, 1:5], np.broadcast_to(np.array([10, 11, 12])[:, None, None], (3, 4, 4)))
+    assert np.all(values[:, [0, 5], :] == -9999)
+    assert np.all(values[:, :, [0, 5]] == -9999)
+    settings = load_settings(tmp_path)
+    scenes = settings["land_cover"]["scenes"]
+    assert [(scene["start_year"], scene["end_year"]) for scene in scenes] == [(1980, 2000), (2001, 2010), (2011, 2019)]
+    assert settings["soil"]["soil_db_mode"] == 1
+    assert settings["soil"]["classdefinition_path"].endswith("soil_classdefinition_iFlag_soilDB_1.txt")
+    assert [horizon["lower_depth"] for horizon in settings["soil"]["horizons"]] == [50, 150, 300]
+
+    published = {path.name for path in publish_model_inputs(tmp_path, L0)}
+    if version == "6":
+        assert {"lc_periods.nc", "soil_horizon_class.nc"} <= published
+    else:
+        assert {"soil_class_horizon_01.asc", "soil_class_horizon_03.asc"} <= published
+        assert sum(name.startswith("lc_") and name.endswith(".asc") for name in published) == 3

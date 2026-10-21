@@ -5,7 +5,20 @@ from .loader import open_layer
 
 
 def crs_of(path, *, is_raster: bool = True):
-    """Return the CRS of the raster or vector at `path`, or None if unreadable."""
+    """Return the CRS of the raster or vector at `path`, or None if unreadable.
+
+    A raster's CRS is read with GDAL: a QGIS layer of a NetCDF georeferenced only by
+    2-D lat/lon arrays builds a geolocation lookup first (about 35 s for a 4440x2040 grid)."""
+    if is_raster:
+        from osgeo import gdal
+        from qgis.core import QgsCoordinateReferenceSystem
+
+        dataset = gdal.Open(str(path))
+        if dataset is not None:
+            wkt = dataset.GetProjection() or (dataset.GetMetadata("GEOLOCATION") or {}).get("SRS", "")
+            crs = QgsCoordinateReferenceSystem.fromWkt(wkt) if wkt else None
+            if crs is not None and crs.isValid():
+                return crs
     layer = open_layer(path, "crs_probe", is_raster=is_raster)
     if layer is None:
         return None

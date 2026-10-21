@@ -85,6 +85,74 @@
            <number>2</number>
           </property>
           <item>
+           <layout class="QHBoxLayout" name="horizontalLayout">
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="label_projectFolder">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>50</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Project Folder:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="lineEdit_ProjectFolder">
+              <property name="toolTip">
+               <string>Path to the project working directory</string>
+              </property>
+              <property name="readOnly">
+               <bool>true</bool>
+              </property>
+              <property name="placeholderText">
+               <string>Select a folder to begin...</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="pushButton_BrowseProjectFolder">
+              <property name="maximumSize">
+               <size>
+                <width>40</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>Select Project Folder</string>
+              </property>
+              <property name="text">
+               <string>...</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="checkBox_enableFolderSearch">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="toolTip">
+               <string>Enable file searching within the folder</string>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
            <layout class="QHBoxLayout" name="horizontalLayout_mHM" stretch="0,0,0,0,1">
             <property name="topMargin">
              <number>0</number>
@@ -165,74 +233,6 @@
                 <string>mRM: Setup &amp; Run</string>
                </property>
               </item>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout">
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QLabel" name="label_projectFolder">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>50</height>
-               </size>
-              </property>
-              <property name="text">
-               <string>Project Folder:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLineEdit" name="lineEdit_ProjectFolder">
-              <property name="toolTip">
-               <string>Path to the project working directory</string>
-              </property>
-              <property name="readOnly">
-               <bool>true</bool>
-              </property>
-              <property name="placeholderText">
-               <string>Select a folder to begin...</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="pushButton_BrowseProjectFolder">
-              <property name="maximumSize">
-               <size>
-                <width>40</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="toolTip">
-               <string>Select Project Folder</string>
-              </property>
-              <property name="text">
-               <string>...</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QCheckBox" name="checkBox_enableFolderSearch">
-              <property name="enabled">
-               <bool>false</bool>
-              </property>
-              <property name="toolTip">
-               <string>Enable file searching within the folder</string>
-              </property>
-              <property name="text">
-               <string/>
-              </property>
              </widget>
             </item>
            </layout>
@@ -694,57 +694,14 @@
                 <property name="topMargin">
                  <number>0</number>
                 </property>
+                <item row="1" column="2">
+                 <widget class="QDateTimeEdit" name="dateTimeEdit_evaluationStartTimeInput">
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
                 <item row="1" column="0">
-                 <widget class="QLabel" name="label_precipitationStartTime">
-                  <property name="text">
-                   <string>Precp. Start Time</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="0" column="1">
-                 <widget class="QDateTimeEdit" name="dateTimeEdit_simulationStartTimeInput"/>
-                </item>
-                <item row="0" column="3">
-                 <widget class="QDateTimeEdit" name="dateTimeEdit_simulationEndTimeInput"/>
-                </item>
-                <item row="0" column="4">
-                 <widget class="QLabel" name="label_precipitationEndTimeValue">
-                  <property name="minimumSize">
-                   <size>
-                    <width>25</width>
-                    <height>0</height>
-                   </size>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item row="1" column="1">
-                 <widget class="QLabel" name="label_simulationStartTime">
-                  <property name="text">
-                   <string>Simulation Start Time</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="1" column="4">
-                 <widget class="QLabel" name="label_precipitationEndTime">
-                  <property name="text">
-                   <string>Precp. End Time</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="0" column="2">
-                 <widget class="QDateTimeEdit" name="dateTimeEdit_evaluationStartTimeInput"/>
-                </item>
-                <item row="1" column="3">
-                 <widget class="QLabel" name="label_simulationEndTime">
-                  <property name="text">
-                   <string>Simulation End Time</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="0" column="0">
                  <widget class="QLabel" name="label_precipitationStartTimeValue">
                   <property name="minimumSize">
                    <size>
@@ -755,12 +712,88 @@
                   <property name="text">
                    <string/>
                   </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
                  </widget>
                 </item>
-                <item row="1" column="2">
+                <item row="1" column="4">
+                 <widget class="QLabel" name="label_precipitationEndTimeValue">
+                  <property name="minimumSize">
+                   <size>
+                    <width>25</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string/>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="3">
+                 <widget class="QDateTimeEdit" name="dateTimeEdit_simulationEndTimeInput">
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QDateTimeEdit" name="dateTimeEdit_simulationStartTimeInput">
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="0">
+                 <widget class="QLabel" name="label_precipitationStartTime">
+                  <property name="text">
+                   <string>Precp. Start Time</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="1">
+                 <widget class="QLabel" name="label_simulationStartTime">
+                  <property name="text">
+                   <string>Simulation Start Time</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="2">
                  <widget class="QLabel" name="label_evaluationStartTime">
                   <property name="text">
                    <string>Evaluation Start Time</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="3">
+                 <widget class="QLabel" name="label_simulationEndTime">
+                  <property name="text">
+                   <string>Simulation End Time</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="4">
+                 <widget class="QLabel" name="label_precipitationEndTime">
+                  <property name="text">
+                   <string>Precp. End Time</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
                   </property>
                  </widget>
                 </item>

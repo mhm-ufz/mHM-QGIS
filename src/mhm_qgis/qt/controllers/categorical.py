@@ -9,10 +9,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from qgis.PyQt.QtCore import QSignalBlocker
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 from ...core.handlers.state.nml_settings import relative_workspace_path, update_section
 from ...core.handlers.store.layout import lai_folder, morph_folder
+from ...core.morphology.layers.categorical import ready_layers
 from ..dialogs import advanced_inputs
 from ..dialogs.lai_netcdf_input import LaiNetcdfInputDialog
 from ..dialogs.mhm_ready_morph_input import MhmReadyInputDialog
@@ -126,6 +128,13 @@ def _configure_ready(dialog, kind, previous):
     ))
     if config is None:
         return False
+    if kind == "lai" and ready_layers(config.input_path, getattr(config, "variable", "")) > 1:
+        # A LAI series, not the class grid: the NetCDF File input takes it (with its time step).
+        dialog._lai_input_config = {"input_path": config.input_path, "variable": config.variable,
+                                    "source_crs": getattr(config, "source_crs", "")}
+        with QSignalBlocker(dialog.comboBox_lai_inputType):
+            dialog.comboBox_lai_inputType.setCurrentText("NetCDF File")
+        return _configure_lai_netcdf(dialog, previous)
     dialog._categorical_ready_configs[kind] = {
         "input_path": config.input_path,
         "classdefinition_path": getattr(config, "classdefinition_path", ""),
