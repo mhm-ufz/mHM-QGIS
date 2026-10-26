@@ -175,3 +175,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# QGIS writes these into the folder it is started from
+symbology-style.db
+user-history.db

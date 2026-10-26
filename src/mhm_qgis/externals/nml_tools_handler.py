@@ -2,6 +2,7 @@
 import os
 import shutil
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -43,17 +44,21 @@ def launch_editor(schemas_dir, output_dir, project, *, namelists=None, initial_v
 
     from .mhm_tools_handler import capture_messages
 
-    selection = project if namelists is None else {project: namelists}
+    request = gui.GuiProjectRequest(
+        project,
+        output_dir,
+        file_profiles=namelists,
+        initial_values=initial_values or {},
+        initial_dimensions=initial_dimensions or {},
+    )
     with capture_messages(log, logger_names=("nml_tools",)), _editor_folder(
-        schemas_dir, output_dir, selection, initial_values or {}, initial_dimensions or {}, log
+        schemas_dir, request, log
     ) as folder:
-        return gui.launch_gui(schemas_dir, folder, selection,
-                              initial_values=initial_values,
-                              initial_dimensions=initial_dimensions)
+        return gui.launch_gui(schemas_dir, [replace(request, output_dir=folder)])
 
 
 @contextmanager
-def _editor_folder(schemas, output, profiles, initial, dimensions, log=None):
+def _editor_folder(schemas, request, log=None):
     """Resize legacy namelists in scratch; commit only files the editor saves."""
     from nml_tools.gui.model import (
         load_profile,
@@ -64,9 +69,15 @@ def _editor_folder(schemas, output, profiles, initial, dimensions, log=None):
         suggestion,
     )
 
-    output = Path(output)
+    output = Path(request.output_dir)
+    profiles = (
+        request.project_profile
+        if request.file_profiles is None
+        else {request.project_profile: request.file_profiles}
+    )
+    initial = request.initial_values
     # nml-tools keys dimensions in lower case; v5 names them `nDomains`.
-    dimensions = {key.lower(): size for key, size in dimensions.items()}
+    dimensions = {key.lower(): size for key, size in request.initial_dimensions.items()}
     project = load_project(schemas, output, profiles)
     previous = recover_dimensions(project)
     shrunk = {key for key, size in dimensions.items() if size < previous.get(key, size)}
