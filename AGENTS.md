@@ -56,7 +56,6 @@ binding as this file: read the matching guide before working in its area.
 | [`display`](.agents/skills/display/SKILL.md): Showing layers and results in QGIS Desktop or the standalone map window, and the post-processing views. | changing map display, the map window or the Outputs tab |
 | [`namelists`](.agents/skills/namelists/SKILL.md): nml-tools schemas, the namelist editor hand-over, registered values and v5.13/v6 differences. | touching namelists, schemas or the namelist editor |
 | [`packaging`](.agents/skills/packaging/SKILL.md): The PyPI wheel, the QGIS plugin ZIP, the private micromamba runtime and its locks, CI and releases. | changing packaging, dependencies, the standalone runtime, CI or a release |
-| [`recent-moves`](.agents/skills/recent-moves/SKILL.md): Where older modules and files went in past restructurings. | an older plan, reference or path names something that no longer exists |
 
 ## Current Conventions
 

@@ -5,7 +5,11 @@ import pytest
 
 model = pytest.importorskip("nml_tools.gui.model")
 from nml_tools.gui import GuiProjectRequest  # noqa: E402
-from mhm_qgis.externals.nml_tools_handler import _editor_folder, launch_editor  # noqa: E402
+
+from mhm_qgis.externals.nml_tools_handler import (  # noqa: E402
+    _editor_folder,
+    launch_editor,
+)
 
 SCHEMAS = Path(__file__).parents[1] / "src/mhm_qgis/nml-schemas/v6"
 
@@ -89,7 +93,8 @@ def test_multi_domain_editor_uses_one_combined_project_request(tmp_path, monkeyp
         initial_dimensions={"n_domains": 1},
     ) == 0
     ((schemas, requests), kwargs) = calls[0]
-    assert schemas == SCHEMAS and kwargs == {}
+    assert schemas == SCHEMAS
+    assert kwargs == {}
     assert len(requests) == 1
     request = requests[0]
     assert request.project_profile == "combine"
