@@ -200,6 +200,8 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
         combo = QtWidgets.QComboBox(self.scrollAreaWidgetContents)
         browse = QtWidgets.QPushButton("...", self.scrollAreaWidgetContents)
         browse.setMaximumWidth(40)
+        for widget in (start, separator, end, combo):  # widths from the stretch alone, as in the first row
+            widget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Preferred)
         for widget in (start, separator, end, combo, browse):
             layout.addWidget(widget)
         for index, stretch in enumerate((2, 1, 2, 6, 1)):

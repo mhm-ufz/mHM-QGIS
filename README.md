@@ -99,7 +99,7 @@ and vector files. The Map Canvas button focuses whichever canvas is in use.
 ## Development
 
 ```bash
-git clone https://git.ufz.de/mhm/mhm-qgis
+git clone https://github.com/mhm-ufz/mHM-QGIS
 cd mhm-qgis
 python3 -m pip install -e '.[dev]'
 python3 -m pytest tests/ -q
@@ -111,8 +111,8 @@ skipped when its runtime libraries are unavailable. Core tests remain
 QGIS-independent. Designer `.ui` files load at runtime through `qgis.PyQt`, so no
 UI or resource compilation is needed.
 
-See [CONTRIBUTING.md](https://git.ufz.de/mhm/mhm-qgis/-/blob/main/CONTRIBUTING.md) and
-[CHANGELOG.md](https://git.ufz.de/mhm/mhm-qgis/-/blob/main/CHANGELOG.md).
+See [CONTRIBUTING.md](https://github.com/mhm-ufz/mHM-QGIS/blob/main/CONTRIBUTING.md) and
+[CHANGELOG.md](https://github.com/mhm-ufz/mHM-QGIS/blob/main/CHANGELOG.md).
 
 ## License
 

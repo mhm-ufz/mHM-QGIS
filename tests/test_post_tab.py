@@ -135,6 +135,7 @@ def test_statistic_maps_balance_and_processes(opened):
     assert "R (mm)" in headers
     assert dialog._post.ui.comboBox_postBalanceMap.count() > 3
     assert dialog._post.ui.mapCanvas_post.layers()[-1].name() == "OpenStreetMap"  # the shared Map dock's basemap
+    assert dialog._post.docks["map"].windowTitle() == f"mHM post: Map: {dialog._post.ui.mapCanvas_post.layers()[-2].name()}"
     times = dialog._post.ui.comboBox_timeBalance
     assert [times.itemData(i) for i in range(times.count())] == ["year", "month", "day"]  # daily output
     times.setCurrentIndex(times.findData("month"))
@@ -374,7 +375,12 @@ def test_tier_c_views(opened_long, monkeypatch):
     extent.scale(0.5)
     ui.mapCanvas_postB.setExtent(extent)
     assert ui.mapCanvas_postA.extent().center() == ui.mapCanvas_postB.extent().center()  # linked
-    assert ui.mapCanvas_postDelta.extent().width() == pytest.approx(ui.mapCanvas_postB.extent().width(), rel=0.2)
+    assert ui.mapCanvas_postDelta.scale() == pytest.approx(ui.mapCanvas_postB.scale(), rel=1e-6)
+    sizes, scale = ui.splitter_postCompareMaps.sizes(), ui.mapCanvas_postA.scale()
+    ui.splitter_postCompareMaps.moveSplitter(sizes[0] // 2, 1)  # A narrower, B wider: the scale stays
+    QCoreApplication.processEvents()
+    for canvas in (ui.mapCanvas_postA, ui.mapCanvas_postB, ui.mapCanvas_postDelta):
+        assert canvas.scale() == pytest.approx(scale, rel=1e-6)
 
     _page(dialog, "Extremes")
     _wait(lambda: "ten or more years" in ui.label_postExtremesNotes.text())  # 2 full years in 800 days

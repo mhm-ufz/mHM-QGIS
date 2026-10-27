@@ -361,6 +361,8 @@ def show_layers(dialog, layers, canvas=None) -> None:
     if first:
         canvas.setExtent(layers[-1].extent())
     canvas.refresh()
+    if basemap and "map" in state.docks:
+        state.docks["map"].setWindowTitle(f"mHM post: Map: {layers[-1].name()}")
 
 
 def _overlay_layers(dialog) -> list:

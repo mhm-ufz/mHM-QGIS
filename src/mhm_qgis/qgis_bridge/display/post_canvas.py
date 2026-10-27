@@ -299,22 +299,34 @@ def flash_gauge(canvas, x, y, crs) -> None:
 
 
 def link_extents(canvases) -> None:
-    """Keep the canvases on one extent (Compare); a guard stops the echo."""
+    """Keep the canvases on one centre and scale (Compare), also when a splitter resizes
+    them; a guard stops the echo."""
+    from qgis.PyQt.QtCore import QEvent, QObject, QTimer
+
+    class KeepScale(QObject):
+        def eventFilter(self, canvas, event):
+            if event.type() == QEvent.Type.Resize:  # a scale-locked canvas keeps its scale on resize
+                canvas.setScaleLocked(True)
+                QTimer.singleShot(0, lambda: canvas.setScaleLocked(False))
+            return False
+
     busy = []
 
     def follow(source):
-        if busy:
+        if busy or source.scaleLocked():  # resizing: each canvas keeps its own centre and scale
             return
         busy.append(True)
         try:
             for canvas in canvases:
                 if canvas is not source:
                     canvas.setExtent(source.extent())
+                    canvas.zoomScale(source.scale(), True)
                     canvas.refresh()
         finally:
             busy.clear()
 
     for canvas in canvases:
+        canvas.installEventFilter(KeepScale(canvas))
         canvas.extentsChanged.connect(lambda canvas=canvas: follow(canvas))
 
 

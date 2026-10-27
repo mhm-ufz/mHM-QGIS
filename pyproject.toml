@@ -69,9 +69,9 @@ docs = [
     "sphinx-rtd-theme",
 ]
 [project.urls]
-Homepage = "https://git.ufz.de/mhm/mhm-qgis"
-Repository = "https://git.ufz.de/mhm/mhm-qgis"
-"Bug Tracker" = "https://git.ufz.de/mhm/mhm-qgis/-/issues"
+Homepage = "https://github.com/mhm-ufz/mHM-QGIS"
+Repository = "https://github.com/mhm-ufz/mHM-QGIS"
+"Bug Tracker" = "https://github.com/mhm-ufz/mHM-QGIS/issues"
 
 [project.scripts]
 mhm-qgis = "mhm_qgis_runtime:launch"

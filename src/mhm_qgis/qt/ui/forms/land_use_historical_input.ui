@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget_historicalLandUseInput">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tab_config">
       <attribute name="title">
@@ -98,7 +98,7 @@
           <number>25</number>
          </attribute>
          <attribute name="horizontalHeaderDefaultSectionSize">
-          <number>120</number>
+          <number>150</number>
          </attribute>
          <row>
           <property name="text">
@@ -150,6 +150,12 @@
             <layout class="QHBoxLayout" name="horizontalLayout_inputLandUseLayer1" stretch="2,1,2,6,1">
              <item>
               <widget class="QLabel" name="label_startingYearLayer1">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
                <property name="text">
                 <string/>
                </property>
@@ -157,6 +163,12 @@
              </item>
              <item>
               <widget class="QLabel" name="label_toLayer1">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
                <property name="text">
                 <string>to</string>
                </property>
@@ -164,13 +176,26 @@
              </item>
              <item>
               <widget class="QLabel" name="label_endingYearLayer1">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
                <property name="text">
                 <string/>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="comboBox_inputLandUseLayer1"/>
+              <widget class="QComboBox" name="comboBox_inputLandUseLayer1">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+              </widget>
              </item>
              <item>
               <widget class="QPushButton" name="pushButton_browseLandUseLayer1">
@@ -220,7 +245,14 @@
           </widget>
          </item>
          <item>
-          <widget class="QComboBox" name="comboBox_lookupTableInput"/>
+          <widget class="QComboBox" name="comboBox_lookupTableInput">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
          </item>
          <item>
           <widget class="QPushButton" name="pushButton_browsecLookupTable">
