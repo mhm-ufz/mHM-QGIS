@@ -131,6 +131,7 @@ def test_cancel_kills_the_child(tmp_path, monkeypatch):
 
 def test_derive_reads_one_cell(tmp_path):
     truth = make_run(tmp_path)
-    values = post_exec.derive(Task(), {"what": "cell", "path": str(truth.files["mhm"]), "variable": "Q",
+    values = post_exec.derive(Task(), {"what": "cell", "path": str(truth.files["mhm"]), "variables": ["Q", "aET"],
                                        "iy": 1, "ix": 2}, tmp_path)
-    np.testing.assert_allclose(values, _file(truth, "Q")[:, 1, 2])
+    for name in ("Q", "aET"):
+        np.testing.assert_allclose(values[name], _file(truth, name)[:, 1, 2])

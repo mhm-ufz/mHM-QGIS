@@ -130,13 +130,17 @@ def test_statistic_maps_balance_and_processes(opened):
     _wait(lambda: state.widgets.get("map_layer") is not None and "sum" in state.widgets["map_layer"].name())
     _page(dialog, "Water balance")
     table = dialog._post.ui.tableWidget_postWaterBalance
-    assert table.rowCount() == 1
+    assert table.rowCount() == 1  # Annual
     headers = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
-    assert "R (mm/yr)" in headers
+    assert "R (mm)" in headers
     assert dialog._post.ui.comboBox_postBalanceMap.count() > 3
-    assert dialog._post.ui.mapCanvas_post.layers()  # on the shared Map dock
-    dialog.comboBox_postResolution.setCurrentText("Month")
+    assert dialog._post.ui.mapCanvas_post.layers()[-1].name() == "OpenStreetMap"  # the shared Map dock's basemap
+    times = dialog._post.ui.comboBox_timeBalance
+    assert [times.itemData(i) for i in range(times.count())] == ["year", "month", "day"]  # daily output
+    times.setCurrentIndex(times.findData("month"))
+    times.activated.emit(times.currentIndex())
     assert table.rowCount() == 3
+    dialog.comboBox_postResolution.setCurrentText("Month")
     _page(dialog, "Processes")
     assert len(state.widgets["processes"].ci.items) >= 3
 
@@ -375,22 +379,22 @@ def test_tier_c_views(opened_long, monkeypatch):
     _page(dialog, "Extremes")
     _wait(lambda: "ten or more years" in ui.label_postExtremesNotes.text())  # 2 full years in 800 days
     assert state.widgets["widget_postExtremesAnnual"].listDataItems()
-    assert "Q maximum" in ui.mapCanvas_post.layers()[-1].name()
+    assert "Q maximum" in ui.mapCanvas_post.layers()[-2].name()
 
     _page(dialog, "Drought")
     _wait(lambda: state.widgets.get("smi") is not None and not dialog.task_coordinator.is_busy())
     assert "streamflow droughts" in ui.label_postDroughtNotes.text()
-    assert ui.mapCanvas_post.layers()[-1].name().startswith("SMI 2000-01")
+    assert ui.mapCanvas_post.layers()[-2].name().startswith("SMI 2000-01")
 
     _page(dialog, "Anomalies")
     _wait(lambda: ui.label_postAnomaliesNotes.text() != "")
     if ui.tableWidget_postFindings.rowCount():
         ui.tableWidget_postFindings.selectRow(0)
-    assert "anomaly z" in ui.mapCanvas_post.layers()[-1].name()
+    assert "anomaly z" in ui.mapCanvas_post.layers()[-2].name()
 
     _page(dialog, "Summary")
     _wait(lambda: ui.tableWidget_postSummary.rowCount() == 2)
-    assert "by basin" in ui.mapCanvas_post.layers()[-1].name()
+    assert "by basin" in ui.mapCanvas_post.layers()[-2].name()
 
     state.context.set("cell", (1, 1))
     post_advanced.why_here(dialog)

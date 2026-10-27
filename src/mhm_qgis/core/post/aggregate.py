@@ -43,7 +43,7 @@ def map_statistics(info) -> tuple:
     return ("mean", "std", "min", "max", "percentile") + (("sum", "anomaly") if info["kind"] == "flux" else ())
 
 
-def _period_mask(intervals, period):
+def period_mask(intervals, period):
     if period is None:
         return np.ones(len(intervals), bool)
     return (intervals[:, 0] >= np.datetime64(period[0])) & (intervals[:, 1] <= np.datetime64(period[1]))
@@ -56,7 +56,7 @@ def temporal(root, variable, how, freq="native", *, basin="domain", cell=None, p
     values = series.cell(root, variable, *cell, period) if cell else series.basin(root, variable, basin, period)
     if values is None:
         return None
-    intervals = series.bounds(root)[_period_mask(series.bounds(root), period)]
+    intervals = series.bounds(root)[period_mask(series.bounds(root), period)]
     days = (intervals[:, 1] - intervals[:, 0]) / np.timedelta64(1, "D")
     flux = info["kind"] == "flux"
     if freq == "native":
@@ -94,7 +94,7 @@ def statistic(root, variable, stat, period=None, q=None):  # noqa: PLR0911
     info = semantics(root, variable)
     check(variable, info, stat, map_statistics(info))
     intervals = series.bounds(root)
-    keep = _period_mask(intervals, period)
+    keep = period_mask(intervals, period)
     days = (intervals[:, 1] - intervals[:, 0]) / np.timedelta64(1, "D")
     flux = info["kind"] == "flux"
     if stat == "percentile":
@@ -130,6 +130,29 @@ def statistic(root, variable, stat, period=None, q=None):  # noqa: PLR0911
     calendar = labels.astype(int) % 12
     climate = {m: np.nanmean(totals[calendar == m], axis=0) for m in np.unique(calendar[chosen])}
     return np.nanmean([totals[i] - climate[calendar[i]] for i in np.flatnonzero(chosen)], axis=0)
+
+
+def cell_statistic(values, intervals, kind, stat, period=None, q=None, step=0):  # noqa: PLR0911 -- one return per statistic
+    """One cell's `stat` as `statistic` maps it: instant at `step`, the others over `period`."""
+    values = np.asarray(values, "f8")
+    if stat == "instant":
+        return values[step]
+    keep = period_mask(intervals, period)
+    chosen, days = values[keep], ((intervals[:, 1] - intervals[:, 0]) / np.timedelta64(1, "D"))[keep]
+    if np.isnan(chosen).all():
+        return np.nan
+    if stat == "sum":
+        return chosen.sum()
+    if stat == "mean":
+        return (chosen.sum() if kind == "flux" else (chosen * days).sum()) / days.sum()
+    if stat == "percentile":
+        return np.nanpercentile(chosen, q)
+    if stat == "anomaly":
+        months = pd.Series(values, index=pd.DatetimeIndex(intervals[:, 0])).resample("MS").sum(min_count=1)
+        anomaly = months - months.groupby(months.index.month).transform("mean")
+        first, last = intervals[keep, 0].min(), intervals[keep, 1].max()
+        return anomaly[(anomaly.index >= first) & (anomaly.index < last)].mean()
+    return {"min": np.nanmin, "max": np.nanmax, "std": np.nanstd}[stat](chosen)
 
 
 def _grid(root, cells, values):

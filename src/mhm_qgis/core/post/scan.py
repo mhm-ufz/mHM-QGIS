@@ -255,8 +255,8 @@ def derive(job):
         import netCDF4
 
         with netCDF4.Dataset(job["path"]) as handle:  # decompresses every map (F6): background only
-            values = np.ma.filled(np.ma.asarray(handle[job["variable"]][:, job["iy"], job["ix"]], "f8"), np.nan)
-        return values.tolist()
+            return {name: np.ma.filled(np.ma.asarray(handle[name][:, job["iy"], job["ix"]], "f8"), np.nan).tolist()
+                    for name in job["variables"]}
     if job["what"] == "statistic":
         return _period_statistic(job)
     if job["what"] == "observe":

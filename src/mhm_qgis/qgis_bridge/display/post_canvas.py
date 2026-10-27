@@ -214,14 +214,22 @@ def _no_brush():
     return Qt.BrushStyle.NoBrush
 
 
-def network_layer(path, name="River network"):
-    """The channel network (`2_channel_network.shp`) as a blue line overlay; None if absent."""
+def network_layer(path, name="River network", clip=None):
+    """The channel network (`2_channel_network.shp`) as a blue line overlay, cut to the
+    `clip` polygons when given; None if absent."""
     from qgis.core import QgsVectorLayer
     from qgis.PyQt.QtGui import QColor
+
+    from ..processing import run
 
     if not Path(path).is_file():
         return None
     layer = QgsVectorLayer(str(path), name, "ogr")
+    if clip is not None:
+        result = run("native:clip", {"INPUT": layer, "OVERLAY": clip, "OUTPUT": "memory:"})
+        if result is not None:
+            layer = result["OUTPUT"]
+            layer.setName(name)
     layer.renderer().symbol().setColor(QColor("#1f78b4"))
     return layer
 

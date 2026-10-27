@@ -12,11 +12,12 @@ layers stay out of the project.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from qgis.PyQt.QtCore import QSignalBlocker, Qt
 from qgis.PyQt.QtWidgets import QTableWidgetItem, QTreeWidgetItem
 
-from ...core.executions.post import SERIES_DEFAULT
 from ...core.post.catalog import Variable
 from ...qgis_bridge.display import post_canvas
 from ..workflows import post as work
@@ -33,8 +34,8 @@ def bind(dialog) -> None:
     dialog._post.ui.treeWidget_postVariables.currentItemChanged.connect(lambda item, _old: _variable_chosen(dialog, item))
     dialog._post.ui.comboBox_postStatistic.activated.connect(lambda _index: _statistic_chosen(dialog))
     dialog._post.ui.spinBox_postPercentile.valueChanged.connect(lambda _value: _statistic_chosen(dialog))
-    # pushButton_postBuildCache → build_cache
-    dialog._post.ui.pushButton_postBuildCache.clicked.connect(lambda: build_cache(dialog))
+    # pushButton_postBuildCacheAll → build_cache
+    dialog._post.ui.pushButton_postBuildCacheAll.clicked.connect(lambda: build_cache(dialog))
     # pushButton_postOpenInQgis → post_canvas.open_in_qgis
     dialog._post.ui.pushButton_postOpenInQgis.clicked.connect(lambda: open_in_qgis(dialog))
     tool = QgsMapToolEmitPoint(dialog._post.ui.mapCanvas_post)
@@ -68,10 +69,12 @@ def refresh(dialog, fields) -> None:
                 post_canvas.show_step(layer, band)
     if "gauge" in fields:
         _zoom_to_gauge(dialog)
-    if fields & {"run", "cell", "current_time"}:
+    if fields & {"run", "cell", "current_time", "statistic", "period"}:
         _inspect(dialog)
     if fields & {"run", "cell", "variable", "period"}:
         _cell_plot(dialog)
+    elif "current_time" in fields:
+        _time_line(dialog)
 
 
 def _populate_tree(dialog) -> None:
@@ -346,37 +349,54 @@ def array_layer(dialog, array, name, stem, *, diverging=False, value_range=None,
 
 
 def show_layers(dialog, layers, canvas=None) -> None:
-    """Layers (under the basin outlines and rivers) on the shared Map, or on `canvas`."""
+    """Layers (under the basin outlines and rivers) on the shared Map over the basemap, or on `canvas`."""
     state = dialog._post
+    basemap = state.widgets.get("basemap", []) if canvas is None else []
     canvas = canvas or getattr(state.ui, "mapCanvas_post", None)
     if canvas is None or not layers:
         return
     first = not canvas.layers()
     canvas.setDestinationCrs(layers[-1].crs())
-    canvas.setLayers([*state.widgets.get("overlays", []), *layers])
+    canvas.setLayers([*state.widgets.get("overlays", []), *layers, *basemap])
     if first:
         canvas.setExtent(layers[-1].extent())
     canvas.refresh()
 
 
 def _overlay_layers(dialog) -> list:
-    """Fresh basin outlines and river network layers of the open run."""
+    """Fresh basin outlines and the river network (cut to the domain) of the open run."""
+    from qgis.core import QgsVectorLayer
+
     from ...core.handlers.store.paths import temp_morphology_folder
 
     state = dialog._post
     masks = {name: np.load(state.root / "weights" / f"{name}.npy")
              for name in next(iter(state.index["variables"].values()), {}).get("basins", [])}
     layers = [post_canvas.outline_layer(masks, state.axes, dialog.get_crs())] if masks else []
-    network = post_canvas.network_layer(f"{temp_morphology_folder(state.run.ref.domain)}/2_channel_network.shp")
+    morphology = Path(temp_morphology_folder(state.run.ref.domain))
+    merged = morphology / "Watersheds" / "4_watershed_merged_vector.shp"
+    clip = QgsVectorLayer(str(merged), "domain", "ogr") if merged.is_file() else next(iter(layers), None)
+    network = post_canvas.network_layer(morphology / "2_channel_network.shp", clip=clip)
     return [layer for layer in (*layers, network) if layer is not None]
+
+
+def _basemap():
+    """QGIS's OpenStreetMap XYZ tiles, under the Map dock's layers (blank offline)."""
+    from qgis.core import QgsRasterLayer
+
+    return QgsRasterLayer("type=xyz&url=https://tile.openstreetmap.org/{z}/{x}/{y}.png&zmin=0&zmax=19",
+                          "OpenStreetMap", "wms")
 
 
 def _overlays(dialog) -> None:
     """Basin outlines and the river network over every map (a new run)."""
     state = dialog._post
     state.widgets["overlays"] = _overlay_layers(dialog)
+    if "basemap" not in state.widgets:
+        state.widgets["basemap"] = [_basemap()]
     state.widgets.pop("map_layer", None)
     state.widgets.pop("view_layers", None)
+    state.widgets.pop("cell_values", None)
     _clear_main(dialog)
     state.ui.mapCanvas_post.setLayers([])  # a new run: zoom to its first map
 
@@ -430,8 +450,49 @@ def clicked(dialog, x, y, button=None, canvas=None) -> None:
             post_advanced.why_here(dialog)
 
 
-def _inspect(dialog) -> None:
+def _cell_values(dialog):
+    """The context cell's full-run series per variable and whether more are being read:
+    cached ones at once, the rest in one background pass that refreshes the inspector and plot."""
     from ...core.post import series
+
+    state = dialog._post
+    cell = state.context.get("cell")
+    found = state.widgets.get("cell_values")
+    if found is not None and found[0] == cell:
+        return found[1:]
+    values = {}
+    for name in state.index["variables"]:
+        cached = series.cell(state.root, name, *cell)
+        if cached is not None:
+            values[name] = cached.to_numpy()
+    inside = np.load(state.root / "weights" / "domain.npy")[int(cell[0]), int(cell[1])] > 0
+    in_file = {v.name for v in state.run.variables if v.file == "mhm" and v.present}
+    missing = [name for name in state.index["variables"] if inside and name in in_file and name not in values]
+    state.widgets["cell_values"] = (cell, values, bool(missing))
+    if not missing:
+        return values, False
+    path, root = state.run.files["mhm"], state.root
+
+    def read(task):
+        from ...core.executions import post as post_exec
+
+        return post_exec.derive(task, {"what": "cell", "path": str(path), "variables": missing,
+                                       "iy": int(cell[0]), "ix": int(cell[1])}, root)
+
+    def done(read_values):
+        if state.widgets.get("cell_values", (None,))[0] == cell:
+            state.widgets["cell_values"] = (cell, values | {n: np.asarray(v, "f8") for n, v in read_values.items()},
+                                            False)
+            _inspect(dialog)
+            _cell_plot(dialog)
+
+    work.submit(dialog, "cell", f"Reading row {cell[0]}, column {cell[1]}", read, done,
+                lambda *_: state.widgets.pop("cell_values", None))
+    return values, True
+
+
+def _inspect(dialog) -> None:
+    from ...core.post import aggregate
 
     state = dialog._post
     table = dialog._post.ui.tableWidget_postCellInspector
@@ -443,20 +504,26 @@ def _inspect(dialog) -> None:
         return
     iy, ix = cell
     step = int(state.context.get("current_time") or 0)
-    rows = [("Cell area (km²)", np.load(state.root / "area.npy")[iy, ix] / 1e6),
-            ("Domain coverage", np.load(state.root / "weights" / "domain.npy")[iy, ix])]
+    stat, q = state.context.get("statistic") or ("instant", None)
+    period = state.context.get("period")
+    rows = [("Cell area", np.load(state.root / "area.npy")[iy, ix] / 1e6, "km²"),
+            ("Domain coverage", np.load(state.root / "weights" / "domain.npy")[iy, ix], "-")]
     if (state.root / "sealed.npy").is_file():
         scene = np.load(state.root / "scenes.npy")[step]
-        rows.append(("Sealed fraction", np.load(state.root / "sealed.npy")[scene, iy, ix]))
-    for name in state.index["variables"]:
-        values = series.cell(state.root, name, iy, ix)
-        rows.append((name, values.iloc[step] if values is not None else None))
-    dialog._post.ui.label_postCell.setText(f"Row {iy}, column {ix}; values at {str(state.intervals[step, 0])[:16]}")
+        rows.append(("Sealed fraction", np.load(state.root / "sealed.npy")[scene, iy, ix], "-"))
+    (values, reading), units = _cell_values(dialog), {v.name: v.units for v in state.run.variables}
+    for name, info in state.index["variables"].items():
+        found = values.get(name)
+        allowed = stat == "instant" or stat in aggregate.map_statistics(info)
+        rows.append((name, aggregate.cell_statistic(found, state.intervals, info["kind"], stat, period, q, step)
+                     if found is not None and allowed else None, units.get(name, "")))
+    when = f"at {str(state.intervals[step, 0])[:16]}" if stat == "instant" else "over the period"
+    dialog._post.ui.label_postCell.setText(f"Row {iy}, column {ix}; {LABELS[stat].lower()} {when}")
     table.setRowCount(len(rows))
-    for row, (name, value) in enumerate(rows):
-        table.setItem(row, 0, QTableWidgetItem(name))
-        text = "no series cache" if value is None else f"{float(value):.4g}"
-        table.setItem(row, 1, QTableWidgetItem(text))
+    for row, (name, value, unit) in enumerate(rows):
+        text = f"{float(value):.4g}" if value is not None else "reading…" if reading and name not in values else "-"
+        for column, cell_text in enumerate((name, text, unit)):
+            table.setItem(row, column, QTableWidgetItem(cell_text))
 
 
 def _highlight(dialog) -> None:
@@ -473,47 +540,42 @@ def _highlight(dialog) -> None:
 
 
 def _cell_plot(dialog) -> None:
-    from ...core.post import series
+    import pyqtgraph as pg
+
+    from ...core.post import aggregate
 
     state = dialog._post
     plot = plot_widget(dialog, dialog._post.ui.widget_postCellPlot)
     plot.clear()
+    if "cell_time" not in state.widgets:
+        state.widgets["cell_time"] = pg.InfiniteLine(angle=90, pen=pg.mkPen("#e31a1c", width=1.5))
+    plot.addItem(state.widgets["cell_time"])
+    _time_line(dialog)
     cell, name = state.context.get("cell"), state.context.get("variable")
-    if cell is None or name is None:
+    values = _cell_values(dialog)[0] if cell is not None else {}
+    if name not in values:
         return
-    period = state.context.get("period")
-    values = series.cell(state.root, name, *cell, period)
-    if values is not None:
-        plot.plot(seconds(values.index), values.to_numpy(), pen="#2c7fb8", name=name)
-        return
-    if name == "pre":
-        return
-    path, root = state.run.files["mhm"], state.root
+    keep = aggregate.period_mask(state.intervals, state.context.get("period"))
+    plot.plot(seconds(state.intervals[keep, 0]), values[name][keep], pen="#2c7fb8", name=name)
 
-    def read(task):
-        from ...core.executions import post as post_exec
 
-        return post_exec.derive(task, {"what": "cell", "path": str(path), "variable": name,
-                                       "iy": int(cell[0]), "ix": int(cell[1])}, root)
-
-    def done(read_values):
-        if state.context.get("cell") == cell and state.context.get("variable") == name:
-            plot.plot(seconds(state.intervals[:, 0]), np.asarray(read_values, float), pen="#2c7fb8", name=name)
-
-    work.submit(dialog, "cell", f"Reading {name} at row {cell[0]}, column {cell[1]}", read, done)
+def _time_line(dialog) -> None:
+    """The cell plot's line at the current time."""
+    state = dialog._post
+    line = state.widgets.get("cell_time")
+    if line is not None and state.intervals is not None:
+        step = int(state.context.get("current_time") or 0)
+        line.setValue(seconds(state.intervals[step:step + 1, 0])[0])
 
 
 def build_cache(dialog) -> None:
-    """Rescan with the chosen variable's series cached too."""
+    """Rescan with every scanned variable's series cached."""
     from ...core.executions import post as post_exec
 
     state = dialog._post
-    name = state.context.get("variable")
-    if state.root is None or name is None:
+    if state.root is None:
         return
-    ref = state.run.ref
-    wanted = tuple({*SERIES_DEFAULT, *(v for v in state.index["variables"] if (state.root / "series" /
-                                                                                f"{v}.npy").is_file()), name})
+    ref, wanted = state.run.ref, tuple(state.index["variables"])
 
     def rescan(task):
         job = post_exec.scan_job(ref, series=wanted, run=state.run)
@@ -525,7 +587,7 @@ def build_cache(dialog) -> None:
         state.index = cache.load_index(state.root)
         refresh(dialog, {"cell", "variable"})
 
-    work.submit(dialog, "scan", f"Building the series cache for {name}", rescan, done)
+    work.submit(dialog, "scan", "Building the series cache for all variables", rescan, done)
 
 
 def open_in_qgis(dialog) -> None:

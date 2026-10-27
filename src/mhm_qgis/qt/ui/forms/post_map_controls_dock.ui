@@ -2,6 +2,14 @@
 <ui version="4.0">
  <class>PostMapControlsDock</class>
  <widget class="QWidget" name="PostMapControlsDock">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>262</width>
+    <height>297</height>
+   </rect>
+  </property>
   <property name="windowTitle">
    <string>Map controls</string>
   </property>
@@ -19,72 +27,70 @@
     <number>2</number>
    </property>
    <item>
-    <widget class="QWidget" name="widget_postMapControls">
-     <layout class="QVBoxLayout" name="verticalLayout_postMapControls">
-      <item>
-       <widget class="QTreeWidget" name="treeWidget_postVariables">
-        <property name="headerHidden">
-         <bool>true</bool>
+    <layout class="QVBoxLayout" name="verticalLayout_postMapControls">
+     <item>
+      <widget class="QTreeWidget" name="treeWidget_postVariables">
+       <property name="headerHidden">
+        <bool>true</bool>
+       </property>
+       <column>
+        <property name="text">
+         <string>Variable</string>
         </property>
-        <column>
-         <property name="text">
-          <string>Variable</string>
+       </column>
+      </widget>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_postStatistic">
+       <item>
+        <widget class="QComboBox" name="comboBox_postStatistic">
+         <property name="toolTip">
+          <string>Instant shows the time step; the others summarise the period, limited by the variable's kind.</string>
          </property>
-        </column>
-       </widget>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_postStatistic">
-        <item>
-         <widget class="QComboBox" name="comboBox_postStatistic">
-          <property name="toolTip">
-           <string>Instant shows the time step; the others summarise the period, limited by the variable's kind.</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QSpinBox" name="spinBox_postPercentile">
-          <property name="suffix">
-           <string> %</string>
-          </property>
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>99</number>
-          </property>
-          <property name="value">
-           <number>50</number>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton_postBuildCache">
-        <property name="toolTip">
-         <string>Store this variable's series per cell, so cell plots and percentiles are instant.</string>
-        </property>
-        <property name="text">
-         <string>Build series cache</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton_postOpenInQgis">
-        <property name="toolTip">
-         <string>Keep a copy of the shown map, with its style and time, in the project ("mHM post" group); the map on the canvas is removed when the analysis layout ends.</string>
-        </property>
-        <property name="text">
-         <string>Keep in project</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSpinBox" name="spinBox_postPercentile">
+         <property name="suffix">
+          <string> %</string>
+         </property>
+         <property name="minimum">
+          <number>1</number>
+         </property>
+         <property name="maximum">
+          <number>99</number>
+         </property>
+         <property name="value">
+          <number>50</number>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_postBuildCacheAll">
+       <property name="toolTip">
+        <string>Store every variable's series per cell, so cell values, plots and percentiles are instant.</string>
+       </property>
+       <property name="text">
+        <string>Build series cache (All)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_postOpenInQgis">
+       <property name="toolTip">
+        <string>Keep a copy of the shown map, with its style and time, in the project (&quot;mHM post&quot; group); the map on the canvas is removed when the analysis layout ends.</string>
+       </property>
+       <property name="text">
+        <string>Keep in project</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>
- <resources />
- <connections />
+ <resources/>
+ <connections/>
 </ui>

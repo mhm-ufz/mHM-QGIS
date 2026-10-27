@@ -14,7 +14,7 @@ from ..workflows import post as work
 from . import post_map
 from .post_context import plot_widget, seconds
 
-FREQ = {"month": "month", "year": "year"}
+TIMES = (("Annual", "year"), ("Monthly", "month"), ("Daily", "day"))
 PANELS = (("Runoff partition", ("QD", "QIf", "QIs", "QB")),
           ("Evapotranspiration", ("PET", "aET", "aET_L")),
           ("Snow", ("pre", "snowpack", "Qsm")),
@@ -25,6 +25,7 @@ COLOURS = ("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e", "#e6ab02", "#a
 
 def bind(dialog) -> None:
     dialog._post.ui.comboBox_postBalanceMap.activated.connect(lambda _index: show_balance_map(dialog))
+    dialog._post.ui.comboBox_timeBalance.activated.connect(lambda _index: refresh_balance(dialog, {"balance_time"}))
 
 
 def _basin(dialog):
@@ -116,27 +117,32 @@ def refresh_balance(dialog, fields) -> None:
         dialog._post.ui.comboBox_postBalanceMap.clear()
         return
     plot = plot_widget(dialog, dialog._post.ui.widget_postWaterBalancePlot)
-    from ...core.post import balance
+    from ...core.post import aggregate, balance
 
-    if not fields & {"run", "basin", "period", "resolution"}:
+    if not fields & {"run", "basin", "period", "balance_time"}:
         return
-    basin, period = _basin(dialog), state.context.get("period")
-    freq = FREQ.get(state.context.get("resolution"), "period")
-    frame = balance.basin(state.root, basin, freq, state.exact, period)
-    shown = balance.per_year(frame) if freq == "period" else frame
-    unit = "mm/yr" if freq == "period" else "mm"
+    combo = dialog._post.ui.comboBox_timeBalance
+    if "run" in fields:  # only the steps the output sums to
+        step = np.median((state.intervals[:, 1] - state.intervals[:, 0]) / np.timedelta64(1, "D"))
+        previous = combo.currentData()
+        combo.clear()
+        for label, freq in TIMES:
+            if step <= aggregate.MAX_DAYS[freq] * 1.001:
+                combo.addItem(label, freq)
+        combo.setCurrentIndex(max(0, combo.findData(previous)))
+    basin, period, freq = _basin(dialog), state.context.get("period"), combo.currentData() or "year"
+    shown = balance.basin(state.root, basin, freq, state.exact, period)
     columns = [c for c in shown.columns if shown[c].notna().any()]
     table.setColumnCount(len(columns))
     table.setRowCount(len(shown))
-    table.setHorizontalHeaderLabels([f"{c} ({unit})" if c not in balance.RATIOS and c != "days" else c
+    table.setHorizontalHeaderLabels([f"{c} (mm)" if c not in balance.RATIOS and c != "days" else c
                                      for c in columns])
-    table.setVerticalHeaderLabels(["Period" if freq == "period" else str(label)[: 7 if freq == "month" else 4]
-                                   for label in shown.index])
+    table.setVerticalHeaderLabels([str(label)[:{"year": 4, "month": 7, "day": 10}[freq]] for label in shown.index])
     for r, (_, row) in enumerate(shown.iterrows()):
         for c, column in enumerate(columns):
             table.setItem(r, c, QTableWidgetItem(f"{row[column]:,.3g}" if column in balance.RATIOS
                                                  else f"{row[column]:,.1f}"))
-    dialog._post.ui.label_postBalanceNotes.setText(" ".join(frame.attrs.get("notes", [])))
+    dialog._post.ui.label_postBalanceNotes.setText(" ".join(shown.attrs.get("notes", [])))
     monthly = balance.basin(state.root, basin, "month", state.exact, period)
     plot.clear()
     x = seconds(monthly.index) + 15 * 86400

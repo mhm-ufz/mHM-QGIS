@@ -68,6 +68,27 @@ def test_monthly_balance_closes_within_the_averaging_bound(tmp_path):
     assert balance.basin(root, freq="month")["P"].sum() == pytest.approx(frame["P"].iloc[0])
 
 
+def test_daily_balance_splits_storage_change(tmp_path):
+    _truth, root = _scanned(tmp_path, days=62)
+    daily, whole = balance.basin(root, freq="day"), balance.basin(root)
+    assert len(daily) == 61
+    assert str(daily.index[0])[:10] == "2000-01-02"
+    assert daily["P"].sum() == pytest.approx(whole["P"].iloc[0])
+    parts = [c for c in daily.columns if c.startswith("dS_")]
+    assert parts
+    assert daily[parts].sum(axis=1).to_numpy() == pytest.approx(daily["dS"].to_numpy())
+
+
+def test_cell_statistic_matches_the_map_meaning(tmp_path):
+    _truth, root = _scanned(tmp_path, days=62)
+    intervals, values = series.bounds(root), series.cell(root, "aET", 1, 2).to_numpy()
+    days = (intervals[:, 1] - intervals[:, 0]) / np.timedelta64(1, "D")
+    assert aggregate.cell_statistic(values, intervals, "flux", "instant", step=3) == values[3]
+    assert aggregate.cell_statistic(values, intervals, "flux", "sum") == pytest.approx(values.sum())
+    assert aggregate.cell_statistic(values, intervals, "flux", "mean") == pytest.approx(values.sum() / days.sum())
+    assert aggregate.cell_statistic(values, intervals, "flux", "max") == values.max()
+
+
 def test_aggregation_follows_the_data_model(tmp_path):
     truth, root = _scanned(tmp_path, days=62)
     aet = series.basin(root, "aET")

@@ -17,6 +17,7 @@ import pandas as pd
 
 from ..datamodel import output_registry
 from . import cache, series
+from .aggregate import UNITS
 
 FLUXES = {"P": "pre", "ET": "aET", "Q": "Q", "QD": "QD", "QIf": "QIf", "QIs": "QIs", "QB": "QB",
           "recharge": "recharge", "PET": "PET"}
@@ -43,7 +44,7 @@ def notes(index) -> list[str]:
 
 
 def basin(root, name="domain", freq="period", exact=False, period=None) -> pd.DataFrame:
-    """Balance terms in mm per group (period, year or month), with ΔS, R, the averaging
+    """Balance terms in mm per group (period, year, month or day), with ΔS, R, the averaging
     bound, `days` and the ratios. `exact`: the output step is the model step;
     `period` (start, end) keeps the intervals inside it."""
     root = Path(root)
@@ -53,16 +54,16 @@ def basin(root, name="domain", freq="period", exact=False, period=None) -> pd.Da
     for column, variable in FLUXES.items():
         values = series.basin(root, variable, name)
         terms[column] = values.to_numpy() if values is not None else np.full(len(intervals), np.nan)
-    parts = [series.basin(root, variable, name) for variable in storages(index)]
-    storage = np.sum([part.to_numpy() for part in parts], axis=0) if parts else np.full(len(intervals), np.nan)
+    parts = {variable: series.basin(root, variable, name).to_numpy() for variable in storages(index)}
+    storage = np.sum(list(parts.values()), axis=0) if parts else np.full(len(intervals), np.nan)
     if period is not None:
         keep = (intervals[:, 0] >= np.datetime64(period[0])) & (intervals[:, 1] <= np.datetime64(period[1]))
         intervals, storage = intervals[keep], storage[keep]
         terms = {column: values[keep] for column, values in terms.items()}
+        parts = {variable: values[keep] for variable, values in parts.items()}
     days = (intervals[:, 1] - intervals[:, 0]) / np.timedelta64(1, "D")
     starts = intervals[1:, 0]
-    labels = (np.zeros(len(starts), int) if freq == "period"
-              else starts.astype("datetime64[Y]" if freq == "year" else "datetime64[M]"))
+    labels = np.zeros(len(starts), int) if freq == "period" else starts.astype(f"datetime64[{UNITS[freq]}]")
     rows, keys = [], []
     for label in dict.fromkeys(labels):
         chosen = np.flatnonzero(labels == label) + 1  # interval indices, all >= 1
@@ -70,6 +71,7 @@ def basin(root, name="domain", freq="period", exact=False, period=None) -> pd.Da
         row = {column: values[chosen].sum() for column, values in terms.items()}
         row["days"] = days[chosen].sum()
         row["dS"] = storage[last] - storage[first - 1]
+        row |= {f"dS_{variable}": values[last] - values[first - 1] for variable, values in parts.items()}
         row["R"] = row["P"] - row["ET"] - row["Q"] - row["dS"]
         row["bound"] = 0.0 if exact else (abs(storage[first] - storage[first - 1])
                                           + abs(storage[last] - storage[max(last - 1, 0)]))

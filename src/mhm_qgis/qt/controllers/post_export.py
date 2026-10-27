@@ -79,13 +79,13 @@ def _plots(dock, out, name) -> list[Path]:
 
 def _rasters(dialog, dock, name) -> list[tuple]:
     """(source, band, stem) of the raster layers on the map canvases of a panel or dock."""
-    from qgis.core import QgsMapLayer, QgsRasterLayer
+    from qgis.core import QgsRasterLayer
     from qgis.gui import QgsMapCanvas
 
     found = []
     for canvas in dock.findChildren(QgsMapCanvas):
         for layer in canvas.layers():
-            if layer.type() != QgsMapLayer.LayerType.RasterLayer or not isinstance(layer, QgsRasterLayer):
+            if not isinstance(layer, QgsRasterLayer) or layer.providerType() != "gdal":  # not the basemap
                 continue
             found.append(_raster(dialog, layer, name))
     return found

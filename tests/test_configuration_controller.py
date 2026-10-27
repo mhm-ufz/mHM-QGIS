@@ -88,28 +88,29 @@ def test_edit_namelists_forwards_project_values_and_dimensions(
     monkeypatch.setattr(
         nml_tools.gui,
         "launch_gui",
-        lambda schemas, folder, profiles, **kwargs: calls.append(dict(schemas_dir=schemas, output_dir=str(folder), project_profiles=profiles, **kwargs)) or 0,
+        lambda schemas, requests: calls.append({"schemas_dir": schemas, **vars(requests[0])}) or 0,
     )
 
     assert controller_module.edit_namelists(dialog) is True
     assert prepared == [(str(tmp_path), "5.13")]
     assert calls == [{
         "schemas_dir": Path(__file__).parents[1] / "src/mhm_qgis/nml-schemas/v5.13",
-        "output_dir": workspace_folder(tmp_path),
+        "project_profile": "v5",
+        "output_dir": Path(workspace_folder(tmp_path)),
+        "file_profiles": None,
         "initial_values": {
             "main": {"config_project": {"project_details": "5.13"}}
         },
         "initial_dimensions": {"n_domains": 2},
-        "project_profiles": "v5",
     }]
 
 
 
 @pytest.mark.parametrize(("setup", "namelists", "expected"), [
-    ("single", None, "classic"),
-    ("single", {"parameter": []}, {"classic": {"parameter": []}}),
-    ("multi", None, "combine"),
-    ("multi", {"main": ["config_optimize"]}, {"combine": {"meta": ["config_optimize"]}}),
+    ("single", None, ("classic", None)),
+    ("single", {"parameter": []}, ("classic", {"parameter": []})),
+    ("multi", None, ("combine", None)),
+    ("multi", {"main": ["config_optimize"]}, ("combine", {"meta": ["config_optimize"]})),
 ])
 def test_edit_namelists_opens_the_setups_v6_project(tmp_path: Path, monkeypatch, setup, namelists, expected) -> None:
     """A v6 single setup edits `classic` (mhm.nml), a combined one `combine` (combine.nml)."""
@@ -133,7 +134,8 @@ def test_edit_namelists_opens_the_setups_v6_project(tmp_path: Path, monkeypatch,
         monkeypatch.setattr(controller_module, name, lambda *_args: None)
     selections = []
     monkeypatch.setattr(nml_tools.gui, "launch_gui",
-                        lambda schemas, folder, profiles, **_kwargs: selections.append(profiles) or 0)
+                        lambda _schemas, requests: selections.append(
+                            (requests[0].project_profile, requests[0].file_profiles)) or 0)
     assert controller_module.edit_namelists(dialog, namelists, update_inputs=False) is True
     assert selections == [expected]
 
