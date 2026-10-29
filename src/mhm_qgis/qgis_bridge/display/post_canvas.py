@@ -84,11 +84,15 @@ def _qdatetime(moment):
 
 
 def set_time_ranges(layer, bounds) -> None:
-    """One fixed range per band from `time_bnds`, so QGIS's own temporal tools animate it."""
+    """One fixed range per band from `time_bnds`, so QGIS's own temporal tools animate it.
+    Before QGIS 3.38 there is no such mode; the plugin's time slider still steps the bands."""
     from qgis.core import Qgis, QgsDateTimeRange
 
+    mode = getattr(getattr(Qgis, "RasterTemporalMode", None), "FixedRangePerBand", None)
+    if mode is None:
+        return
     properties = layer.temporalProperties()
-    properties.setMode(Qgis.RasterTemporalMode.FixedRangePerBand)
+    properties.setMode(mode)
     properties.setFixedRangePerBand({index + 1: QgsDateTimeRange(_qdatetime(start), _qdatetime(end), True, False)
                                      for index, (start, end) in enumerate(bounds)})
     properties.setIsActive(True)
@@ -98,12 +102,13 @@ def style(layer, low, high, *, diverging=False, band=1) -> None:
     """A fixed colour ramp: Viridis from `low` to `high` (the scan's 2nd and 98th
     percentiles, so colours hold while animating) or RdBu centred on 0 for differences."""
     from qgis.core import (
-        Qgis,
         QgsColorRampShader,
         QgsRasterShader,
         QgsSingleBandPseudoColorRenderer,
         QgsStyle,
     )
+
+    from ..layers.compat import linear_interpolation
 
     if diverging:
         low, high = -max(abs(low), abs(high)), max(abs(low), abs(high))
@@ -111,7 +116,7 @@ def style(layer, low, high, *, diverging=False, band=1) -> None:
         low, high = low - 0.5, low + 0.5
     ramp = QgsStyle.defaultStyle().colorRamp("RdBu" if diverging else "Viridis")
     shader = QgsColorRampShader(low, high)
-    shader.setColorRampType(Qgis.ShaderInterpolationMethod.Linear)
+    shader.setColorRampType(linear_interpolation())
     shader.setColorRampItemList([QgsColorRampShader.ColorRampItem(
         low + (high - low) * i / (STOPS - 1), ramp.color(i / (STOPS - 1))) for i in range(STOPS)])
     raster_shader = QgsRasterShader(low, high)
@@ -149,7 +154,9 @@ def raster_layer(path, name, value_range, *, diverging=False):
 
 def show_step(layer, band) -> None:
     """Show one time step: a renderer band switch, colours unchanged."""
-    layer.renderer().setInputBand(int(band))
+    from ..layers.compat import set_input_band
+
+    set_input_band(layer.renderer(), int(band))
     layer.triggerRepaint()
 
 
@@ -278,11 +285,13 @@ def gauge_layer(gauges, crs, field="value", name="Gauges"):
 
 def highlight_cell(canvas, axes, iy, ix, crs):
     """Outline one L1 cell on `canvas`; returns the rubber band (remove with `reset`)."""
-    from qgis.core import Qgis, QgsGeometry, QgsRectangle
+    from qgis.core import QgsGeometry, QgsRectangle
     from qgis.gui import QgsRubberBand
     from qgis.PyQt.QtGui import QColor
 
-    band = QgsRubberBand(canvas, Qgis.GeometryType.Polygon)
+    from ..layers.compat import polygon_geometry
+
+    band = QgsRubberBand(canvas, polygon_geometry())
     band.setColor(QColor(255, 255, 255, 0))
     band.setStrokeColor(QColor("#e31a1c"))
     band.setWidth(2)

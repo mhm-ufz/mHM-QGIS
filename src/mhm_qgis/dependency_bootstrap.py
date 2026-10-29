@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.metadata
 import os
 import re
 import shlex
@@ -17,6 +18,9 @@ SKIPPED_QGIS_PACKAGES = {
     "pyside6",
     "qgis",
 }
+
+# Checked, never pip-installed: replacing the NumPy QGIS was built with breaks GDAL.
+QGIS_BUILT_WITH = {"numpy"}
 
 IMPORT_NAME_BY_PACKAGE = {
     "pyyaml": "yaml",
@@ -138,6 +142,9 @@ def dependency_from_requirement_line(line: str) -> Dependency | None:
     if not requirement or requirement.startswith(("-", ".")):
         return None
 
+    parsed = _parsed(requirement)
+    if parsed is not None and parsed.marker is not None and not parsed.marker.evaluate():
+        return None  # for another Python version
     package_name = re.split(r"\s*(?:\[|==|!=|~=|>=|<=|>|<|;)", requirement, maxsplit=1)[0]
     package_key = package_name.strip().lower().replace("_", "-")
     if not package_key or package_key in SKIPPED_QGIS_PACKAGES:
@@ -154,14 +161,33 @@ def dependency_from_requirement_line(line: str) -> Dependency | None:
     )
 
 
+def _parsed(requirement: str):
+    """`packaging`'s requirement (pip and matplotlib ship it); None without packaging,
+    and checks are then import-only."""
+    try:
+        from packaging.requirements import Requirement
+    except ImportError:
+        return None
+    return Requirement(requirement)
+
+
 def can_import(dependency: Dependency) -> bool:
-    """Return whether a dependency import currently succeeds."""
+    """Return whether a dependency imports at a version its requirement allows.
+
+    An old package already in QGIS's Python must fail here, or it is never
+    upgraded (e.g. one written for NumPy < 1.24 then fails on `np.long`)."""
 
     try:
         importlib.import_module(dependency.import_name)
-        return True
     except ImportError:
         return False
+    parsed = _parsed(dependency.requirement)
+    if parsed is None or not parsed.specifier:
+        return True
+    try:
+        return parsed.specifier.contains(importlib.metadata.version(parsed.name), prereleases=True)
+    except importlib.metadata.PackageNotFoundError:  # importable without pip metadata: trust it
+        return True
 
 
 def add_user_site() -> str:
@@ -189,6 +215,7 @@ def install_missing_dependencies(parent, missing: list[Dependency]) -> Bootstrap
 
     installed = []
     failed = {}
+    loaded = {dependency.requirement for dependency in missing if dependency.import_name in sys.modules}
 
     progress = create_progress_dialog(parent, missing)
     set_wait_cursor(True)
@@ -199,6 +226,11 @@ def install_missing_dependencies(parent, missing: list[Dependency]) -> Bootstrap
                 progress.setLabelText(f"Installing {dependency.requirement}...")
                 progress.setValue(index - 1)
 
+            if dependency.package_name.lower() in QGIS_BUILT_WITH:
+                failed[dependency.requirement] = (
+                    f"QGIS comes with an older {dependency.package_name}; it is not replaced, as QGIS "
+                    "was built against it. Use a newer QGIS.")
+                continue
             command = pip_install_command(dependency.requirement, break_system_packages)
             completed = subprocess.run(  # nosec B603: this Python's pip, a requirement from the plugin's requirements.txt, no shell
                 command,
@@ -240,7 +272,8 @@ def install_missing_dependencies(parent, missing: list[Dependency]) -> Bootstrap
             parent,
             "mHM QGIS Dependencies Installed",
             "Installed and loaded mHM QGIS Python dependencies:\n\n"
-            + "\n".join(dependency.requirement for dependency in installed),
+            + "\n".join(dependency.requirement for dependency in installed)
+            + ("\n\nRestart QGIS to load the upgraded ones." if loaded else ""),
         )
     elif not result.ok:
         show_failure(parent, result)

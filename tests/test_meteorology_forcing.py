@@ -436,7 +436,8 @@ def test_group_reduction_matches_a_plain_python_reference(method, cadence, days,
     reference = []
     for start in range(0, hours, span):
         group = values[start:start + span]
-        with warnings.catch_warnings(action="ignore", category=RuntimeWarning):  # the all-NaN interval
+        with warnings.catch_warnings():  # the all-NaN interval
+            warnings.simplefilter("ignore", RuntimeWarning)
             plane = reduce(group, axis=0)
         # An interval with no valid sample is nodata, not zero.
         reference.append(np.where(np.isfinite(group).any(axis=0), plane, np.nan))

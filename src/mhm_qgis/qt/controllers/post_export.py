@@ -93,8 +93,10 @@ def _rasters(dialog, dock, name) -> list[tuple]:
 
 def _raster(dialog, layer, name) -> tuple:
     """(source, band, stem) of a raster layer: an instant map's shown band, with its time."""
+    from ...qgis_bridge.layers.compat import input_band
+
     instant = layer.customProperty("mhm_qgis/instant", False)
-    band = layer.renderer().inputBand() if instant else 1
+    band = input_band(layer.renderer()) if instant else 1
     when = str(dialog._post.intervals[band - 1, 0])[:16] if instant else ""
     return layer.source(), band, _stem(name, layer.name(), when)
 

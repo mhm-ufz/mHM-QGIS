@@ -21,7 +21,7 @@ python -m pip install mhm-qgis
 mhm-qgis
 ```
 
-This works in any Python 3.11+: plain, a virtual environment or a conda environment.
+This works in any Python 3.10+: plain, a virtual environment or a conda environment.
 `pip install mhm-qgis` installs only the small launcher. On first launch, after you
 confirm, it installs a private QGIS 3.44 runtime with the app and everything it needs
 (conda-forge and PyPI), then opens the app; later launches open it directly. Your own
@@ -52,7 +52,7 @@ mhm-qgis-runtime remove          # repair = remove, then install
 
 ### QGIS plugin
 
-Install **mHM QGIS** from the QGIS Plugin Manager (QGIS 3.44 or newer, including
+Install **mHM QGIS** from the QGIS Plugin Manager (QGIS 3.34 or newer, including
 QGIS 4). Enable *Show also experimental plugins* while the plugin is experimental. On
 first start the plugin lists its missing Python dependencies (see `requirements.txt`)
 and offers to install them with `pip --user` into the Python that QGIS uses. If that

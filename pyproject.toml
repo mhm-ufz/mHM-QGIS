@@ -21,13 +21,14 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Hydrology",
     "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 # `pip install mhm-qgis` is the launcher only (standard library): its first run installs a
 # private QGIS runtime with `mhm-qgis[full]`. An environment that already has QGIS needs
 # `pip install 'mhm-qgis[full]'`. The QGIS plugin reads requirements.txt instead.
@@ -35,21 +36,23 @@ dependencies = []
 
 [project.optional-dependencies]
 full = [
-    "numpy>=1.20.0",
-    "scipy>=1.7.0",
-    "pandas>=1.3.0",
-    "pyproj>=3.0.0",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "pyproj>=3.5",
     "pyqtgraph>=0.13.3",
-    "pyflwdir>=0.5.12",
+    'pyflwdir>=0.5.12; python_version >= "3.11"',
+    'pyflwdir>=0.5.11; python_version < "3.11"',
     "mhm>=5.13.4,<5.14",  # the latest mHM 5.13 executable, as the `mhm` command
     "mhm-tools>=0.3.0,<0.4",
-    "nml-tools[gui]>=0.7.0,<0.8",
-    "qtpy",
-    "guidata",
-    "netCDF4>=1.5.0",
+    "nml-tools[gui]>=0.6.0,<0.7",
+    "qtpy>=2.0",
+    "guidata>=3.6",
+    "netCDF4>=1.6.3",
     "pyyaml>=5.4",
-    "xarray>=0.19.0",
-    "rioxarray>=0.13.0",
+    "xarray>=2023.4",
+    "rioxarray>=0.14",
+    'tomli>=1.1; python_version < "3.11"',
 ]
 check = [
     "isort[colors]>=5.13",

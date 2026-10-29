@@ -15,6 +15,7 @@ from qgis.PyQt.QtCore import QCoreApplication, QEvent, QSettings, Qt
 
 from mhm_qgis.core.handlers.store.layout import forget_project_version, input_state_path
 from mhm_qgis.core.post import catalog
+from mhm_qgis.qgis_bridge.layers.compat import input_band
 from mhm_qgis.qt.controllers import post_context, post_hydro, post_map
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 from mhm_qgis.qt.docks import host
@@ -94,8 +95,8 @@ def test_the_tab_links_its_views_without_reading_netcdf_on_the_gui_thread(opened
     assert layer.bandCount() == 62
     dialog._post.ui.horizontalSlider_postTime.setValue(5)
     _wait(lambda: state.context.get("current_time") == 5)
-    assert layer.renderer().inputBand() == 6
-    assert main.renderer().inputBand() == 6
+    assert input_band(layer.renderer()) == 6
+    assert input_band(main.renderer()) == 6
     post_map.clicked(dialog, 503000.0, 2997000.0)  # row 1, column 1
     assert state.context.get("cell") == (1, 1)
     with real(truth.files["mhm"]) as handle:
@@ -116,7 +117,7 @@ def test_the_tab_links_its_views_without_reading_netcdf_on_the_gui_thread(opened
     assert state.context.get("current_time") == 10
     assert dialog._post.ui.horizontalSlider_postTime.value() == 10
     _page(dialog, "Map Explorer")
-    assert layer.renderer().inputBand() == 11  # the hidden map caught up when shown
+    assert input_band(layer.renderer()) == 11  # the hidden map caught up when shown
 
 
 def test_statistic_maps_balance_and_processes(opened):

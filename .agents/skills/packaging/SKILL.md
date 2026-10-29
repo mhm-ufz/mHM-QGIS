@@ -40,12 +40,12 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   an SPDX `license` string first.
 - `.gitlab-ci.yml` runs on every push to `upstream` (`git.ufz.de/mhm/mhm-qgis`), shaped
   like mhm-tools' pipeline: `isort --check`, `ruff check src tests tools`, the plain test
-  suite on Python 3.11 and 3.13 with coverage, and `build` (wheel, sdist, `twine check`,
+  suite on Python 3.10 and 3.13 with coverage, and `build` (wheel, sdist, `twine check`,
   plugin ZIP). `test-qgis` runs the whole suite inside the private QGIS 3.44 runtime
   through `tools/run_in_runtime.py`; it downloads a conda QGIS, so it runs on a
   schedule, on tags or by hand. The local QGIS suite stays the gate for a change.
 - `.github/workflows/release-check.yml` runs on the GitHub `origin` (tags, manual,
-  weekly). It builds the artifacts, runs core tests on Python 3.11 and 3.14, and installs
+  weekly). It builds the artifacts, runs core tests on Python 3.10 and 3.14, and installs
   the private runtime plus a GUI open/close on Linux, Windows and both macOS
   architectures. Publishing stays manual.
 - Until mhm-tools 0.3 and nml-tools 0.6 are on PyPI, both pipelines install them from

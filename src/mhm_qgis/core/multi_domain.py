@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import tomllib
 from functools import cache
 from pathlib import Path
 
@@ -25,6 +24,11 @@ from .handlers.store.paths import (
     schemas_folder,
     version_key,
 )
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 SECTION = "multi_domain"
 SHARED_FILES = {"v6": ("parameters.nml", "outputs.nml"),

@@ -265,7 +265,9 @@ def _sync_main(dialog) -> None:
     copy = post_canvas.open_in_qgis(layer, layer.name(), TEMPORARY)
     copy.setCustomProperty("mhm_qgis/instant", layer.customProperty("mhm_qgis/instant", False))
     if copy.customProperty("mhm_qgis/instant", False):
-        post_canvas.show_step(copy, layer.renderer().inputBand())
+        from ...qgis_bridge.layers.compat import input_band
+
+        post_canvas.show_step(copy, input_band(layer.renderer()))
     state.widgets.update(main_ids=[*(item.id() for item in overlays), copy.id()], main_layer_id=copy.id(),
                          main_stale=False)
     from qgis.core import QgsCoordinateTransform

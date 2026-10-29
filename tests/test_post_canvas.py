@@ -20,6 +20,7 @@ from qgis.PyQt.QtCore import QSize
 
 from mhm_qgis.core.post import catalog, grid
 from mhm_qgis.qgis_bridge.display import post_canvas
+from mhm_qgis.qgis_bridge.layers.compat import input_band
 
 RAPTI = Path("/home/bashyal/Works/Rapti/mhm-plugin/output/mHM_Fluxes_States.nc")
 UTM = QgsCoordinateReferenceSystem("EPSG:32644")
@@ -28,7 +29,7 @@ UTM = QgsCoordinateReferenceSystem("EPSG:32644")
 def _values(layer, band=None):
     """The layer's pixels as QGIS reads them for its extent, north first."""
     provider, extent = layer.dataProvider(), layer.extent()
-    block = provider.block(band or layer.renderer().inputBand(), extent, layer.width(), layer.height())
+    block = provider.block(band or input_band(layer.renderer()), extent, layer.width(), layer.height())
     return np.array([[np.nan if block.isNoData(r, c) else block.value(r, c) for c in range(layer.width())]
                      for r in range(layer.height())])
 
@@ -58,9 +59,10 @@ def test_vrt_places_every_step(tmp_path, geographic):
     assert layer.crs().authid() == ("EPSG:4326" if geographic else "EPSG:32644")
     assert layer.bandCount() == 10
     np.testing.assert_allclose(_values(layer, 4), _stored(path, 3), equal_nan=True)
-    ranges = layer.temporalProperties().fixedRangePerBand()
-    assert ranges[1].begin().toString("yyyy-MM-dd") == "2000-01-01"
-    assert ranges[10].end().toString("yyyy-MM-dd") == "2000-01-11"
+    if hasattr(layer.temporalProperties(), "fixedRangePerBand"):  # QGIS 3.38+
+        ranges = layer.temporalProperties().fixedRangePerBand()
+        assert ranges[1].begin().toString("yyyy-MM-dd") == "2000-01-01"
+        assert ranges[10].end().toString("yyyy-MM-dd") == "2000-01-11"
 
 
 @pytest.mark.skipif(not RAPTI.is_file(), reason="Rapti run not present")
@@ -86,7 +88,7 @@ def test_band_switch_renders_with_fixed_colours(tmp_path):
 
     first = render()
     post_canvas.show_step(layer, 7)
-    assert layer.renderer().inputBand() == 7
+    assert input_band(layer.renderer()) == 7
     assert (layer.renderer().classificationMin(), layer.renderer().classificationMax()) == (0.0, 5.0)
     assert render() != first
 

@@ -22,7 +22,7 @@ import os
 import re
 import shutil
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .. import multi_domain
@@ -153,7 +153,7 @@ def _write_meta(folder, target, name, note, period, linked=False) -> None:
         processes = None
     meta = {
         "name": name,
-        "created": datetime.now(UTC).isoformat(timespec="seconds"),
+        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "version": project_version(folder),
         "period": period,
         "processes": processes,

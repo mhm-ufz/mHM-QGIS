@@ -54,7 +54,7 @@ test:
   image: python:$PY
   parallel:
     matrix:
-      - PY: ["3.11", "3.13"]
+      - PY: ["3.10", "3.13"]
   before_script:
     - *qt_libs
     - *unreleased

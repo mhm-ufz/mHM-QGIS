@@ -91,7 +91,37 @@ def create_vector_file_writer(path, fields, geometry_type, crs,
     )
 
 
+def linear_interpolation():
+    """The colour ramp shader's linear mode: `Qgis.ShaderInterpolationMethod` from QGIS 3.38."""
+    from qgis.core import Qgis, QgsColorRampShader
+
+    method = getattr(Qgis, "ShaderInterpolationMethod", None)
+    return method.Linear if method is not None else QgsColorRampShader.Interpolated
+
+
+def polygon_geometry():
+    """`Qgis.GeometryType.Polygon` from QGIS 3.30, `QgsWkbTypes.PolygonGeometry` before."""
+    from qgis.core import Qgis, QgsWkbTypes
+
+    kind = getattr(Qgis, "GeometryType", None)
+    return kind.Polygon if kind is not None else QgsWkbTypes.PolygonGeometry
+
+
+def input_band(renderer) -> int:
+    """The band a single-band renderer draws: `inputBand()` from QGIS 3.38, `band()` before."""
+    return renderer.inputBand() if hasattr(renderer, "inputBand") else renderer.band()
+
+
+def set_input_band(renderer, band) -> None:
+    """Switch a single-band renderer's band: `setInputBand` from QGIS 3.38, `setBand` before."""
+    (renderer.setInputBand if hasattr(renderer, "setInputBand") else renderer.setBand)(band)
+
+
 __all__ = [
     "create_vector_file_writer",
+    "input_band",
+    "linear_interpolation",
+    "polygon_geometry",
     "qgs_field",
+    "set_input_band",
 ]

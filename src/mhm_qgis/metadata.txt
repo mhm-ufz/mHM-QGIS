@@ -1,6 +1,6 @@
 [general]
 name=mHM QGIS
-qgisMinimumVersion=3.44
+qgisMinimumVersion=3.34
 qgisMaximumVersion=4.99
 description=Prepare, configure and run the mesoscale Hydrological Model (mHM) 5.13 and v6.
 version=0.0.1

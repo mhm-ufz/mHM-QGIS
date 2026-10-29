@@ -1,7 +1,7 @@
 """Saved gauges drive the station list and observation plot, without QGIS."""
 import math
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -31,7 +31,7 @@ def test_saved_gauges_and_missing_observations(tmp_path):
     }})
     assert stations(tmp_path) == [{"id": "00350", "path": str(path)}]
     x, y = discharge_series(path)
-    assert x[0] == datetime(2020, 1, 1, tzinfo=UTC).timestamp()
+    assert x[0] == datetime(2020, 1, 1, tzinfo=timezone.utc).timestamp()
     assert len(x) == 5
     assert y[0] == 0
     assert y[2] == 4.5
