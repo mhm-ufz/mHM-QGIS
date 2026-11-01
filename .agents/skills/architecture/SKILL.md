@@ -156,17 +156,22 @@ A module belongs to exactly one layer.
   their old names (`tab`, `tab_meteo`, …). Plan: `.development/polishing/plan.md`.
   Columns: status, then a button made by `_action` (Add or Edit selects the row; Run on
   A. Morphology / B. Meteorology, also `workflow_state`'s button for those workflows), then the
-  eye, which shows a processed input's layer; only rows with a `status` show one (not the DEM
-  derivatives). `show_inputs` hides the rows under A, B and C until Domain Setup has run (the
+  eye, which shows a processed row's layers: a `grid` row (L0, L2, Resolution) its model grids
+  through `display_grids`, all levels on one eye; a `view` row (Settings) clicks that button
+  instead. Every row with a state shows its symbol; the DEM derivatives have no `status`, so
+  their ✏️ only replaces and they do not hold back ▶, while I. DEM Derivatives is 🟢 once the
+  DEM is read. `show_inputs` hides the rows under A, B and C until Domain Setup has run (the
   `project_structure` workflow is completed), and rows whose `input` the Settings page's
   process cases do not need (`qt/controllers/process_cases.py`, `datamodel.check`). A row with
   `summary` fills that table on its page from the rows below it. An input page embeds its
   child dialog in its Designer host `widget_<name>Form`, under its Designer type radios
-  (`main.radios` groups them; their texts are the saved modes, `categorical.MODES` /
+  (`main.radios` groups `radioButton_<name>*` by name, wherever they are laid out; their texts are the saved modes, `categorical.MODES` /
   `main.DOMAIN_TYPES`). `main.embed` turns the dialog's OK/Cancel into one Set button
   (Set commits, as in `categorical.show`) and closes the form it replaces with its signals
   blocked, so no `rejected` slot shows a form again; the delineator's `closeEvent` cleanup
-  still runs. A type is `dialog._categorical_modes`, not a widget.
+  still runs. A type is `dialog._categorical_modes`, not a widget. Selecting VII. Domain Definition shows the
+  checked radio's form (`main.show_domain_definition`) unless one is already embedded. A `toolButton_*Info`
+  shows its plain-text toolTip (a table format) in a message box, as nml-tools does.
 - `qt/tooltip/`: the Help tour. `Closure.helpRequested` starts it on the visible page:
   the current `tabWidget_steps` tab plus any visible stacked page inside it, with steps
   from `tooltips.yml` keyed by object name, in list order. A step whose widget is hidden

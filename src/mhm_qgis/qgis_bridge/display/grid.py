@@ -79,22 +79,30 @@ def _grid_raster(level: str, header, crs: str):
     return path
 
 
+def display_grids(dialog, levels) -> list[str]:
+    """Show the grids of `levels` (L0, L1, L11, L2); their layer names, none after a warning."""
+    names = []
+    try:
+        headers = dialog.grid_level_headers()
+        for level in levels:
+            name = f"mHM {'L11/L3' if level == 'L11' else level} grid"
+            layer = show_raster(dialog, _grid_raster(level, headers[level], dialog.selected_meteo_crs()), name)
+            if layer is not None:
+                layer.setOpacity(0.55)
+                layer.triggerRepaint()
+                names.append(name)
+    except Exception as error:
+        QMessageBox.warning(dialog, "Display Grid", str(error))
+    return names
+
+
 def display_selected_grid(dialog) -> None:
     """Create and show the grid selected by the main form."""
     selected = dialog.comboBox_gridVariableToDisplay.currentText().strip()
     if not selected:
         QMessageBox.warning(dialog, "Display Grid", "Select L0, L1, L11/L3, or L2.")
         return
-    level = "L11" if selected.startswith("L11") else selected
-    try:
-        header = dialog.grid_level_headers()[level]
-        path = _grid_raster(level, header, dialog.selected_meteo_crs())
-        layer = show_raster(dialog, path, f"mHM {selected} grid")
-        if layer is not None:
-            layer.setOpacity(0.55)
-            layer.triggerRepaint()
-    except Exception as error:
-        QMessageBox.warning(dialog, "Display Grid", str(error))
+    display_grids(dialog, ["L11" if selected.startswith("L11") else selected])
 
 
-__all__ = ["display_selected_grid"]
+__all__ = ["display_grids", "display_selected_grid"]

@@ -5,6 +5,7 @@
 # `display`: a `resolve_display_output` key, processed when its file exists, shown by the eye.
 # `action`: edit (➕ Add / ✏️ Edit selects the row) or run (▶ prepares the children).
 # `summary`: a table on its page listing the rows below with their status and prepared file.
+# `grid`: the model grid levels its eye shows; `view`: the button its eye clicks.
 nodes:
   - {key: intro, title: Introduction, page: page_projectIntro, status: intro}
   - key: project_configuration
@@ -16,10 +17,10 @@ nodes:
         title: Domain Setup
         page: tab
         children:
-          - {key: l0_reference, title: L0 Reference (DEM), page: page_l0Reference}
-          - {key: l2_reference, title: L2 Reference (Precipitation), page: page_l2Reference}
-          - {key: resolution, title: Resolution, page: page_resolution}
-          - {key: settings, title: Settings, page: page_settings}
+          - {key: l0_reference, title: L0 Reference (DEM), page: page_l0Reference, status: l0, grid: [L0]}
+          - {key: l2_reference, title: L2 Reference (Precipitation), page: page_l2Reference, status: l2, grid: [L2]}
+          - {key: resolution, title: Resolution, page: page_resolution, status: resolution, grid: [L1, L11]}
+          - {key: settings, title: Settings, page: page_settings, status: namelists, view: pushButton_editNmlsFinal}
   - key: inputs
     title: 2. Inputs
     page: page_inputs
@@ -34,6 +35,7 @@ nodes:
           - key: dem_derivatives
             title: I. DEM Derivatives
             page: page_demDerivatives
+            status: derivatives
             children:
               - {key: dem, title: i. DEM (filled), page: page_demDerivatives, input: dem, display: dem, action: edit}
               - {key: slope, title: ii. Slope, page: page_demDerivatives, input: slope, display: slope, action: edit}

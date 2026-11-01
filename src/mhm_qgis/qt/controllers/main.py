@@ -10,6 +10,7 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QMessageBox,
+    QRadioButton,
     QTableWidgetItem,
 )
 
@@ -242,10 +243,11 @@ DOMAIN_TYPES = ("Single Domain [DEM extent]", "Select Domains [using Domain Deli
 
 
 def radios(dialog, name, chosen):
-    """Group the radios of `verticalLayout_<name>Types` (Designer); a click calls `chosen(text)`."""
-    group, layout = QButtonGroup(dialog), getattr(dialog, f"verticalLayout_{name}Types")
-    for index in range(layout.count()):
-        group.addButton(layout.itemAt(index).widget())
+    """Group the Designer radios `radioButton_<name>*`, wherever laid out; a click calls `chosen(text)`."""
+    group = QButtonGroup(dialog)
+    for radio in dialog.findChildren(QRadioButton):
+        if radio.objectName().startswith(f"radioButton_{name}"):
+            group.addButton(radio)
     group.buttonClicked.connect(lambda button: chosen(button.text()))
     setattr(dialog, f"buttonGroup_{name}", group)
 
@@ -285,9 +287,11 @@ def embed(dialog, name, child):
 def handle_domain_definition_type(dialog, text):
     """Embed the chosen domain definition: the delineator, or the DEM-extent gauge assignment."""
     if text == DOMAIN_TYPES[1]:
-        dialog._domain_definition_mode = text
-        dialog.save_input_state()
-        open_domain_delineator(dialog)
+        if open_domain_delineator(dialog):
+            dialog._domain_definition_mode = text
+            dialog.save_input_state()
+        else:
+            check(dialog, "domainDefinition", dialog._domain_definition_mode)
         return
     delineator = dialog.findChild(QDialog, "DomainDelineatorDialog")
     if delineator is not None and delineator._domain_jobs_busy():
@@ -296,6 +300,16 @@ def handle_domain_definition_type(dialog, text):
         return
     if not open_domain_assignment(dialog):
         check(dialog, "domainDefinition", dialog._domain_definition_mode)
+
+
+def show_domain_definition(dialog):
+    """The row's page: the checked type's form, unless one is already shown."""
+    if dialog.verticalLayout_domainDefinitionForm.count():
+        return
+    if dialog.radioButton_domainDefinitionDelineator.isChecked():
+        open_domain_delineator(dialog)
+    elif dialog.radioButton_domainDefinitionDemExtent.isChecked():
+        open_domain_assignment(dialog)
 
 
 def _selected_outlets(dialog, title):
@@ -369,10 +383,10 @@ def _assignment_failed(dialog, error):
 
 
 def open_domain_delineator(dialog):
-    """Prepare the hydrology prerequisites, then open the delineation dialog."""
+    """Prepare the hydrology prerequisites, then open the delineation dialog; False if not started."""
     outlet_ids = _selected_outlets(dialog, "Domain Delineator")
     if outlet_ids is None:
-        return
+        return False
     layer = dialog.input_combo("pour_points").currentLayer()
     field = selected_outlet_id_field(dialog)
     started = hydrology.start_domain_preflight(
@@ -385,12 +399,15 @@ def open_domain_delineator(dialog):
         QMessageBox.information(
             dialog, "Domain Delineator", "Domain Delineator preparation is already running."
         )
+    return bool(started)
 
 
 def _show_domain_delineator(dialog, context, pour_points_layer, outlet_id_field, outlet_ids):
     """The delineator below the Domain Definition radios, until another type replaces it."""
     from ..dialogs.domain_delineator import DomainDelineatorDialog
 
+    if not dialog.radioButton_domainDefinitionDelineator.isChecked():
+        return  # switched away while it was being prepared
     try:
         delineator = DomainDelineatorDialog(
             dialog, pour_points_layer, outlet_id_field, outlet_ids, prepared_context=context,

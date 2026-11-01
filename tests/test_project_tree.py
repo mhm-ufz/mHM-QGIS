@@ -180,7 +180,7 @@ def test_process_cases_are_kept_in_the_state_and_the_namelists(dialog, tmp_path)
     assert all(row.isHidden() for row in temperatures)
     process_cases.changed(dialog, {"pet": 1})  # Hargreaves-Samani: tavg, tmin, tmax and aspect
     assert not any(row.isHidden() for row in temperatures)
-    assert project_tree.item(dialog, "aspect").text(project_tree.STATUS_COLUMN) == ""  # derivatives carry no status
+    assert project_tree.item(dialog, "aspect").text(project_tree.STATUS_COLUMN) == "⚪"  # not derived yet
     state = json.loads((tmp_path / ".temp" / "mhm_qgis_input_state.json").read_text())
     assert state["process_cases"]["pet"] == 1
     assert nml_settings.load_settings(tmp_path)["intro_values"]["main"]["config_processes"]["pet"] == 1  # no namelist yet
@@ -209,6 +209,125 @@ def test_summary_tables_on_the_inputs_morphology_and_dem_derivative_pages(dialog
     assert [table.isRowHidden(row) for row in range(table.rowCount())] == [True, False, True, True, True]
     dialog.pushButton_refL0Derivatives.click()
     assert tree.currentItem() is project_tree.item(dialog, "l0_reference")
+
+
+def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from mhm_qgis.qgis_bridge.display import grid as grid_display
+    from mhm_qgis.qt.controllers import process_cases
+
+    _set_up(dialog, tmp_path)
+    process_cases.inputs(dialog)
+    keys =("l0_reference", "l2_reference", "resolution", "settings", "dem_derivatives", "aspect")
+
+    def statuses():
+        project_tree.refresh(dialog)
+        return [project_tree.item(dialog, key).text(project_tree.STATUS_COLUMN) for key in keys]
+
+    def eye(key):
+        return not project_tree.item(dialog, key).icon(project_tree.VIEW).isNull()
+
+    assert statuses() == ["⚪"] * 6
+    assert not any(eye(key) for key in keys[:4])
+    dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
+    dialog._grid_l2_header = {"cellsize": 1000.0}
+    dialog.lineEdit_L1Resolution.setText("1000")
+    dialog.lineEdit_L11Resolution.setText("1000")
+    (tmp_path / "mhm.nml").write_text("")
+    assert statuses() == ["✅", "✅", "✅", "✅", "🟢", "⚪"]  # derivatives: the DEM is read, ▶ makes them
+    assert all(eye(key) for key in keys[:4])
+    dialog._input_findings["latlon"] = SimpleNamespace(ok=False)  # v5.13 also needs latlon.nc
+    assert statuses()[2] == "🟢"
+    del dialog._input_findings["latlon"]
+    dialog._input_findings.update({name: SimpleNamespace(ok=True, reasons=[]) for name in ("dem", "slope", "aspect", "fdir", "facc")})
+    assert statuses()[4:] == ["✅", "✅"]
+
+    shown, opened = [], []
+    monkeypatch.setattr(grid_display, "display_grids", lambda _dialog, levels: shown.append(levels) or ["L1", "L11/L3"])
+    monkeypatch.setattr(dialog.pushButton_editNmlsFinal, "click", lambda: opened.append(True))
+    resolution = project_tree.item(dialog, "resolution")
+    project_tree.clicked(dialog, resolution, project_tree.VIEW)
+    assert shown == [["L1", "L11"]]  # one eye, both grids
+    assert dialog._viewed["resolution"] == ["L1", "L11/L3"]
+    project_tree.clicked(dialog, resolution, project_tree.VIEW)
+    assert "resolution" not in dialog._viewed
+    project_tree.clicked(dialog, project_tree.item(dialog, "settings"), project_tree.VIEW)
+    assert opened == [True]
+
+
+def test_the_delineator_type_is_kept_only_once_it_opens(dialog, monkeypatch):
+    from mhm_qgis.qt.controllers import main
+
+    monkeypatch.setattr(main.QMessageBox, "warning", lambda *_args: None)  # "Select a project folder first."
+    dialog.radioButton_domainDefinitionDelineator.click()
+    assert dialog._domain_definition_mode == ""
+    assert not dialog.radioButton_domainDefinitionDelineator.isChecked()
+    dialog.radioButton_domainDefinitionDemExtent.setChecked(True)  # switched while it was prepared
+    main._show_domain_delineator(dialog, {}, None, "", [])
+    assert dialog.verticalLayout_domainDefinitionForm.count() == 0
+
+
+def test_the_domain_row_shows_the_checked_types_form_once(dialog, monkeypatch):
+    from qgis.PyQt.QtWidgets import QWidget
+
+    from mhm_qgis.qt.controllers import main
+
+    opened = []
+    monkeypatch.setattr(main, "open_domain_delineator", lambda _dialog: opened.append("delineator"))
+    monkeypatch.setattr(main, "open_domain_assignment", lambda _dialog: opened.append("assignment"))
+    tree, row = dialog.treeWidget_projectStructure, project_tree.item(dialog, "domain_definition")
+    main.check(dialog, "domainDefinition", main.DOMAIN_TYPES[1])  # as a loaded setup restores it
+    tree.setCurrentItem(row)
+    main.check(dialog, "domainDefinition", main.DOMAIN_TYPES[0])
+    tree.setCurrentItem(project_tree.item(dialog, "lc"))
+    tree.setCurrentItem(row)
+    assert opened == ["delineator", "assignment"]
+    main.embed(dialog, "domainDefinition", QWidget())  # a form already shown is kept
+    tree.setCurrentItem(project_tree.item(dialog, "lc"))
+    tree.setCurrentItem(row)
+    assert opened == ["delineator", "assignment"]
+
+
+def test_a_hidden_current_row_selects_its_shown_parent(dialog, tmp_path):
+    from mhm_qgis.qt.controllers import process_cases
+
+    _set_up(dialog, tmp_path)
+    process_cases.changed(dialog, {"pet": 1})  # Hargreaves-Samani reads tmin
+    tree = dialog.treeWidget_projectStructure
+    tree.setCurrentItem(project_tree.item(dialog, "meteo_tmin"))
+    process_cases.changed(dialog, {"pet": -1})
+    assert tree.currentItem() is project_tree.item(dialog, "meteorology")
+
+
+def test_cases_chosen_for_one_version_do_not_carry_over(dialog):
+    dialog.comboBox_mHMversion.setCurrentText("6.0")
+    dialog._process_cases = {"pet": 1}
+    dialog.comboBox_mHMversion.setCurrentText("5.13")
+    assert dialog._process_cases == {}
+
+
+def test_info_buttons_explain_the_lookup_and_discharge_tables(dialog, monkeypatch):
+    from qgis.PyQt.QtWidgets import QMessageBox
+
+    shown = []
+    monkeypatch.setattr(QMessageBox, "information", lambda _parent, title, text: shown.append((title, text)))
+    buttons = [getattr(dialog, f"toolButton_{page}LookupInfo") for page in ("landUse", "soil", "geology", "lai")]
+    buttons.append(dialog.toolButton_domainDefinitionInfo)
+    for button in buttons:
+        assert button.text() == "i"
+        assert "Example" in button.toolTip()
+        assert "<" not in button.toolTip()  # plain text: only the button is styled
+        button.click()
+    assert shown == [(button.accessibleName(), button.toolTip()) for button in buttons]
+
+
+def test_the_parameter_namelist_widgets_follow_their_checkbox(dialog):
+    widgets = (dialog.label_parameterArgument, dialog.lineEdit_pathParameterArgument,
+               dialog.pushButton_browseParameterNamelistFile)
+    assert not any(widget.isEnabled() for widget in widgets)
+    dialog.checkBox_enableParameterArgument.setChecked(True)
+    assert all(widget.isEnabled() for widget in widgets)
 
 
 def test_columns_and_the_add_edit_run_buttons(dialog):

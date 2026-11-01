@@ -65,6 +65,10 @@ def test_answers_reach_the_form_and_the_one_shot_handoff(tmp_path):
 def test_saving_namelists_retires_the_wizard_values(tmp_path, monkeypatch):
     dialog = _dialog(tmp_path)
     nml_settings.update_section(tmp_path, "intro_values", {"main": {"config_processes": {"pet": 1}}})
+    monkeypatch.setattr("mhm_qgis.externals.nml_tools_handler.launch_editor",
+                        lambda *_args, **_kwargs: (tmp_path / "parameters.nml").write_text(""))
+    assert model.edit_namelists(dialog, {"parameter": []}, update_inputs=False)
+    assert nml_settings.load_settings(tmp_path)["intro_values"]  # not handed to that editor: kept
 
     def editor(*_args, **_kwargs):
         (tmp_path / "mhm.nml").write_text("&config_processes\n  pet = 1\n/\n")

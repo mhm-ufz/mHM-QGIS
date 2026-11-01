@@ -58,6 +58,9 @@ class Dialog:
         self.groupBox_editCalibrationNamelists = SimpleNamespace(setEnabled=lambda _enabled: None)
         self.run_name = ""
         self.comboBox_runName = SimpleNamespace(currentText=lambda: self.run_name)
+        self.parameter = None  # the -p path once its checkbox is checked
+        self.checkBox_enableParameterArgument = SimpleNamespace(isChecked=lambda: self.parameter is not None)
+        self.lineEdit_pathParameterArgument = SimpleNamespace(text=lambda: self.parameter or "")
 
     def log_message(self, message) -> None:
         self.messages.append(message)
@@ -181,6 +184,18 @@ def test_run_mhm_uses_project_terminal(tmp_path: Path, monkeypatch) -> None:
     assert processing.workflow(tmp_path, "run_mhm")["status"] == "running"
     callback(0)
     assert processing.workflow(tmp_path, "run_mhm")["status"] == "completed"
+
+    errors = []
+    monkeypatch.setattr(controller_module.QMessageBox, "critical", lambda *args: errors.append(args[2]))
+    dialog.parameter = ""
+    assert controller_module.run(dialog) is False  # a checked -p needs a path
+    dialog.parameter = str(tmp_path / "other.nml")
+    assert controller_module.run(dialog) is False  # and an existing file
+    assert errors == ["Choose the parameter namelist to pass with -p.",
+                      f"Parameter namelist not found: {tmp_path / 'other.nml'}"]
+    (tmp_path / "other.nml").write_text("")
+    assert controller_module.run(dialog) is True
+    assert dialog.terminal.calls[-1][0] == f"{executable} -p {tmp_path / 'other.nml'}"
 
 
 def test_a_named_run_points_the_namelists_at_its_folder(tmp_path: Path, monkeypatch) -> None:

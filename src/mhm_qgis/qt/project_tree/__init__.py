@@ -85,8 +85,45 @@ def _meteo(dialog, node):
     return "added" if node["key"].removeprefix("meteo_") in dialog._meteo_inputs else "empty"
 
 
+def _l0(dialog, _node):
+    return "processed" if dialog._grid_l0_info else "empty"
+
+
+def _l2(dialog, _node):
+    from ..controllers.grid import precipitation_folder
+
+    return "processed" if dialog._grid_l2_header else "added" if precipitation_folder(dialog) else "empty"
+
+
+def _resolution(dialog, _node):
+    """L1 and L11 set; processed once latlon.nc exists where the version needs it (v5.13)."""
+    from ..controllers.grid import current_l1_resolution, current_l11_resolution
+
+    if not (current_l1_resolution(dialog) and current_l11_resolution(dialog)):
+        return "empty"
+    latlon = dialog._input_findings.get("latlon")
+    return "added" if latlon and not latlon.ok else "processed"
+
+
+def _namelists(dialog, _node):
+    from ...core.handlers.store.paths import workspace_folder
+
+    folder = dialog.project_folder
+    return "processed" if folder and any(Path(workspace_folder(folder)).glob("*.nml")) else "empty"
+
+
+def _derivatives(dialog, node):
+    """Processed when every shown derivative is; added once the DEM is read (▶ makes them)."""
+    row = item(dialog, node["key"])
+    children = [row.child(i) for i in range(row.childCount()) if not row.child(i).isHidden()]
+    if children and all(_state(dialog, _node(child)) == "processed" for child in children):
+        return "processed"
+    return "added" if dialog._grid_l0_info else "empty"
+
+
 STATUS = {"intro": _intro, "project_setup": _project_setup, "gauges": _gauges,
-          "categorical": _categorical, "domain": _domain, "meteo": _meteo}
+          "categorical": _categorical, "domain": _domain, "meteo": _meteo, "l0": _l0, "l2": _l2,
+          "resolution": _resolution, "namelists": _namelists, "derivatives": _derivatives}
 
 
 def _state(dialog, node):
@@ -178,7 +215,8 @@ def select(dialog, row) -> None:
     elif node["page"] == "page_demDerivatives":
         main.show_dem_derivatives(dialog, node.get("input"))
     else:
-        hook = {"intro": intro.embed, "resolution": grid.show_resolution_summary, "settings": process_cases.show}
+        hook = {"intro": intro.embed, "resolution": grid.show_resolution_summary, "settings": process_cases.show,
+                "domain_definition": main.show_domain_definition}
         if key in hook:
             hook[key](dialog)
     dialog.tabWidget_steps.setTabText(0, node["title"])
@@ -198,6 +236,8 @@ def clicked(dialog, row, column) -> None:
     key, node = row.data(0, Qt.ItemDataRole.UserRole), _node(row)
     if key == "outputs" and column == VIEW:
         post_context.workspace(dialog, not dialog._post.workspace)
+    elif column == VIEW and "view" in node and not row.icon(VIEW).isNull():
+        getattr(dialog, node["view"]).click()
     elif column == VIEW and not row.icon(VIEW).isNull():
         view(dialog, key, key not in dialog._viewed)
     elif "analysis" in node:
@@ -205,12 +245,13 @@ def clicked(dialog, row, column) -> None:
 
 
 def view(dialog, key, on) -> None:
-    """Show a processed input's layer (a forcing on the time toolbar), or hide it."""
+    """Show a processed row's layers (a forcing on the time toolbar, a `grid` row its model
+    grids), or hide them."""
     from qgis.core import QgsProject
 
     from ...qgis_bridge.layers.project import find_by_name
 
-    name = dialog._viewed.pop(key, "")
+    names, node = dialog._viewed.pop(key, []), _node(item(dialog, key))
     if on and key.startswith("meteo_"):
         import numpy as np
 
@@ -219,20 +260,27 @@ def view(dialog, key, on) -> None:
 
         variable = key.removeprefix("meteo_")
         steps, name = meteo.show(dialog, variable)
+        names = [name]
         if steps:
             starts = np.array(steps, dtype="datetime64[s]")
             post_context.time_axis(dialog, np.column_stack([starts, starts]),
                                    lambda index: meteo.show(dialog, variable, index))
+    elif on and "grid" in node:
+        from ...qgis_bridge.display.grid import display_grids
+
+        names = display_grids(dialog, node["grid"])
     elif on:
         from ..controllers import main
 
-        name = main.display_morphology(dialog, _node(item(dialog, key))["display"])
-    layer = find_by_name(name) if name else None
-    shown = layer and QgsProject.instance().layerTreeRoot().findLayer(layer.id())
-    if shown:
-        shown.setItemVisibilityChecked(on)
-    if on and name:
-        dialog._viewed[key] = name
+        names = [main.display_morphology(dialog, node["display"])]
+    names = [name for name in names if name]
+    for name in names:
+        layer = find_by_name(name)
+        shown = layer and QgsProject.instance().layerTreeRoot().findLayer(layer.id())
+        if shown:
+            shown.setItemVisibilityChecked(on)
+    if on and names:
+        dialog._viewed[key] = names
     set_view(dialog, key, key in dialog._viewed)
 
 
@@ -255,6 +303,11 @@ def show_inputs(dialog, findings) -> None:
         if names or grouped:
             row.setHidden((grouped and not set_up)
                           or (bool(names) and not any(name in dialog._input_findings for name in names)))
+    tree, row = dialog.treeWidget_projectStructure, dialog.treeWidget_projectStructure.currentItem()
+    while row is not None and not _shown(row):
+        row = row.parent()
+    if row is not tree.currentItem():
+        tree.setCurrentItem(row)  # a hidden row's page would stay shown
     refresh(dialog)
 
 
@@ -310,7 +363,7 @@ def refresh(dialog) -> None:
     for row in _rows(dialog):
         node = _node(row)
         state = _state(dialog, node)
-        if "status" in node:
+        if state is not None:
             symbol, meaning = SYMBOLS[state]
             row.setText(STATUS_COLUMN, symbol)
             row.setToolTip(STATUS_COLUMN, meaning)
@@ -322,11 +375,14 @@ def refresh(dialog) -> None:
             edit = derived or state != "empty"
             _action(dialog, row, "✏️" if edit else "\N{HEAVY PLUS SIGN}", "Edit" if edit else "Add",
                     lambda row=row: tree.setCurrentItem(row)).setEnabled(not derived or state == "processed")
+        if node.get("action") == "edit" or {"grid", "view"} & node.keys():
             if state == "processed":
                 set_view(dialog, node["key"], node["key"] in dialog._viewed)
             else:
                 row.setIcon(VIEW, QIcon())
                 dialog._viewed.pop(node["key"], None)
+            if "view" in node:
+                row.setToolTip(VIEW, getattr(dialog, node["view"]).toolTip())
     for row in runs:
         needed = [child for child in _rows(dialog, row) if child is not row and not child.isHidden()
                   and "status" in _node(child)]

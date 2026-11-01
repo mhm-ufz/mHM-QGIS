@@ -93,10 +93,11 @@ def _prepare_v5_mrm_outputs(cwd):
     return lambda: path.write_text(original, encoding="utf-8")
 
 
-def run(version: str, cwd, run_command, on_finished=None, v6_path=None, namelist=None) -> bool:
+def run(version: str, cwd, run_command, on_finished=None, v6_path=None, namelist=None, parameter=None) -> bool:
     """Launch the selected executable through the caller's terminal runner.
 
-    `namelist` is passed as `-n <file>`: a v6 combined run reads `combine.nml`.
+    `namelist` is passed as `-n <file>`: a v6 combined run reads `combine.nml`;
+    `parameter` as `-p <file>`, a parameter namelist other than the setup's.
     """
     is_v5 = version_key(version) == "v5.13"
     path = executable(version, v6_path=v6_path)
@@ -112,7 +113,8 @@ def run(version: str, cwd, run_command, on_finished=None, v6_path=None, namelist
     options = {"cwd": str(cwd), "show": True}
     if on_finished is not None or is_v5:
         options["on_finished"] = finished
-    arguments = [str(path), *(["-n", str(namelist)] if namelist else [])]
+    arguments = [str(path), *(["-n", str(namelist)] if namelist else []),
+                 *(["-p", str(parameter)] if parameter else [])]
     command = subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
     try:
         started = bool(run_command(command, **options))

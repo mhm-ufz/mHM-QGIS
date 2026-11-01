@@ -378,7 +378,10 @@ def process_lat_lon(dialog):
     )
     outputs = morphology_setup.latlon(request, log=dialog.log_message)
     if outputs:
+        from . import process_cases
+
         dialog.log_message(f"latlon.nc created successfully: {outputs[0]}")
+        process_cases.inputs(dialog)  # the latlon finding, so Resolution's status
     return bool(outputs)
 
 

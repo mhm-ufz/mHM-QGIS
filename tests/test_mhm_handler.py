@@ -84,6 +84,9 @@ def test_run_uses_selected_v6_binary(tmp_path, monkeypatch):
         str(binary),
         {"cwd": str(tmp_path), "show": True},
     )]
+    assert mhm_handler.run("6", tmp_path, lambda command, **options: calls.append(command) or True,
+                           v6_path=binary, parameter=tmp_path / "other.nml")
+    assert calls[-1] == f"{binary} -p {tmp_path / 'other.nml'}"
 
 
 def test_v5_multi_run_uses_the_real_mrm_group_only_while_running(tmp_path, monkeypatch):

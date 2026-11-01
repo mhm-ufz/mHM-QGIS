@@ -6,6 +6,7 @@ button names its controller or workflow entry point at the connection site.
 from __future__ import annotations
 
 from qgis.core import QgsProject
+from qgis.PyQt.QtWidgets import QMessageBox, QToolButton
 
 from ...qgis_bridge.display import grid as grid_display
 from .. import project_tree, tooltip
@@ -42,6 +43,11 @@ def _bind_input_sources(dialog):
     # Land use, soil, geology and LAI radios → categorical.show; domain radios → main.handle_domain_definition_type
     categorical.bind(dialog)
     main.radios(dialog, "domainDefinition", lambda text: main.handle_domain_definition_type(dialog, text))
+    # toolButton_*Info → its plain-text toolTip in a message box, as in nml-tools
+    for info in dialog.findChildren(QToolButton):
+        if info.objectName().endswith("Info"):
+            info.clicked.connect(lambda _checked=False, info=info: QMessageBox.information(
+                dialog, info.accessibleName(), info.toolTip()))
 
     # A bound slot, so the connection dies with the dialog on plugin reload.
     qgis_project = QgsProject.instance()
@@ -171,6 +177,11 @@ def bind(dialog):
     )
     # pushButton_execute_mHM → model.run
     dialog.pushButton_execute_mHM.clicked.connect(lambda: model.run(dialog))
+    # checkBox_enableParameterArgument → its -p widgets; pushButton_browseParameterNamelistFile → model.browse_parameter_namelist
+    for widget in (dialog.label_parameterArgument, dialog.lineEdit_pathParameterArgument,
+                   dialog.pushButton_browseParameterNamelistFile):
+        dialog.checkBox_enableParameterArgument.toggled.connect(widget.setEnabled)
+    dialog.pushButton_browseParameterNamelistFile.clicked.connect(lambda: model.browse_parameter_namelist(dialog))
     # pushButton_mapCanvas → dialog.open_map_canvas
     dialog.pushButton_mapCanvas.clicked.connect(dialog.open_map_canvas)
     # pushButton_terminal → dialog.open_project_terminal

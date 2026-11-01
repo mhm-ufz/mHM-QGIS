@@ -122,6 +122,9 @@ def version_changed(dialog) -> None:
         ensure_project_structure(dialog.project_folder, selected_version(dialog))
         invalidate(dialog, "run_mhm")
         refresh_advanced_nml_settings(dialog)
+    else:  # the version is fixed once a setup exists; cases chosen for the other one don't carry over
+        dialog._process_cases.clear()
+        process_cases.show(dialog)
     dialog.save_input_state()
     restore_simulation_times(dialog)
     dialog.groupBox_editCalibrationNamelists.setEnabled(
@@ -176,8 +179,8 @@ def edit_namelists(dialog, namelists=None, *, update_inputs=True) -> bool:
             log=dialog.log_message,
         )
         if _namelist_stamps(workspace) != before:
-            if nml_settings.load_settings(dialog.project_folder).get("intro_values"):
-                # The wizard's choices are now in the saved namelists; later edits win.
+            if update_inputs and nml_settings.load_settings(dialog.project_folder).get("intro_values"):
+                # Handed over (only update_inputs passes them): now in the namelists; later edits win.
                 nml_settings.update_section(dialog.project_folder, "intro_values", {})
             process_cases.reread(dialog)
         return True
@@ -248,6 +251,12 @@ def outputs_ready(dialog, project_folder) -> bool:
     return answer == QMessageBox.StandardButton.Yes
 
 
+def browse_parameter_namelist(dialog):
+    path, _ = open_file(dialog, "Parameter namelist", "Namelists (*.nml);;All files (*)")
+    if path:
+        dialog.lineEdit_pathParameterArgument.setText(path)
+
+
 def run(dialog) -> bool:
     if not require_active(dialog) or (
         dialog.comboBox_runName.currentText().strip() == NEW_RUN
@@ -294,6 +303,14 @@ def run(dialog) -> bool:
             ensure_project_structure(project_folder, version)
         if not inputs_ready(dialog, project_folder) or not outputs_ready(dialog, project_folder):
             return False
+        parameter = None
+        if dialog.checkBox_enableParameterArgument.isChecked():
+            text = dialog.lineEdit_pathParameterArgument.text().strip()
+            if not text:
+                raise ValueError("Choose the parameter namelist to pass with -p.")
+            parameter = Path(text).resolve()
+            if not parameter.is_file():
+                raise ValueError(f"Parameter namelist not found: {parameter}")
         if name and any(ref.name == name for ref in runs.list_runs(project_folder)) and QMessageBox.question(
                 dialog, "Run name", f"A run named {name} exists. Run again and overwrite its outputs?") \
                 != QMessageBox.StandardButton.Yes:
@@ -312,6 +329,7 @@ def run(dialog) -> bool:
             on_finished=finished,
             v6_path=v6_path,
             namelist="combine.nml" if combined and version.startswith("6") else None,
+            parameter=parameter,
         )
         if not started:
             finished(-1)
