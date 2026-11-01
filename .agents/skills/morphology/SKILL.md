@@ -60,7 +60,8 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   runs during project restoration. The worker returns metadata; the controller
   updates coverage, the multiplier default, and the persisted common grid.
 - Precipitation Scan and Add/Edit Meteorology open `meteo_var_details_input.ui`.
-  Only OK starts metadata inspection; Cancel leaves saved inputs unchanged. The
+  Only OK (Set, when embedded on a forcing row's page) starts metadata inspection; Cancel
+  leaves saved inputs unchanged. The
   variable table is populated after successful inspection and restores without scanning.
 - Forcings: `pre`, `tavg`, `tmin`, `tmax`, `tann`, `pet`, `ssrd`, `strd`, `netrad`, `eabs`,
   `windspeed` (`layout.METEO_VARIABLES`, `forcing/temporal.VARIABLES`, `forcing/types`,

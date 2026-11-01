@@ -100,9 +100,9 @@ pages:
       text: Checks that the domains agree on processes, land-cover scenes, soil horizons and geology, copies the first domain's parameter and output namelists if this setup has none, then writes the namelist handoff.
 
   page_demDerivatives:
-    - widget: label_demDerivativesSummary
+    - widget: tableWidget_demDerivatives
       title: DEM derivatives
-      text: Which derivatives the ▶ of A. Morphology has written. On a derivative's row you can replace it with a raster on the same grid that covers the whole DEM.
+      text: The derivatives the ▶ of A. Morphology wrote to dem_derivatives.nc, on the L0 reference grid (R). On a derivative's row you can replace it with a raster on the same grid that covers the whole DEM.
 
   page_gauges:
     - widget: comboBox_pourPointInput
@@ -115,7 +115,7 @@ pages:
   page_landUse:
     - widget: label_landUseType
       title: Land cover
-      text: Land cover as an mHM-ready raster or as a dataset with a lookup table. The chosen type's form opens below; OK keeps it.
+      text: Land cover as an mHM-ready raster or as a dataset with a lookup table. The chosen type's form opens below; Set keeps it.
 
   page_soil:
     - widget: label_soilType
@@ -135,7 +135,7 @@ pages:
   page_domainDefinition:
     - widget: label_domainDefinitionType
       title: Domain definition
-      text: How the model domain is defined; the Domain Delineator opens below, snaps outlets and saves the catchments.
+      text: How the model domain is defined. Below it opens the gauge assignment for the DEM extent (Set applies it) or the Domain Delineator, which snaps outlets and saves the catchments.
 
   tab_meteo:
     - widget: comboBox_meteoVar

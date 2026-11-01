@@ -33,6 +33,30 @@ def read_namelists(folder, schemas_dir, *, lower=True, project=None) -> dict:
     return values
 
 
+def write_namelists(folder, schemas_dir, values, *, project=None) -> None:
+    """Merge ``{file profile: {group: {key: value}}}`` into the saved files in *folder*;
+    their other groups and keys stay as they are."""
+    from nml_tools.gui.model import (
+        load_profile,
+        load_project,
+        recover_dimensions,
+        save_profiles,
+    )
+
+    try:
+        project = load_project(schemas_dir, folder, project)
+        dimensions = recover_dimensions(project)
+        updates = []
+        for profile in project.profiles:
+            if profile.name in values:
+                saved = load_profile(project, profile, dimensions)
+                groups = {group: {**saved.get(group, {}), **fields} for group, fields in values[profile.name].items()}
+                updates.append((profile, groups, dimensions))
+        save_profiles(project, updates)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise ValueError(f"Could not write the namelists in {folder}: {error}") from error
+
+
 def launch_editor(schemas_dir, output_dir, project, *, namelists=None, initial_values=None,
                   initial_dimensions=None, log=None):
     """Open nml-tools' editor on one project profile (``classic``, ``combine``, ``v5``),

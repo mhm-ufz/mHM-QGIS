@@ -12,7 +12,7 @@ from qgis.PyQt.QtWidgets import QDialog
 from ... import intro
 from ...core import datamodel
 from ...core.handlers.state import nml_settings
-from . import grid
+from . import grid, process_cases
 from .version import selected as selected_version
 
 
@@ -43,6 +43,10 @@ def finish(dialog, wizard):
     dialog._intro_answers = wizard.answers()
     dialog._intro_pending = True
     apply(dialog)
+    effects = intro.effects(intro.load_questions(), dialog._intro_answers, selected_version(dialog))
+    cases = {key.split(".", 1)[1]: int(value) for key, value in effects.items() if key.startswith("processes.")}
+    if cases:
+        process_cases.changed(dialog, cases)
     dialog.save_input_state()
     project_tree.refresh(dialog)
 

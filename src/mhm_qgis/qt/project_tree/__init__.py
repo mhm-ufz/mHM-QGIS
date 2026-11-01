@@ -1,18 +1,19 @@
 """The project tree: each row shows its page of `stackedWidget_project` in the dialog's
 one tab (`tab_project`), titled after the row.
 
-Rows are made in Designer; `tree.yml` gives each its key, page, status, inputs, display
-and action, matched by title. Columns: name | status | add, edit or run | eye.
+Rows are made in Designer; `tree.yml` gives each its key, page, status, inputs, display,
+action and summary table, matched by title. Columns: name | status | add, edit or run | eye.
 """
 from __future__ import annotations
 
+import os
 from functools import cache
 from pathlib import Path
 
 import yaml
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QHeaderView, QPushButton
+from qgis.PyQt.QtWidgets import QHeaderView, QPushButton, QTableWidgetItem
 
 COLUMNS = ("Project structure", "", "", "")  # name | status | add/edit/run | view
 STATUS_COLUMN, ACTION, VIEW = 1, 2, 3
@@ -49,6 +50,14 @@ def _rows(dialog, top=None):
         row = pending.pop()
         yield row
         pending += [row.child(i) for i in reversed(range(row.childCount()))]
+
+
+def _shown(row) -> bool:
+    while row is not None:
+        if row.isHidden():
+            return False
+        row = row.parent()
+    return True
 
 
 def _intro(dialog, _node):
@@ -160,6 +169,8 @@ def select(dialog, row) -> None:
     from ..controllers import categorical, forcing, grid, intro, main, process_cases
 
     key = node["key"]
+    if "summary" in node:
+        _summary(dialog, getattr(dialog, node["summary"]), row)
     if key in categorical.KINDS:
         categorical.show(dialog, key)
     elif key.startswith("meteo_"):
@@ -231,13 +242,49 @@ def go_to(dialog, key) -> None:
 
 
 def show_inputs(dialog, findings) -> None:
-    """Show only the input rows the process cases need (`datamodel.check` findings), then refresh."""
+    """Show the input rows the process cases need (`datamodel.check` findings), and none under
+    A, B and C before Domain Setup has run; then refresh."""
+    from ...core.handlers.state import processing
+
     dialog._input_findings = {name: finding for finding in findings for name in finding.input.split("|")}
+    set_up = bool(dialog.project_folder) and \
+        processing.workflow(dialog.project_folder, "project_structure").get("status") == "completed"
     for row in _rows(dialog):
         names = _inputs(_node(row))
-        if names:
-            row.setHidden(not any(name in dialog._input_findings for name in names))
+        grouped = row.parent() is not None and _node(row.parent())["key"] in ("morphology", "meteorology", "observations")
+        if names or grouped:
+            row.setHidden((grouped and not set_up)
+                          or (bool(names) and not any(name in dialog._input_findings for name in names)))
     refresh(dialog)
+
+
+def _file(dialog, node) -> str:
+    """The row's prepared file, relative to the project, or ""."""
+    from ...core.handlers.store.morphology import resolve_display_output
+    from ...core.meteorology.display import meteo_output_path
+
+    folder, key, path = dialog.project_folder, node["key"], None
+    if folder and "display" in node:
+        output = resolve_display_output(folder, node["display"])
+        path = output.path if output else None
+    elif folder and key.startswith("meteo_"):
+        path = meteo_output_path(folder, key.removeprefix("meteo_"))
+    return os.path.relpath(path, folder) if path else ""
+
+
+def _summary(dialog, table, top) -> None:
+    """The shown rows under `top` with a status or inputs: status, what needs them, prepared file."""
+    rows = [row for row in _rows(dialog, top)
+            if row is not top and _shown(row) and {"status", "input"} & _node(row).keys()]
+    table.setRowCount(len(rows))
+    for index, row in enumerate(rows):
+        node = _node(row)
+        findings = [dialog._input_findings[name] for name in _inputs(node) if name in dialog._input_findings]
+        needed = ", ".join(dict.fromkeys(reason for finding in findings for reason in finding.reasons))
+        for column, text in enumerate((row.text(0), " ".join(SYMBOLS[_state(dialog, node)]), needed, _file(dialog, node))):
+            table.setItem(index, column, QTableWidgetItem(text))
+    for column in range(table.columnCount() - 1):  # the last one stretches
+        table.resizeColumnToContents(column)
 
 
 def outputs_shown(dialog, on) -> None:
@@ -263,7 +310,7 @@ def refresh(dialog) -> None:
     for row in _rows(dialog):
         node = _node(row)
         state = _state(dialog, node)
-        if state is not None:
+        if "status" in node:
             symbol, meaning = SYMBOLS[state]
             row.setText(STATUS_COLUMN, symbol)
             row.setToolTip(STATUS_COLUMN, meaning)
@@ -283,10 +330,13 @@ def refresh(dialog) -> None:
     for row in runs:
         needed = [child for child in _rows(dialog, row) if child is not row and not child.isHidden()
                   and "status" in _node(child)]
-        ready = bool(dialog.project_folder) and all(child.text(STATUS_COLUMN) != "⚪" for child in needed)
+        ready = bool(needed) and all(child.text(STATUS_COLUMN) != "⚪" for child in needed)
         key = _node(row)["key"]
         _action(dialog, row, "▶", "Run", lambda key=key: _run(dialog, key)).setEnabled(
             ready and workflow_state.running_key(dialog) is None)
+    current = tree.currentItem()
+    if current is not None and "summary" in _node(current):
+        _summary(dialog, getattr(dialog, _node(current)["summary"]), current)
 
 
 def set_view(dialog, key, visible) -> None:

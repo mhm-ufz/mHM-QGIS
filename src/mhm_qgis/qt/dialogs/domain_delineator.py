@@ -34,6 +34,7 @@ from ...core.handlers.state.domain_state import (
     save_preview,
     save_state,
 )
+from ...core.handlers.state.nml_settings import sync_domain_settings
 from ...core.handlers.store import registry
 from ...core.handlers.store.layout import domain_dem_path, morph_folder
 from ...core.morphology.hydrology.outlets import (
@@ -738,6 +739,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
     def _domain_state_saved(self, proposed_state):
         self.state = proposed_state
         self._draft_state = copy.deepcopy(proposed_state)
+        sync_domain_settings(self.main_dialog.project_folder)
         self.main_dialog.save_input_state()
         self.main_dialog.update_gauged_outlet_count()
         self._show_saved_watershed(

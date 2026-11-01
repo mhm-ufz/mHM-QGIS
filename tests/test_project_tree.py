@@ -4,7 +4,7 @@ import pytest
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
-from qgis.PyQt.QtWidgets import QDialog
+from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox
 
 from mhm_qgis.qt import project_tree
 from mhm_qgis.qt.dialogs.intro_wizard import IntroWizard
@@ -39,7 +39,9 @@ def test_rows_match_tree_yml_and_open_on_project_configuration(dialog):
 def test_each_row_shows_its_page_titled_after_it(dialog):
     tree = dialog.treeWidget_projectStructure
     for key, page, title in (("domain_setup", dialog.tab, "Domain Setup"),
-                             ("inputs", dialog.page_demDerivatives, "I. DEM Derivatives"),  # no page: its first child's
+                             ("inputs", dialog.page_inputs, "2. Inputs"),
+                             ("morphology", dialog.page_morphology, "A. Morphology"),
+                             ("dem_derivatives", dialog.page_demDerivatives, "I. DEM Derivatives"),
                              ("lc", dialog.page_landUse, "III. Land use"),
                              ("domain_definition", dialog.page_domainDefinition, "VII. Domain Definition"),
                              ("meteorology", dialog.tab_meteo, "B. Meteorology"),
@@ -126,26 +128,87 @@ def test_resolution_summary_is_l0_times_the_multiplier(dialog):
     assert dialog.spinBox_resL2Multiplier.isReadOnly()
 
 
-def test_process_cases_list_their_inputs_and_go_to_edit_namelists(dialog, tmp_path):
+def _set_up(dialog, tmp_path):
+    """A v6 project whose Domain Setup has run."""
     import json
 
-    from mhm_qgis.core.handlers.state import nml_settings
+    from mhm_qgis.core.handlers.state import processing
     from mhm_qgis.core.handlers.store import layout
-    from mhm_qgis.qt.controllers import process_cases
 
     dialog.comboBox_mHMversion.setCurrentText("6.0")
     (tmp_path / ".temp").mkdir()
     (tmp_path / ".temp" / "mhm_qgis_input_state.json").write_text(json.dumps({"mhm_version": "6.0"}))
     layout.forget_project_version()
     dialog.project_folder = str(tmp_path)
+    processing.mark_workflow(tmp_path, "project_structure", "completed")
+
+
+def test_input_rows_wait_for_domain_setup(dialog, tmp_path):
+    from mhm_qgis.qt.controllers import process_cases
+
+    groups = [project_tree.item(dialog, key) for key in ("morphology", "meteorology", "observations")]
+    rows = [group.child(i) for group in groups for i in range(group.childCount())]
+    assert not any(group.isHidden() for group in groups)
+    assert all(row.isHidden() for row in rows)
+    dialog.project_folder = str(tmp_path)
+    process_cases.inputs(dialog)
+    assert all(row.isHidden() for row in rows)  # a project, but no Domain Setup yet
+    (tmp_path / ".temp").mkdir()
+    from mhm_qgis.core.handlers.state import processing
+
+    processing.mark_workflow(tmp_path, "project_structure", "completed")
+    process_cases.inputs(dialog)
+    assert not project_tree.item(dialog, "gauges").isHidden()
+    assert not project_tree.item(dialog, "meteo_pre").isHidden()
+
+
+def test_process_cases_are_kept_in_the_state_and_the_namelists(dialog, tmp_path):
+    import json
+
+    from mhm_qgis.core import datamodel
+    from mhm_qgis.core.handlers.state import nml_settings
+    from mhm_qgis.core.handlers.store.paths import namelist_project, schemas_folder
+    from mhm_qgis.externals.nml_tools_handler import write_namelists
+    from mhm_qgis.qt.controllers import process_cases
+
+    _set_up(dialog, tmp_path)
     dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "settings"))
-    assert dialog.formLayout_processCases.rowCount() > 5  # one combo per process
-    temperatures = [project_tree.item(dialog, f"meteo_{name}") for name in ("tavg", "tmin", "tmax")]
-    assert all(row.isHidden() for row in temperatures)  # no case needs them yet
-    assert project_tree.item(dialog, "aspect").text(project_tree.STATUS_COLUMN) == "⚪"  # every v6 run needs it
-    process_cases.changed(dialog, "pet", 1)  # Hargreaves-Samani: tavg, tmin, tmax and aspect
+    combos = [dialog.formLayout_processCases.itemAt(i).widget() for i in range(dialog.formLayout_processCases.count())]
+    assert all("namelist value" not in combo.itemText(0) for combo in combos if hasattr(combo, "itemText"))
+    temperatures = [project_tree.item(dialog, f"meteo_{name}") for name in ("tmin", "tmax")]
+    process_cases.changed(dialog, {"pet": -1})  # read from file: no extremes (snow's default reads tavg)
+    assert all(row.isHidden() for row in temperatures)
+    process_cases.changed(dialog, {"pet": 1})  # Hargreaves-Samani: tavg, tmin, tmax and aspect
     assert not any(row.isHidden() for row in temperatures)
-    assert nml_settings.load_settings(tmp_path)["intro_values"]["main"]["config_processes"]["pet"] == 1
+    assert project_tree.item(dialog, "aspect").text(project_tree.STATUS_COLUMN) == ""  # derivatives carry no status
+    state = json.loads((tmp_path / ".temp" / "mhm_qgis_input_state.json").read_text())
+    assert state["process_cases"]["pet"] == 1
+    assert nml_settings.load_settings(tmp_path)["intro_values"]["main"]["config_processes"]["pet"] == 1  # no namelist yet
+    write_namelists(tmp_path, schemas_folder("6.0"), {"main": {"config_processes": {"pet": 1}}},
+                    project=namelist_project("6.0", False))
+    process_cases.changed(dialog, {"pet": 2})
+    assert datamodel.current_processes(tmp_path)["pet"] == 2  # written to the saved namelist at once
+
+
+def test_summary_tables_on_the_inputs_morphology_and_dem_derivative_pages(dialog, tmp_path):
+    from mhm_qgis.qt.controllers import process_cases
+
+    _set_up(dialog, tmp_path)
+    process_cases.inputs(dialog)
+    tree = dialog.treeWidget_projectStructure
+    tree.setCurrentItem(project_tree.item(dialog, "inputs"))
+    table = dialog.tableWidget_inputsSummary
+    names = [table.item(row, 0).text() for row in range(table.rowCount())]
+    assert {"II. Gauges", "Precipitation"} <= set(names)
+    assert table.item(names.index("Precipitation"), 1).text().startswith("⚪")
+    tree.setCurrentItem(project_tree.item(dialog, "morphology"))
+    table = dialog.tableWidget_morphologySummary
+    assert "Precipitation" not in [table.item(row, 0).text() for row in range(table.rowCount())]
+    tree.setCurrentItem(project_tree.item(dialog, "slope"))
+    table = dialog.tableWidget_demDerivatives
+    assert [table.isRowHidden(row) for row in range(table.rowCount())] == [True, False, True, True, True]
+    dialog.pushButton_refL0Derivatives.click()
+    assert tree.currentItem() is project_tree.item(dialog, "l0_reference")
 
 
 def test_columns_and_the_add_edit_run_buttons(dialog):
@@ -169,8 +232,39 @@ def test_a_type_radio_shows_its_form_and_ok_commits_it(dialog, tmp_path):
     radios = dialog.buttonGroup_landUse.buttons()
     assert [radio.text() for radio in radios][1] == "Single Categorical Layer (with Lookup Table)"
     radios[1].click()
-    assert isinstance(dialog.verticalLayout_landUseForm.itemAt(0).widget(), SingleLayerInputDialog)
-    assert dialog._categorical_modes.get("lc", "") == ""  # not before OK
+    form = dialog.verticalLayout_landUseForm.itemAt(0).widget()
+    assert isinstance(form, SingleLayerInputDialog)
+    assert [button.text() for button in form.findChild(QDialogButtonBox).buttons()] == ["Set"]
+    assert dialog._categorical_modes.get("lc", "") == ""  # not before Set
+
+
+def test_type_radios_are_designer_widgets_with_the_saved_mode_texts(dialog):
+    from mhm_qgis.qt.controllers import categorical, main
+
+    for kind, page in categorical.PAGES.items():
+        assert [radio.text() for radio in getattr(dialog, f"buttonGroup_{page}").buttons()] == list(categorical.MODES[kind])
+        assert getattr(dialog, f"verticalLayout_{page}Types").spacing() == 0
+    assert [radio.text() for radio in dialog.buttonGroup_domainDefinition.buttons()] == list(main.DOMAIN_TYPES)
+    assert dialog.radioButton_domainDefinitionDelineator.text() == main.DOMAIN_TYPES[1]
+
+
+def test_embedding_a_form_closes_the_old_one_without_its_slots(dialog):
+    from mhm_qgis.qt.controllers import main
+
+    closed, rejected = [], []
+
+    class Old(QDialog):
+        def closeEvent(self, event):
+            closed.append(True)
+            super().closeEvent(event)
+
+    old = Old()
+    old.rejected.connect(lambda: rejected.append(True))
+    main.embed(dialog, "domainDefinition", old)
+    assert dialog.widget_domainDefinitionForm.isAncestorOf(old)
+    main.embed(dialog, "domainDefinition", QDialog())
+    assert closed == [True]
+    assert rejected == []
 
 
 def test_a_forcing_row_embeds_its_details_and_steps_on_the_time_toolbar(dialog):

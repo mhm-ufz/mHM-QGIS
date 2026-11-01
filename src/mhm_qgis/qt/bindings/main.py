@@ -41,8 +41,7 @@ def _bind_input_sources(dialog):
 
     # Land use, soil, geology and LAI radios → categorical.show; domain radios → main.handle_domain_definition_type
     categorical.bind(dialog)
-    main.radios(dialog, "domainDefinition", main.DOMAIN_TYPES,
-                lambda text: main.handle_domain_definition_type(dialog, text))
+    main.radios(dialog, "domainDefinition", lambda text: main.handle_domain_definition_type(dialog, text))
 
     # A bound slot, so the connection dies with the dialog on plugin reload.
     qgis_project = QgsProject.instance()
@@ -62,8 +61,10 @@ def bind(dialog):
     dialog.lineEdit_ProjectFolder.textChanged.connect(lambda _text: project_tree.refresh(dialog))
     dialog.comboBox_mHMversion.currentIndexChanged.connect(lambda _index: project_tree.refresh(dialog))
     dialog.comboBox_mHMversion.currentIndexChanged.connect(lambda _index: process_cases.inputs(dialog))
-    # pushButton_refL0/L2 → the L0/L2 Reference rows the Resolution page's values come from
-    dialog.pushButton_refL0.clicked.connect(lambda: project_tree.go_to(dialog, "l0_reference"))
+    # pushButton_refL0/L2 → the L0/L2 Reference rows the Resolution page's values come from;
+    # pushButton_refL0Derivatives → L0 Reference, the grid of the DEM derivatives
+    for button in (dialog.pushButton_refL0, dialog.pushButton_refL0Derivatives):
+        button.clicked.connect(lambda: project_tree.go_to(dialog, "l0_reference"))
     dialog.pushButton_refL2.clicked.connect(lambda: project_tree.go_to(dialog, "l2_reference"))
 
     # Project management

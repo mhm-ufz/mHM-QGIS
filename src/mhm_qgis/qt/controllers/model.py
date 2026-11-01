@@ -19,6 +19,7 @@ from ...core.handlers.store.paths import (
 )
 from ...dependency_bootstrap import configure_qtpy_api
 from ..dialogs.file_picker import open_file
+from . import process_cases
 from .categorical import refresh_advanced_nml_settings
 from .time import restore as restore_simulation_times
 from .time import values as simulation_times
@@ -174,10 +175,11 @@ def edit_namelists(dialog, namelists=None, *, update_inputs=True) -> bool:
             initial_dimensions=build_dimensions(version, dialog),
             log=dialog.log_message,
         )
-        if _namelist_stamps(workspace) != before and nml_settings.load_settings(
-                dialog.project_folder).get("intro_values"):
-            # The wizard's choices are now in the saved namelists; later edits win.
-            nml_settings.update_section(dialog.project_folder, "intro_values", {})
+        if _namelist_stamps(workspace) != before:
+            if nml_settings.load_settings(dialog.project_folder).get("intro_values"):
+                # The wizard's choices are now in the saved namelists; later edits win.
+                nml_settings.update_section(dialog.project_folder, "intro_values", {})
+            process_cases.reread(dialog)
         return True
     except Exception as error:
         dialog.log_message(f"ERROR: Edit Namelists failed. Details: {error}")

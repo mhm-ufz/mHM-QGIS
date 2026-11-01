@@ -9,7 +9,16 @@ from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 from ...core.handlers.store.layout import ensure_project_structure
 from .. import project_tree
 from ..dialogs.file_picker import open_directory
-from . import grid, input_state, intro, multi_domain, post_context, workflow_state
+from . import (
+    grid,
+    input_state,
+    intro,
+    main,
+    multi_domain,
+    post_context,
+    process_cases,
+    workflow_state,
+)
 from .version import selected as selected_version
 from .workflow_state import set_status, switch_busy
 
@@ -80,9 +89,7 @@ def create_structure(dialog):
             raise ValueError("The domain input state must be a JSON object.")
         settings.read(path)  # Creates the domain's settings.yaml on first use.
         dialog.save_input_state()
-        if dialog._domain_delineator_dialog is not None:
-            dialog._domain_delineator_dialog.close()
-            dialog._domain_delineator_dialog = None
+        main.embed(dialog, "domainDefinition", None)  # closes an open delineator
         dialog.project_folder = str(path)
         active_domain = True
         set_status(dialog, "project_structure", "running")
@@ -96,6 +103,7 @@ def create_structure(dialog):
         intro.write_pending(dialog)
         dialog.comboBox_mHMversion.setEnabled(False)
         set_status(dialog, "project_structure", "completed")
+        process_cases.inputs(dialog)  # the input rows show once Domain Setup has run
         from ..dialogs.project_folder_tree import ProjectFolderTreeDialog
 
         ProjectFolderTreeDialog(dialog.project_folder, dialog).exec()
@@ -127,9 +135,7 @@ def select_folder(dialog):
     if not directory:
         return
     dialog.save_input_state()
-    if dialog._domain_delineator_dialog is not None:
-        dialog._domain_delineator_dialog.close()
-        dialog._domain_delineator_dialog = None
+    main.embed(dialog, "domainDefinition", None)
     dialog.project_directory = directory
     dialog.project_folder = None
     dialog.comboBox_mHMversion.setEnabled(True)

@@ -56,6 +56,12 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   layout); for a v5.13 setup they drop the section instead of writing it, since v5.13 reads
   its inputs from the fixed `dir_*` folders that `vSpecific/v5_13` builds.
   `apply_registered` overlays `namelist_values` for v6 only.
+- Process cases live in the input state (`process_cases`) and the saved main (v6 combined:
+  meta) namelist alike. `process_cases.changed` writes both: the namelist through
+  `nml_tools_handler.write_namelists` (nml-tools' `save_profiles` replaces only that group),
+  or, before any namelist is saved, the one-shot `intro_values`. On load the namelist's cases
+  win over the state's; after Edit Namelists saves, `process_cases.reread` copies them back.
+  Missing cases are the schema defaults (`datamodel.default_processes`).
 - The wizard's process and output choices are **one-shot**. They go into the
   `nml-settings.json` section `intro_values`, which `vSpecific.common.apply_registered`
   overlays after the plugin-managed `namelist_values` (both versions). `model.edit_namelists`

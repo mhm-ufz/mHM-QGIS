@@ -4,6 +4,7 @@
 # `input`: data-model id(s); the row shows only when the process cases need one.
 # `display`: a `resolve_display_output` key, processed when its file exists, shown by the eye.
 # `action`: edit (➕ Add / ✏️ Edit selects the row) or run (▶ prepares the children).
+# `summary`: a table on its page listing the rows below with their status and prepared file.
 nodes:
   - {key: intro, title: Introduction, page: page_projectIntro, status: intro}
   - key: project_configuration
@@ -21,9 +22,13 @@ nodes:
           - {key: settings, title: Settings, page: page_settings}
   - key: inputs
     title: 2. Inputs
+    page: page_inputs
+    summary: tableWidget_inputsSummary
     children:
       - key: morphology
         title: A. Morphology
+        page: page_morphology
+        summary: tableWidget_morphologySummary
         action: run
         children:
           - key: dem_derivatives

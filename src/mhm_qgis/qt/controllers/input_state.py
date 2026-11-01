@@ -51,6 +51,7 @@ def save(dialog):
             "version": 4, "setup": "multi",
             "mhm_version": dialog.comboBox_mHMversion.currentText().strip(),
             "domains": list(dialog._multi_domains), "intro": dialog._intro_answers,
+            "process_cases": process_cases.current(dialog),
         })
         return
     existing_layers = jsonio.read_mapping(path).get("layers", {})
@@ -129,6 +130,7 @@ def save(dialog):
         "domain_definition_type": dialog._domain_definition_mode,
         "crs_authid": crs.authid() if crs and crs.isValid() else "",
         "intro": dialog._intro_answers,
+        "process_cases": process_cases.current(dialog),
     }
     try:
         jsonio.write(path, state)
@@ -156,6 +158,7 @@ def load(dialog):
         _restore_combo_text(dialog.comboBox_mHMversion, state.get("mhm_version", ""))
         # A setup without saved answers keeps the ones given before it was opened.
         dialog._intro_answers = state.get("intro") or dialog._intro_answers
+        process_cases.restore(dialog, state)
         if state.get("setup") == "multi":
             from . import multi_domain, project
 

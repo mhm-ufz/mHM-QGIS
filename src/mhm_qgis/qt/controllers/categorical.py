@@ -1,8 +1,8 @@
 """Land cover, soil, geology and LAI input types on their project-tree pages.
 
-A radio picks the type and shows its dialog embedded below it; OK stores the chosen
-source in one of the dialog's config dicts, which are the only record of it, and
-commits the type. Cancel brings back the committed type's form.
+A radio (Designer, texts as `MODES`) picks the type and shows its dialog embedded below
+it; Set stores the chosen source in one of the dialog's config dicts, which are the only
+record of it, and commits the type.
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ MODES = {
 
 def bind(dialog):
     for kind in KINDS:
-        main.radios(dialog, PAGES[kind], MODES[kind], lambda text, kind=kind: show(dialog, kind, text))
+        main.radios(dialog, PAGES[kind], lambda text, kind=kind: show(dialog, kind, text))
 
 
 def categorical_input_mode(dialog, kind):

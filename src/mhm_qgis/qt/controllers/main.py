@@ -5,7 +5,13 @@ import os
 import traceback
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QButtonGroup, QDialog, QMessageBox, QRadioButton
+from qgis.PyQt.QtWidgets import (
+    QButtonGroup,
+    QDialog,
+    QDialogButtonBox,
+    QMessageBox,
+    QTableWidgetItem,
+)
 
 from ...core.handlers.store.morphology import resolve_display_output
 from ...core.handlers.store.paths import portable_path
@@ -235,13 +241,11 @@ def update_gauged_outlet_count(dialog, layer=None):
 DOMAIN_TYPES = ("Single Domain [DEM extent]", "Select Domains [using Domain Delineator]")
 
 
-def radios(dialog, name, texts, chosen):
-    """One radio per text in `verticalLayout_<name>Types`; a click calls `chosen(text)`."""
-    group = QButtonGroup(dialog)
-    for text in texts:
-        button = QRadioButton(text)
-        group.addButton(button)
-        getattr(dialog, f"verticalLayout_{name}Types").addWidget(button)
+def radios(dialog, name, chosen):
+    """Group the radios of `verticalLayout_<name>Types` (Designer); a click calls `chosen(text)`."""
+    group, layout = QButtonGroup(dialog), getattr(dialog, f"verticalLayout_{name}Types")
+    for index in range(layout.count()):
+        group.addButton(layout.itemAt(index).widget())
     group.buttonClicked.connect(lambda button: chosen(button.text()))
     setattr(dialog, f"buttonGroup_{name}", group)
 
@@ -256,33 +260,42 @@ def check(dialog, name, text):
 
 
 def embed(dialog, name, child):
-    """Show the dialog `child` (or nothing) as the form of the page with `verticalLayout_<name>Form`."""
+    """Show the dialog `child` (or nothing) in `widget_<name>Form`, its OK/Cancel as one Set button.
+
+    The form it replaces is closed silently: its own close handling runs, but not the
+    `rejected`/`finished` slots that would show a form again.
+    """
     layout = getattr(dialog, f"verticalLayout_{name}Form")
     while layout.count():
         old = layout.takeAt(0).widget()
         if old is not None:
+            old.blockSignals(True)
+            old.close()
             old.deleteLater()
     if child is not None:
         child.setWindowFlags(Qt.WindowType.Widget)
+        box = child.findChild(QDialogButtonBox)
+        if box is not None:
+            box.setStandardButtons(QDialogButtonBox.StandardButton.NoButton)
+            box.addButton("Set", QDialogButtonBox.ButtonRole.AcceptRole)
         layout.addWidget(child)
         child.show()
 
 
 def handle_domain_definition_type(dialog, text):
-    """Dispatch the selected domain-definition workflow."""
-    previous = dialog._domain_definition_mode
+    """Embed the chosen domain definition: the delineator, or the DEM-extent gauge assignment."""
     if text == DOMAIN_TYPES[1]:
         dialog._domain_definition_mode = text
         dialog.save_input_state()
         open_domain_delineator(dialog)
         return
-    embed(dialog, "domainDefinition", None)
-    if open_domain_assignment(dialog):
-        dialog._domain_definition_mode = text
-        dialog.save_input_state()
+    delineator = dialog.findChild(QDialog, "DomainDelineatorDialog")
+    if delineator is not None and delineator._domain_jobs_busy():
+        check(dialog, "domainDefinition", DOMAIN_TYPES[1])
+        QMessageBox.information(dialog, "Domain Definition", "Wait for the active Domain Delineator task to finish.")
         return
-    check(dialog, "domainDefinition", previous)
-    dialog.save_input_state()
+    if not open_domain_assignment(dialog):
+        check(dialog, "domainDefinition", dialog._domain_definition_mode)
 
 
 def _selected_outlets(dialog, title):
@@ -304,13 +317,12 @@ def _selected_outlets(dialog, title):
 
 
 def open_domain_assignment(dialog):
-    """Open the non-interactive gauge assignment for the DEM-extent domain."""
+    """Embed the gauge assignment for the DEM-extent domain; Set applies it. False without outlets."""
     outlet_ids = _selected_outlets(dialog, "Domain Assignment")
     if outlet_ids is None:
         return False
     try:
         from ...core.handlers.state.domain_state import DOMAIN_MODE_DEM_EXTENT
-        from ...core.handlers.state.nml_settings import sync_domain_settings
         from ...qgis_bridge.layers.domain import DomainWorkflow
         from ..dialogs.discharge_assignment import DischargeTableAssignmentDialog
 
@@ -326,18 +338,34 @@ def open_domain_assignment(dialog):
         assignment = DischargeTableAssignmentDialog(
             outlet_ids, dialog, initial_records=state.get("outlets", {}),
         )
-        if assignment.exec() != QDialog.DialogCode.Accepted:
-            return False
+    except Exception as error:
+        _assignment_failed(dialog, error)
+        return False
+    assignment.accepted.connect(lambda: _assign(dialog, workflow, assignment))
+    embed(dialog, "domainDefinition", assignment)
+    return True
+
+
+def _assign(dialog, workflow, assignment):
+    from ...core.handlers.state.nml_settings import sync_domain_settings
+
+    try:
         workflow.apply_dem_extent(assignment.selected_assignments())
         sync_domain_settings(dialog.project_folder)
-        update_gauged_outlet_count(dialog)
-        invalidate_meteo(dialog)
-        return True
     except Exception as error:
-        dialog.log_message(f"ERROR: Domain assignment failed: {error}")
-        dialog.log_message(f"Traceback: {traceback.format_exc()}")
-        QMessageBox.critical(dialog, "Domain Assignment", str(error))
-        return False
+        _assignment_failed(dialog, error)
+        return
+    dialog._domain_definition_mode = DOMAIN_TYPES[0]
+    dialog.save_input_state()
+    update_gauged_outlet_count(dialog)
+    invalidate_meteo(dialog)
+    open_domain_assignment(dialog)
+
+
+def _assignment_failed(dialog, error):
+    dialog.log_message(f"ERROR: Domain assignment failed: {error}")
+    dialog.log_message(f"Traceback: {traceback.format_exc()}")
+    QMessageBox.critical(dialog, "Domain Assignment", str(error))
 
 
 def open_domain_delineator(dialog):
@@ -360,7 +388,7 @@ def open_domain_delineator(dialog):
 
 
 def _show_domain_delineator(dialog, context, pour_points_layer, outlet_id_field, outlet_ids):
-    """The delineator below the Domain Definition radios; closing it saves the domain settings."""
+    """The delineator below the Domain Definition radios, until another type replaces it."""
     from ..dialogs.domain_delineator import DomainDelineatorDialog
 
     try:
@@ -371,24 +399,9 @@ def _show_domain_delineator(dialog, context, pour_points_layer, outlet_id_field,
         dialog.log_message(f"ERROR: Domain delineator failed: {error}")
         dialog.log_message(f"Traceback: {traceback.format_exc()}")
         QMessageBox.critical(dialog, "Domain Delineator", str(error))
-        _domain_delineator_closed(dialog)
         return
-    dialog._domain_delineator_dialog = delineator
-    delineator.finished.connect(lambda _result: _domain_delineator_closed(dialog))
+    delineator.pushButton_close.hide()
     embed(dialog, "domainDefinition", delineator)
-
-
-def _domain_delineator_closed(dialog):
-    from ...core.handlers.state.nml_settings import sync_domain_settings
-
-    dialog._domain_delineator_dialog = None
-    embed(dialog, "domainDefinition", None)
-    try:
-        sync_domain_settings(dialog.project_folder)
-    except Exception as error:
-        dialog.log_message(f"WARNING: Could not update domain namelist settings: {error}")
-    dialog.save_input_state()
-    update_gauged_outlet_count(dialog)
 
 
 def _domain_delineator_preflight_failed(dialog, message):
@@ -402,14 +415,22 @@ DEM_BUNDLE_VARIABLES = {"dem": "dem_filled", "slope": "slope", "aspect": "aspect
 
 
 def show_dem_derivatives(dialog, variable=None):
-    """The DEM Derivatives page: which are in dem_derivatives.nc; a derivative's row can replace it."""
-    from ...core.handlers.file.netcdf.raster import variables
+    """The DEM Derivatives page: every derivative in dem_derivatives.nc, or only `variable`'s with its Replace row."""
+    from ...core.handlers.file.netcdf.raster import describe
     from ...core.handlers.store.paths import temp_morphology_folder
 
-    present = variables(os.path.join(temp_morphology_folder(dialog.project_folder), "dem_derivatives.nc")) \
-        if dialog.project_folder else ()
-    dialog.label_demDerivativesSummary.setText("<br>".join(
-        f"{'✅' if name in present else '⚪'} {name}" for name in DEM_BUNDLE_VARIABLES.values()))
+    path = os.path.join(temp_morphology_folder(dialog.project_folder), "dem_derivatives.nc") \
+        if dialog.project_folder else ""
+    present, table = describe(path) if path else {}, dialog.tableWidget_demDerivatives
+    table.setRowCount(len(DEM_BUNDLE_VARIABLES))
+    for row, (key, name) in enumerate(DEM_BUNDLE_VARIABLES.items()):
+        shape, units = present.get(name, ((), ""))
+        file = os.path.relpath(path, dialog.project_folder) if name in present else "—"
+        for column, text in enumerate((key, name, " \N{MULTIPLICATION SIGN} ".join(map(str, shape[-2:])) or "—", units, file)):
+            table.setItem(row, column, QTableWidgetItem(text))
+        table.setRowHidden(row, variable not in (None, key))
+    for column in range(table.columnCount() - 1):  # the last one stretches
+        table.resizeColumnToContents(column)
     dialog._dem_override = variable
     dialog.widget_demOverride.setVisible(variable is not None)
     dialog.widget_demOverride.setEnabled(DEM_BUNDLE_VARIABLES.get(variable) in present)

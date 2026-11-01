@@ -1,5 +1,5 @@
-"""The Settings page's process cases: one combo per process, the inputs the cases need as
-rows under 2. Inputs, and the choices handed to Edit Namelists through `intro_values`."""
+"""The Settings page's process cases: one combo per process, kept alike in the input state
+and the saved namelists, and the inputs the cases need as rows under 2. Inputs."""
 from __future__ import annotations
 
 from qgis.PyQt.QtWidgets import QComboBox
@@ -7,7 +7,7 @@ from qgis.PyQt.QtWidgets import QComboBox
 from ... import intro
 from ...core import datamodel
 from ...core.handlers.state import nml_settings
-from ...core.handlers.store.paths import namelist_project
+from ...core.handlers.store.paths import namelist_project, schemas_folder
 from .. import project_tree
 from .version import selected as selected_version
 
@@ -22,41 +22,69 @@ def _saved(dialog) -> dict:
         return {}
 
 
+def current(dialog) -> dict:
+    """Every process's case: the chosen or loaded ones over the schema defaults."""
+    return {**datamodel.default_processes(selected_version(dialog)), **dialog._process_cases}
+
+
+def restore(dialog, state) -> None:
+    """On load: the saved namelists' cases, else the state's, else those chosen before."""
+    dialog._process_cases = _saved(dialog) or dict(state.get("process_cases") or dialog._process_cases)
+    show(dialog)
+
+
 def show(dialog) -> None:
-    """One combo per process of the selected version: "namelist value" (no change), then its cases."""
-    form, version, saved = dialog.formLayout_processCases, selected_version(dialog), _saved(dialog)
+    """One combo per process of the selected version, on its current case."""
+    form, version, cases = dialog.formLayout_processCases, selected_version(dialog), current(dialog)
     while form.rowCount():
         form.removeRow(0)
     for process, spec in datamodel.load_rules(version)["processes"].items():
         combo = QComboBox(dialog.page_settings)
-        combo.addItem("namelist value", None)
         for case in spec.get("cases") or {}:
             combo.addItem(datamodel.case_label(version, process, case), int(case))
-        current = dialog._process_cases.get(process, saved.get(process))
-        combo.setCurrentIndex(0 if current is None else max(0, combo.findData(current)))
-        combo.currentIndexChanged.connect(lambda _index, p=process, c=combo: changed(dialog, p, c.currentData()))
+        if combo.findData(cases.get(process)) < 0 and process in cases:  # a case the rules don't list
+            combo.addItem(datamodel.case_label(version, process, cases[process]), cases[process])
+        combo.setCurrentIndex(max(0, combo.findData(cases.get(process))))
+        combo.currentIndexChanged.connect(lambda _index, p=process, c=combo: changed(dialog, {p: c.currentData()}))
         form.addRow(process.replace("_", " "), combo)
 
 
-def changed(dialog, process, case) -> None:
-    if case is None:
-        dialog._process_cases.pop(process, None)
-    else:
-        dialog._process_cases[process] = case
+def changed(dialog, cases) -> None:
+    """Keep `cases` ({process: case}) in the input state and the namelists; show their inputs."""
+    dialog._process_cases.update(cases)
+    if dialog.project_folder:
+        _sync(dialog)
+    dialog.save_input_state()
     inputs(dialog)
-    if dialog.project_folder and dialog._process_cases:
-        _hand_over(dialog)
 
 
-def _hand_over(dialog) -> None:
-    """Merge the chosen cases into the one-shot `intro_values` Edit Namelists opens with."""
+def reread(dialog) -> None:
+    """After Edit Namelists saved: the namelists' cases back into the state and the combos."""
+    dialog._process_cases.update(_saved(dialog))
+    dialog.save_input_state()
+    show(dialog)
+    inputs(dialog)
+
+
+def _sync(dialog) -> None:
+    """Write the cases into the saved namelists; before there are any, hand them to the first
+    Edit Namelists through the one-shot `intro_values`."""
+    from ...externals.nml_tools_handler import write_namelists
+
     version = selected_version(dialog)
+    project = namelist_project(version, dialog._multi_domains is not None)
     try:
         saved = datamodel.read_namelists(dialog.project_folder)
     except (OSError, ValueError):
         saved = {}
-    effects = {f"processes.{process}": case for process, case in dialog._process_cases.items()}
-    values = intro.handoff(version, effects, saved, namelist_project(version, dialog._multi_domains is not None))
+    effects = {f"processes.{process}": case for process, case in current(dialog).items()}
+    values = intro.handoff(version, effects, saved, project)
+    if saved:
+        try:
+            write_namelists(dialog.project_folder, schemas_folder(version), values, project=project)
+        except ValueError as error:
+            dialog.log_message(f"ERROR: {error}")
+        return
     merged = nml_settings.load_settings(dialog.project_folder).get("intro_values") or {}
     for profile, namelists in values.items():
         for name, fields in namelists.items():
@@ -67,7 +95,7 @@ def _hand_over(dialog) -> None:
 def inputs(dialog) -> None:
     """Show the rows under 2. Inputs the cases need, with what is prepared (✅)."""
     version = selected_version(dialog)
-    rules, cases = datamodel.load_rules(version), {**_saved(dialog), **dialog._process_cases}
+    rules, cases = datamodel.load_rules(version), current(dialog)
     try:
         findings = datamodel.check(dialog.project_folder, cases) if dialog.project_folder else None
     except (OSError, ValueError):

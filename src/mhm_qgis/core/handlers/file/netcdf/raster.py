@@ -33,6 +33,16 @@ def variables(path):
         return tuple(handle.variables)
 
 
+def describe(path):
+    """{variable: (shape, units)}; a missing file has none."""
+    from netCDF4 import Dataset
+
+    if not Path(path).is_file():
+        return {}
+    with Dataset(path) as handle:
+        return {name: (var.shape, getattr(var, "units", "")) for name, var in handle.variables.items()}
+
+
 def raster_variables(path):
     """Return numeric NetCDF variables with at least two dimensions."""
     from netCDF4 import Dataset

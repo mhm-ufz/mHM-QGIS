@@ -70,7 +70,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._map_window = None
         self._terminal_dialog = None
         self._thread_display_dialog = None
-        self._domain_delineator_dialog = None
         self._discharge_plot = None
         self._closing = False
         self._running_workflow = None  # See `controllers/workflow_state.running_key`.
@@ -270,8 +269,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         if self.task_coordinator.is_busy() or (terminal is not None and terminal.is_running()):
             QtCore.QTimer.singleShot(50, self._finish_cancelled_close)
             return
-        if self._domain_delineator_dialog is not None:
-            self._domain_delineator_dialog.close()
+        main_controller.embed(self, "domainDefinition", None)  # closes an open delineator
         super().done(self._close_result)
 
     # --- Owned windows ----------------------------------------------------

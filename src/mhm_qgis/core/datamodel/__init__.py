@@ -157,6 +157,17 @@ def current_processes(project_folder) -> dict[str, int] | None:
     return _processes(read_namelists(project_folder))
 
 
+@cache
+def default_processes(version) -> dict[str, int]:
+    """The schemas' process cases: the v6 defaults, or the v5.13 example `processCase`."""
+    folder = schemas_folder(version) / "nml-schemas"
+    if version_key(version) == "v6":
+        schema = yaml.safe_load((folder / "config_processes.yml").read_text(encoding="utf-8"))
+        return {name: int(spec["default"]) for name, spec in schema["properties"].items() if "default" in spec}
+    schema = yaml.safe_load((folder / "config_process_selection.yml").read_text(encoding="utf-8"))
+    return _processes({"processselection": {"processcase": schema["properties"]["processCase"]["examples"][0]}}) or {}
+
+
 def _processes(values) -> dict[str, int] | None:
     """Process cases from read namelists (v6 `config_processes`, v5.13 `processCase`)."""
     if "config_processes" in values:
