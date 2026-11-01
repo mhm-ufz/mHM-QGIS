@@ -54,7 +54,8 @@ def launch_editor(schemas_dir, output_dir, project, *, namelists=None, initial_v
     with capture_messages(log, logger_names=("nml_tools",)), _editor_folder(
         schemas_dir, request, log
     ) as folder:
-        return gui.launch_gui(schemas_dir, [replace(request, output_dir=folder)])
+        config = Path(schemas_dir) / "nml-config.toml"
+        return gui.launch_gui(config, [replace(request, output_dir=folder)])
 
 
 @contextmanager

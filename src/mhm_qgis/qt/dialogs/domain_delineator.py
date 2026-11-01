@@ -48,7 +48,6 @@ from ..reporting import error_detail
 from ..ui import load_form
 from ..workflows import hydrology
 from .file_picker import open_file
-from .input_selection import scan_project_inputs
 
 Ui_DomainDelineatorDialog = load_form("domain_delineator_dialog.ui")
 
@@ -338,11 +337,6 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         self.comboBox_dischargeFile.addItem("", "")
 
         available = {}
-        for item in scan_project_inputs(self.project_folder, "lookup"):
-            path = self._normal_path(item.data["path"])
-            if path in excluded:
-                continue
-            available[path] = item.label
         if current and current not in excluded and os.path.isfile(current):
             available.setdefault(current, self._path_label(current))
 

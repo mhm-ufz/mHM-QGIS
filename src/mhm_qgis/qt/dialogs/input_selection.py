@@ -10,11 +10,9 @@ from pathlib import Path
 from qgis.core import QgsMapLayer, QgsProject
 from qgis.PyQt import QtCore, QtWidgets
 
-from ...core.handlers.store.paths import WORKSPACE_FOLDER_NAME
 from ...qgis_bridge import layers
 from .file_picker import open_file
 
-EXCLUDED_PROJECT_FOLDERS = {WORKSPACE_FOLDER_NAME}
 INPUT_EXTENSIONS = {
     "dem": {".asc", ".nc", ".tif"},
     "pour_points": {".shp"},
@@ -79,40 +77,6 @@ def _kind(value: str) -> str:
     if kind not in INPUT_EXTENSIONS:
         raise ValueError(f"Unknown input kind: {value!r}")
     return kind
-
-
-def scan_project_inputs(project_folder, kind: str) -> list[InputItem]:
-    """List eligible project files while pruning plugin-owned top-level folders."""
-    project_root = Path(project_folder).expanduser().resolve()
-    if not project_root.is_dir():
-        return []
-
-    kind = _kind(kind)
-    extensions = INPUT_EXTENSIONS[kind]
-    items = []
-    for current_root, directories, filenames in os.walk(project_root):
-        if Path(current_root) == project_root:
-            directories[:] = [
-                name
-                for name in directories
-                if name not in EXCLUDED_PROJECT_FOLDERS
-            ]
-        for filename in filenames:
-            path = Path(current_root, filename)
-            if path.suffix.lower() not in extensions:
-                continue
-            label = path.relative_to(project_root).as_posix()
-            items.append(
-                InputItem(
-                    label,
-                    {
-                        "origin": "file",
-                        "kind": kind,
-                        "path": str(path.resolve()),
-                    },
-                )
-            )
-    return sorted(items, key=lambda item: item.label.casefold())
 
 
 def _layer_id(layer):
@@ -350,26 +314,20 @@ def _populate_file_combo(combo_box, project_folder, kind, initial=""):
     combo_box.clear()
     combo_box.addItem("", "")
     selected = 0
-    normalized = os.path.normcase(os.path.abspath(str(initial))) if initial else ""
-    for item in scan_project_inputs(project_folder, kind):
-        path = item.data["path"]
-        combo_box.addItem(item.label, path)
-        if normalized and os.path.normcase(os.path.abspath(path)) == normalized:
-            selected = combo_box.count() - 1
-    if initial and selected == 0 and Path(initial).is_file():
+    if initial and Path(initial).is_file():
         combo_box.addItem(str(Path(initial).resolve()), str(Path(initial).resolve()))
         selected = combo_box.count() - 1
     combo_box.setCurrentIndex(selected)
 
 
 def _populate_layer_combo(adapter, project_folder, kind, initial=""):
-    """Populate a categorical input with loaded layers and project files."""
+    """Populate a categorical input with the layers loaded in QGIS."""
     combo_box = adapter.combo_box
     combo_box.clear()
     adapter.addItem("", {"origin": "empty"})
     selected = 0
     initial = str(initial or "")
-    for item in (*loaded_qgis_items(kind), *scan_project_inputs(project_folder, kind)):
+    for item in loaded_qgis_items(kind):
         adapter.addItem(item.label, item.data)
         source = str(item.data.get("source") or item.data.get("path") or "")
         if initial and source == initial:
@@ -483,7 +441,6 @@ def _combo_path_at(combo_box, index):
 
 
 __all__ = [
-    "EXCLUDED_PROJECT_FOLDERS",
     "INPUT_EXTENSIONS",
     "InputComboAdapter",
     "InputItem",
@@ -494,5 +451,4 @@ __all__ = [
     "loaded_qgis_items",
     "qgis_layer_item",
     "raster_details",
-    "scan_project_inputs",
 ]

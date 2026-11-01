@@ -4,10 +4,10 @@ from __future__ import annotations
 import os
 import traceback
 
-from qgis.PyQt.QtCore import QDateTime
-from qgis.PyQt.QtWidgets import QDialog, QMessageBox
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QButtonGroup, QDialog, QMessageBox, QRadioButton
 
-from ...core.handlers.store.morphology import land_cover_periods, resolve_display_output
+from ...core.handlers.store.morphology import resolve_display_output
 from ...core.handlers.store.paths import portable_path
 from ...core.morphology.hydrology.outlets import StationIdError, outlet_ids_from_layer
 from ..dialogs.file_picker import open_file
@@ -16,7 +16,6 @@ from ..dialogs.input_selection import (
     InputComboAdapter,
     loaded_qgis_items,
     raster_details,
-    scan_project_inputs,
 )
 from ..reporting import error_detail
 from ..workflows import hydrology
@@ -38,10 +37,7 @@ def input_layer_widgets(dialog):
 
 
 def refresh_input_sources(dialog):
-    """Populate input boxes from QGIS and, when enabled, the project folder."""
-    include_files = bool(
-        dialog.project_folder and dialog.checkBox_enableFolderSearch.isChecked()
-    )
+    """Populate input boxes from the layers loaded in QGIS."""
     for kind, adapter in dialog._input_adapters.items():
         combo = adapter.combo_box
         previous = combo.currentData()
@@ -49,9 +45,6 @@ def refresh_input_sources(dialog):
         combo.clear()
         for item in loaded_qgis_items(kind):
             adapter.addItem(item.label, item.data)
-        if include_files:
-            for item in scan_project_inputs(dialog.project_directory or dialog.project_folder, kind):
-                combo.addItem(item.label, item.data)
         index = _matching_input_index(combo, previous)
         if (
             index < 0
@@ -239,24 +232,56 @@ def update_gauged_outlet_count(dialog, layer=None):
     return count
 
 
-def handle_domain_definition_type(dialog, index):
+DOMAIN_TYPES = ("Single Domain [DEM extent]", "Select Domains [using Domain Delineator]")
+
+
+def radios(dialog, name, texts, chosen):
+    """One radio per text in `verticalLayout_<name>Types`; a click calls `chosen(text)`."""
+    group = QButtonGroup(dialog)
+    for text in texts:
+        button = QRadioButton(text)
+        group.addButton(button)
+        getattr(dialog, f"verticalLayout_{name}Types").addWidget(button)
+    group.buttonClicked.connect(lambda button: chosen(button.text()))
+    setattr(dialog, f"buttonGroup_{name}", group)
+
+
+def check(dialog, name, text):
+    """Check the radio for `text` (ignoring case, `_` as a space); none for another text."""
+    group = getattr(dialog, f"buttonGroup_{name}")
+    group.setExclusive(False)
+    for button in group.buttons():
+        button.setChecked(button.text().lower() == str(text or "").lower().replace("_", " "))
+    group.setExclusive(True)
+
+
+def embed(dialog, name, child):
+    """Show the dialog `child` (or nothing) as the form of the page with `verticalLayout_<name>Form`."""
+    layout = getattr(dialog, f"verticalLayout_{name}Form")
+    while layout.count():
+        old = layout.takeAt(0).widget()
+        if old is not None:
+            old.deleteLater()
+    if child is not None:
+        child.setWindowFlags(Qt.WindowType.Widget)
+        layout.addWidget(child)
+        child.show()
+
+
+def handle_domain_definition_type(dialog, text):
     """Dispatch the selected domain-definition workflow."""
-    if dialog._loading_input_state:
-        return
-    combo = dialog.comboBox_domainDefinitionType
     previous = dialog._domain_definition_mode
-    if int(index) == 1:
-        dialog._domain_definition_mode = combo.currentText()
+    if text == DOMAIN_TYPES[1]:
+        dialog._domain_definition_mode = text
         dialog.save_input_state()
         open_domain_delineator(dialog)
         return
+    embed(dialog, "domainDefinition", None)
     if open_domain_assignment(dialog):
-        dialog._domain_definition_mode = combo.currentText()
+        dialog._domain_definition_mode = text
         dialog.save_input_state()
         return
-    combo.blockSignals(True)
-    combo.setCurrentIndex(combo.findText(previous) if previous else -1)
-    combo.blockSignals(False)
+    check(dialog, "domainDefinition", previous)
     dialog.save_input_state()
 
 
@@ -324,7 +349,7 @@ def open_domain_delineator(dialog):
     field = selected_outlet_id_field(dialog)
     started = hydrology.start_domain_preflight(
         dialog,
-        (dialog.comboBox_domainDefinitionType,),
+        (dialog.page_domainDefinition,),
         lambda context: _show_domain_delineator(dialog, context, layer, field, outlet_ids),
         lambda message: _domain_delineator_preflight_failed(dialog, message),
     )
@@ -335,26 +360,35 @@ def open_domain_delineator(dialog):
 
 
 def _show_domain_delineator(dialog, context, pour_points_layer, outlet_id_field, outlet_ids):
-    from ...core.handlers.state.nml_settings import sync_domain_settings
+    """The delineator below the Domain Definition radios; closing it saves the domain settings."""
     from ..dialogs.domain_delineator import DomainDelineatorDialog
 
     try:
-        dialog._domain_delineator_dialog = DomainDelineatorDialog(
+        delineator = DomainDelineatorDialog(
             dialog, pour_points_layer, outlet_id_field, outlet_ids, prepared_context=context,
         )
-        dialog._domain_delineator_dialog.exec()
     except Exception as error:
         dialog.log_message(f"ERROR: Domain delineator failed: {error}")
         dialog.log_message(f"Traceback: {traceback.format_exc()}")
         QMessageBox.critical(dialog, "Domain Delineator", str(error))
-    finally:
-        dialog._domain_delineator_dialog = None
-        try:
-            sync_domain_settings(dialog.project_folder)
-        except Exception as error:
-            dialog.log_message(f"WARNING: Could not update domain namelist settings: {error}")
-        dialog.save_input_state()
-        update_gauged_outlet_count(dialog)
+        _domain_delineator_closed(dialog)
+        return
+    dialog._domain_delineator_dialog = delineator
+    delineator.finished.connect(lambda _result: _domain_delineator_closed(dialog))
+    embed(dialog, "domainDefinition", delineator)
+
+
+def _domain_delineator_closed(dialog):
+    from ...core.handlers.state.nml_settings import sync_domain_settings
+
+    dialog._domain_delineator_dialog = None
+    embed(dialog, "domainDefinition", None)
+    try:
+        sync_domain_settings(dialog.project_folder)
+    except Exception as error:
+        dialog.log_message(f"WARNING: Could not update domain namelist settings: {error}")
+    dialog.save_input_state()
+    update_gauged_outlet_count(dialog)
 
 
 def _domain_delineator_preflight_failed(dialog, message):
@@ -362,74 +396,58 @@ def _domain_delineator_preflight_failed(dialog, message):
     QMessageBox.critical(dialog, "Domain Delineator", error_detail(message))
 
 
+# --- DEM derivatives ------------------------------------------------------
+
+DEM_BUNDLE_VARIABLES = {"dem": "dem_filled", "slope": "slope", "aspect": "aspect", "fdir": "fdir", "facc": "facc"}
+
+
+def show_dem_derivatives(dialog, variable=None):
+    """The DEM Derivatives page: which are in dem_derivatives.nc; a derivative's row can replace it."""
+    from ...core.handlers.file.netcdf.raster import variables
+    from ...core.handlers.store.paths import temp_morphology_folder
+
+    present = variables(os.path.join(temp_morphology_folder(dialog.project_folder), "dem_derivatives.nc")) \
+        if dialog.project_folder else ()
+    dialog.label_demDerivativesSummary.setText("<br>".join(
+        f"{'✅' if name in present else '⚪'} {name}" for name in DEM_BUNDLE_VARIABLES.values()))
+    dialog._dem_override = variable
+    dialog.widget_demOverride.setVisible(variable is not None)
+    dialog.widget_demOverride.setEnabled(DEM_BUNDLE_VARIABLES.get(variable) in present)
+
+
+def browse_dem_override(dialog):
+    path, _ = open_file(dialog, "Replacement raster", "Rasters (*.tif *.tiff *.nc *.asc);;All files (*)")
+    if path:
+        dialog.lineEdit_demOverride.setText(path)
+
+
+def override_dem_derivative(dialog):
+    """Replace the page's derivative with the chosen raster (same grid, whole DEM)."""
+    from ...core.handlers.raster.tasks import override_derivative
+    from ...core.handlers.store.paths import temp_morphology_folder
+    from .. import project_tree
+
+    path, variable = dialog.lineEdit_demOverride.text().strip(), dialog._dem_override
+    try:
+        override_derivative(temp_morphology_folder(dialog.project_folder), DEM_BUNDLE_VARIABLES[variable], path)
+    except (OSError, RuntimeError, ValueError) as error:
+        QMessageBox.warning(dialog, "Replace DEM Derivative", str(error))
+        return
+    dialog.log_message(f"Replaced {variable} in dem_derivatives.nc with {path}.")
+    project_tree.refresh(dialog)
+
+
 # --- Result display -------------------------------------------------------
 
-DISPLAY_KEYS = (
-    "dem",
-    "slope",
-    "aspect",
-    "flow_accumulation",
-    "flow_direction",
-    "idgauges",
-    "land_cover",
-    "soil",
-    "geology",
-    "lai",
-    "domain_mask",
-)
-
-
-def configure_morphology_display(dialog):
-    """Attach stable keys to the morphology display choices."""
-    combo = dialog.comboBox_morphVariableToDisplay
-    for index, key in enumerate(DISPLAY_KEYS[: combo.count()]):
-        combo.setItemData(index, key)
-    dialog.dateTimeEdit_forHistoricalInputs.setEnabled(False)
-
-
-def refresh_morphology_date_control(dialog) -> None:
-    """Enable the date selector only for historical land cover."""
-    editor = dialog.dateTimeEdit_forHistoricalInputs
-    periods = land_cover_periods(dialog.project_folder) if dialog.project_folder else []
-    enabled = dialog.comboBox_morphVariableToDisplay.currentData() == "land_cover" and len(periods) > 1
-    editor.setEnabled(enabled)
-    if not enabled:
-        return
-    from ...core.handlers.lookup.manifests import period_datetime
-    try:
-        first = min(period_datetime(p.get("start_time") or str(p["start_year"])) for p in periods)
-        last = max(period_datetime(p.get("end_time") or f'{p["end_year"]}-12-31T23:59:59') for p in periods)
-    except (KeyError, TypeError, ValueError):
-        editor.setEnabled(False)
-        return
-    editor.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
-    editor.setDateTimeRange(QDateTime(first), QDateTime(last))
-    editor.setDateTime(QDateTime(first))
-
-
-def display_selected_morphology_layer(dialog) -> None:
-    """Resolve the selected output and hand it to the QGIS renderer."""
-    if not dialog.project_folder:
-        QMessageBox.warning(dialog, "Display Layer", "Select a project folder first.")
-        return
-    key = dialog.comboBox_morphVariableToDisplay.currentData()
-    if not key:
-        QMessageBox.warning(dialog, "Display Layer", "Select a morphology layer.")
-        return
-    when = None
-    if dialog.dateTimeEdit_forHistoricalInputs.isEnabled():
-        when = dialog.dateTimeEdit_forHistoricalInputs.dateTime().toPyDateTime()
-    output = resolve_display_output(dialog.project_folder, key, when=when)
+def display_morphology(dialog, key) -> str:
+    """Show the prepared output for a `resolve_display_output` key: its layer name, "" when there is none."""
+    output = resolve_display_output(dialog.project_folder, key) if dialog.project_folder else None
     if output is None:
-        QMessageBox.warning(
-            dialog,
-            "Display Layer",
-            "The selected morphology output has not been prepared yet.",
-        )
-        return
+        return ""
     from ...qgis_bridge.display.morphology import show_output
 
     show_output(dialog, output)
+    return output.name
 
 
 def refresh_observation_stations(dialog):
@@ -473,12 +491,12 @@ def display_observation_discharge(dialog):
         QMessageBox.warning(dialog, "Discharge", str(error))
 
 
-def on_tab_changed(dialog, index):
-    """Refresh results when their tab is selected."""
-    dialog.log_message(f"Switched to '{dialog.tabWidget_steps.tabText(index)}' tab.")
-    # mHM reports nothing when it finishes, so the Outputs tab re-reads the
+def on_page_changed(dialog, page):
+    """Refresh results when their page is shown."""
+    dialog.log_message(f"Switched to '{dialog.tabWidget_steps.tabText(0)}'.")
+    # mHM reports nothing when it finishes, so the Outputs page re-reads the
     # runs each time it is shown.
-    if dialog.tabWidget_steps.widget(index) is dialog.tab_outputs:
+    if page is dialog.tab_outputs:
         from . import post_context
 
         post_context.populate(dialog)

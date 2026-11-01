@@ -14,11 +14,11 @@ from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 from ...core.handlers.store.paths import workspace_folder
 from ...qgis_bridge import layers as qgis_layers
-from ...qgis_bridge.display import meteo as meteo_display
+from .. import project_tree
 from ..bindings.main import bind as bind_main_form
 from ..controllers import categorical, grid, input_state
 from ..controllers import main as main_controller
-from ..controllers import post_context, workflow_state
+from ..controllers import post_context, process_cases, workflow_state
 from ..threads.task_coordinator import TaskCoordinator
 from ..ui import load_form
 from ..workflows.morphology import MorphologyTaskBridge
@@ -57,6 +57,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._intro_answers = {}
         self._multi_domains = None
         self._intro_pending = False
+        self._process_cases = {}  # Settings page: process -> case chosen this session
         self._preferred_l1_resolution = None
         self._preferred_l11_resolution = None
 
@@ -78,28 +79,23 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.task_coordinator.log.connect(lambda _key, message: self.log_message(message))
 
         main_controller.configure_input_adapters(self)
-        main_controller.configure_morphology_display(self)
         self.spinBox_L2ResolutionMultiplier.setMinimum(1)
         self.spinBox_L2ResolutionMultiplier.setMaximum(1_000_000)
-        self.pushButton_executeAllMeteo.setToolTip(
-            "Prepare meteorology forcing on the saved common L2 grid"
-        )
         self.lineEdit_precipitationGlobDefinition.setText("*.nc")
         self.comboBox_mhmWorkType.setCurrentIndex(0)
         self.comboBox_mhmWorkType.model().item(2).setEnabled(False)  # mRM only: not yet
         self.stackedWidget_configuration.setCurrentWidget(self.page_singleDomain)
-        self.tabWidget_steps.setCurrentIndex(0)
-        workflow_state.capture_button_styles(self)
         self.morphology_tasks = MorphologyTaskBridge(self)
-
+        project_tree.build(self)  # before the styles: its ▶ buttons are workflow buttons
+        workflow_state.capture_button_styles(self)
         bind_main_form(self)
+        process_cases.inputs(self)
         self.connect_input_state_teardown_guards()
         project_crs = QgsProject.instance().crs()
         if project_crs.isValid():
             self.mProjectionSelectionWidget_crs.setCrs(project_crs)
         self.refresh_input_sources()
         self.update_gauged_outlet_count()
-        meteo_display.refresh(self)
         post_context.clear(self)
         grid.refresh_precipitation_folder(self)
         grid.refresh_grid_resolution_controls(self)

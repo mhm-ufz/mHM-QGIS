@@ -17,9 +17,10 @@ from types import SimpleNamespace
 
 import numpy as np
 from qgis.PyQt.QtCore import QDate, QSignalBlocker, QTimer
-from qgis.PyQt.QtWidgets import QInputDialog, QMenu, QMessageBox, QVBoxLayout
+from qgis.PyQt.QtWidgets import QInputDialog, QMenu, QMessageBox, QVBoxLayout, QWidget
 
 from ...core.post import cache, runs
+from .. import project_tree
 from ..docks import host
 from ..objects.analysis_context import AnalysisContext
 from ..workflows import post as work
@@ -47,7 +48,9 @@ class PostState:
     panels: dict = field(default_factory=dict)     # central panel name -> page over the canvas
     docks: dict = field(default_factory=dict)      # side dock name -> QgsDockWidget
     toolbar: object = None
+    axis: tuple | None = None     # (intervals, step(index)) the time toolbar is on: the run's or a forcing's
     view: str | None = None
+    chosen: str | None = None     # the analysis last picked in the project tree
     workspace: bool = False
 
 
@@ -113,18 +116,15 @@ def bind(dialog) -> None:
         lambda text: context.set("resolution", text.lower()))
     # pushButton_postRefresh → populate (rescan)
     dialog.pushButton_postRefresh.clicked.connect(lambda: populate(dialog, rescan=True))
-    # listWidget_postNavigation → view_selected (arranges the host window for the view)
-    dialog.listWidget_postNavigation.currentRowChanged.connect(lambda _row: view_selected(dialog))
-    dialog.listWidget_postNavigation.itemClicked.connect(lambda _item: view_selected(dialog))  # brings a panel back
-    # pushButton_postWorkspace → workspace on/off; pushButton_postResetLayout → reset_layout
-    dialog.pushButton_postWorkspace.toggled.connect(lambda on: workspace(dialog, on))
-    dialog.pushButton_postResetLayout.clicked.connect(lambda: reset_layout(dialog))
+    # The analysis rows, the eye and the ↺ of "4. Outputs" are in the project tree (project_tree.clicked).
     # toolButton_postExport → its menu: export the shown view, archive the current run
     from . import post_export
 
     post_export.bind(dialog)
     dialog.task_coordinator.changed.connect(lambda: work.show_progress(dialog))
     context.set("resolution", "native")
+    if dialog.iface is not None:  # in QGIS's toolbars from the start; the standalone map window has it once used
+        host.time_toolbar(dialog, _toolbar_created)
 
 
 def _created(dialog, name) -> None:
@@ -154,11 +154,11 @@ def _created(dialog, name) -> None:
 
 def _toolbar_created(dialog) -> None:
     """The time controls: slider (debounced), steps, play."""
-    ui, context = dialog._post.ui, dialog._post.context
+    ui = dialog._post.ui
     debounce = QTimer(dialog._post.toolbar)
     debounce.setSingleShot(True)
     debounce.setInterval(50)
-    debounce.timeout.connect(lambda: context.set("current_time", ui.horizontalSlider_postTime.value()))
+    debounce.timeout.connect(lambda: dialog._post.axis and dialog._post.axis[1](ui.horizontalSlider_postTime.value()))
     ui.horizontalSlider_postTime.valueChanged.connect(lambda _value: debounce.start())
     ui.horizontalSlider_postTime.valueChanged.connect(lambda value: _show_time(dialog, value))
     ui.toolButton_postStepBack.clicked.connect(lambda: step(dialog, -1))
@@ -175,15 +175,13 @@ def workspace(dialog, on) -> None:
     state = dialog._post
     if on == state.workspace:
         return
-    with QSignalBlocker(dialog.pushButton_postWorkspace):
-        dialog.pushButton_postWorkspace.setChecked(on)
+    project_tree.set_view(dialog, "outputs", on)
     if on:
         state.workspace = True
         host.begin(dialog)
-        host.time_toolbar(dialog, _toolbar_created)
-        view = host.view_for(getattr(dialog.listWidget_postNavigation.currentItem(), "text", lambda: "")())
-        if view:
-            _show_view(dialog, view)
+        _sync_time_bar(dialog)
+        if state.chosen:
+            _show_view(dialog, state.chosen)
         return
     from . import post_map
 
@@ -191,15 +189,14 @@ def workspace(dialog, on) -> None:
     post_map.leave(dialog)
     host.end(dialog)
     state.workspace, state.view, state.dirty = False, None, {}
-    state.ui = SimpleNamespace()
+    state.ui = SimpleNamespace(**{name: widget for name, widget in vars(state.ui).items()
+                                  if isinstance(widget, QWidget) and state.toolbar.isAncestorOf(widget)})
     state.widgets = {"pending": state.widgets.get("pending", {})}
 
 
-def view_selected(dialog) -> None:
-    item = dialog.listWidget_postNavigation.currentItem()
-    view = host.view_for(item.text()) if item is not None else None
-    if view is None:
-        return
+def view_selected(dialog, view) -> None:
+    """An analysis picked in the project tree: shown, turning the analysis layout on first."""
+    dialog._post.chosen = view
     if not dialog._post.workspace:
         workspace(dialog, True)  # applies the selected view
         return
@@ -274,7 +271,7 @@ def clear(dialog) -> None:
     """Forget the open run (another setup was opened); the analysis layout ends."""
     state = dialog._post
     end_workspace(dialog)
-    for name in ("run", "root", "intervals", "axes"):
+    for name in ("run", "root", "intervals", "axes", "axis"):
         setattr(state, name, None)
     state.refs, state.gauges, state.findings, state.index, state.dirty = [], [], [], {}, {}
     with QSignalBlocker(state.context):
@@ -282,6 +279,7 @@ def clear(dialog) -> None:
         state.context.set("resolution", dialog.comboBox_postResolution.currentText().lower())
     dialog.comboBox_postRun.clear()
     dialog.comboBox_postBasin.clear()
+    project_tree.outputs_shown(dialog, False)
     from . import post_balance
 
     post_balance.refresh_overview(dialog, {"run"})
@@ -392,6 +390,7 @@ def _ready(dialog, ref, run, findings, gauges, exact) -> None:
         context.set("current_time", 0)
         context.set("cell", None)
     _sync_time_bar(dialog)
+    project_tree.outputs_shown(dialog, True)
     if not context.set("run", ref):
         changed(dialog, "run")  # the same run, rescanned
 
@@ -425,26 +424,34 @@ def step(dialog, delta, playing=False) -> None:
 
 
 def _sync_time_bar(dialog) -> None:
-    """Put the time toolbar (when shown) on the run's intervals and the current time."""
+    """Put the time toolbar on the run's intervals and current time."""
     state = dialog._post
-    slider = getattr(state.ui, "horizontalSlider_postTime", None)
-    if slider is None or state.intervals is None:
-        return
+    if state.intervals is not None:
+        time_axis(dialog, state.intervals, lambda value: state.context.set("current_time", value),
+                  int(state.context.get("current_time") or 0))
+
+
+def time_axis(dialog, intervals, step, value=0) -> None:
+    """The time toolbar on `intervals` ((T, 2) datetime64); moving it calls `step(index)`."""
+    state = dialog._post
+    host.time_toolbar(dialog, _toolbar_created)
+    state.axis = (intervals, step)
+    slider = state.ui.horizontalSlider_postTime
     with QSignalBlocker(slider):
-        slider.setRange(0, len(state.intervals) - 1)
-        slider.setValue(int(state.context.get("current_time") or 0))
+        slider.setRange(0, len(intervals) - 1)
+        slider.setValue(value)
     _show_time(dialog, slider.value())
 
 
 def _show_time(dialog, value) -> None:
-    intervals, ui = dialog._post.intervals, dialog._post.ui
-    if intervals is None or not 0 <= value < len(intervals) or not hasattr(ui, "dateTimeEdit_postTime"):
+    axis, ui = dialog._post.axis, dialog._post.ui
+    if axis is None or not 0 <= value < len(axis[0]) or not hasattr(ui, "dateTimeEdit_postTime"):
         return
     from qgis.PyQt.QtCore import QDateTime, Qt
 
     with QSignalBlocker(ui.dateTimeEdit_postTime):
         ui.dateTimeEdit_postTime.setDateTime(
-            QDateTime.fromString(str(intervals[value, 0].astype("datetime64[s]")), Qt.DateFormat.ISODate))
+            QDateTime.fromString(str(axis[0][value, 0].astype("datetime64[s]")), Qt.DateFormat.ISODate))
 
 
 def _qdate(moment) -> QDate:

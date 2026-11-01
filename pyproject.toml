@@ -98,6 +98,7 @@ mhm_qgis = [
     "nml-schemas/**/*.toml",
     "**/*.yml",
     "**/*.png",
+    "**/*.svg",
     "**/*.qm",
     "**/*.ui",
 ]

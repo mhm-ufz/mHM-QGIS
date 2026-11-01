@@ -80,7 +80,7 @@ confirm its metadata dialog to scan and establish the common grid. Add other
 meteorology variables through the same dialog. Choose simulation dates and
 catchments; no selected catchments means valid DEM cells.
 
-Run **Execute All Morphology**, then **Execute All Meteorology**. Review inputs,
+Run **▶** on *A. Morphology*, then on *B. Meteorology* in the project tree. Review inputs,
 edit namelists, and run mHM. Each setup is one model domain and may contain
 disconnected catchments. Meteorology preparation preserves input cadence,
 converts units and optionally deaccumulates running totals. Historical land-use

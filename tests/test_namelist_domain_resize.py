@@ -92,8 +92,8 @@ def test_multi_domain_editor_uses_one_combined_project_request(tmp_path, monkeyp
         initial_values=values,
         initial_dimensions={"n_domains": 1},
     ) == 0
-    ((schemas, requests), kwargs) = calls[0]
-    assert schemas == SCHEMAS
+    ((config, requests), kwargs) = calls[0]
+    assert config == SCHEMAS / "nml-config.toml"
     assert kwargs == {}
     assert len(requests) == 1
     request = requests[0]

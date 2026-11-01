@@ -1,4 +1,4 @@
-"""Meteorology workflow started by ``pushButton_executeAllMeteo``."""
+"""Meteorology workflow started by the ▶ of B. Meteorology in the project tree."""
 from pathlib import Path
 
 from ...core.executions import meteo

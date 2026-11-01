@@ -517,6 +517,16 @@ def update_l11_resolution_label(dialog):
     update_latlon_button_state(dialog)
 
 
+def show_resolution_summary(dialog):
+    """The Resolution page's L0 and L2 rows: L2 is L0 times the L2 multiplier."""
+    l0, factor = current_l0_resolution(dialog), dialog.spinBox_L2ResolutionMultiplier.value()
+    dialog.spinBox_resL2Multiplier.setValue(factor)
+    dialog.label_resL0Value.setText(f"{l0:g}" if l0 else "-")
+    dialog.label_resL2Value.setText(f"{l0 * factor:g}" if l0 else "-")
+    for label in (dialog.label_resL0Unit, dialog.label_resL2Unit):
+        label.setText(dialog.label_L0ResolutionUnit.text() if l0 else "")
+
+
 def current_l0_resolution(dialog):
     """Return the current L0 cell size, unrounded when it is known."""
     if dialog._grid_l0_info:

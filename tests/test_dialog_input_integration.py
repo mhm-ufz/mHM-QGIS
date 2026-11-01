@@ -21,6 +21,7 @@ from mhm_qgis.core.handlers.state import processing
 from mhm_qgis.core.handlers.store.paths import data_folder
 from mhm_qgis.core.handlers.store.layout import input_state_path
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
+from mhm_qgis.qt import project_tree
 from mhm_qgis.qt.controllers import main, workflow_state
 # isort: on
 
@@ -60,28 +61,18 @@ def test_dialog_prerequisites_keep_required_and_optional_input_checks(monkeypatc
         assert messages == ([] if expected_message is None else [expected_message])
 
 
-def test_dialog_maps_new_combos_and_discovers_relative_project_files(tmp_path):
+def test_dialog_maps_new_combos_and_lists_no_project_files(tmp_path):
     _app()
-    raster = tmp_path / "0 GIS" / "dem.tif"
-    raster.parent.mkdir()
-    raster.touch()
-    excluded = tmp_path / "mhm-qgis" / "ignored.tif"
-    excluded.parent.mkdir()
-    excluded.touch()
+    (tmp_path / "dem.tif").touch()
 
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
-    dialog.checkBox_enableFolderSearch.setChecked(True)
     dialog.refresh_input_sources()
 
     assert isinstance(dialog.input_combo("dem"), InputComboAdapter)
     assert dialog.input_combo("dem").combo_box is dialog.comboBox_demInput
-    labels = [
-        dialog.comboBox_demInput.itemText(index)
-        for index in range(dialog.comboBox_demInput.count())
-    ]
-    assert "0 GIS/dem.tif" in labels
-    assert all("mhm-qgis" not in label for label in labels)
+    labels = [dialog.comboBox_demInput.itemText(index) for index in range(dialog.comboBox_demInput.count())]
+    assert "dem.tif" not in labels  # only layers loaded in QGIS, and browsed files
     dialog.close()
 
 
@@ -108,12 +99,10 @@ def test_main_configuration_buttons_use_dialog_first_controller(monkeypatch):
     dialog.close()
 
 
-def test_morphology_display_wiring_selects_historical_band(tmp_path, monkeypatch):
-    from qgis.PyQt.QtCore import QDate
-
+def test_the_land_use_eye_shows_the_prepared_periods(tmp_path, monkeypatch):
     from mhm_qgis.core.handlers.state.nml_settings import update_section
     from mhm_qgis.qgis_bridge.display import morphology
-    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt import project_tree
 
     _app()
     output = tmp_path / "lc_periods.nc"
@@ -125,32 +114,18 @@ def test_morphology_display_wiring_selects_historical_band(tmp_path, monkeypatch
             {"start_year": 2000, "end_year": 2010},
         ],
     })
-    rendered, warnings = [], []
+    rendered = []
     monkeypatch.setattr(
         morphology, "show_raster",
         lambda owner, path, name, **options: rendered.append((path, options)),
     )
-    monkeypatch.setattr(
-        main.QMessageBox, "warning", lambda *args: warnings.append(args[-1]),
-    )
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
-    combo = dialog.comboBox_morphVariableToDisplay
-    editor = dialog.dateTimeEdit_forHistoricalInputs
-    combo.setCurrentIndex(combo.findData("land_cover"))
-    assert editor.isEnabled()
-    assert editor.minimumDate() == QDate(1990, 1, 1)
-    assert editor.maximumDate() == QDate(2010, 12, 31)
-    editor.setDate(QDate(2005, 1, 1))
-    dialog.pushButton_morphLayerDisplay.click()
-    assert rendered == [(output, {
-        "variable": "land_cover", "band": 2, "is_raster": True,
-    })]
-    combo.setCurrentIndex(combo.findData("dem"))
-    assert not editor.isEnabled()
-    dialog.pushButton_morphLayerDisplay.click()
-    assert warnings == ["The selected morphology output has not been prepared yet."]
-    assert len(rendered) == 1
+    project_tree.refresh(dialog)
+    assert project_tree.item(dialog, "lc").text(project_tree.STATUS_COLUMN) == "✅"
+    project_tree.view(dialog, "lc", True)
+    assert [(path, options["variable"]) for path, options in rendered] == [(output, "land_cover")]
+    assert main.display_morphology(dialog, "dem") == ""  # not prepared
     dialog.close()
 
 
@@ -166,26 +141,27 @@ def test_project_without_saved_state_clears_previous_project_inputs(tmp_path):
     dialog = MhmQgisDialog()
     dialog.project_folder = str(first_project)
     dialog._categorical_ready_configs["soil"] = {"input_path": str(raster)}
-    dialog.comboBox_soil_inputType.setCurrentIndex(1)
+    dialog._categorical_modes["soil"] = "Single Categorical Layer (with Lookup Table)"
+    main.check(dialog, "soil", dialog._categorical_modes["soil"])
     dialog.comboBox_pourPointOutletID.addItem("old_id")
     dialog.comboBox_pourPointOutletID.setCurrentText("old_id")
-    dialog.comboBox_domainDefinitionType.setCurrentIndex(0)
+    dialog._domain_definition_mode = main.DOMAIN_TYPES[0]
+    main.check(dialog, "domainDefinition", main.DOMAIN_TYPES[0])
     dialog._categorical_lookup_configs["soil"] = {
         "lookup_table": str(first_project / "soil.csv"),
         "mapping_field": "source",
         "class_field": "class",
     }
-    dialog.checkBox_enableFolderSearch.setChecked(True)
 
     dialog.project_folder = str(second_project)
     dialog.load_input_state()
 
     assert dialog._categorical_ready_configs == {}
-    assert dialog.comboBox_soil_inputType.currentIndex() == -1
+    assert dialog.categorical_input_mode("soil") == ""
+    assert dialog.buttonGroup_soil.checkedButton() is None
     assert dialog.categorical_lookup_config("soil") is None
-    assert not dialog.checkBox_enableFolderSearch.isChecked()
     assert main.selected_outlet_id_field(dialog) == ""
-    assert dialog.comboBox_domainDefinitionType.currentIndex() == -1
+    assert dialog.buttonGroup_domainDefinition.checkedButton() is None
     dialog.close()
 
 
@@ -211,7 +187,7 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     assert main.selected_outlet_ids(dialog) == ["1", "2"]
 
     dialog.comboBox_pourPointOutletID.setCurrentText("outlet_name")
-    dialog.comboBox_domainDefinitionType.setCurrentIndex(0)
+    dialog._domain_definition_mode = main.DOMAIN_TYPES[0]
     dialog.save_input_state()
     dialog.close()
 
@@ -233,7 +209,7 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
 
     assert main.selected_outlet_id_field(restored) == "outlet_name"
     assert main.selected_outlet_ids(restored) == ["upper", "lower"]
-    assert restored.comboBox_domainDefinitionType.currentIndex() == 0
+    assert restored.buttonGroup_domainDefinition.checkedButton().text() == main.DOMAIN_TYPES[0]
     restored.close()
 
 
@@ -298,7 +274,7 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     restored.project_folder = str(tmp_path)
     workflow_state.refresh_all(restored)
 
-    assert "#2e7d32" in restored.pushButton_executeAllMeteo.styleSheet()
+    assert "#2e7d32" in project_tree.button(restored, "meteorology").styleSheet()
     restored.close()
 
 
@@ -335,8 +311,6 @@ def test_meteorology_completion_is_independent_of_latlon(tmp_path):
     restored.project_folder = str(tmp_path)
     workflow_state.refresh_all(restored)
 
-    assert "#2e7d32" in (
-        restored.pushButton_executeAllMeteo.styleSheet()
-    )
+    assert "#2e7d32" in project_tree.button(restored, "meteorology").styleSheet()
     assert processing.workflow(tmp_path, "execute_all_meteo")["status"] == "completed"
     restored.close()

@@ -88,13 +88,14 @@ def test_edit_namelists_forwards_project_values_and_dimensions(
     monkeypatch.setattr(
         nml_tools.gui,
         "launch_gui",
-        lambda schemas, requests: calls.append({"schemas_dir": schemas, **vars(requests[0])}) or 0,
+        lambda config, requests: calls.append({"config_path": config, **vars(requests[0])}) or 0,
     )
 
     assert controller_module.edit_namelists(dialog) is True
     assert prepared == [(str(tmp_path), "5.13")]
     assert calls == [{
-        "schemas_dir": Path(__file__).parents[1] / "src/mhm_qgis/nml-schemas/v5.13",
+        "config_path": Path(__file__).parents[1]
+        / "src/mhm_qgis/nml-schemas/v5.13/nml-config.toml",
         "project_profile": "v5",
         "output_dir": Path(workspace_folder(tmp_path)),
         "file_profiles": None,

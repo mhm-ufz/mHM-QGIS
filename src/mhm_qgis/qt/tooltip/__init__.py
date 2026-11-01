@@ -93,7 +93,6 @@ class Tour(QFrame):
         self.next.clicked.connect(lambda: self.show_step(self.index + 1))
         self.help.clicked.connect(self._open_help)
         self.done.clicked.connect(self.close)
-        dialog.tabWidget_steps.currentChanged.connect(self.close)
         for stack in dialog.findChildren(QStackedWidget):
             stack.currentChanged.connect(self.close)
         dialog.installEventFilter(self)

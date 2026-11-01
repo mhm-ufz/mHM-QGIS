@@ -1,0 +1,296 @@
+"""The project tree: each row shows its page of `stackedWidget_project` in the dialog's
+one tab (`tab_project`), titled after the row.
+
+Rows are made in Designer; `tree.yml` gives each its key, page, status, inputs, display
+and action, matched by title. Columns: name | status | add, edit or run | eye.
+"""
+from __future__ import annotations
+
+from functools import cache
+from pathlib import Path
+
+import yaml
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QHeaderView, QPushButton
+
+COLUMNS = ("Project structure", "", "", "")  # name | status | add/edit/run | view
+STATUS_COLUMN, ACTION, VIEW = 1, 2, 3
+SYMBOLS = {"empty": ("⚪", "Empty: no inputs added"),
+           "added": ("🟢", "Inputs added, not processed yet"),
+           "processed": ("✅", "Processed")}
+ICONS = Path(__file__).parents[1] / "ui" / "forms" / "Resources"
+
+
+@cache
+def load() -> dict:
+    """`tree.yml` as {title: node}, nested rows included."""
+    nodes, pending = {}, list(yaml.safe_load(Path(__file__).with_name("tree.yml").read_text(encoding="utf-8"))["nodes"])
+    while pending:
+        node = pending.pop()
+        nodes[node["title"]] = node
+        pending += node.get("children", [])
+    return nodes
+
+
+def _node(row) -> dict:
+    return load()[row.text(0)]
+
+
+def _inputs(node) -> list:
+    value = node.get("input", [])
+    return value if isinstance(value, list) else [value]
+
+
+def _rows(dialog, top=None):
+    tree = dialog.treeWidget_projectStructure
+    pending = [top] if top else [tree.topLevelItem(i) for i in reversed(range(tree.topLevelItemCount()))]
+    while pending:
+        row = pending.pop()
+        yield row
+        pending += [row.child(i) for i in reversed(range(row.childCount()))]
+
+
+def _intro(dialog, _node):
+    return "processed" if dialog._intro_answers else "empty"
+
+
+def _project_setup(dialog, _node):
+    folder = dialog.lineEdit_ProjectFolder.text().strip()
+    return "processed" if folder and Path(folder).is_dir() else "empty"
+
+
+def _gauges(dialog, _node):
+    return "added" if dialog.comboBox_pourPointInput.currentIndex() >= 0 and dialog.comboBox_pourPointOutletID.currentText().strip() else "empty"
+
+
+def _categorical(dialog, node):
+    return "added" if dialog._categorical_modes.get(node["key"]) else "empty"
+
+
+def _domain(dialog, _node):
+    return "added" if dialog._domain_definition_mode else "empty"
+
+
+def _meteo(dialog, node):
+    return "added" if node["key"].removeprefix("meteo_") in dialog._meteo_inputs else "empty"
+
+
+STATUS = {"intro": _intro, "project_setup": _project_setup, "gauges": _gauges,
+          "categorical": _categorical, "domain": _domain, "meteo": _meteo}
+
+
+def _state(dialog, node):
+    """processed, added or empty; None for a row without a status."""
+    if not ({"status", "display", "input"} & node.keys()):
+        return None
+    findings = dialog._input_findings
+    if any(findings[name].ok for name in _inputs(node) if name in findings):
+        return "processed"
+    if "display" in node and dialog.project_folder:
+        from ...core.handlers.store.morphology import resolve_display_output
+
+        if resolve_display_output(dialog.project_folder, node["display"]) is not None:
+            return "processed"
+    rule = STATUS.get(node.get("status"))
+    return rule(dialog, node) if rule else "empty"
+
+
+def build(dialog) -> None:
+    """Columns, keys on the Designer rows, statuses, and Project Configuration selected."""
+    from ..controllers import post_context
+
+    dialog._input_findings, dialog._viewed = {}, {}
+    tree = dialog.treeWidget_projectStructure
+    tree.setColumnCount(len(COLUMNS))
+    tree.setHeaderLabels(COLUMNS)
+    header = tree.header()
+    header.setStretchLastSection(False)
+    header.setMinimumSectionSize(28)
+    header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+    for column in (STATUS_COLUMN, ACTION, VIEW):
+        header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
+        tree.setColumnWidth(column, 28)
+    for row in _rows(dialog):
+        row.setData(0, Qt.ItemDataRole.UserRole, _node(row)["key"])
+    tree.expandAll()
+    dialog.splitter.setSizes([260, 900])
+    _action(dialog, item(dialog, "outputs"), "↺", "Reset the view's layout", lambda: post_context.reset_layout(dialog))
+    set_view(dialog, "outputs", False)
+    outputs_shown(dialog, False)
+    refresh(dialog)
+    tree.setCurrentItem(item(dialog, "project_configuration"))
+    select(dialog, tree.currentItem())
+
+
+def _action(dialog, row, symbol, tip, slot):
+    """The row's button in the action column, made on first use."""
+    tree = dialog.treeWidget_projectStructure
+    button = tree.itemWidget(row, ACTION)
+    if button is None:
+        button = QPushButton()
+        button.setFlat(True)
+        button.setFixedSize(24, 24)
+        button.clicked.connect(lambda _checked=False: slot())
+        tree.setItemWidget(row, ACTION, button)
+    button.setText(symbol)
+    button.setToolTip(tip)
+    return button
+
+
+def button(dialog, key):
+    """The row's action button (▶ of A. Morphology / B. Meteorology for `workflow_state`)."""
+    return dialog.treeWidget_projectStructure.itemWidget(item(dialog, key), ACTION)
+
+
+def item(dialog, key):
+    """The row with `key`, or None."""
+    return next((row for row in _rows(dialog) if row.data(0, Qt.ItemDataRole.UserRole) == key), None)
+
+
+def select(dialog, row) -> None:
+    """Show the row's page in `tab_project`, titled after it; a row without one selects its
+    first child, and an analysis row also shows its view."""
+    if row is None:
+        return
+    node = _node(row)
+    if "page" not in node:
+        dialog.treeWidget_projectStructure.setCurrentItem(row.child(0))
+        return
+    from ..controllers import categorical, forcing, grid, intro, main, process_cases
+
+    key = node["key"]
+    if key in categorical.KINDS:
+        categorical.show(dialog, key)
+    elif key.startswith("meteo_"):
+        forcing.show_meteo_input(dialog, key.removeprefix("meteo_"))
+    elif node["page"] == "page_demDerivatives":
+        main.show_dem_derivatives(dialog, node.get("input"))
+    else:
+        hook = {"intro": intro.embed, "resolution": grid.show_resolution_summary, "settings": process_cases.show}
+        if key in hook:
+            hook[key](dialog)
+    dialog.tabWidget_steps.setTabText(0, node["title"])
+    dialog.stackedWidget_project.setCurrentWidget(getattr(dialog, node["page"]))
+    if "analysis" in node:
+        from ..controllers import post_context
+
+        post_context.view_selected(dialog, node["analysis"])
+
+
+def clicked(dialog, row, column) -> None:
+    """The eye: the Outputs row's toggles the analysis layout, a processed input's its layer;
+    clicking an analysis row again brings its panel back (QGIS shows the canvas when a layer
+    is added)."""
+    from ..controllers import post_context
+
+    key, node = row.data(0, Qt.ItemDataRole.UserRole), _node(row)
+    if key == "outputs" and column == VIEW:
+        post_context.workspace(dialog, not dialog._post.workspace)
+    elif column == VIEW and not row.icon(VIEW).isNull():
+        view(dialog, key, key not in dialog._viewed)
+    elif "analysis" in node:
+        select(dialog, row)
+
+
+def view(dialog, key, on) -> None:
+    """Show a processed input's layer (a forcing on the time toolbar), or hide it."""
+    from qgis.core import QgsProject
+
+    from ...qgis_bridge.layers.project import find_by_name
+
+    name = dialog._viewed.pop(key, "")
+    if on and key.startswith("meteo_"):
+        import numpy as np
+
+        from ...qgis_bridge.display import meteo
+        from ..controllers import post_context
+
+        variable = key.removeprefix("meteo_")
+        steps, name = meteo.show(dialog, variable)
+        if steps:
+            starts = np.array(steps, dtype="datetime64[s]")
+            post_context.time_axis(dialog, np.column_stack([starts, starts]),
+                                   lambda index: meteo.show(dialog, variable, index))
+    elif on:
+        from ..controllers import main
+
+        name = main.display_morphology(dialog, _node(item(dialog, key))["display"])
+    layer = find_by_name(name) if name else None
+    shown = layer and QgsProject.instance().layerTreeRoot().findLayer(layer.id())
+    if shown:
+        shown.setItemVisibilityChecked(on)
+    if on and name:
+        dialog._viewed[key] = name
+    set_view(dialog, key, key in dialog._viewed)
+
+
+def go_to(dialog, key) -> None:
+    """Select the row with `key` (the R buttons: where a value comes from)."""
+    dialog.treeWidget_projectStructure.setCurrentItem(item(dialog, key))
+
+
+def show_inputs(dialog, findings) -> None:
+    """Show only the input rows the process cases need (`datamodel.check` findings), then refresh."""
+    dialog._input_findings = {name: finding for finding in findings for name in finding.input.split("|")}
+    for row in _rows(dialog):
+        names = _inputs(_node(row))
+        if names:
+            row.setHidden(not any(name in dialog._input_findings for name in names))
+    refresh(dialog)
+
+
+def outputs_shown(dialog, on) -> None:
+    """The analysis rows, shown only while a run is open (a hidden group hides its rows)."""
+    for key in ("basics", "diagnostics", "advanced"):
+        item(dialog, key).setHidden(not on)
+
+
+def _run(dialog, key) -> None:
+    if key == "morphology":
+        dialog.morphology_tasks.start_execute_all()
+    else:
+        from ..workflows import meteorology
+
+        meteorology.start(dialog)
+
+
+def refresh(dialog) -> None:
+    """Every row's status, its add, edit or run button, and its eye when processed."""
+    from ..controllers import workflow_state
+
+    tree, runs = dialog.treeWidget_projectStructure, []
+    for row in _rows(dialog):
+        node = _node(row)
+        state = _state(dialog, node)
+        if state is not None:
+            symbol, meaning = SYMBOLS[state]
+            row.setText(STATUS_COLUMN, symbol)
+            row.setToolTip(STATUS_COLUMN, meaning)
+            row.setTextAlignment(STATUS_COLUMN, Qt.AlignmentFlag.AlignCenter)
+        if node.get("action") == "run":
+            runs.append(row)
+        elif node.get("action") == "edit":
+            derived = "status" not in node  # a DEM derivative: made by ▶, only replaced
+            edit = derived or state != "empty"
+            _action(dialog, row, "✏️" if edit else "\N{HEAVY PLUS SIGN}", "Edit" if edit else "Add",
+                    lambda row=row: tree.setCurrentItem(row)).setEnabled(not derived or state == "processed")
+            if state == "processed":
+                set_view(dialog, node["key"], node["key"] in dialog._viewed)
+            else:
+                row.setIcon(VIEW, QIcon())
+                dialog._viewed.pop(node["key"], None)
+    for row in runs:
+        needed = [child for child in _rows(dialog, row) if child is not row and not child.isHidden()
+                  and "status" in _node(child)]
+        ready = bool(dialog.project_folder) and all(child.text(STATUS_COLUMN) != "⚪" for child in needed)
+        key = _node(row)["key"]
+        _action(dialog, row, "▶", "Run", lambda key=key: _run(dialog, key)).setEnabled(
+            ready and workflow_state.running_key(dialog) is None)
+
+
+def set_view(dialog, key, visible) -> None:
+    """The row's eye: its data shown on the map, or hidden."""
+    row = item(dialog, key)
+    row.setIcon(VIEW, QIcon(str(ICONS / ("eye.svg" if visible else "eye-off.svg"))))
+    row.setToolTip(VIEW, "Shown on the map" if visible else "Hidden")

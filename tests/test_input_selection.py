@@ -24,10 +24,9 @@ from qgis.core import (
 from qgis.PyQt import QtWidgets
 
 from mhm_qgis.qt.dialogs.input_selection import (
-    EXCLUDED_PROJECT_FOLDERS,
     InputComboAdapter,
+    InputItem,
     loaded_qgis_items,
-    scan_project_inputs,
 )
 from mhm_qgis.qt.dialogs.lai_netcdf_input import LaiNetcdfInputDialog
 from mhm_qgis.qt.dialogs.mhm_ready_morph_input import MhmReadyInputDialog
@@ -54,62 +53,12 @@ def _touch(path: Path):
     return path
 
 
-def test_scanner_filters_case_insensitively_and_prunes_only_owned_roots(tmp_path):
-    wanted = _touch(tmp_path / "0 GIS" / "DEM.TIF")
-    nested_named_data = _touch(tmp_path / "inputs" / "data" / "nested.asc")
-    _touch(tmp_path / "0 GIS" / "ignore.shp")
-    for folder in EXCLUDED_PROJECT_FOLDERS:
-        _touch(tmp_path / folder / "excluded.tif")
-
-    items = scan_project_inputs(tmp_path, "dem")
-
-    assert [item.label for item in items] == [
-        "0 GIS/DEM.TIF",
-        "inputs/data/nested.asc",
-    ]
-    assert [item.data["path"] for item in items] == [
-        str(wanted.resolve()),
-        str(nested_named_data.resolve()),
-    ]
-
-
-def test_scanner_uses_input_specific_extensions(tmp_path):
-    for filename in (
-        "dem.nc",
-        "grid.asc",
-        "raster.tif",
-        "points.shp",
-        "table.csv",
-        "table.txt",
-    ):
-        _touch(tmp_path / filename)
-
-    assert {item.label for item in scan_project_inputs(tmp_path, "dem")} == {
-        "dem.nc",
-        "grid.asc",
-        "raster.tif",
-    }
-    assert [item.label for item in scan_project_inputs(tmp_path, "pour_points")] == [
-        "points.shp"
-    ]
-    assert {item.label for item in scan_project_inputs(tmp_path, "soil")} == {
-        "dem.nc",
-        "grid.asc",
-        "points.shp",
-        "raster.tif",
-    }
-    assert {item.label for item in scan_project_inputs(tmp_path, "lookup")} == {
-        "table.csv",
-        "table.txt",
-    }
-
-
 def test_adapter_returns_file_layer_without_adding_it_to_project(tmp_path):
     _app()
     raster = _raster(tmp_path / "dem.tif")
     combo = QtWidgets.QComboBox()
     adapter = InputComboAdapter(combo, "dem")
-    item = scan_project_inputs(tmp_path, "dem")[0]
+    item = InputItem("dem.tif", {"origin": "file", "kind": "dem", "path": str(raster.resolve())})
     adapter.addItem(item.label, item.data)
     before = dict(QgsProject.instance().mapLayers())
 
@@ -127,7 +76,7 @@ def test_adapter_opens_a_file_layer_once_per_file_version(tmp_path):
     _app()
     raster = _raster(tmp_path / "dem.tif")
     adapter = InputComboAdapter(QtWidgets.QComboBox(), "dem")
-    item = scan_project_inputs(tmp_path, "dem")[0]
+    item = InputItem("dem.tif", {"origin": "file", "kind": "dem", "path": str(raster.resolve())})
     adapter.addItem(item.label, item.data)
 
     first = adapter.currentLayer()
@@ -217,9 +166,8 @@ def test_single_layer_dialog_uses_loaded_qgis_layer(tmp_path):
         dialog.comboBox_inputLayer.setCurrentIndex(
             dialog.comboBox_inputLayer.findText("Loaded soil [unknown CRS]")
         )
-        dialog.lookup_table_combo.setCurrentIndex(
-            dialog.lookup_table_combo.findData(str(lookup.resolve()))
-        )
+        dialog.lookup_table_combo.addItem(lookup.name, str(lookup.resolve()))  # as the browse button adds it
+        dialog.lookup_table_combo.setCurrentIndex(dialog.lookup_table_combo.count() - 1)
         dialog.mapping_field_combo.setCurrentText("code")
         dialog.class_field_combo.setCurrentText("class_id")
 

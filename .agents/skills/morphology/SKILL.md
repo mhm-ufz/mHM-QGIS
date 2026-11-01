@@ -90,12 +90,15 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   for v6, then hands periods to nml-tools. Meteorology validates input coverage.
 - Scan establishes the common grid before either execution. `core/grid/raster.py`
   reads DEM metadata only (a warped VRT when CRS conversion is necessary).
-- `pushButton_executeAllMorphology` schedules `EXECUTE_ALL_STAGES`: NetCDF DEM
+- The ▶ of A. Morphology schedules `EXECUTE_ALL_STAGES`: NetCDF DEM
   derivatives, saved gauge positions, morphology mask, categorical inputs, LAI,
   then one version-aware publication stage. Snapping and delineation must already
   be saved by Domain Delineator. There are no late crop, per-outlet link or
   per-outlet DEM stages.
-- `pushButton_executeAllMeteo` runs only `core/executions/meteo`, never morphology.
+- The ▶ of B. Meteorology runs only `core/executions/meteo`, never morphology.
+- A DEM derivative's row can replace it in `dem_derivatives.nc` with a raster on the same
+  grid covering the whole DEM (`core/handlers/raster/tasks.override_derivative`); a new DEM
+  rebuilds the bundle and drops it.
 - DEM processing does not modify mHM-tools. Derive terrain on the real DEM first, then place all
   variables once on the common L0 extent in `.temp/Morphology/dem_derivatives.nc`.
   Extract `dem_filled` as the single raster variable `dem` in `filled_dem.nc` with
@@ -377,7 +380,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   it in the UI.
 - Clip/resample LAI to the filled DEM L0 grid. The filled DEM may be projected while LAI
   may be lat/lon.
-- **Execute All has one plan.** `pushButton_executeAllMorphology` goes to
+- **Execute All has one plan.** The ▶ of A. Morphology goes to
   `MorphologyTaskBridge.start_execute_all()`, which schedules
   `core/executions/morphology.EXECUTE_ALL_STAGES`. Every user-visible execution command,
   including snapping and gauge-position creation, must be represented in that API plan;

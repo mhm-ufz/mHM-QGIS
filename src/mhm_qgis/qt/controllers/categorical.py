@@ -1,16 +1,15 @@
-"""Land cover, soil, geology and LAI input types on the main form.
+"""Land cover, soil, geology and LAI input types on their project-tree pages.
 
-Choosing an input type opens its child dialog at once. Accepting stores the
-chosen source in one of the dialog's config dicts, which are the only record of
-it; cancelling restores the previous type.
+A radio picks the type and shows its dialog embedded below it; OK stores the chosen
+source in one of the dialog's config dicts, which are the only record of it, and
+commits the type. Cancel brings back the committed type's form.
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from qgis.PyQt.QtCore import QSignalBlocker
-from qgis.PyQt.QtWidgets import QDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QMessageBox
 
 from ...core.handlers.state.nml_settings import relative_workspace_path, update_section
 from ...core.handlers.store.layout import lai_folder, morph_folder
@@ -19,25 +18,29 @@ from ..dialogs import advanced_inputs
 from ..dialogs.lai_netcdf_input import LaiNetcdfInputDialog
 from ..dialogs.mhm_ready_morph_input import MhmReadyInputDialog
 from ..dialogs.single_layer_input import SingleLayerInputDialog
+from . import main
 from .grid import require_common_grid
-from .main import refresh_morphology_date_control
 from .workflow_state import invalidate_meteo
 
 KINDS = ("lc", "soil", "geology", "lai")
 _LABELS = {"lc": "land use", "soil": "soil", "geology": "geology", "lai": "LAI"}
+PAGES = {"lc": "landUse", "soil": "soil", "geology": "geology", "lai": "lai"}
+_READY, _LOOKUP = "mHM ready", "Single Categorical Layer (with Lookup Table)"
+MODES = {
+    "lc": (_READY, _LOOKUP, "Multi Historical Periods (with Lookup Table)"),
+    "soil": (_READY, _LOOKUP, "Multi-horizon Multi-variate Layers"),
+    "geology": (_READY, _LOOKUP),
+    "lai": (_READY, "NetCDF File", _LOOKUP),
+}
 
 
-def categorical_type_combo(dialog, kind):
-    return {
-        "lc": dialog.comboBox_landUseInputType,
-        "soil": dialog.comboBox_soil_inputType,
-        "geology": dialog.comboBox_geology_inputType,
-        "lai": dialog.comboBox_lai_inputType,
-    }[kind]
+def bind(dialog):
+    for kind in KINDS:
+        main.radios(dialog, PAGES[kind], MODES[kind], lambda text, kind=kind: show(dialog, kind, text))
 
 
 def categorical_input_mode(dialog, kind):
-    return categorical_type_combo(dialog, kind).currentText().strip()
+    return dialog._categorical_modes.get(kind, "")
 
 
 def categorical_source_config(dialog, kind):
@@ -58,83 +61,74 @@ def uses_advanced_categorical_input(dialog, kind):
     )
 
 
-def restore_categorical_mode(dialog, kind, text):
-    combo = categorical_type_combo(dialog, kind)
-    combo.blockSignals(True)
-    combo.setCurrentIndex(combo.findText(text) if text else -1)
-    combo.blockSignals(False)
-
-
-def handle_categorical_type(dialog, kind, text):
-    """Open the child dialog for the selected input type, then record it."""
-    text = str(text or "").strip()
-    previous = dialog._categorical_modes.get(kind, "")
-    if dialog._loading_input_state:
-        dialog._categorical_modes[kind] = text
-        return
-    if not dialog.project_folder:
+def show(dialog, kind, text=None):
+    """The kind's page: the form for `text` (a clicked radio), else the committed type's, filled in."""
+    if text and not dialog.project_folder:
         QMessageBox.warning(
             dialog,
             "Project Folder Required",
             f"Select a project folder before configuring {_LABELS[kind]} inputs.",
         )
-        restore_categorical_mode(dialog, kind, previous)
+        text = None
+    text = text or categorical_input_mode(dialog, kind)
+    main.check(dialog, PAGES[kind], text)
+    if not text or not dialog.project_folder:
+        main.embed(dialog, PAGES[kind], None)
         return
-    mode = text.lower()
+    child, result, apply = _form(dialog, kind, text)
+    child.accepted.connect(lambda: _commit(dialog, kind, text, getattr(child, result)(), apply))
+    child.rejected.connect(lambda: show(dialog, kind))
+    main.embed(dialog, PAGES[kind], child)
+
+
+def _form(dialog, kind, text):
+    """The child dialog for a type, the method giving its value, and how to apply that."""
+    mode, folder = text.lower(), dialog.project_folder
     if mode == "mhm ready":
-        accepted = _configure_ready(dialog, kind, previous)
-    elif kind == "lai" and "netcdf" in mode:
-        accepted = _configure_lai_netcdf(dialog, previous)
-    elif kind == "lc" and "single categorical" not in mode:
-        accepted = _configure_historical_land_use(dialog, text, previous)
-    elif kind == "soil" and "multi-horizon" in mode:
-        accepted = _configure_multi_horizon_soil(dialog, previous)
-    elif kind in ("lc", "lai") or "lookup table" in mode:
-        accepted = _configure_lookup(dialog, kind, previous)
-    else:
-        accepted = True
-    if not accepted:
+        return MhmReadyInputDialog(folder, kind, dialog, initial=dialog._categorical_ready_configs.get(kind)), \
+            "selected_config", _configure_ready
+    if kind == "lai" and "netcdf" in mode:
+        return LaiNetcdfInputDialog(folder, dialog, initial=dialog._lai_input_config), \
+            "selected_config", _configure_lai_netcdf
+    if kind == "lc" and "single categorical" not in mode:
+        return advanced_inputs.HistoricalLandUseDialog(
+            folder, dialog, initial=dialog._advanced_inputs.get("land_cover"), all_time="single layer" in mode,
+        ), "selected_input", _configure_historical_land_use
+    if kind == "soil" and "multi-horizon" in mode:
+        return advanced_inputs.MultiHorizonSoilDialog(folder, dialog, initial=dialog._advanced_inputs.get("soil")), \
+            "selected_input", _configure_multi_horizon_soil
+    return SingleLayerInputDialog(folder, kind, dialog, initial=dialog._categorical_lookup_configs.get(kind)), \
+        "selected_config", _configure_lookup
+
+
+def _commit(dialog, kind, text, value, apply):
+    """The accepted form hid itself: show the committed type again, then apply and commit `text`."""
+    show(dialog, kind)
+    if value is None or not apply(dialog, kind, value):
         return
     dialog._categorical_modes[kind] = text
+    show(dialog, kind)
     dialog.save_input_state()
     invalidate_meteo(dialog)
-    if kind == "lc":
-        refresh_morphology_date_control(dialog)
-    if mode == "mhm ready":
+    if text.lower() == "mhm ready":
         title = f'{"LAI" if kind == "lai" else kind.title()} ready input'
         dialog.morphology_tasks.start_ready_input(
             kind, failed=lambda message: QMessageBox.critical(dialog, title, str(message)),
         )
 
 
-def _accepted(dialog, kind, previous, child, result="selected_config"):
-    """Run a child dialog; restore the previous type unless it yields a value."""
-    value = getattr(child, result)() if child.exec() == QDialog.DialogCode.Accepted else None
-    if value is None:
-        restore_categorical_mode(dialog, kind, previous)
-    return value
-
-
-def _configure_ready(dialog, kind, previous):
+def _configure_ready(dialog, kind, config):
     try:
         require_common_grid(dialog)
     except ValueError as error:
         QMessageBox.warning(dialog, "Common Grid Required", str(error))
-        restore_categorical_mode(dialog, kind, previous)
-        return False
-    config = _accepted(dialog, kind, previous, MhmReadyInputDialog(
-        dialog.project_folder, kind, dialog,
-        initial=dialog._categorical_ready_configs.get(kind),
-    ))
-    if config is None:
         return False
     if kind == "lai" and ready_layers(config.input_path, getattr(config, "variable", "")) > 1:
         # A LAI series, not the class grid: the NetCDF File input takes it (with its time step).
         dialog._lai_input_config = {"input_path": config.input_path, "variable": config.variable,
                                     "source_crs": getattr(config, "source_crs", "")}
-        with QSignalBlocker(dialog.comboBox_lai_inputType):
-            dialog.comboBox_lai_inputType.setCurrentText("NetCDF File")
-        return _configure_lai_netcdf(dialog, previous)
+        show(dialog, "lai", "NetCDF File")
+        return False
     dialog._categorical_ready_configs[kind] = {
         "input_path": config.input_path,
         "classdefinition_path": getattr(config, "classdefinition_path", ""),
@@ -153,13 +147,7 @@ def _configure_ready(dialog, kind, previous):
     return True
 
 
-def _configure_lookup(dialog, kind, previous):
-    config = _accepted(dialog, kind, previous, SingleLayerInputDialog(
-        dialog.project_folder, kind, dialog,
-        initial=dialog._categorical_lookup_configs.get(kind),
-    ))
-    if config is None:
-        return False
+def _configure_lookup(dialog, kind, config):
     dialog._categorical_lookup_configs[kind] = {
         "input_path": config.input_path,
         "lookup_table": config.lookup_table,
@@ -185,12 +173,7 @@ def _configure_lookup(dialog, kind, previous):
     return True
 
 
-def _configure_lai_netcdf(dialog, previous):
-    config = _accepted(dialog, "lai", previous, LaiNetcdfInputDialog(
-        dialog.project_folder, dialog, initial=dialog._lai_input_config,
-    ))
-    if config is None:
-        return False
+def _configure_lai_netcdf(dialog, _kind, config):
     dialog._lai_input_config = {
         "input_path": config.input_path,
         "target_timestep": config.target_timestep,
@@ -222,26 +205,14 @@ def save_lai_nml_input(project_folder, config):
     })
 
 
-def _configure_historical_land_use(dialog, text, previous):
-    value = _accepted(dialog, "lc", previous, advanced_inputs.HistoricalLandUseDialog(
-        dialog.project_folder, dialog,
-        initial=dialog._advanced_inputs.get("land_cover"),
-        all_time="single layer" in text.lower(),
-    ), "selected_input")
-    if value is None:
-        return False
+def _configure_historical_land_use(dialog, _kind, value):
     dialog._advanced_inputs["land_cover"] = value
     dialog._land_cover_ready_source = ""
     save_land_cover_nml_input(dialog, value)
     return True
 
 
-def _configure_multi_horizon_soil(dialog, previous):
-    value = _accepted(dialog, "soil", previous, advanced_inputs.MultiHorizonSoilDialog(
-        dialog.project_folder, dialog, initial=dialog._advanced_inputs.get("soil"),
-    ), "selected_input")
-    if value is None:
-        return False
+def _configure_multi_horizon_soil(dialog, _kind, value):
     dialog._advanced_inputs["soil"] = value
     save_soil_nml_input(dialog, value)
     return True

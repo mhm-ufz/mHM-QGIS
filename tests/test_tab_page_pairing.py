@@ -4,6 +4,7 @@ import pytest
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from mhm_qgis.core.handlers.store.layout import METEO_VARIABLES
+from mhm_qgis.qt import project_tree
 from mhm_qgis.qt.controllers import grid
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
@@ -11,13 +12,14 @@ from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 def test_each_step_owns_its_controls():
     dialog = MhmQgisDialog()
     for tab, button in (
-        (dialog.tab_geometry, dialog.pushButton_executeAllMorphology),
-        (dialog.tab_meteo, dialog.pushButton_executeAllMeteo),
+        (dialog.tab_project, dialog.lineEdit_ProjectFolder),
+        (dialog.page_gauges, dialog.comboBox_pourPointInput),
+        (dialog.tab_meteo, dialog.tableWidget_meteoInputs),
         (dialog.tab_hydro, dialog.pushButton_observationDisplay_discharge),
         (dialog.tab_execution, dialog.pushButton_execute_mHM),
         (dialog.tab_outputs, dialog.pushButton_postRefresh),
     ):
-        dialog.tabWidget_steps.setCurrentWidget(tab)
+        dialog.stackedWidget_project.setCurrentWidget(tab)
         assert tab.isAncestorOf(button)
     assert not hasattr(dialog, "stackedWidget")
     dialog.close()
@@ -27,10 +29,10 @@ def test_work_type_switches_configuration_page():
     dialog = MhmQgisDialog()
     dialog.comboBox_mhmWorkType.setCurrentIndex(1)
     assert dialog.stackedWidget_configuration.currentWidget() is dialog.page_multiDomain
-    assert not dialog.tab_geometry.isEnabled()
+    assert project_tree.item(dialog, "inputs").isHidden()  # a combined setup prepares no inputs
     dialog.comboBox_mhmWorkType.setCurrentIndex(0)
     assert dialog.stackedWidget_configuration.currentWidget() is dialog.page_singleDomain
-    assert dialog.tab_geometry.isEnabled()
+    assert not project_tree.item(dialog, "inputs").isHidden()
     dialog.close()
 
 

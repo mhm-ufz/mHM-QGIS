@@ -14,7 +14,7 @@ from ...core.handlers.file import json as jsonio
 from ...core.handlers.store.layout import input_state_path
 from ...core.handlers.store.paths import portable_path, project_path
 from ...qgis_bridge import layers as qgis_layers
-from . import categorical, forcing, grid, main, model, time
+from . import categorical, forcing, grid, main, model, process_cases, time
 
 _PATH_KEYS = ("input_path", "lookup_table", "classdefinition_path")
 
@@ -102,8 +102,7 @@ def save(dialog):
             "l1_resolution": grid.current_l1_resolution(dialog),
             "l11_resolution": grid.current_l11_resolution(dialog),
         },
-        "lai_input_type": dialog.comboBox_lai_inputType.currentText(),
-        "folder_search": dialog.checkBox_enableFolderSearch.isChecked(),
+        "lai_input_type": categorical.categorical_input_mode(dialog, "lai"),
         "categorical_types": {
             kind: categorical.categorical_input_mode(dialog, kind)
             for kind in categorical.KINDS
@@ -127,7 +126,7 @@ def save(dialog):
         "meteo_inputs": meteo_inputs,
         "observation_inputs": dialog._observation_inputs,
         "pour_point_outlet_id_field": main.selected_outlet_id_field(dialog),
-        "domain_definition_type": dialog.comboBox_domainDefinitionType.currentText().strip(),
+        "domain_definition_type": dialog._domain_definition_mode,
         "crs_authid": crs.authid() if crs and crs.isValid() else "",
         "intro": dialog._intro_answers,
     }
@@ -135,6 +134,7 @@ def save(dialog):
         jsonio.write(path, state)
     except Exception as error:
         dialog.log_message(f"WARNING: Could not save input state: {error}")
+    process_cases.inputs(dialog)  # the tree's statuses and ▶ follow every input change
 
 
 def load(dialog):
@@ -166,7 +166,6 @@ def load(dialog):
             multi_domain.refresh_table(dialog)
             return
         _restore_resolution_preferences(dialog, state.get("grid_resolutions", {}))
-        _restore_combo_text(dialog.comboBox_lai_inputType, state.get("lai_input_type", ""))
         crs = QgsCoordinateReferenceSystem(state.get("crs_authid", "") or "")
         if crs.isValid():
             dialog.mProjectionSelectionWidget_crs.setCrs(crs)
@@ -182,6 +181,7 @@ def load(dialog):
         grid.refresh_grid_resolution_controls(dialog)
     finally:
         dialog._loading_input_state = False
+        process_cases.inputs(dialog)
         model.populate_run_names(dialog, "")
         main.refresh_observation_stations(dialog)
         if dialog._discharge_plot is not None:
@@ -194,13 +194,11 @@ def clear(dialog):
     dialog._multi_domains = None
     for _, combo in main.input_layer_widgets(dialog):
         combo.setCurrentIndex(-1)
-    for widget in (
-        *(categorical.categorical_type_combo(dialog, kind) for kind in categorical.KINDS),
-        dialog.comboBox_domainDefinitionType,
-        dialog.comboBox_precipitationFile,
-    ):
-        with QSignalBlocker(widget):
-            widget.setCurrentIndex(-1)
+    with QSignalBlocker(dialog.comboBox_precipitationFile):
+        dialog.comboBox_precipitationFile.setCurrentIndex(-1)
+    for name in (*categorical.PAGES.values(), "domainDefinition"):
+        main.check(dialog, name, "")
+        main.embed(dialog, name, None)
     with QSignalBlocker(dialog.comboBox_pourPointOutletID):
         dialog.comboBox_pourPointOutletID.clear()
         dialog.comboBox_pourPointOutletID.addItem("")
@@ -219,8 +217,6 @@ def clear(dialog):
     forcing.populate_meteo_table(dialog)
     forcing.populate_observation_table(dialog)
     grid.clear_precipitation_resolution_labels(dialog)
-    with QSignalBlocker(dialog.checkBox_enableFolderSearch):
-        dialog.checkBox_enableFolderSearch.setChecked(False)
     dialog._categorical_lookup_configs = {}
     dialog._categorical_ready_configs = {}
     dialog._lai_input_config = {}
@@ -239,19 +235,6 @@ def _restore_combo_text(combo, text):
         combo.setCurrentIndex(index)
 
 
-def _find_normalized(combo, text):
-    """Find `text`, ignoring case and treating `_` like a space."""
-    index = combo.findText(text)
-    if index >= 0:
-        return index
-    normalized = text.lower().replace("_", " ")
-    return next(
-        (candidate for candidate in range(combo.count())
-         if combo.itemText(candidate).lower().replace("_", " ") == normalized),
-        -1,
-    )
-
-
 def _restore_resolution_preferences(dialog, saved):
     """Remember saved L1/L11 choices for the next combo population."""
     for key, attribute in (
@@ -266,10 +249,8 @@ def _restore_resolution_preferences(dialog, saved):
 
 
 def _restore_categorical_inputs(dialog, state):
-    """Restore folder search, categorical modes, and their source configs."""
+    """Restore categorical modes and their source configs."""
     root = dialog.project_folder
-    with QSignalBlocker(dialog.checkBox_enableFolderSearch):
-        dialog.checkBox_enableFolderSearch.setChecked(bool(state.get("folder_search")))
     for attribute, key in (
         ("_categorical_lookup_configs", "categorical_lookups"),
         ("_categorical_ready_configs", "categorical_ready"),
@@ -282,13 +263,12 @@ def _restore_categorical_inputs(dialog, state):
     dialog._lai_input_config = _paths(state.get("lai_netcdf", {}), project_path, root)
     dialog.task_coordinator.set_max_threads(state.get("thread_count", 2))
 
-    for kind, text in state.get("categorical_types", {}).items():
-        if kind not in categorical.KINDS:
-            continue
-        combo = categorical.categorical_type_combo(dialog, kind)
-        index = _find_normalized(combo, str(text))
-        combo.setCurrentIndex(index)
-        dialog._categorical_modes[kind] = str(text) if index >= 0 else ""
+    for kind, text in {"lai": state.get("lai_input_type", ""), **state.get("categorical_types", {})}.items():
+        if kind in categorical.KINDS:  # saved texts may differ in case or use `_` for spaces
+            normalized = str(text).lower().replace("_", " ")
+            mode = next((mode for mode in categorical.MODES[kind] if mode.lower() == normalized), "")
+            dialog._categorical_modes[kind] = mode
+            main.check(dialog, categorical.PAGES[kind], mode)
 
     inputs = state.get("advanced_inputs", {})
     dialog._advanced_inputs = dict(inputs) if isinstance(inputs, dict) else {}
@@ -351,12 +331,10 @@ def _restore_domain_inputs(dialog, state):
     main.populate_pour_point_outlet_fields(
         dialog, preferred=preferred
     )
-    combo = dialog.comboBox_domainDefinitionType
     text = str(state.get("domain_definition_type", "") or "")
     if not text and state.get("dem_domain"):
-        text = combo.itemText(0)
-    with QSignalBlocker(combo):
-        combo.setCurrentIndex(combo.findText(text) if text else -1)
+        text = main.DOMAIN_TYPES[0]
+    main.check(dialog, "domainDefinition", text)
     dialog._domain_definition_mode = text
 
 

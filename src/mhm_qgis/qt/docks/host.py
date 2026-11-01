@@ -33,11 +33,6 @@ def layouts() -> dict:
     return yaml.safe_load(Path(__file__).with_name("layouts.yml").read_text(encoding="utf-8"))
 
 
-def view_for(title):
-    """The view key answering a navigation entry's text; None for a header."""
-    return next((key for key, spec in layouts()["views"].items() if spec["title"] == title), None)
-
-
 def settings() -> QSettings:
     return QSettings()
 
@@ -102,7 +97,7 @@ def part(dialog, name, on_create=None):
 
 
 def time_toolbar(dialog, on_create=None):
-    """The "mHM post time" toolbar, built from its form on first use."""
+    """The "mHM post time" toolbar, built from its form when the dialog opens."""
     state = dialog._post
     if state.toolbar is None:
         toolbar = QToolBar("mHM post time", window(dialog))
@@ -116,6 +111,15 @@ def time_toolbar(dialog, on_create=None):
         if on_create is not None:
             on_create(dialog)
     return state.toolbar
+
+
+def drop_time_toolbar(dialog) -> None:
+    """For unloading the plugin."""
+    state = dialog._post
+    if state.toolbar is not None:
+        window(dialog).removeToolBar(state.toolbar)
+        state.toolbar.deleteLater()
+        state.toolbar = None
 
 
 def central(view) -> str:
@@ -188,8 +192,8 @@ def begin(dialog) -> None:
 
 
 def end(dialog) -> None:
-    """Remove our panels (the canvas comes back), docks and toolbar, then restore the
-    user's layout."""
+    """Remove our panels (the canvas comes back) and docks, then restore the user's layout
+    (the time toolbar stays: inputs use it too)."""
     state, host = dialog._post, window(dialog)
     for page in state.panels.values():
         stack(dialog).removeWidget(page)
@@ -201,10 +205,7 @@ def end(dialog) -> None:
         else:
             host.removeDockWidget(created)
         created.deleteLater()
-    if state.toolbar is not None:
-        host.removeToolBar(state.toolbar)
-        state.toolbar.deleteLater()
-    state.panels, state.docks, state.toolbar = {}, {}, None
+    state.panels, state.docks = {}, {}
     store = settings()
     saved = store.value(f"{SETTINGS}/user_layout")
     if saved is not None:

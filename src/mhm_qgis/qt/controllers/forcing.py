@@ -13,7 +13,7 @@ from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetI
 
 from ...core.meteorology.forcing import MeteoFolderSpec, inspect_meteo_folder_cached
 from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
-from . import grid
+from . import grid, main
 from .workflow_state import (
     invalidate,
     invalidate_meteo,
@@ -30,15 +30,31 @@ def scan_precipitation(dialog):
 
 
 def edit_meteo_input(dialog, variable=None):
-    """Accept metadata, then schedule only inspection; failed scans keep old input."""
+    """Accept metadata in a pop-up, then schedule only inspection."""
     variable = variable or dialog.comboBox_meteoVar.currentText()
+    spec = _accepted_spec(dialog, variable, _meteo_initial(dialog, variable), "Meteorology input")
+    return None if spec is None else submit_meteo_input(dialog, variable, spec)
+
+
+def show_meteo_input(dialog, variable):
+    """A meteorology row's page: the variable's metadata form, filled in; OK scans it."""
+    prompt = MeteoVarDetailsDialog(variable, dialog.project_directory, _meteo_initial(dialog, variable), dialog)
+    prompt.accepted.connect(lambda: require_active(dialog) and not switch_busy(dialog) and submit_meteo_input(
+        dialog, variable, replace(prompt.spec, crs=dialog.selected_meteo_crs() or None)))
+    prompt.finished.connect(lambda _result: show_meteo_input(dialog, variable))
+    main.embed(dialog, "meteoVar", prompt)
+
+
+def _meteo_initial(dialog, variable):
     initial = dict(dialog._meteo_inputs.get(variable, {}))
     if variable == "pre":
         initial.update(folder=grid.precipitation_folder(dialog),
                        pattern=dialog.lineEdit_precipitationGlobDefinition.text())
-    spec = _accepted_spec(dialog, variable, initial, "Meteorology input")
-    if spec is None:
-        return None
+    return initial
+
+
+def submit_meteo_input(dialog, variable, spec):
+    """Scan an accepted spec; a failed scan keeps the old input."""
     if variable == "pre":
         set_status(dialog, "scan_precipitation", "running")
 

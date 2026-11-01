@@ -30,7 +30,6 @@ from .input_selection import (
     INPUT_EXTENSIONS,
     InputComboAdapter,
     loaded_qgis_items,
-    scan_project_inputs,
 )
 
 Ui_LandUse = load_form("land_use_historical_input.ui")
@@ -67,11 +66,7 @@ class _DynamicInputDialogMixin:
         adapter = InputComboAdapter(combo, kind, self)
         cache = self.__dict__.setdefault("_raster_item_cache", {})
         if kind not in cache:
-            cache[kind] = list(loaded_qgis_items("dem")) + [
-                item
-                for item in scan_project_inputs(self.project_folder, kind)
-                if Path(item.data["path"]).suffix.lower() != ".shp"
-            ]
+            cache[kind] = list(loaded_qgis_items("dem"))
         for item in cache[kind]:
             combo.addItem(item.label, item.data)
         combo.setCurrentIndex(-1)
@@ -167,7 +162,6 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
         self._lookup_error = ""
 
         self._rows.append(self._first_row())
-        land_use_controller._populate_lookup(self)
         bind_historical_land_use(self)
         self._replace_accept_handler(self.buttonBox)
         land_use_controller.set_layer_count(self, 1)

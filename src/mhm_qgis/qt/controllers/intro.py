@@ -16,17 +16,35 @@ from . import grid
 from .version import selected as selected_version
 
 
-def launch(dialog):
+def embed(dialog):
+    """A fresh wizard on the Introduction page, for the current version and saved answers."""
     from ..dialogs.intro_wizard import IntroWizard
 
-    wizard = IntroWizard(intro.load_questions(), selected_version(dialog), dialog._intro_answers, dialog)
-    if wizard.exec() != QDialog.DialogCode.Accepted:
-        return False
+    page = dialog.page_projectIntro
+    for old in page.findChildren(IntroWizard):
+        old.deleteLater()
+    wizard = IntroWizard(intro.load_questions(), selected_version(dialog), dialog._intro_answers, page)
+    wizard.setWindowFlags(Qt.WindowType.Widget)
+    wizard.finished.connect(lambda result: _finished(dialog, wizard, result))
+    page.layout().addWidget(wizard)
+
+
+def _finished(dialog, wizard, result):
+    """Finish applies the answers; either way the wizard starts over (`done` hid it)."""
+    if result == QDialog.DialogCode.Accepted:
+        finish(dialog, wizard)
+    wizard.restart()
+    wizard.show()
+
+
+def finish(dialog, wizard):
+    from .. import project_tree
+
     dialog._intro_answers = wizard.answers()
     dialog._intro_pending = True
     apply(dialog)
     dialog.save_input_state()
-    return True
+    project_tree.refresh(dialog)
 
 
 def apply(dialog):

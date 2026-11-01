@@ -7,7 +7,7 @@ from qgis.PyQt.QtCore import QSignalBlocker
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 from ...core.handlers.store.layout import ensure_project_structure
-from ...qgis_bridge.display import meteo as meteo_display
+from .. import project_tree
 from ..dialogs.file_picker import open_directory
 from . import grid, input_state, intro, multi_domain, post_context, workflow_state
 from .version import selected as selected_version
@@ -20,8 +20,8 @@ def show_work_type(dialog):
     dialog.stackedWidget_configuration.setCurrentWidget(
         dialog.page_singleDomain if single else dialog.page_multiDomain
     )
-    for page in (dialog.tab_geometry, dialog.tab_meteo, dialog.tab_hydro):
-        page.setEnabled(single)
+    for key in ("l0_reference", "l2_reference", "resolution", "inputs"):  # single-domain rows; Settings stays
+        project_tree.item(dialog, key).setHidden(not single)
 
 
 def work_type_changed(dialog):
@@ -89,7 +89,6 @@ def create_structure(dialog):
         dialog.load_input_state()
         ensure_project_structure(path, selected_version(dialog))
         grid.update_l2_resolution_from_metadata(dialog)
-        meteo_display.refresh(dialog)
         post_context.clear(dialog)
         workflow_state.refresh_all(dialog)
         dialog.save_input_state()
@@ -144,7 +143,6 @@ def select_folder(dialog):
         dialog._loading_input_state = False
     populate_domains(dialog)
     multi_domain.populate_setups(dialog)
-    meteo_display.refresh(dialog)
     post_context.clear(dialog)
     dialog.log_message(
         "Select a domain and press Create Project Structure to open it."

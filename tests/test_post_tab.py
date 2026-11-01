@@ -16,6 +16,7 @@ from qgis.PyQt.QtCore import QCoreApplication, QEvent, QSettings, Qt
 from mhm_qgis.core.handlers.store.layout import forget_project_version, input_state_path
 from mhm_qgis.core.post import catalog
 from mhm_qgis.qgis_bridge.layers.compat import input_band
+from mhm_qgis.qt import project_tree
 from mhm_qgis.qt.controllers import post_context, post_hydro, post_map
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 from mhm_qgis.qt.docks import host
@@ -65,9 +66,12 @@ def _open(dialog):
     _wait(lambda: dialog._post.root is not None and not dialog.task_coordinator.is_busy())
 
 
+def _row(dialog, text):
+    return next(row for row in project_tree._rows(dialog) if row.text(0) == text)
+
+
 def _page(dialog, text):
-    nav = dialog.listWidget_postNavigation
-    nav.setCurrentRow(next(row for row in range(nav.count()) if nav.item(row).text() == text))
+    dialog.treeWidget_projectStructure.setCurrentItem(_row(dialog, text))
     _wait(lambda: not dialog.task_coordinator.is_busy())
 
 
@@ -240,7 +244,8 @@ def test_each_view_arranges_the_window_and_the_workspace_restores_it(opened):
     _page(dialog, "Map Explorer")
     _wait(lambda: dialog._post.widgets.get("map_layer") is not None)
     docks, stack = dialog._post.docks, host.stack(dialog)
-    assert dialog.pushButton_postWorkspace.isChecked()
+    assert dialog._post.workspace
+    assert project_tree.item(dialog, "outputs").toolTip(project_tree.VIEW) == "Shown on the map"  # the eye
     assert stack.currentWidget() is window.canvas
     assert window.dockWidgetArea(docks["map_controls"]) == left
     assert docks["map_controls"] in window.tabifiedDockWidgets(layers_dock)
@@ -264,8 +269,8 @@ def test_each_view_arranges_the_window_and_the_workspace_restores_it(opened):
     assert not docks["map_controls"].isVisible()
     assert window.canvas.mapTool() is None  # the user's (none here) is back
     stack.setCurrentWidget(window.canvas)  # as QGIS does when a layer is added
-    nav = dialog.listWidget_postNavigation
-    nav.itemClicked.emit(nav.currentItem())
+    tree = dialog.treeWidget_projectStructure
+    tree.itemClicked.emit(tree.currentItem(), 0)
     assert stack.currentWidget() is dialog._post.panels["hydrograph"]  # selecting the view brings it back
 
     _page(dialog, "Map Explorer")
@@ -274,12 +279,16 @@ def test_each_view_arranges_the_window_and_the_workspace_restores_it(opened):
     _page(dialog, "Water balance")
     _page(dialog, "Map Explorer")
     assert window.dockWidgetArea(docks["cell_inspector"]) == left  # remembered
-    dialog.pushButton_postResetLayout.click()
+    outputs = project_tree.item(dialog, "outputs")
+    project_tree.button(dialog, "outputs").click()  # ↺
     assert window.dockWidgetArea(docks["cell_inspector"]) == right  # declared again
-    dialog.pushButton_postWorkspace.setChecked(False)
+    project_tree.clicked(dialog, outputs, project_tree.VIEW)  # the eye: layout off
+    assert outputs.toolTip(project_tree.VIEW) == "Hidden"
     assert dialog._post.docks == {}
     assert dialog._post.panels == {}
-    assert dialog._post.toolbar is None
+    assert dialog._post.toolbar is not None  # the time toolbar stays: the inputs use it too
+    host.drop_time_toolbar(dialog)
+    QgsApplication.processEvents()
     assert stack.count() == 1
     assert stack.currentWidget() is window.canvas
     assert QgsProject.instance().layerTreeRoot().findGroup(post_map.TEMPORARY) is None
@@ -332,6 +341,7 @@ def test_desktop_docks_go_through_iface(tmp_path, monkeypatch):
     assert dialog._post.docks["map"] in main.tabifiedDockWidgets(layers)
     assert main.findChild(QDockWidget, "mhmPostMapDock") is dialog._post.docks["map"]
     host.end(dialog)
+    host.drop_time_toolbar(dialog)
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     assert calls == ["add"] * 2 + ["remove"] * 2  # Map and Cell inspector
     assert stack.count() == 1

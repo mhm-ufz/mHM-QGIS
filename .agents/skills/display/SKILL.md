@@ -17,9 +17,12 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   `show_dataarray`). After a successful load, it calls the dialog's one-line
   `map_displayed(when)` hook, which opens the standalone map window and sets its time
   label. Meteo passes `when=`; morphology and grid pass nothing, which clears it.
-- Two group boxes share one render path: `groupBox_displayMorphLayers` and
-  `groupBox_meteoDisplay`. Each picks a variable and a time, then `qgis_bridge/display`
-  puts a 2-D raster on the canvas. mHM output has its own tab (below).
+- Inputs are shown by the eye of their project-tree row once processed (`project_tree.view`):
+  morphology through `main.display_morphology`, a forcing through
+  `qgis_bridge/display/meteo.show`, one time step at a time. The "mHM post time" toolbar steps
+  whatever `post_context.time_axis` last put it on: the open run, or the shown forcing. It
+  exists from the start in Desktop (first use in the standalone window) and leaves only on
+  unload (`host.drop_time_toolbar`). mHM output has its own tab (below).
 - `show_raster` reuses the layer already loaded under the same name, refreshing its
   provider when its source or file stamp changes. A time scrubber
   calls it on every step and `layers.load` does not uniquify names, so reloading would
@@ -28,9 +31,11 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   `band = time index + 1`. **mHM output cannot**: it carries no CRS and GDAL returns the
   identity geotransform `(0,1,0,0,0,1)`, which would place it at the origin with unit
   pixels. The Outputs tab therefore wraps it in a VRT (`post_canvas`, below).
-- **Outputs tab** (`tab_outputs` in `mhm_qgis_main.ui`, so Designer shows it): context bar
-  (run, basin, period, resolution), the navigation list, "Analysis layout" / "Reset
-  layout" and the status row; nothing else. `qt/controllers/post_context.py` owns
+- **Outputs page** (`tab_outputs`, a page of `stackedWidget_project`): context bar
+  (run, basin, period, resolution), the Overview and the status row; nothing else. The
+  views are project-tree rows under "4. Outputs" (A. Basics, B. Diagnostics, C. Advanced;
+  `analysis:` in `qt/project_tree/tree.yml`), disabled until a run is open. The "4. Outputs"
+  row's eye toggles the analysis layout and its ↺ resets the view's layout. `qt/controllers/post_context.py` owns
   `dialog._post` and its `AnalysisContext` (`qt/objects/analysis_context.py`, one
   `changed(field)` signal; unchanged values emit nothing). Views: `post_balance`
   (Overview, Water balance, Processes), `post_map` (Map, Map controls, Cell inspector),
@@ -42,7 +47,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
     `theMapCanvas`; found as `iface.mapCanvas().parentWidget()`), and **left docks**
     tabbed with QGIS's "Layers" panel (`add_dock`; tabs at the bottom; Map Explorer's Cell inspector on the right). The central widget
     itself is never replaced. **QGIS shows the canvas again whenever a layer is added**
-    (verified): clicking the navigation entry again (`itemClicked`) brings the panel
+    (verified): clicking the view's tree row again (`itemClicked`) brings the panel
     back. The standalone `MapCanvasWindow` is built alike (canvas in a stacked widget,
     the layer tree as a left dock named "Layers"), so there is one code path.
   - **Map Explorer draws on the host's main canvas.** That canvas follows the project's

@@ -8,6 +8,7 @@ from pathlib import Path
 from ....externals import pyflwdir_handler
 from ...grid import (
     aligned_window,
+    crs_equal,
     geotransform_from_header,
     header_bounds,
     header_from_geotransform,
@@ -685,6 +686,36 @@ def dem_derivative_files(
         dataset.input_fingerprint = digest
     _progress(task, 100)
     return {**result, "reused": False}
+
+
+def override_derivative(folder, variable, raster):
+    """Write `raster` over `variable` of `folder`/dem_derivatives.nc. It must be on the
+    bundle's grid (CRS, cell size, alignment) and cover all of it."""
+    from netCDF4 import Dataset
+    from osgeo import gdal
+
+    from ..file.netcdf.raster import source
+
+    bundle = Path(folder) / "dem_derivatives.nc"
+    target, given = gdal.Open(source(bundle, variable)), gdal.Open(str(raster))
+    if target is None or given is None:
+        raise ValueError(f"Cannot open {raster} or {variable} of {bundle}.")
+    if not crs_equal(given.GetProjection(), target.GetProjection()):
+        raise ValueError(f"{Path(raster).name} is not in the DEM's CRS.")
+    window = aligned_window(
+        header_from_geotransform(given.GetGeoTransform(), given.RasterXSize, given.RasterYSize),
+        header_from_geotransform(target.GetGeoTransform(), target.RasterXSize, target.RasterYSize),
+        label=Path(raster).name,
+    )
+    if (window["copy_rows"], window["copy_cols"]) != (window["target_rows"], window["target_cols"]):
+        raise ValueError(f"{Path(raster).name} does not cover the whole DEM.")
+    values = given.GetRasterBand(1).ReadAsArray(
+        window["source_x"], window["source_y"], window["target_cols"], window["target_rows"])
+    target = given = None
+    with Dataset(bundle, "a") as handle:
+        stored = handle[variable]
+        y = handle[stored.dimensions[-2]][:]
+        stored[:] = (values[::-1] if y[0] < y[-1] else values).astype(stored.dtype)  # GDAL reads north first
 
 
 def _compute_dem_derivatives(prepared, staging, log):

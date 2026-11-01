@@ -3,6 +3,7 @@
 from qgis.PyQt.QtWidgets import QMessageBox
 
 from ...core.handlers.state import processing
+from .. import project_tree
 
 
 def set_status(dialog, key, status, message=""):
@@ -34,13 +35,13 @@ def specs(dialog):
             "failed_message": "Precipitation scan failed.",
         },
         "execute_all_morphology": {
-            "button": dialog.pushButton_executeAllMorphology,
+            "button": project_tree.button(dialog, "morphology"),
             "label": "Execute All Morphology",
             "completed_message": "Morphology preparation completed successfully.",
             "failed_message": "Execute All Morphology failed. Check the log for details.",
         },
         "execute_all_meteo": {
-            "button": dialog.pushButton_executeAllMeteo,
+            "button": project_tree.button(dialog, "meteorology"),
             "label": "Meteorology Preparation",
             "completed_message": "Meteorology preparation completed successfully.",
             "failed_message": "Meteorology preparation failed. Check the log for details.",
@@ -84,10 +85,7 @@ def capture_button_styles(dialog):
 def set_setup_controls_enabled(dialog, enabled):
     """Lock the inputs a running workflow reads, so they cannot change under it."""
     for widget in (
-        dialog.groupBox_mHMConfiguration,
-        dialog.groupBox_morphReferenceL0,
-        dialog.groupBox_meteoReferenceL2,
-        dialog.groupBox_4,
+        dialog.page_projectSetup,
         dialog.tabWidget_steps,
     ):
         widget.setEnabled(enabled)
@@ -97,28 +95,22 @@ def set_button_state(dialog, workflow_key, status):
     control = button(dialog, workflow_key)
     if control is None:
         return
-    if status == "running":
-        control.setEnabled(False)
-        color, border = "#f6c453", "#a66f00"
+    control.setEnabled(status != "running")
+    if status in ("running", "completed", "failed"):
+        color, border = {"running": ("#f6c453", "#a66f00"), "completed": ("#2e7d32", "#1b5e20"),
+                         "failed": ("#c62828", "#8e0000")}[status]
+        control.setStyleSheet(
+            "QPushButton {"
+            "text-align: left;"
+            f"background-color: {color};"
+            f"border: 1px solid {border};"
+            "border-radius: 3px;"
+            "}"
+        )
     else:
-        control.setEnabled(True)
-        if status == "completed":
-            color, border = "#2e7d32", "#1b5e20"
-        elif status == "failed":
-            color, border = "#c62828", "#8e0000"
-        else:
-            control.setStyleSheet(
-                dialog._workflow_button_default_styles.get(workflow_key, "")
-            )
-            return
-    control.setStyleSheet(
-        "QPushButton {"
-        "text-align: left;"
-        f"background-color: {color};"
-        f"border: 1px solid {border};"
-        "border-radius: 3px;"
-        "}"
-    )
+        control.setStyleSheet(dialog._workflow_button_default_styles.get(workflow_key, ""))
+    if status != "running" and workflow_key in ("execute_all_morphology", "execute_all_meteo"):
+        project_tree.refresh(dialog)  # its statuses, and ▶ enabled only when the inputs are added
 
 
 def refresh_all(dialog):

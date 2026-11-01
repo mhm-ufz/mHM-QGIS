@@ -92,7 +92,7 @@ binding as this file: read the matching guide before working in its area.
   or scratch copy silently tests the main checkout's code. Then call `QgsApplication.setPrefixPath` and
   `initQgis()`. Set `locale/userLocale` in `QSettings` **after** `initQgis()` or
   `classFactory` fails on a headless machine. Useful assertions: the main dialog
-  constructs with 2 input adapters (DEM, pour points) and 6 tabs.
+  constructs with 2 input adapters (DEM, pour points) and one tab (`tab_project`): the step pages are in `stackedWidget_project`, chosen by the project tree.
 - `PyYAML` is a declared dependency (`pyproject.toml`, both `requirements.txt`), so
   `dependency_bootstrap` checks it before the dialog opens; the plugin's own schemas
   may use `yaml.safe_load`.

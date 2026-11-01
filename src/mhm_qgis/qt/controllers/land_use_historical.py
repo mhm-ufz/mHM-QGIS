@@ -11,7 +11,6 @@ from qgis.PyQt.QtCore import QDateTime, QSignalBlocker
 from ...core.handlers import lookup
 from ...core.handlers.lookup import MAX_LAND_USE_PERIODS, LandUseInput
 from ..dialogs.file_picker import open_file
-from ..dialogs.input_selection import scan_project_inputs
 
 
 def set_layer_count(dialog, count: int) -> None:
@@ -113,13 +112,6 @@ def _update_bounds(dialog, *_args) -> None:
         for column, label in enumerate((row.start_label, row.end_label)):
             editor = dialog.tableWidget_landUseTimeInputs.cellWidget(index, column)
             label.setText(editor.dateTime().toString("yyyy-MM-dd HH:mm") if editor else "")
-
-
-def _populate_lookup(dialog) -> None:
-    dialog.comboBox_lookupTableInput.clear()
-    for item in scan_project_inputs(dialog.project_folder, "lookup"):
-        dialog.comboBox_lookupTableInput.addItem(item.label, item.data["path"])
-    dialog.comboBox_lookupTableInput.setCurrentIndex(-1)
 
 
 def _lookup_changed(dialog, *_args) -> None:

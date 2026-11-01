@@ -33,7 +33,7 @@ def test_help_walks_the_visible_page_and_esc_only_ends_the_tour():
 
     dialog = MhmQgisDialog()
     dialog.show()
-    dialog.tabWidget_steps.setCurrentWidget(dialog.tab)
+    dialog.stackedWidget_project.setCurrentWidget(dialog.tab)
     pages = tooltip.load()["pages"]
 
     dialog.Closure.helpRequested.emit()
@@ -49,16 +49,19 @@ def test_help_walks_the_visible_page_and_esc_only_ends_the_tour():
     assert tour.index == 1
     assert tour.back.isEnabled()
 
-    dialog.checkBox_enableFolderSearch.hide()
+    dialog.stackedWidget_project.setCurrentWidget(dialog.page_projectSetup)
     tour = tooltip.start(dialog)
-    assert "checkBox_enableFolderSearch" not in [step["widget"] for _widget, step in tour.steps]
+    assert [step["widget"] for _widget, step in tour.steps] == [step["widget"] for step in pages["page_projectSetup"]]
+    dialog.comboBox_mhmWorkType.hide()
+    tour = tooltip.start(dialog)
+    assert "comboBox_mhmWorkType" not in [step["widget"] for _widget, step in tour.steps]
 
     QTest.keyClick(dialog, Qt.Key.Key_Escape)
     assert not tour.isVisible()
     assert dialog.isVisible()
 
     tour = tooltip.start(dialog)
-    dialog.tabWidget_steps.setCurrentWidget(dialog.tab_meteo)
+    dialog.stackedWidget_project.setCurrentWidget(dialog.tab_meteo)
     assert not tour.isVisible()
 
     dialog.close()

@@ -5,10 +5,7 @@ version: 1
 help_url: ""
 
 pages:
-  tab:
-    - widget: pushButton_launchIntroductionWizard
-      title: New here?
-      text: Answer a few questions about your study and data; the wizard suggests the work type, resolutions and forcing variables.
+  page_projectSetup:
     - widget: comboBox_mHMversion
       title: mHM version
       text: Choose mHM 5.13 or 6 before creating a setup. The version decides the input layout and the namelists, and is fixed once a setup exists.
@@ -18,9 +15,8 @@ pages:
     - widget: lineEdit_ProjectFolder
       title: Project folder
       text: The outer project folder. Setups live inside it under <code>mhm-qgis/&lt;name&gt;</code>.
-    - widget: checkBox_enableFolderSearch
-      title: Search the project folder
-      text: Also list rasters and vectors found inside the project folder, not only layers loaded in QGIS.
+
+  tab:
     - widget: mProjectionSelectionWidget_crs
       title: Model CRS
       text: All grids are prepared in this CRS. EPSG:4326 or a projected CRS in metres (e.g. UTM) both work; L1 and L11 resolutions are entered in its unit.
@@ -32,9 +28,13 @@ pages:
     - widget: pushButton_createOrLoadDomainStructure
       title: Create or open the setup
       text: Opens the selected setup, or asks for a name and creates its folders and state files.
+
+  page_l0Reference:
     - widget: comboBox_demInput
       title: DEM
       text: The elevation model. Its extent and cell size define the L0 grid every other input is aligned to.
+
+  page_l2Reference:
     - widget: comboBox_precipitationFile
       title: Precipitation folder
       text: Folder with the precipitation NetCDF files. Together with the glob below it fixes the file set; nothing else is searched.
@@ -56,6 +56,8 @@ pages:
     - widget: dateTimeEdit_simulationEndTimeInput
       title: Simulation end
       text: Last model time step. The meteorology must cover the whole simulation period.
+
+  page_resolution:
     - widget: lineEdit_L1Resolution
       title: L1 (hydrology) resolution
       text: Cell size mHM runs its hydrology on. Only multiples of L0 that fit the common grid are accepted.
@@ -68,6 +70,11 @@ pages:
     - widget: comboBox_gridVariableToDisplay
       title: Show a grid
       text: Displays the prepared grid levels on the map to check their extent and alignment.
+
+  page_settings:
+    - widget: pushButton_edit_nmls
+      title: Edit namelists
+      text: Opens the namelist editor for the combined run.
 
   page_multiDomain:
     - widget: comboBox_multiDomainFolderSelector
@@ -91,41 +98,44 @@ pages:
     - widget: pushButton_prepareMultiDomainSetup
       title: Prepare the combined run
       text: Checks that the domains agree on processes, land-cover scenes, soil horizons and geology, copies the first domain's parameter and output namelists if this setup has none, then writes the namelist handoff.
-    - widget: pushButton_edit_nmls
-      title: Edit namelists
-      text: Opens the namelist editor for the combined run.
 
-  tab_geometry:
+  page_demDerivatives:
+    - widget: label_demDerivativesSummary
+      title: DEM derivatives
+      text: Which derivatives the ▶ of A. Morphology has written. On a derivative's row you can replace it with a raster on the same grid that covers the whole DEM.
+
+  page_gauges:
     - widget: comboBox_pourPointInput
       title: Outlets
       text: Point layer with the catchment outlets or gauges.
     - widget: comboBox_pourPointOutletID
       title: Outlet ID
       text: Attribute holding each outlet's unique ID; gauges keep it in the model.
-    - widget: comboBox_domainDefinitionType
-      title: Domain definition
-      text: How the model domain is defined; the Domain Delineator snaps outlets and saves the catchments.
-    - widget: comboBox_landUseInputType
+
+  page_landUse:
+    - widget: label_landUseType
       title: Land cover
-      text: Land cover as an mHM-ready raster or as a dataset with a lookup table.
-    - widget: comboBox_soil_inputType
+      text: Land cover as an mHM-ready raster or as a dataset with a lookup table. The chosen type's form opens below; OK keeps it.
+
+  page_soil:
+    - widget: label_soilType
       title: Soil
       text: Soil classes as an mHM-ready raster or through a lookup table, with one or several horizons.
-    - widget: comboBox_geology_inputType
+
+  page_geology:
+    - widget: label_geologyType
       title: Geology
       text: Geology classes as an mHM-ready raster or through a lookup table.
-    - widget: comboBox_lai_inputType
+
+  page_lai:
+    - widget: label_laiType
       title: LAI
       text: Leaf-area index, e.g. a long-term monthly NetCDF. Needed by interception and by PET cases -1, 2 and 3.
-    - widget: pushButton_executeAllMorphology
-      title: Execute All
-      text: Prepares DEM derivatives, gauges, the mask and all categorical inputs on the common grid, then publishes them for the chosen mHM version.
-    - widget: comboBox_morphVariableToDisplay
-      title: Show a morphology layer
-      text: Displays a prepared morphology layer on the map.
-    - widget: dateTimeEdit_forHistoricalInputs
-      title: Date for historical layers
-      text: Which land-cover period to display when land cover changes over time.
+
+  page_domainDefinition:
+    - widget: label_domainDefinitionType
+      title: Domain definition
+      text: How the model domain is defined; the Domain Delineator opens below, snaps outlets and saves the catchments.
 
   tab_meteo:
     - widget: comboBox_meteoVar
@@ -137,12 +147,6 @@ pages:
     - widget: tableWidget_meteoInputs
       title: Forcing inputs
       text: The variables that will be prepared, with their source and time step.
-    - widget: pushButton_executeAllMeteo
-      title: Execute All Meteorology
-      text: Prepares every forcing variable on the common L2 grid for the simulation period.
-    - widget: comboBox_meteoVarDisplay
-      title: Show a forcing
-      text: Displays a prepared forcing variable at a chosen time.
 
   tab_hydro:
     - widget: comboBox_observationVar
@@ -191,15 +195,9 @@ pages:
     - widget: comboBox_postResolution
       title: Resolution
       text: Aggregates series and balance tables; fluxes are summed, states averaged.
-    - widget: listWidget_postNavigation
-      title: Views
-      text: Each view arranges the QGIS window (or the map window) for its kind of analysis, its panel in the centre over the map canvas and its side panels as tabs beside Layers; Map Explorer draws on the map canvas itself. They share the run, basin, period and time. Click a view again to bring its panel back.
     - widget: textBrowser_postOverview
       title: Overview
       text: The selected run at a glance (water balance, ratios, the main gauge's scores) and what to check.
-    - widget: pushButton_postWorkspace
-      title: Analysis layout
-      text: Turns the arranged window on; turning it off removes the docks and restores your own layout. The time toolbar steps through the output intervals.
     - widget: toolButton_postExport
       title: Export
       text: Writes the shown view's tables (CSV), plots (PNG, SVG and their data as CSV) and maps (GeoTIFF and CF netCDF) to a folder; or archives the current run.

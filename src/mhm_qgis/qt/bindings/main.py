@@ -8,32 +8,25 @@ from __future__ import annotations
 from qgis.core import QgsProject
 
 from ...qgis_bridge.display import grid as grid_display
-from ...qgis_bridge.display import meteo as meteo_display
-from .. import tooltip
+from .. import project_tree, tooltip
 from ..controllers import (
     categorical,
     forcing,
     grid,
-    intro,
     main,
     model,
     multi_domain,
     post_context,
+    process_cases,
     project,
     time,
     version,
 )
-from ..workflows import meteorology, observations
+from ..workflows import observations
 
 
 def _bind_input_sources(dialog):
-    """Connect folder searching, browsing, and categorical type controls."""
-    dialog.checkBox_enableFolderSearch.toggled.connect(
-        lambda checked=False: (
-            dialog.refresh_input_sources(),
-            dialog.save_input_state(),
-        )
-    )
+    """Connect browsing and categorical type controls."""
     for kind, button in (
         ("dem", dialog.pushButton_browseDEMInput),
         ("pour_points", dialog.pushButton_browsePourPointInput),
@@ -46,15 +39,10 @@ def _bind_input_sources(dialog):
             )
         )
 
-    for kind in categorical.KINDS:
-        combo = categorical.categorical_type_combo(dialog, kind)
-        combo.activated.connect(
-            lambda _index, input_kind=kind, widget=combo: (
-                categorical.handle_categorical_type(
-                    dialog, input_kind, widget.currentText()
-                )
-            )
-        )
+    # Land use, soil, geology and LAI radios → categorical.show; domain radios → main.handle_domain_definition_type
+    categorical.bind(dialog)
+    main.radios(dialog, "domainDefinition", main.DOMAIN_TYPES,
+                lambda text: main.handle_domain_definition_type(dialog, text))
 
     # A bound slot, so the connection dies with the dialog on plugin reload.
     qgis_project = QgsProject.instance()
@@ -68,8 +56,15 @@ def bind(dialog):
     # Closure Help → tooltip.start (a guided tour of the visible page)
     dialog.Closure.helpRequested.connect(lambda: tooltip.start(dialog))
 
-    # pushButton_launchIntroductionWizard → intro.launch
-    dialog.pushButton_launchIntroductionWizard.clicked.connect(lambda: intro.launch(dialog))
+    # treeWidget_projectStructure → project_tree.select; folder and version → project_tree.refresh
+    dialog.treeWidget_projectStructure.currentItemChanged.connect(lambda row, _old: project_tree.select(dialog, row))
+    dialog.treeWidget_projectStructure.itemClicked.connect(lambda row, column: project_tree.clicked(dialog, row, column))
+    dialog.lineEdit_ProjectFolder.textChanged.connect(lambda _text: project_tree.refresh(dialog))
+    dialog.comboBox_mHMversion.currentIndexChanged.connect(lambda _index: project_tree.refresh(dialog))
+    dialog.comboBox_mHMversion.currentIndexChanged.connect(lambda _index: process_cases.inputs(dialog))
+    # pushButton_refL0/L2 → the L0/L2 Reference rows the Resolution page's values come from
+    dialog.pushButton_refL0.clicked.connect(lambda: project_tree.go_to(dialog, "l0_reference"))
+    dialog.pushButton_refL2.clicked.connect(lambda: project_tree.go_to(dialog, "l2_reference"))
 
     # Project management
     # pushButton_BrowseProjectFolder → project.select_folder
@@ -117,8 +112,8 @@ def bind(dialog):
     for name in ("simulationStart", "evaluationStart", "simulationEnd"):
         getattr(dialog, f"dateTimeEdit_{name}TimeInput").dateTimeChanged.connect(
             lambda: time.save(dialog))
-    dialog.tabWidget_steps.currentChanged.connect(
-        lambda index: main.on_tab_changed(dialog, index)
+    dialog.stackedWidget_project.currentChanged.connect(
+        lambda index: main.on_page_changed(dialog, dialog.stackedWidget_project.widget(index))
     )
     _bind_input_sources(dialog)
     # pushButton_threads → dialog.open_thread_display
@@ -128,6 +123,10 @@ def bind(dialog):
         lambda checked=False: main.display_observation_discharge(dialog)
     )
 
+    # pushButton_browseDemOverride / pushButton_demOverride → main.browse_dem_override / override_dem_derivative
+    dialog.pushButton_browseDemOverride.clicked.connect(lambda: main.browse_dem_override(dialog))
+    dialog.pushButton_demOverride.clicked.connect(lambda: main.override_dem_derivative(dialog))
+
     pour_points = dialog.input_combo("pour_points")
     pour_points.layerChanged.connect(
         lambda layer=None: main.populate_pour_point_outlet_fields(dialog, layer)
@@ -136,45 +135,8 @@ def bind(dialog):
     dialog.comboBox_pourPointOutletID.currentIndexChanged.connect(
         lambda _index: main.handle_model_input_changed(dialog)
     )
-    dialog.comboBox_domainDefinitionType.activated.connect(
-        lambda index: main.handle_domain_definition_type(dialog, index)
-    )
-
-    # pushButton_morphLayerDisplay → main.display_selected_morphology_layer
-    dialog.pushButton_morphLayerDisplay.clicked.connect(
-        lambda checked=False: main.display_selected_morphology_layer(dialog)
-    )
-    dialog.comboBox_morphVariableToDisplay.currentIndexChanged.connect(
-        lambda index=None: main.refresh_morphology_date_control(dialog)
-    )
-
-    # Meteorology display: the slider and the date editor drive one step index.
-    dialog.comboBox_meteoVarDisplay.currentIndexChanged.connect(
-        lambda index: meteo_display.refresh(dialog)
-    )
-    # pushButton_meteoVarDisplay → meteo_display.display_selected_layer
-    dialog.pushButton_meteoVarDisplay.clicked.connect(
-        lambda checked=False: meteo_display.display_selected_layer(dialog)
-    )
-    dialog.horizontalSlider_meteoTimeSelector.valueChanged.connect(
-        lambda value: meteo_display.slider_moved(dialog, value)
-    )
-    dialog.dateTimeEdit_meteoVarDisplay.dateTimeChanged.connect(
-        lambda value=None: meteo_display.date_changed(dialog, value)
-    )
-
     # Outputs tab: the post-processing context bar, pages and time bar
     post_context.bind(dialog)
-
-    # Batch morphology workflows
-    # pushButton_executeAllMorphology → morphology.start_execute_all
-    dialog.pushButton_executeAllMorphology.clicked.connect(
-        lambda: dialog.morphology_tasks.start_execute_all()  # noqa: PLW0108 -- drop `checked`
-    )
-    # pushButton_executeAllMeteo → meteorology.start
-    dialog.pushButton_executeAllMeteo.clicked.connect(
-        lambda: meteorology.start(dialog)
-    )
 
     _bind_grid(dialog)
 
@@ -257,7 +219,6 @@ def _bind_input_state(dialog):
     changed = lambda *_args: main.handle_model_input_changed(dialog)  # noqa: E731
     for _, combo_box in main.input_layer_widgets(dialog):
         combo_box.layerChanged.connect(changed)
-    dialog.comboBox_lai_inputType.currentIndexChanged.connect(changed)
     dialog.lineEdit_L1Resolution.editingFinished.connect(changed)
     dialog.lineEdit_L11Resolution.editingFinished.connect(changed)
     dialog.mProjectionSelectionWidget_crs.crsChanged.connect(changed)

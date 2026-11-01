@@ -1,7 +1,7 @@
 """The categorical input-type handlers write back to the main dialog.
 
-Each handler opens a modal child dialog. These tests stub the child so the
-handler's bookkeeping runs against a real `MhmQgisDialog`, which is where a
+A type's radio embeds its child dialog in the page; OK applies it. These tests stub
+the child so the bookkeeping runs against a real `MhmQgisDialog`, which is where a
 child dialog shadowing the parent shows up as an `AttributeError`.
 """
 
@@ -43,12 +43,9 @@ def _app():
 def _stub(result):
     """Return a child-dialog factory that accepts and yields `result`."""
 
-    class _Child:
+    class _Child(QDialog):
         def __init__(self, *_args, **_kwargs):
-            pass
-
-        def exec(self):
-            return QDialog.DialogCode.Accepted
+            super().__init__()
 
         def selected_config(self):
             return result
@@ -63,6 +60,12 @@ def _dialog(tmp_path):
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
     return dialog
+
+
+def _choose(dialog, kind, text):
+    """Pick the type and press OK on its embedded form."""
+    categorical.show(dialog, kind, text)
+    getattr(dialog, f"verticalLayout_{categorical.PAGES[kind]}Form").itemAt(0).widget().accept()
 
 
 def _lookup_config(tmp_path):
@@ -83,7 +86,7 @@ def test_lookup_selection_lands_on_the_main_dialog(tmp_path, monkeypatch):
         categorical, "SingleLayerInputDialog", _stub(config)
     )
 
-    categorical.handle_categorical_type(
+    _choose(
         dialog, "geology", "Single Categorical Layer (with Lookup Table)"
     )
 
@@ -108,7 +111,7 @@ def test_single_categorical_land_use_lands_on_the_main_dialog(
         categorical, "SingleLayerInputDialog", _stub(config)
     )
 
-    categorical.handle_categorical_type(
+    _choose(
         dialog, "lc", "Single Categorical Layer (with Lookup Table)"
     )
 
@@ -132,7 +135,7 @@ def test_historical_land_use_lands_on_the_main_dialog(tmp_path, monkeypatch):
         advanced_inputs, "HistoricalLandUseDialog", _stub(value)
     )
 
-    categorical.handle_categorical_type(
+    _choose(
         dialog, "lc", "Multi Historical Layers (with Lookup Table)"
     )
 
@@ -152,7 +155,7 @@ def test_multi_horizon_soil_lands_on_the_main_dialog(tmp_path, monkeypatch):
         advanced_inputs, "MultiHorizonSoilDialog", _stub(value)
     )
 
-    categorical.handle_categorical_type(
+    _choose(
         dialog, "soil", "Multi-horizon Multi-variate Layers"
     )
 

@@ -126,7 +126,7 @@ def test_desktop_focuses_its_own_canvas(project, tmp_path):
     canvas = QgsMapCanvas(main_window)
     main_window.setCentralWidget(canvas)
     dialog = MhmQgisDialog(iface=SimpleNamespace(
-        mainWindow=lambda: main_window, mapCanvas=lambda: canvas
+        mainWindow=lambda: main_window, mapCanvas=lambda: canvas, addToolBar=main_window.addToolBar
     ))
     assert dialog.open_map_canvas() is canvas
     show_raster(dialog, _raster(tmp_path / "dem.tif"), "dem")

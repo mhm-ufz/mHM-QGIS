@@ -149,6 +149,18 @@ A module belongs to exactly one layer.
 - `qt/threads/`: `task_coordinator.py`, the one background mechanism (real QgsTask
   scheduling). The native raster subprocess entry point belongs to `core/`, not this
   Qt package.
+- `qt/project_tree/`: `treeWidget_projectStructure`, which replaced the step tabs. Rows are
+  made in Designer; `tree.yml` gives each (matched by title) its key, its page in
+  `stackedWidget_project` and its status rule (`STATUS`). The dialog's one tab, `tab_project`,
+  holds that stack and is titled after the selected row. The old step tabs are its pages under
+  their old names (`tab`, `tab_meteo`, …). Plan: `.development/polishing/plan.md`.
+  Columns: status, then a button made by `_action` (Add or Edit selects the row; Run on
+  A. Morphology / B. Meteorology, also `workflow_state`'s button for those workflows), then the
+  eye, which shows a processed input's layer. `show_inputs` hides rows whose `input` the
+  Settings page's process cases do not need (`qt/controllers/process_cases.py`:
+  `datamodel.check`, hand-over to Edit Namelists via `intro_values`). An input page embeds its
+  child dialog under its type radios (`main.radios` / `main.embed`; OK commits, as in
+  `categorical.show`), so a type is `dialog._categorical_modes`, not a widget.
 - `qt/tooltip/`: the Help tour. `Closure.helpRequested` starts it on the visible page:
   the current `tabWidget_steps` tab plus any visible stacked page inside it, with steps
   from `tooltips.yml` keyed by object name, in list order. A step whose widget is hidden
