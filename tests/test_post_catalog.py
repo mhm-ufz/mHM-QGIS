@@ -148,6 +148,24 @@ def test_archive_moves_the_run_atomically(tmp_path):
             runs.archive(tmp_path, name, values=V5)
 
 
+def test_archive_rolls_back_when_final_metadata_cannot_be_written(tmp_path, monkeypatch):
+    make_run(tmp_path)
+    source = tmp_path / "output" / "mHM_Fluxes_States.nc"
+    inode = source.stat().st_ino
+    monkeypatch.setattr(
+        runs,
+        "_write_meta",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    with pytest.raises(OSError, match="disk full"):
+        runs.archive(tmp_path, "baseline", values=V5)
+
+    assert source.stat().st_ino == inode
+    assert not (tmp_path / "runs" / "baseline").exists()
+    assert not (tmp_path / "runs" / ".mhm-qgis" / "archive" / "baseline").exists()
+
+
 def test_v6_archive_takes_outputs_written_outside_output(tmp_path):
     make_run(tmp_path, version="6")
     _state(tmp_path, mhm_version="6")
@@ -156,6 +174,41 @@ def test_v6_archive_takes_outputs_written_outside_output(tmp_path):
     assert (tmp_path / "runs" / "r1" / "mrm_poi_output.nc").read_bytes() == b"poi"
     assert not (tmp_path / "mrm_poi_output.nc").exists()
     assert catalog.open_run(ref, V6).files["discharge"] == tmp_path / "runs" / "r1" / "mrm_poi_output.nc"
+
+
+def test_v6_multi_archive_rolls_every_domain_back_on_failure(tmp_path, monkeypatch):
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+
+    root = tmp_path / "multi"
+    root.mkdir()
+    _state(root, mhm_version="6", setup="multi")
+    update_section(root, "multi_domain", {"domains": ["../a", "../b"]})
+    real_open = catalog.open_run
+    for name in ("a", "b"):
+        domain = tmp_path / name
+        domain.mkdir()
+        _state(domain, mhm_version="6")
+        make_run(domain, version="6")
+    monkeypatch.setattr(catalog, "open_run", lambda ref, values=None: real_open(ref, V6))
+    real_meta = runs._write_meta
+    calls = []
+
+    def fail_second(*args, **kwargs):
+        calls.append(args[0])
+        if len(calls) == 2:
+            raise OSError("disk full")
+        return real_meta(*args, **kwargs)
+
+    monkeypatch.setattr(runs, "_write_meta", fail_second)
+
+    with pytest.raises(OSError, match="disk full"):
+        runs.archive(root, "baseline")
+
+    for name in ("a", "b"):
+        domain = tmp_path / name
+        assert (domain / "output" / "mhm_output.nc").is_file()
+        assert not (domain / "runs" / "baseline").exists()
+        assert not (domain / "runs" / ".mhm-qgis" / "archive" / "baseline").exists()
 
 
 def test_v5_multi_lists_and_archives_each_domain(tmp_path):
@@ -197,13 +250,16 @@ def test_a_named_run_writes_into_its_folder_and_is_listed(tmp_path):
                    '  dir_Total_Runoff(1) = "output/"\n  mhm_file_RestartOut(1) = "restart/r.nc"\n/\n')
     made = runs.link_outputs(tmp_path, "case1")
     text = nml.read_text()
-    assert 'dir_Out(1) = "runs/case1/output/"' in text
-    assert 'dirConfigOut = "runs/case1/output/"' in text
+    assert 'dir_Out(1) = "runs/.mhm-qgis/pending/case1/output/"' in text
+    assert 'dirConfigOut = "runs/.mhm-qgis/pending/case1/output/"' in text
     assert 'dir_Total_Runoff(1) = "output/"' in text  # an input
     assert 'mhm_file_RestartOut(1) = "restart/r.nc"' in text
-    assert (tmp_path / "runs" / "case1" / "output") in made
-    (tmp_path / "output").rename(tmp_path / "runs" / "case1" / "output")  # as mHM would have written it
+    staged_output = tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1" / "output"
+    assert staged_output in made
+    source = tmp_path / "output" / "mHM_Fluxes_States.nc"
+    source.replace(staged_output / source.name)  # as mHM would have written it
     [ref] = runs.finish_named(tmp_path, "case1")
+    assert 'dir_Out(1) = "runs/case1/output/"' in nml.read_text()
     assert ref.label == f"case1 · {tmp_path.name}"
     assert ref.root == tmp_path
     assert runs.run_meta(ref)["linked"] is True
@@ -214,8 +270,58 @@ def test_a_named_run_writes_into_its_folder_and_is_listed(tmp_path):
     assert catalog.open_run(current, values).files["mhm"] == tmp_path / "output" / "mHM_Fluxes_States.nc"
     runs.link_outputs(tmp_path, "")  # an unnamed run writes to output/ again
     assert 'dir_Out(1) = "output/"' in nml.read_text()
-    with pytest.raises(ValueError, match="letters"):
-        runs.link_outputs(tmp_path, "a b")
+    for unsafe in ("a b", "..", ".mhm-qgis"):
+        with pytest.raises(ValueError, match="letters"):
+            runs.link_outputs(tmp_path, unsafe)
+
+
+def test_a_failed_named_rerun_keeps_the_published_run(tmp_path):
+    make_run(tmp_path)
+    nml = tmp_path / "mhm.nml"
+    nml.write_text('&directories_general\n  dir_Out(1) = "output/"\n/\n')
+    runs.link_outputs(tmp_path, "case1")
+    stage = tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1"
+    source = tmp_path / "output" / "mHM_Fluxes_States.nc"
+    source.replace(stage / "output" / source.name)
+    runs.finish_named(tmp_path, "case1")
+    published = tmp_path / "runs" / "case1" / "output" / source.name
+    original = published.read_bytes()
+
+    runs.link_outputs(tmp_path, "case1")
+    (stage / "output" / "partial.nc").write_bytes(b"partial")
+    runs.fail_named(tmp_path, "case1")
+
+    assert published.read_bytes() == original
+    assert not stage.exists()
+    assert 'dir_Out(1) = "runs/case1/output/"' in nml.read_text()
+
+
+def test_failed_named_publication_restores_the_previous_run(tmp_path, monkeypatch):
+    make_run(tmp_path)
+    nml = tmp_path / "mhm.nml"
+    nml.write_text('&directories_general\n  dir_Out(1) = "output/"\n/\n')
+    runs.link_outputs(tmp_path, "case1")
+    stage = tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1"
+    source = tmp_path / "output" / "mHM_Fluxes_States.nc"
+    source.replace(stage / "output" / source.name)
+    runs.finish_named(tmp_path, "case1")
+    published = tmp_path / "runs" / "case1" / "output" / source.name
+    original = published.read_bytes()
+
+    runs.link_outputs(tmp_path, "case1")
+    (stage / "output" / "replacement.nc").write_bytes(b"replacement")
+    monkeypatch.setattr(
+        runs,
+        "_write_meta",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    with pytest.raises(OSError, match="disk full"):
+        runs.finish_named(tmp_path, "case1")
+
+    assert published.read_bytes() == original
+    assert not stage.exists()
+    assert [ref.name for ref in runs.list_runs(tmp_path) if ref.name] == ["case1"]
 
 
 def test_a_run_that_wrote_no_output_variable_says_so(tmp_path):

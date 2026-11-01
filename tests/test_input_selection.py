@@ -26,6 +26,8 @@ from qgis.PyQt import QtWidgets
 from mhm_qgis.qt.dialogs.input_selection import (
     InputComboAdapter,
     InputItem,
+    RasterInputConfig,
+    _ensure_raster_details,
     loaded_qgis_items,
 )
 from mhm_qgis.qt.dialogs.lai_netcdf_input import LaiNetcdfInputDialog
@@ -84,6 +86,27 @@ def test_adapter_opens_a_file_layer_once_per_file_version(tmp_path):
     stamp = raster.stat().st_mtime_ns + 1_000_000_000
     os.utime(raster, ns=(stamp, stamp))
     assert adapter.currentLayer() is not first
+
+
+def test_the_meteorology_form_keeps_the_files_crs(tmp_path):
+    from mhm_qgis.qt.controllers import meteo_var_details_input as controller
+    from mhm_qgis.qt.dialogs.meteo_var_details_input import MeteoVarDetailsDialog
+
+    _app()
+    form = MeteoVarDetailsDialog("pre", str(tmp_path), {"folder": str(tmp_path), "crs": "EPSG:3035"})
+
+    assert form.mProjectionSelectionWidget_crs.crs().authid() == "EPSG:3035"
+    assert controller.validate(form)
+    assert form.spec.crs == "EPSG:3035"
+
+
+def test_a_file_layer_carries_the_crs_assigned_to_it(tmp_path):
+    _app()
+    raster = _raster(tmp_path / "dem.tif")  # no CRS of its own, like an ASC without .prj
+    adapter = InputComboAdapter(QtWidgets.QComboBox(), "dem")
+    adapter.addItem("dem.tif", {"origin": "file", "path": str(raster.resolve()), "source_crs": "EPSG:3035"})
+
+    assert adapter.currentLayer().crs().authid() == "EPSG:3035"
 
 
 def test_adapter_selects_loaded_layer_and_emits_layer(tmp_path):
@@ -181,6 +204,33 @@ def test_single_layer_dialog_uses_loaded_qgis_layer(tmp_path):
         assert layers.find_by_source(config.input_path) is layer
     finally:
         project.removeMapLayer(layer.id())
+
+
+def test_raster_details_preserve_loaded_layer_identity(monkeypatch):
+    from mhm_qgis.qt.dialogs import input_selection
+
+    _app()
+    combo = QtWidgets.QComboBox()
+    combo.addItem("Loaded raster", {
+        "origin": "qgis",
+        "layer_id": "layer-1",
+        "source": "/tmp/input.asc",
+    })
+    monkeypatch.setattr(
+        input_selection,
+        "raster_details",
+        lambda _parent, path: RasterInputConfig(path, "Band1", "EPSG:3035"),
+    )
+
+    assert _ensure_raster_details(None, combo)
+    assert combo.currentData() == {
+        "origin": "qgis",
+        "layer_id": "layer-1",
+        "source": "/tmp/input.asc",
+        "path": "/tmp/input.asc",
+        "variable": "Band1",
+        "source_crs": "EPSG:3035",
+    }
 
 
 def test_lookup_browse_accepts_qt_clicked_boolean(tmp_path, monkeypatch):

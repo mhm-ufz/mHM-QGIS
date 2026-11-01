@@ -12,9 +12,9 @@ from qgis.PyQt.QtCore import QSignalBlocker
 
 from ...core.handlers.file import json as jsonio
 from ...core.handlers.store.layout import input_state_path
-from ...core.handlers.store.paths import portable_path, project_path
+from ...core.handlers.store.paths import portable_path, project_path, version_key
 from ...qgis_bridge import layers as qgis_layers
-from . import categorical, forcing, grid, main, model, process_cases, time
+from . import categorical, forcing, grid, main, model, process_cases, time, version
 
 _PATH_KEYS = ("input_path", "lookup_table", "classdefinition_path")
 
@@ -49,7 +49,7 @@ def save(dialog):
         # A combined setup holds no inputs of its own, only its domains.
         jsonio.write(path, {
             "version": 4, "setup": "multi",
-            "mhm_version": dialog.comboBox_mHMversion.currentText().strip(),
+            "mhm_version": version.selected(dialog),
             "domains": list(dialog._multi_domains), "intro": dialog._intro_answers,
             "process_cases": process_cases.current(dialog),
         })
@@ -97,7 +97,7 @@ def save(dialog):
     crs = dialog.get_crs()
     state = {
         "version": 4,
-        "mhm_version": dialog.comboBox_mHMversion.currentText().strip(),
+        "mhm_version": version.selected(dialog),
         "layers": layers,
         "grid_resolutions": {
             "l1_resolution": grid.current_l1_resolution(dialog),
@@ -155,6 +155,13 @@ def load(dialog):
             main.refresh_input_sources(dialog)
             dialog.log_message("WARNING: Could not read input state: not a JSON object.")
             return
+        if version_key(state.get("mhm_version")) == "v5.13":
+            from ...externals.mhm_handler import recover_v5_mrm_outputs
+
+            try:
+                recover_v5_mrm_outputs(dialog.project_folder)
+            except (OSError, RuntimeError) as error:
+                dialog.log_message(f"WARNING: Could not recover mrm_outputs.nml: {error}")
         _restore_combo_text(dialog.comboBox_mHMversion, state.get("mhm_version", ""))
         # A setup without saved answers keeps the ones given before it was opened.
         dialog._intro_answers = state.get("intro") or dialog._intro_answers

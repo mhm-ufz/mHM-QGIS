@@ -104,8 +104,27 @@ def test_v5_multi_run_uses_the_real_mrm_group_only_while_running(tmp_path, monke
         callbacks.append(options["on_finished"])
         return True
 
-    assert mhm_handler.run("5.13", root, launch, on_finished=finished.append)
+    def completed(exit_code):
+        assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults_mrm\n")
+        finished.append(exit_code)
+
+    assert mhm_handler.run("5.13", root, launch, on_finished=completed)
     assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults\n")
     callbacks[0](0)
     assert finished == [0]
     assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults_mrm\n")
+    assert not (root / ".mrm_outputs.nml.mhm-qgis-original").exists()
+
+
+def test_v5_run_recovers_a_namelist_left_temporary_by_a_crash(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    outputs = root / "mrm_outputs.nml"
+    original = "&NLoutputResults_mrm\n  timeStep = -2\n/\n"
+    outputs.write_text("&NLoutputResults\n  timeStep = -2\n/\n", encoding="utf-8")
+    (root / ".mrm_outputs.nml.mhm-qgis-original").write_text(original, encoding="utf-8")
+
+    mhm_handler.recover_v5_mrm_outputs(root)
+
+    assert outputs.read_text(encoding="utf-8") == original
+    assert not (root / ".mrm_outputs.nml.mhm-qgis-original").exists()

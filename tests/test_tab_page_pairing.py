@@ -51,6 +51,22 @@ def test_resolution_fields_preserve_exact_positive_values_for_click_validation()
     dialog.close()
 
 
+def test_l1_and_l11_spin_boxes_hold_the_integer_multiple_of_l0():
+    dialog = MhmQgisDialog()
+    l0 = 1 / 1200
+    dialog._grid_l0_info = {"resolution": l0}
+    for level in ("L1", "L11"):
+        field, spin = (getattr(dialog, f"lineEdit_{level}Resolution"),
+                       getattr(dialog, f"spinBox_{level}ResolutionMultiplier"))
+        spin.setValue(3)
+        assert field.text() == repr(3 * l0)
+        field.setText(repr(4.6 * l0))
+        assert spin.value() == 5
+        field.editingFinished.emit()
+        assert field.text() == repr(5 * l0)
+    dialog.close()
+
+
 def test_meteo_combo_offers_every_prepared_forcing():
     # Precipitation has its own scan; every other forcing is added here (netrad
     # was missing, which made PET cases 2 and 3 unpreparable).

@@ -294,7 +294,11 @@ def find_field(field_names: list[str], aliases: tuple[str, ...]) -> str | None:
 
     for field_name in field_names:
         normalized_name = normalize_field_name(field_name)
-        if any(normalize_field_name(alias) in normalized_name for alias in aliases):
+        if any(
+            len(normalized_alias) > 1 and normalized_alias in normalized_name
+            for alias in aliases
+            if (normalized_alias := normalize_field_name(alias))
+        ):
             return field_name
 
     return None

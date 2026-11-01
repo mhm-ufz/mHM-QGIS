@@ -78,8 +78,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.task_coordinator.log.connect(lambda _key, message: self.log_message(message))
 
         main_controller.configure_input_adapters(self)
-        self.spinBox_L2ResolutionMultiplier.setMinimum(1)
-        self.spinBox_L2ResolutionMultiplier.setMaximum(1_000_000)
+        for level in ("L2", "L1", "L11"):
+            getattr(self, f"spinBox_{level}ResolutionMultiplier").setRange(1, 1_000_000)
         self.lineEdit_precipitationGlobDefinition.setText("*.nc")
         self.comboBox_mhmWorkType.setCurrentIndex(0)
         self.comboBox_mhmWorkType.model().item(2).setEnabled(False)  # mRM only: not yet
@@ -241,12 +241,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         if int(result) == int(QDialog.DialogCode.Rejected) and (
             busy or (terminal is not None and terminal.is_running())
         ):
-            self._closing = True
-            self._close_result = result
-            self.task_coordinator.cancel_all()
-            if terminal is not None:
-                terminal.stop()
-            QtCore.QTimer.singleShot(0, self._finish_cancelled_close)
+            self.shutdown(result)
             return
         terminal_busy = terminal is not None and terminal.command_running()
         if busy or terminal_busy:
@@ -263,6 +258,18 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             )
             return
         super().done(result)
+
+    def shutdown(self, result=QDialog.DialogCode.Rejected):
+        """Idempotently stop owned work and close the dialog for plugin teardown."""
+        if self._closing:
+            return
+        self._closing = True
+        self._close_result = result
+        self.suspend_input_state_saves()
+        self.task_coordinator.cancel_all()
+        if self._terminal_dialog is not None:
+            self._terminal_dialog.stop()
+        QtCore.QTimer.singleShot(0, self._finish_cancelled_close)
 
     def _finish_cancelled_close(self):
         terminal = self._terminal_dialog

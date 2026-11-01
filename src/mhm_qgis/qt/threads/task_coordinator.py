@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from qgis.core import QgsApplication, QgsTask
 from qgis.PyQt import QtCore
 
+from ...core.utils.report import error_detail
+
 
 @dataclass
 class TaskRecord:
@@ -272,7 +274,7 @@ class TaskCoordinator(QtCore.QObject):
         callback = record.on_success if success else record.on_error
         if callback is not None:
             try:
-                callback(payload)
+                callback(payload if success else error_detail(payload))  # the traceback stays in logs
             except Exception as error:
                 details = "".join(
                     traceback.format_exception(type(error), error, error.__traceback__)
@@ -281,7 +283,7 @@ class TaskCoordinator(QtCore.QObject):
                 record.logs.append(details)
                 if success and record.on_error is not None:
                     try:
-                        record.on_error(details)
+                        record.on_error(error_detail(details))
                     except Exception:
                         record.logs.append(traceback.format_exc())
         self._start_available()

@@ -6,6 +6,11 @@ a folder being rebuilt. Nothing here constructs a layer -- see `loader`.
 from __future__ import annotations
 
 import os
+import re
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
+_NETCDF_SOURCE = re.compile(r'^NETCDF:"([^"]+)"(.*)$', re.IGNORECASE)
 
 
 def _project():
@@ -39,19 +44,41 @@ def normalized_source(source) -> str:
     """Normalize a QGIS layer source for comparison.
 
     Sources arrive as bare paths and as provider URIs with a `|layername=...`
-    tail, in either slash style and either case, so equality only means
-    anything after the path half is resolved and the whole thing is folded.
+    tail. Only the physical path uses the operating system's case rules;
+    provider suffixes retain their own semantics.
     """
     if not source:
         return ""
 
-    base_source = source.split("|")[0]
-    if os.path.exists(base_source):
-        suffix = source[len(base_source):]
-        base_source = os.path.abspath(base_source)
-        return (base_source + suffix).replace("\\", "/").lower()
+    path, suffix = _source_parts(source)
+    if path is not None:
+        normalized = os.path.normcase(os.path.abspath(path)).replace("\\", "/")
+        return normalized + suffix
 
-    return source.replace("\\", "/").lower()
+    return str(source).replace("\\", "/")
+
+
+def _source_parts(source) -> tuple[str | None, str]:
+    """Return a local provider path and the source suffix used to address it."""
+    text = str(source or "")
+    match = _NETCDF_SOURCE.match(text)
+    if match:
+        return match.group(1), f"|NETCDF{match.group(2)}"
+
+    split_at = min((index for marker in ("|", "?") if (index := text.find(marker)) >= 0),
+                   default=len(text))
+    base, suffix = text[:split_at], text[split_at:]
+    parsed = urlparse(base)
+    if parsed.scheme == "file":
+        path = unquote(parsed.path)
+        if parsed.netloc:
+            path = f"//{parsed.netloc}{path}"
+        if re.match(r"^/[A-Za-z]:/", path):
+            path = path[1:]
+        return path, suffix
+    if os.path.isabs(base) or os.path.exists(base):
+        return base, suffix
+    return None, text
 
 
 def find_by_source(source):
@@ -77,10 +104,11 @@ def remove_under(folder, log=None) -> int:
     if project is None or not folder:
         return 0
 
-    folder = str(folder).replace("\\", "/")
+    root = Path(folder).resolve()
     doomed = []
     for layer_id, layer in project.mapLayers().items():
-        if folder in layer.source().replace("\\", "/"):
+        source, _suffix = _source_parts(layer.source())
+        if source is not None and Path(source).resolve().is_relative_to(root):
             doomed.append(layer_id)
             if log is not None:
                 log(f"Removing layer from QGIS: {layer.name()}")

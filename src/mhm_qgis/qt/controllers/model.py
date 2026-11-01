@@ -268,27 +268,48 @@ def run(dialog) -> bool:
     project_folder = dialog.project_folder
     name = dialog.comboBox_runName.currentText().strip()
 
+    def failed(message):
+        processing.mark_workflow(project_folder, "run_mhm", "failed", message)
+        if dialog.project_folder == project_folder:
+            set_button_state(dialog, "run_mhm", "failed")
+        dialog.log_message(f"ERROR: {message}")
+
     def finished(exit_code):
         if exit_code == 0:
-            processing.mark_workflow(project_folder, "run_mhm", "completed")
-            if dialog.project_folder == project_folder:
-                set_button_state(dialog, "run_mhm", "completed")
-            dialog.log_message("mHM completed successfully.")
             if name:
-                runs.finish_named(project_folder, name)
+                try:
+                    runs.finish_named(project_folder, name)
+                except Exception as error:
+                    try:
+                        runs.fail_named(project_folder, name)
+                    except OSError as cleanup_error:
+                        dialog.log_message(
+                            f"ERROR: Could not clean up the staged run: {cleanup_error}"
+                        )
+                    message = f"mHM finished, but run {name} could not be published: {error}"
+                    failed(message)
+                    QMessageBox.critical(dialog, "mHM Run Publication Error", message)
+                    return
                 dialog.log_message(f"Run {name} is in runs/{name}/; the Outputs tab lists it.")
                 if dialog.project_folder == project_folder:
                     from . import post_context
 
                     post_context.populate(dialog)
                     populate_run_names(dialog, name)
+            processing.mark_workflow(project_folder, "run_mhm", "completed")
+            if dialog.project_folder == project_folder:
+                set_button_state(dialog, "run_mhm", "completed")
+            dialog.log_message("mHM completed successfully.")
             return
         message = f"mHM exited with code {exit_code}."
-        processing.mark_workflow(project_folder, "run_mhm", "failed", message)
-        if dialog.project_folder == project_folder:
-            set_button_state(dialog, "run_mhm", "failed")
-        dialog.log_message(f"ERROR: {message}")
+        if name:
+            try:
+                runs.fail_named(project_folder, name)
+            except OSError as error:
+                message += f" The staged run could not be cleaned up: {error}"
+        failed(message)
 
+    linked = False
     try:
         from ...externals.mhm_handler import run as run_mhm
 
@@ -315,7 +336,8 @@ def run(dialog) -> bool:
                 dialog, "Run name", f"A run named {name} exists. Run again and overwrite its outputs?") \
                 != QMessageBox.StandardButton.Yes:
             return False
-        runs.link_outputs(project_folder, name)  # the namelists' output paths: runs/<name>/ or output/
+        runs.link_outputs(project_folder, name)  # a named run stages its outputs until success
+        linked = True
         workspace = workspace_folder(project_folder)
         terminal = dialog.open_project_terminal()
         if terminal is None:
@@ -335,6 +357,11 @@ def run(dialog) -> bool:
             finished(-1)
         return started
     except (OSError, ValueError, RuntimeError) as error:
+        if linked and name:
+            try:
+                runs.fail_named(project_folder, name)
+            except OSError as cleanup_error:
+                dialog.log_message(f"ERROR: Could not clean up the staged run: {cleanup_error}")
         set_status(dialog, "run_mhm", "failed", str(error))
         dialog.log_message(f"ERROR: Run mHM failed. Details: {error}")
         QMessageBox.critical(dialog, "mHM Execution Error", str(error))

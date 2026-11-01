@@ -214,10 +214,40 @@ def test_a_named_run_points_the_namelists_at_its_folder(tmp_path: Path, monkeypa
     (tmp_path / "mhm.nml").write_text('&config_mhm\n  output_path(1) = "output/mhm_output.nc"\n/\n')
 
     assert controller_module.run(dialog) is True
-    assert 'output_path(1) = "runs/case1/output/mhm_output.nc"' in (tmp_path / "mhm.nml").read_text()
-    assert (tmp_path / "runs" / "case1" / "output").is_dir()
+    assert 'output_path(1) = "runs/.mhm-qgis/pending/case1/output/mhm_output.nc"' in (
+        tmp_path / "mhm.nml"
+    ).read_text()
+    assert (tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1" / "output").is_dir()
     dialog.terminal.calls[0][1]["on_finished"](0)
     assert [ref.name for ref in runs.list_runs(tmp_path)] == ["case1"]
+
+
+def test_named_run_is_not_completed_when_publication_fails(tmp_path: Path, monkeypatch) -> None:
+    from mhm_qgis.core.post import runs
+
+    dialog = Dialog(tmp_path)
+    dialog.run_name = "case1"
+    _no_buttons(monkeypatch)
+    monkeypatch.setattr(controller_module, "ensure_project_structure", lambda *_args: [])
+    monkeypatch.setattr(controller_module, "require_v6_executable", lambda _owner: str(tmp_path / "mhmv6"))
+    monkeypatch.setattr(controller_module, "inputs_ready", lambda *_args: True)
+    from mhm_qgis.externals import mhm_handler
+    monkeypatch.setattr(mhm_handler, "executable", lambda _version, v6_path=None: Path(v6_path))
+    monkeypatch.setattr(
+        runs,
+        "finish_named",
+        lambda *_args: (_ for _ in ()).throw(OSError("disk full")),
+    )
+    errors = []
+    monkeypatch.setattr(controller_module.QMessageBox, "critical", lambda *_args: errors.append(_args[2]))
+    (tmp_path / "mhm.nml").write_text('&config_mhm\n  output_path(1) = "output/mhm.nc"\n/\n')
+
+    assert controller_module.run(dialog)
+    dialog.terminal.calls[0][1]["on_finished"](0)
+
+    assert processing.workflow(tmp_path, "run_mhm")["status"] == "failed"
+    assert "could not be published" in errors[0]
+    assert not (tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1").exists()
 
 
 def test_run_name_combo_lists_runs_and_prompts_for_new_name(tmp_path, monkeypatch):

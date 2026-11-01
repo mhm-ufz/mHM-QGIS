@@ -193,11 +193,14 @@ class MhmQgis:
             from .qt.controllers import post_context
             from .qt.docks import host
 
+            dialog.finished.connect(dialog.deleteLater)
+            dialog.shutdown()
             post_context.end_workspace(dialog)  # our docks leave QGIS's window; its layout returns
             host.drop_time_toolbar(dialog)
         for action in self.actions:
             self.iface.removePluginMenu(self.tr("&mHM QGIS"), action)
             self.iface.removeToolBarIcon(action)
+        self.dlg = None
 
     def run(self):
         """Run method that performs all the real work"""

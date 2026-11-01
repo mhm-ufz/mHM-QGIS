@@ -82,6 +82,7 @@ def executable(version: str, v6_path=None) -> Path:
 def _prepare_v5_mrm_outputs(cwd):
     """Use mHM's real duplicate group name only while the executable runs."""
     path = Path(cwd) / "mrm_outputs.nml"
+    recover_v5_mrm_outputs(cwd)
     try:
         original = path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -89,8 +90,34 @@ def _prepare_v5_mrm_outputs(cwd):
     runnable = _MRM_OUTPUT_GROUP.sub(r"\1NLoutputResults", original, count=1)
     if runnable == original:
         return lambda: None
-    path.write_text(runnable, encoding="utf-8")
-    return lambda: path.write_text(original, encoding="utf-8")
+    backup = path.with_name(f".{path.name}.mhm-qgis-original")
+    _replace_text(backup, original)
+    _replace_text(path, runnable)
+    return lambda: os.replace(backup, path) if backup.is_file() else None
+
+
+def recover_v5_mrm_outputs(cwd) -> None:
+    """Restore a v5 mRM namelist left temporary by an interrupted process."""
+    path = Path(cwd) / "mrm_outputs.nml"
+    backup = path.with_name(f".{path.name}.mhm-qgis-original")
+    if backup.is_file():
+        original = backup.read_text(encoding="utf-8")
+        current = path.read_text(encoding="utf-8")
+        runnable = _MRM_OUTPUT_GROUP.sub(r"\1NLoutputResults", original, count=1)
+        if current not in {original, runnable}:
+            raise RuntimeError(
+                f"Cannot recover {path.name}: it changed while the mHM backup existed."
+            )
+        os.replace(backup, path)
+
+
+def _replace_text(path, text) -> None:
+    temporary = path.with_name(f".{path.name}.tmp")
+    try:
+        temporary.write_text(text, encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def run(version: str, cwd, run_command, on_finished=None, v6_path=None, namelist=None, parameter=None) -> bool:
@@ -104,11 +131,9 @@ def run(version: str, cwd, run_command, on_finished=None, v6_path=None, namelist
     restore = _prepare_v5_mrm_outputs(cwd) if is_v5 else lambda: None
 
     def finished(exit_code):
-        try:
-            if on_finished is not None:
-                on_finished(exit_code)
-        finally:
-            restore()
+        restore()
+        if on_finished is not None:
+            on_finished(exit_code)
 
     options = {"cwd": str(cwd), "show": True}
     if on_finished is not None or is_v5:
@@ -126,4 +151,4 @@ def run(version: str, cwd, run_command, on_finished=None, v6_path=None, namelist
     return started
 
 
-__all__ = ["executable", "run"]
+__all__ = ["executable", "recover_v5_mrm_outputs", "run"]

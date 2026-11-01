@@ -68,6 +68,10 @@ def test_an_unknown_or_missing_version_falls_back_to_v5_13(tmp_path):
     broken = _project(tmp_path / "broken", "5.13")
     Path(input_state_path(broken)).write_text("{ not json", encoding="utf-8")
     assert project_version(broken) == "v5.13"
+    assert project_version(_project(tmp_path / "unknown", "7.0")) == "v5.13"
+    empty = _project(tmp_path / "empty", "5.13")
+    Path(input_state_path(empty)).write_text("{}", encoding="utf-8")
+    assert project_version(empty) == "v5.13"
 
 
 def test_v6_meteo_is_flat_and_has_no_header(tmp_path):

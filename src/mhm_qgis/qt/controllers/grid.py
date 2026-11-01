@@ -125,7 +125,7 @@ def precipitation_spec(dialog):
     data.update(
         folder=precipitation_folder(dialog),
         pattern=dialog.lineEdit_precipitationGlobDefinition.text().strip(),
-        crs=dialog.selected_meteo_crs() or None,
+        crs=data.get("crs") or dialog.selected_meteo_crs() or None,
     )
     return MeteoFolderSpec(**data).normalized()
 
@@ -510,6 +510,23 @@ def update_l1_resolution_label(dialog):
     )
 
 
+def sync_multiplier(dialog, level, snap=False):
+    """Show the line edit's cell size as n x L0; `snap` rewrites the text to exactly n x L0."""
+    l0, value = current_l0_resolution(dialog), _current_resolution_input(dialog, level)
+    spin = getattr(dialog, f"spinBox_{level}ResolutionMultiplier")
+    spin.setEnabled(bool(l0 and value))
+    if l0 and value:
+        with QSignalBlocker(spin):
+            spin.setValue(max(1, round(value / l0)))
+        if snap:
+            getattr(dialog, f"lineEdit_{level}Resolution").setText(repr(spin.value() * l0))
+
+
+def multiplier_changed(dialog, level, n):
+    if l0 := current_l0_resolution(dialog):
+        getattr(dialog, f"lineEdit_{level}Resolution").setText(repr(n * l0))
+
+
 def update_l11_resolution_label(dialog):
     """Show the selected L11 relation to L1."""
     value = current_l11_resolution(dialog)
@@ -652,6 +669,7 @@ def _populate_resolution_input(dialog, level, values, preferred_value=None, unit
     units.addItem(unit or "")
     # Grid units belong to the selected CRS, not a display override.
     units.setEnabled(False)
+    sync_multiplier(dialog, level)
     return matched
 
 

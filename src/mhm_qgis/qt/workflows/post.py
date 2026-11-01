@@ -21,9 +21,8 @@ def submit(dialog, key, label, runner, done, failed=None) -> bool:
             submit(dialog, key, *pending.pop(key))
 
     def on_error(details):
-        last = next((line for line in reversed(str(details).splitlines()) if line.strip()), "")
         dialog.label_postStatus.setText(f"{label} failed")
-        dialog.log_message(f"ERROR: {label}: {last}")
+        dialog.log_message(f"ERROR: {label}: {details}")
         if failed is not None:
             failed(details)
         next_job()

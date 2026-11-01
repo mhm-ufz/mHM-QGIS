@@ -59,3 +59,15 @@ def test_observation_filename_rejects_path_components():
 
     with pytest.raises(ValueError, match="safe for a filename"):
         streamflow_filename("../7")
+
+
+def test_quality_is_not_mistaken_for_a_q_discharge_column(tmp_path):
+    source = tmp_path / "gauge.csv"
+    source.write_text(
+        "date,quality,flow_rate\n2020-01-01,9,1.25\n",
+        encoding="utf-8",
+    )
+
+    records = records_from_layer(_FileLayer(source))
+
+    assert [record.value for record in records] == [1.25]

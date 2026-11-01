@@ -95,8 +95,7 @@ def test_jobs_run_off_the_qgstask_thread_and_still_report_failures():
     # A raw QgsTask thread is not created by Python, so it reports as
     # `_DummyThread`; a real one means the job ran off the QgsTask thread.
     assert kinds == ["Thread"]
-    assert errors
-    assert "boom" in errors[0]
+    assert errors == ["ValueError: boom"]  # the message, not the traceback
 
 
 class _Ambiguous:
@@ -212,6 +211,45 @@ def test_cancelled_dialog_is_replaced_when_plugin_reopens(monkeypatch):
     plugin.run()
 
     assert plugin.dlg is fresh
+
+
+def test_plugin_unload_shuts_down_and_deletes_its_dialog(monkeypatch):
+    from types import SimpleNamespace
+
+    from mhm_qgis.mhm_qgis import MhmQgis
+    from mhm_qgis.qt.controllers import post_context
+    from mhm_qgis.qt.docks import host
+
+    calls = []
+
+    class Signal:
+        def connect(self, callback):
+            calls.append(("connect", callback))
+
+    dialog = SimpleNamespace(
+        finished=Signal(),
+        deleteLater=lambda: calls.append("delete"),
+        shutdown=lambda: calls.append("shutdown"),
+    )
+    monkeypatch.setattr(post_context, "end_workspace", lambda owner: calls.append(("end", owner)))
+    monkeypatch.setattr(host, "drop_time_toolbar", lambda owner: calls.append(("toolbar", owner)))
+    iface = SimpleNamespace(
+        removePluginMenu=lambda _menu, action: calls.append(("menu", action)),
+        removeToolBarIcon=lambda action: calls.append(("icon", action)),
+    )
+    plugin = MhmQgis.__new__(MhmQgis)
+    plugin.iface = iface
+    plugin.dlg = dialog
+    plugin.actions = ["action"]
+
+    plugin.unload()
+
+    assert "shutdown" in calls
+    assert ("end", dialog) in calls
+    assert ("toolbar", dialog) in calls
+    assert ("menu", "action") in calls
+    assert ("icon", "action") in calls
+    assert plugin.dlg is None
 
 
 def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_path):

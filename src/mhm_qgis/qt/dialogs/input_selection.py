@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from qgis.core import QgsMapLayer, QgsProject
+from qgis.core import QgsCoordinateReferenceSystem, QgsMapLayer, QgsProject
 from qgis.PyQt import QtCore, QtWidgets
 
 from ...qgis_bridge import layers
@@ -221,24 +221,26 @@ class InputComboAdapter(QtCore.QObject):
                 layer = _project_layer(data.get("layer_id")) or self._layers.get(data.get("layer_id"))
                 return layer if layer is not None and not sip.isdeleted(layer) else None
             if data.get("origin") == "file":
-                return self._opened(data.get("path"), str(data.get("variable", "")))
+                return self._opened(data.get("path"), str(data.get("variable", "")), str(data.get("source_crs") or ""))
         if data is not None and hasattr(data, "type"):
             return data
         text = self.combo_box.currentText().strip()
         return self._opened(text) if os.path.isfile(text) else None
 
-    def _opened(self, path, variable=""):
-        """Open a file layer once per file version rather than on every call."""
+    def _opened(self, path, variable="", crs=""):
+        """Open a file layer once per file version and assigned CRS rather than on every call."""
         from qgis.PyQt import sip
 
         try:
             stat = os.stat(path)
         except (OSError, TypeError, ValueError):
             return None
-        key = (path, variable, stat.st_mtime_ns, stat.st_size)
+        key = (path, variable, crs, stat.st_mtime_ns, stat.st_size)
         cached_key, layer = self._file_layer
         if cached_key != key or layer is None or sip.isdeleted(layer):
             layer = _file_layer(path, self.kind, variable)
+            if layer is not None and crs:
+                layer.setCrs(QgsCoordinateReferenceSystem(crs))  # an ASC has none; the user assigned it
             self._file_layer = (key, layer)
         return layer
 
@@ -389,11 +391,12 @@ def _ensure_raster_details(parent, combo_box):
     details = raster_details(parent, path)
     if details is None:
         return False
-    combo_box.setItemData(combo_box.currentIndex(), {
-        "path": details.input_path,
-        "variable": details.variable,
-        "source_crs": details.source_crs,
-    })
+    current.update(
+        path=details.input_path,
+        variable=details.variable,
+        source_crs=details.source_crs,
+    )
+    combo_box.setItemData(combo_box.currentIndex(), current)
     return True
 
 

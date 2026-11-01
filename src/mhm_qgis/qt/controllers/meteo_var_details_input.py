@@ -1,6 +1,7 @@
 """Populate and validate meteorology metadata without opening data files."""
 from pathlib import Path
 
+from qgis.core import QgsCoordinateReferenceSystem
 from qgis.PyQt.QtWidgets import QMessageBox
 
 from ...core.meteorology.forcing.temporal import (
@@ -10,6 +11,7 @@ from ...core.meteorology.forcing.temporal import (
     validate_spec,
 )
 from ...core.meteorology.forcing.types import MeteoFolderSpec
+from ...qgis_bridge.layers import crs_string
 from ..dialogs.file_picker import open_directory
 
 
@@ -30,6 +32,7 @@ def populate(dialog, initial):
     update_aggregation_control(dialog)
     dialog.comboBox_unitInput.addItems(VARIABLES[dialog.variable][2])
     dialog.comboBox_unitInput.setCurrentText(normalize_unit(initial.get("unit", VARIABLES[dialog.variable][2][0])))
+    dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem(initial.get("crs") or ""))
 
 
 def populate_output_resolutions(dialog, selected=None):
@@ -78,7 +81,8 @@ def validate(dialog):
             output_temporal_resolution=dialog.comboBox_temporalResolutionOutput.currentText(),
             aggregation=("" if not dialog.comboBox_temporalAggregationTypeMeteoOutput.isEnabled()
                          else dialog.comboBox_temporalAggregationTypeMeteoOutput.currentText()),
-            unit=dialog.comboBox_unitInput.currentText()).normalized()
+            unit=dialog.comboBox_unitInput.currentText(),
+            crs=crs_string(dialog.mProjectionSelectionWidget_crs.crs()) or None).normalized()
         validate_spec(dialog.spec)
     except (OSError, ValueError) as error:
         QMessageBox.warning(dialog, "Meteorology input", str(error))

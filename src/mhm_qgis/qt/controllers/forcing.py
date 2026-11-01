@@ -6,7 +6,7 @@ the reference variable whose scan establishes the common grid (`grid`).
 """
 from __future__ import annotations
 
-from dataclasses import asdict, replace
+from dataclasses import asdict
 
 from qgis.PyQt.QtCore import QSignalBlocker, Qt
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetItem
@@ -40,13 +40,20 @@ def show_meteo_input(dialog, variable):
     """A meteorology row's page: the variable's metadata form, filled in; OK scans it."""
     prompt = MeteoVarDetailsDialog(variable, dialog.project_directory, _meteo_initial(dialog, variable), dialog)
     prompt.accepted.connect(lambda: require_active(dialog) and not switch_busy(dialog) and submit_meteo_input(
-        dialog, variable, replace(prompt.spec, crs=dialog.selected_meteo_crs() or None)))
+        dialog, variable, prompt.spec))
     prompt.finished.connect(lambda _result: show_meteo_input(dialog, variable))
     main.embed(dialog, "meteoVar", prompt)
 
 
+def _initial(dialog, inputs, variable):
+    """A variable's saved form values; the domain CRS until the file's CRS is chosen."""
+    initial = dict(inputs.get(variable, {}))
+    initial["crs"] = initial.get("crs") or dialog.selected_meteo_crs()
+    return initial
+
+
 def _meteo_initial(dialog, variable):
-    initial = dict(dialog._meteo_inputs.get(variable, {}))
+    initial = _initial(dialog, dialog._meteo_inputs, variable)
     if variable == "pre":
         initial.update(folder=grid.precipitation_folder(dialog),
                        pattern=dialog.lineEdit_precipitationGlobDefinition.text())
@@ -90,7 +97,7 @@ def edit_observation_input(dialog, variable=None):
     """Collect and inspect one L2 gridded observation."""
     variable = variable or dialog.comboBox_observationVar.currentText()
     spec = _accepted_spec(
-        dialog, variable, dict(dialog._observation_inputs.get(variable, {})),
+        dialog, variable, _initial(dialog, dialog._observation_inputs, variable),
         "Observation input",
     )
     if spec is None:
@@ -122,7 +129,7 @@ def _accepted_spec(dialog, variable, initial, title):
     prompt = MeteoVarDetailsDialog(variable, dialog.project_directory, initial, dialog)
     if prompt.exec() != QDialog.DialogCode.Accepted:
         return None
-    return replace(prompt.spec, crs=dialog.selected_meteo_crs() or None)
+    return prompt.spec
 
 
 def _spec_state(spec):
@@ -172,7 +179,7 @@ def _populate_forcing_table(table, inputs, edit):
 
 
 def _spec(dialog, value):
-    return MeteoFolderSpec(**dict(value, crs=dialog.selected_meteo_crs() or None)).normalized()
+    return MeteoFolderSpec(**dict(value, crs=value.get("crs") or dialog.selected_meteo_crs() or None)).normalized()
 
 
 def selected_meteo_specs(dialog):

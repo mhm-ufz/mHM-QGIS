@@ -1506,6 +1506,9 @@
               </item>
               <item>
                <widget class="QSpinBox" name="spinBox_resL2Multiplier">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
                 <property name="readOnly">
                  <bool>true</bool>
                 </property>
@@ -1559,7 +1562,7 @@
              </layout>
             </item>
             <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_L1" stretch="0,0,0,0,0">
+             <layout class="QHBoxLayout" name="horizontalLayout_L1" stretch="0,0,0,0,0,0,0,0">
               <item>
                <widget class="QLabel" name="label_L1Resolution">
                 <property name="minimumSize">
@@ -1586,7 +1589,7 @@
                <widget class="QLineEdit" name="lineEdit_L1Resolution">
                 <property name="maximumSize">
                  <size>
-                  <width>100</width>
+                  <width>16777215</width>
                   <height>16777215</height>
                  </size>
                 </property>
@@ -1619,6 +1622,23 @@
                   <string>m</string>
                  </property>
                 </item>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_resL1Open">
+                <property name="text">
+                 <string>  i.e.  </string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QSpinBox" name="spinBox_L1ResolutionMultiplier"/>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_L0Reference_3">
+                <property name="text">
+                 <string>× L0</string>
+                </property>
                </widget>
               </item>
               <item>
@@ -1674,7 +1694,7 @@
                <widget class="QLineEdit" name="lineEdit_L11Resolution">
                 <property name="maximumSize">
                  <size>
-                  <width>100</width>
+                  <width>16777215</width>
                   <height>16777215</height>
                  </size>
                 </property>
@@ -1707,6 +1727,23 @@
                   <string>m</string>
                  </property>
                 </item>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_resL11Open">
+                <property name="text">
+                 <string>  i.e.  </string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QSpinBox" name="spinBox_L11ResolutionMultiplier"/>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_L0Reference_4">
+                <property name="text">
+                 <string>× L0</string>
+                </property>
                </widget>
               </item>
               <item>
@@ -2327,11 +2364,11 @@
               <item>
                <layout class="QHBoxLayout" name="horizontalLayout_landUseLookup">
                 <item>
-                <widget class="QRadioButton" name="radioButton_landUseLookup">
-                 <property name="text">
-                  <string>Single Categorical Layer (with Lookup Table)</string>
-                 </property>
-                </widget>
+                 <widget class="QRadioButton" name="radioButton_landUseLookup">
+                  <property name="text">
+                   <string>Single Categorical Layer (with Lookup Table)</string>
+                  </property>
+                 </widget>
                 </item>
                 <item>
                  <widget class="QToolButton" name="toolButton_landUseLookupInfo">
@@ -2444,11 +2481,11 @@ CODE,NAME,MHM_CLASS
               <item>
                <layout class="QHBoxLayout" name="horizontalLayout_soilLookup">
                 <item>
-                <widget class="QRadioButton" name="radioButton_soilLookup">
-                 <property name="text">
-                  <string>Single Categorical Layer (with Lookup Table)</string>
-                 </property>
-                </widget>
+                 <widget class="QRadioButton" name="radioButton_soilLookup">
+                  <property name="text">
+                   <string>Single Categorical Layer (with Lookup Table)</string>
+                  </property>
+                 </widget>
                 </item>
                 <item>
                  <widget class="QToolButton" name="toolButton_soilLookupInfo">
@@ -2565,11 +2602,11 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
               <item>
                <layout class="QHBoxLayout" name="horizontalLayout_geologyLookup">
                 <item>
-                <widget class="QRadioButton" name="radioButton_geologyLookup">
-                 <property name="text">
-                  <string>Single Categorical Layer (with Lookup Table)</string>
-                 </property>
-                </widget>
+                 <widget class="QRadioButton" name="radioButton_geologyLookup">
+                  <property name="text">
+                   <string>Single Categorical Layer (with Lookup Table)</string>
+                  </property>
+                 </widget>
                 </item>
                 <item>
                  <widget class="QToolButton" name="toolButton_geologyLookupInfo">
@@ -2684,11 +2721,11 @@ CODE,NAME,GEO_CLASS,KARSTIC,PARAMETER_VALUE
               <item>
                <layout class="QHBoxLayout" name="horizontalLayout_laiLookup">
                 <item>
-                <widget class="QRadioButton" name="radioButton_laiLookup">
-                 <property name="text">
-                  <string>Single Categorical Layer (with Lookup Table)</string>
-                 </property>
-                </widget>
+                 <widget class="QRadioButton" name="radioButton_laiLookup">
+                  <property name="text">
+                   <string>Single Categorical Layer (with Lookup Table)</string>
+                  </property>
+                 </widget>
                 </item>
                 <item>
                  <widget class="QToolButton" name="toolButton_laiLookupInfo">
@@ -2776,11 +2813,11 @@ ID,LAND-USE,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,LAI_CLASS
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_domainDefinitionType">
               <item>
-              <widget class="QLabel" name="label_domainDefinitionType">
-               <property name="text">
-                <string>Domain definition:</string>
-               </property>
-              </widget>
+               <widget class="QLabel" name="label_domainDefinitionType">
+                <property name="text">
+                 <string>Domain definition:</string>
+                </property>
+               </widget>
               </item>
               <item>
                <widget class="QToolButton" name="toolButton_domainDefinitionInfo">
@@ -3655,9 +3692,9 @@ date,discharge
                  <item>
                   <widget class="QCheckBox" name="checkBox_enableParameterArgument">
                    <property name="toolTip">
-<string>Pass a different parameter namelist to mHM (-p)</string>
-</property>
-<property name="text">
+                    <string>Pass a different parameter namelist to mHM (-p)</string>
+                   </property>
+                   <property name="text">
                     <string/>
                    </property>
                   </widget>

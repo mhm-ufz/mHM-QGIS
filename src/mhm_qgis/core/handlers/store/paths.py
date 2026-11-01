@@ -53,9 +53,7 @@ def domain_folder(project_folder, name, workspace=WORKSPACE_FOLDER_NAME) -> Path
 def version_key(version_text: str | None) -> str:
     """Return the normalized version folder name used by templates."""
     text = (version_text or "").strip().lower().removeprefix("v")
-    if text.startswith("5"):
-        return "v5.13"
-    return "v6"
+    return "v6" if text.startswith("6") else "v5.13"
 
 
 def schemas_folder(version_text: str | None) -> Path:

@@ -259,6 +259,25 @@ def test_discontinuous_times_units_and_grids_are_rejected(tmp_path):
         inspect_meteo_folder(spec)
 
 
+def test_projected_coordinates_without_a_grid_mapping_use_the_chosen_crs(tmp_path):
+    from mhm_qgis.core.grid.model import resolution_in_crs
+
+    ds = xr.Dataset({"pre": (("time", "yc", "xc"), np.ones((1, 2, 2)))}, coords={
+        "time": np.asarray(["2001-01-01"], dtype="datetime64[ns]"),
+        "yc": [2951847.0, 2927847.0], "xc": [3973369.0, 3997369.0]})
+    ds.to_netcdf(tmp_path / "pre.nc", engine="scipy")
+    metadata = inspect_meteo_folder(MeteoFolderSpec("pre", tmp_path, unit="mm", crs="EPSG:3035"))
+
+    assert (metadata.crs, metadata.unit, metadata.resolution) == ("EPSG:3035", "m", 24000.0)
+    assert resolution_in_crs(metadata, "EPSG:4326").unit == "deg"
+
+
+def test_cf_and_slash_spellings_of_a_daily_rate_match():
+    from mhm_qgis.core.meteorology.forcing.temporal import normalize_unit
+
+    assert normalize_unit("mm d-1") == normalize_unit("mm/d") == normalize_unit("mm/day")
+
+
 def test_incomplete_cumulative_cycle_does_not_replace_outputs(tmp_path):
     _write_nc(tmp_path / "raw/a.nc", "tp", times=("2001-01-01T12",), units="m")
     output = tmp_path / "out/pre.nc"

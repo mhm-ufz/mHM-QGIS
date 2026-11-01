@@ -215,12 +215,13 @@ def _bind_grid(dialog):
     )
     dialog.lineEdit_L1Resolution.textChanged.connect(
         lambda _text: (
+            grid.sync_multiplier(dialog, "L1"),
             grid.update_l1_resolution_label(dialog),
             grid.update_l11_resolution_label(dialog),
         )
     )
     dialog.lineEdit_L11Resolution.textChanged.connect(
-        lambda _text: grid.update_l11_resolution_label(dialog)
+        lambda _text: (grid.sync_multiplier(dialog, "L11"), grid.update_l11_resolution_label(dialog))
     )
     # pushButton_createLatLon → grid.process_lat_lon
     dialog.pushButton_createLatLon.clicked.connect(lambda: grid.process_lat_lon(dialog))
@@ -231,6 +232,9 @@ def _bind_input_state(dialog):
     changed = lambda *_args: main.handle_model_input_changed(dialog)  # noqa: E731
     for _, combo_box in main.input_layer_widgets(dialog):
         combo_box.layerChanged.connect(changed)
-    dialog.lineEdit_L1Resolution.editingFinished.connect(changed)
-    dialog.lineEdit_L11Resolution.editingFinished.connect(changed)
+    for level in ("L1", "L11"):
+        getattr(dialog, f"lineEdit_{level}Resolution").editingFinished.connect(
+            lambda level=level: (grid.sync_multiplier(dialog, level, snap=True), changed()))
+        getattr(dialog, f"spinBox_{level}ResolutionMultiplier").valueChanged.connect(
+            lambda n, level=level: (grid.multiplier_changed(dialog, level, n), changed()))
     dialog.mProjectionSelectionWidget_crs.crsChanged.connect(changed)

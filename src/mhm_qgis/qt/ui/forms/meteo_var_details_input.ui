@@ -197,6 +197,27 @@
         </item>
        </layout>
       </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_crs" stretch="2,3">
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="label_crs">
+          <property name="text">
+           <string>Coordinate CRS:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QgsProjectionSelectionWidget" name="mProjectionSelectionWidget_crs">
+          <property name="toolTip">
+           <string>CRS of the files' x/y coordinates, used only when the files don't declare one.</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
      </layout>
     </widget>
    </item>
@@ -243,6 +264,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QgsProjectionSelectionWidget</class>
+   <extends>QWidget</extends>
+   <header>qgis.gui</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections>
   <connection>

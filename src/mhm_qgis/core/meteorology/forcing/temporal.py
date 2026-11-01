@@ -40,6 +40,7 @@ def normalize_unit(unit):
                "w/m2": "W m-2", "wm-2": "W m-2", "j/m2": "J m-2", "jm-2": "J m-2",
                "m/s": "m s-1", "ms-1": "m s-1", "kg/m2": "kg m-2",
                "kgm-2": "kg m-2", "kgm-2s-1": "kg m-2 s-1", "mmday-1": "mm/day",
+               "mmd-1": "mm/day", "mm/d": "mm/day",
                "pa": "Pa", "hpa": "hPa", "kpa": "kPa",
                "m3s-1": "m3 s-1", "m3m-3": "m3 m-3", "counts": "counts"}
     return aliases.get(compact, compact)
