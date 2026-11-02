@@ -1,4 +1,6 @@
 # Core dependencies (floors: the first releases that work with pandas 2.0 and NumPy 1.24)
+# NumPy is QGIS's own, never installed: the plugin installs each line below with
+# numpy==<QGIS's version>, so pip picks the newest that fits it (NumPy 1 or 2).
 numpy>=1.24
 scipy>=1.10
 pandas>=2.0

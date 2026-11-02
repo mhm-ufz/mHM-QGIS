@@ -27,3 +27,8 @@ def test_qgis_numpy_is_reported_never_replaced(monkeypatch):
     result = bootstrap.install_missing_dependencies(None, [bootstrap.dependency_from_requirement_line("numpy>=999")])
     assert not ran
     assert "newer QGIS" in result.failed["numpy>=999"]
+
+
+def test_every_install_holds_the_numpy_qgis_has(monkeypatch):
+    monkeypatch.setattr(bootstrap.importlib.metadata, "version", lambda name: {"numpy": "1.26.4"}[name])
+    assert bootstrap.pip_install_command("rioxarray>=0.14")[-2:] == ["rioxarray>=0.14", "numpy==1.26.4"]

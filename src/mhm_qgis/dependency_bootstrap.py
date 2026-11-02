@@ -1,6 +1,7 @@
 """QGIS runtime dependency bootstrap for the mhm_qgis plugin."""
 from __future__ import annotations
 
+import contextlib
 import importlib
 import importlib.metadata
 import os
@@ -282,7 +283,11 @@ def install_missing_dependencies(parent, missing: list[Dependency]) -> Bootstrap
 
 
 def pip_install_command(requirement: str, break_system_packages=False) -> list[str]:
-    """Return the pip install command for one requirement."""
+    """Return the pip install command for one requirement, holding QGIS's NumPy.
+
+    Without the pin, pip upgrades NumPy for a package whose newest release needs a
+    newer one (scipy, pandas, rioxarray need NumPy 2) and GDAL, built against QGIS's,
+    fails with `_ARRAY_API not found`. With it, pip picks the newest that still fits."""
 
     command = [
         sys.executable,
@@ -292,6 +297,8 @@ def pip_install_command(requirement: str, break_system_packages=False) -> list[s
         "--user",
         requirement,
     ]
+    with contextlib.suppress(importlib.metadata.PackageNotFoundError):
+        command.append(f"numpy=={importlib.metadata.version('numpy')}")
     if break_system_packages and sys.platform.startswith("linux"):
         command.append("--break-system-packages")
     return command
