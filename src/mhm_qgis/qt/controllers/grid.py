@@ -159,6 +159,21 @@ def invalidate_grid(dialog):
     update_extent_labels(dialog)
 
 
+def crs_changed(dialog):
+    """A new domain CRS: L0 again now; L2, and so L1/L11, after a new precipitation scan."""
+    if dialog._loading_input_state:
+        return
+    dialog._preferred_l1_resolution = dialog._preferred_l11_resolution = None
+    dialog._l2_multiplier_user_selected = False
+    with QSignalBlocker(dialog.spinBox_L2ResolutionMultiplier):
+        dialog.spinBox_L2ResolutionMultiplier.setValue(1)
+    dialog.lineEdit_L1Resolution.clear()
+    dialog.lineEdit_L11Resolution.clear()
+    clear_precipitation_resolution_labels(dialog)
+    invalidate_grid(dialog)  # before L0, which would rebuild L1 from the old L2
+    update_l0_resolution_from_dem(dialog)
+
+
 def grid_fingerprint(dialog):
     from ...core.handlers.file.netcdf.raster import file_path
     from ...core.handlers.state.cache import fingerprint

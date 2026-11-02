@@ -471,6 +471,20 @@ def test_dem_derivatives_delegate_the_expensive_pass_to_the_caller(tmp_path):
     assert (folder / "filled_dem.nc").is_file()
 
 
+def test_a_dem_without_crs_gets_its_assigned_one_even_in_the_target_crs(tmp_path):
+    from mhm_qgis.core.handlers.raster.tasks import _prepared_dem_source
+
+    bare, own = tmp_path / "dem.asc", tmp_path / "own.tif"
+    _dem(own)
+    gdal.Translate(str(bare), str(own), format="AAIGrid")
+    (tmp_path / "dem.prj").unlink()  # an ASC without .prj
+    assert not gdal.Open(str(bare)).GetProjection()
+    prepared = _prepared_dem_source(bare, "EPSG:32632", "EPSG:32632", str(tmp_path / "prepared.nc"))
+    assert prepared != str(bare)
+    assert gdal.Open(prepared).GetProjection()
+    assert _prepared_dem_source(own, "EPSG:32632", "EPSG:32632", str(tmp_path / "x.nc")) == str(own)
+
+
 def test_native_worker_runs_the_dem_derivative_job(tmp_path):
     from mhm_qgis.core.native_worker import run
 

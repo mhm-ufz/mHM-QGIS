@@ -185,6 +185,7 @@ class MorphologyTaskBridge:
             self.filled_dem_path,
             crs=layers.crs_string(self.dialog.get_crs()),
             target_timestep=config.get("target_timestep") or lai.DEFAULT_TIMESTEP,
+            l0_header=(self.dialog._grid_l0_info or {}).get("header"),
         ) if "netcdf" in mode else None
         if options is None:
             self.dialog.log_message("No LAI NetCDF input is selected. Skipping LAI.")

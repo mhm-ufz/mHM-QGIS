@@ -391,29 +391,116 @@ def prepare_lai_file(
     source_variable: str | None = None,
     dem_crs: str | None = None,
     resampling: str = "bilinear",
+    l0_header: dict | None = None,
     task=None,
     log: LogCallback | None = None,
 ) -> Path:
-    """Stream gridded LAI onto the DEM through mHM-tools."""
+    """Stream gridded LAI onto the DEM through mHM-tools.
+
+    mHM-tools reads 1-D lat/lon. A file without lat/lon must already be the L0
+    reference grid; 2-D lat/lon are first put on a regular lat/lon grid.
+    """
+    import xarray as xr
     from mhm_tools.pre.format_lai import format_lai_netcdf_file
 
     output = Path(output_file)
     if output.is_symlink():
         output.unlink()
-    with capture_messages(log):
-        result = format_lai_netcdf_file(
-            input_file,
-            dem_file,
-            output,
-            output_temporal_resolution=output_temporal_resolution,
-            source_variable=source_variable,
-            dem_crs=dem_crs,
-            resampling=resampling,
-            is_cancelled=task.isCanceled if task is not None else None,
-            progress=task.setProgress if task is not None else None,
-            log=log,
-        )
+    with xr.open_dataset(input_file) as dataset:
+        lat = next((dataset[name] for name in ("lat", "latitude") if name in dataset.variables), None)
+        if lat is None:
+            return _lai_on_l0(dataset, source_variable, output, l0_header, dem_crs, output_temporal_resolution,
+                              dem_file)
+        with TemporaryDirectory(prefix="mhm_qgis_lai_", dir=output.parent) as temporary:
+            if lat.ndim == 2:
+                input_file = _regular_lonlat(dataset, source_variable, lat, Path(temporary) / "lai_lonlat.nc")
+            with capture_messages(log):
+                result = format_lai_netcdf_file(
+                    input_file,
+                    dem_file,
+                    output,
+                    output_temporal_resolution=output_temporal_resolution,
+                    source_variable=source_variable,
+                    dem_crs=dem_crs,
+                    resampling=resampling,
+                    is_cancelled=task.isCanceled if task is not None else None,
+                    progress=task.setProgress if task is not None else None,
+                    log=log,
+                )
     return _require_outputs((Path(result),))[0]
+
+
+def _lai_variable(dataset, variable):
+    if variable:
+        return dataset[variable]
+    return next(value for value in dataset.data_vars.values() if value.ndim == 3)
+
+
+def _lai_on_l0(dataset, variable, output, header, crs, output_temporal_resolution, dem_file) -> Path:
+    """A LAI series already on the L0 reference grid, rows north-first: only its time step changes.
+
+    Like the resampled LAI, it is staged on the filled DEM's (padded, common L0) grid.
+    """
+    from mhm_tools.pre.format_lai import (
+        NODATA,
+        coordinate_dataset,
+        lai_output_attrs,
+        prepare_lai_temporal,
+        target_grid_from_header,
+        target_grid_from_raster,
+        time_attrs_for_step,
+    )
+
+    data = _lai_variable(dataset, variable)
+    shape = (int(header["nrows"]), int(header["ncols"])) if header else None
+    if tuple(data.shape[-2:]) != shape:
+        raise ValueError(
+            f"LAI without latitude/longitude must have the L0 grid's shape {shape} (rows, columns); "
+            f"{data.name!r} has {tuple(data.shape[-2:])}.")
+    temporal = prepare_lai_temporal(data, output_temporal_resolution, time_dim=data.dims[0])
+    grid = target_grid_from_header(header, crs)
+    staged = coordinate_dataset(
+        grid.x_centers, grid.y_centers, crs, "LAI on the L0 grid", temporal.data["time"].values,
+        temporal.time_bounds, time_attrs_for_step(temporal.time_step))
+    staged["lai"] = (("time", "yc", "xc"), temporal.data.transpose("time", ...).values, lai_output_attrs(data.attrs))
+    dem, _crs = target_grid_from_raster(dem_file, crs)
+    rows, cellsize = len(dem.y_centers), dem.transform.a
+    dem_header = {"ncols": len(dem.x_centers), "nrows": rows, "cellsize": cellsize,
+                  "xllcorner": dem.transform.c, "yllcorner": dem.transform.f - rows * cellsize}
+    with TemporaryDirectory(prefix="mhm_qgis_lai_", dir=output.parent) as temporary:
+        reference = Path(temporary) / "lai_reference.nc"
+        staged.to_netcdf(reference, encoding={"lai": {"_FillValue": NODATA}})
+        return copy_lai_file_to_grid(reference, output, dem_header, crs, "LAI on the L0 grid")
+
+
+def _regular_lonlat(dataset, variable, lat, path) -> Path:
+    """Nearest-neighbour copy of a 2-D lat/lon LAI cube onto a regular lat/lon grid at its own spacing.
+
+    resamples twice (this, then mhm-tools' bilinear onto the DEM); a
+    sampler streaming straight onto the DEM would avoid it if the smoothing matters.
+    """
+    import numpy as np
+    import xarray as xr
+    from scipy.spatial import cKDTree
+
+    lon = next(dataset[name] for name in ("lon", "longitude") if name in dataset.variables).values
+    data = _lai_variable(dataset, variable)
+    data = data.transpose(*[dim for dim in data.dims if dim not in lat.dims], *lat.dims)
+    lat = lat.values
+    step = min(np.nanmedian(np.hypot(np.diff(lon, axis=axis), np.diff(lat, axis=axis))) for axis in (0, 1))
+    grid_lat = np.arange(np.nanmin(lat), np.nanmax(lat) + step / 2, step)
+    grid_lon = np.arange(np.nanmin(lon), np.nanmax(lon) + step / 2, step)
+    scale = np.cos(np.radians(np.nanmean(lat)))  # a degree of longitude is shorter
+    tree = cKDTree(np.column_stack((lon.ravel() * scale, lat.ravel())))
+    grid_x, grid_y = np.meshgrid(grid_lon * scale, grid_lat)
+    distance, index = tree.query(np.column_stack((grid_x.ravel(), grid_y.ravel())))
+    values = data.values.astype("float64").reshape(data.shape[0], -1)[:, index]
+    values[:, distance > step] = np.nan  # outside the source footprint
+    xr.Dataset(
+        {data.name: (("time", "lat", "lon"), values.reshape(-1, grid_lat.size, grid_lon.size), data.attrs)},
+        coords={"time": data[data.dims[0]].values, "lat": grid_lat, "lon": grid_lon},
+    ).to_netcdf(path)
+    return path
 
 
 def copy_lai_file_to_grid(

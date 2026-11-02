@@ -67,6 +67,7 @@ def lai(task, options, messages):
         source_variable=options.get("source_variable"),
         dem_crs=options.get("dem_crs") or None,
         resampling=options.get("method") or "bilinear",
+        l0_header=options.get("l0_header"),
         task=task,
         log=messages.append,
     )

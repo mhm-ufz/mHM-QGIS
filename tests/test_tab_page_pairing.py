@@ -51,6 +51,35 @@ def test_resolution_fields_preserve_exact_positive_values_for_click_validation()
     dialog.close()
 
 
+def test_reopening_the_dem_refreshes_it(tmp_path):
+    gdal = pytest.importorskip("osgeo.gdal")
+    from mhm_qgis.qt.controllers import main
+
+    dem = str(tmp_path / "dem.tif")
+    gdal.GetDriverByName("GTiff").Create(dem, 2, 2, 1).FlushCache()
+    dialog, seen = MhmQgisDialog(), []
+    dialog._input_adapters["dem"].layerChanged.connect(seen.append)
+    main.add_file_input(dialog, "dem", dem, manual=True)
+    main.add_file_input(dialog, "dem", dem, manual=True, source_crs="EPSG:3035")
+    assert len(seen) == 2
+    dialog.close()
+
+
+def test_a_new_crs_resets_l1_l11_and_l2():
+    from qgis.core import QgsCoordinateReferenceSystem
+
+    dialog = MhmQgisDialog()
+    dialog.lineEdit_L1Resolution.setText("1000")
+    dialog.lineEdit_L11Resolution.setText("2000")
+    dialog.spinBox_L2ResolutionMultiplier.setValue(4)
+    dialog._grid_l2_header = {"cellsize": 4000}
+    dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:3035"))
+    assert (dialog.lineEdit_L1Resolution.text(), dialog.lineEdit_L11Resolution.text()) == ("", "")
+    assert dialog.spinBox_L2ResolutionMultiplier.value() == 1
+    assert dialog._grid_l2_header is None
+    dialog.close()
+
+
 def test_l1_and_l11_spin_boxes_hold_the_integer_multiple_of_l0():
     dialog = MhmQgisDialog()
     l0 = 1 / 1200

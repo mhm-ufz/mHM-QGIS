@@ -160,7 +160,7 @@ def build(dialog) -> None:
     for row in _rows(dialog):
         row.setData(0, Qt.ItemDataRole.UserRole, _node(row)["key"])
     tree.expandAll()
-    dialog.splitter.setSizes([260, 900])
+    dialog.splitter.setSizes([310, 850])
     _action(dialog, item(dialog, "outputs"), "↺", "Reset the view's layout", lambda: post_context.reset_layout(dialog))
     set_view(dialog, "outputs", False)
     outputs_shown(dialog, False)

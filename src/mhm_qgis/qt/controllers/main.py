@@ -125,7 +125,10 @@ def add_file_input(dialog, kind, path, *, manual, variable="", source_crs=""):
         data = combo.itemData(index)
         if isinstance(data, dict) and data.get("path") == path:
             combo.setItemData(index, {**data, "variable": variable, "source_crs": source_crs})
-            combo.setCurrentIndex(index)
+            if combo.currentIndex() == index:
+                combo.currentIndexChanged.emit(index)  # reopened, maybe with another CRS
+            else:
+                combo.setCurrentIndex(index)
             return
     label = portable_path(dialog.project_folder, path)
     combo.addItem(label, {

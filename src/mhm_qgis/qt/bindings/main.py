@@ -197,9 +197,7 @@ def _bind_grid(dialog):
     dem = dialog.input_combo("dem")
     dem.layerChanged.connect(lambda layer=None: grid.update_l0_resolution_from_dem(dialog, layer))
     dem.layerChanged.connect(lambda layer=None: grid.invalidate_grid(dialog))
-    dialog.mProjectionSelectionWidget_crs.crsChanged.connect(
-        lambda crs=None: grid.invalidate_grid(dialog)
-    )
+    dialog.mProjectionSelectionWidget_crs.crsChanged.connect(lambda crs=None: grid.crs_changed(dialog))
     dialog.spinBox_L2ResolutionMultiplier.valueChanged.connect(
         lambda value: grid.handle_l2_multiplier_changed(dialog, value)
     )

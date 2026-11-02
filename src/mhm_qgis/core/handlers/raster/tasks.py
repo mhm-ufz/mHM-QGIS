@@ -580,7 +580,10 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
     if "|" in source and os.path.isfile(source.split("|", 1)[0]):
         source = source.split("|", 1)[0]
     selected_netcdf_variable = source.startswith('NETCDF:"')
-    if not selected_netcdf_variable and (
+    dataset = gdal.Open(source)
+    own_crs = bool(dataset is not None and dataset.GetProjection())  # an ASC without .prj has none
+    dataset = None
+    if not selected_netcdf_variable and own_crs and (
         not target_crs or source_crs == target_crs
     ):
         return source
@@ -589,7 +592,7 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
     source_valid = source_ref.SetFromUserInput(str(source_crs or "")) == 0
     target_valid = target_ref.SetFromUserInput(str(target_crs or "")) == 0
     reproject = source_valid and target_valid and not source_ref.IsSame(target_ref)
-    if not selected_netcdf_variable and not reproject:
+    if not selected_netcdf_variable and not reproject and own_crs:
         return source
     os.makedirs(os.path.dirname(reprojected_path), exist_ok=True)
     if Path(reprojected_path).is_symlink():
