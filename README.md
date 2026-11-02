@@ -55,12 +55,11 @@ mhm-qgis-runtime remove          # repair = remove, then install
 Install **mHM QGIS** from the QGIS Plugin Manager (QGIS 3.34 or newer, including
 QGIS 4). Enable *Show also experimental plugins* while the plugin is experimental. On
 first start the plugin lists its missing Python dependencies (see `requirements.txt`)
-and offers to install them with `pip --user` into the Python that QGIS uses. If that
-fails, install them manually with that same Python. On Windows, use the OSGeo4W Shell:
-
-```bash
-python -m pip install --user -r <plugin folder>/requirements.txt
-```
+and offers to install them for the Python that QGIS uses, into its own folder in the
+QGIS profile (`<profile>/python/mhm-qgis-packages`), not `~/.local`: removing the
+profile removes them, and no other Python sees them. QGIS's own packages (NumPy, GDAL)
+are reused, never replaced. If that fails, the plugin shows the exact commands to run
+with that same Python (on Windows, in the OSGeo4W Shell).
 
 ### mHM executables
 

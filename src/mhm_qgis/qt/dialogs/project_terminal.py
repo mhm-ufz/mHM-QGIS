@@ -5,11 +5,11 @@ import contextlib
 import os
 import shlex
 import signal
-import sys
 import uuid
 
 from qgis.PyQt import QtCore, QtGui, QtWidgets
 
+from ...dependency_bootstrap import python_environment, python_executable
 from ..bindings.project_terminal import bind as bind_terminal
 from ..ui import load_form
 
@@ -98,6 +98,10 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         self._cwd = cwd
         self._append_text(f"Starting terminal session in {cwd}\n")
         program, args = self._shell_command()
+        environment = QtCore.QProcessEnvironment()
+        for name, value in python_environment().items():  # QGIS's Python and the plugin's `mhm` must start here
+            environment.insert(name, value)
+        self._process.setProcessEnvironment(environment)
         self._process.setWorkingDirectory(cwd)
         self._process.start(program, args)
         if not self._process.waitForStarted(3000):
@@ -169,7 +173,7 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         if os.name == "nt":
             return os.environ.get("COMSPEC", "cmd.exe"), []
         shell = os.environ.get("SHELL", "/bin/bash")
-        return sys.executable, [
+        return python_executable(), [
             "-c", "import os,sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])",
             shell,
         ]

@@ -7,11 +7,15 @@ import shlex
 import shutil
 import site
 import subprocess
-import sys
 import sysconfig
 from pathlib import Path
 
 from ..core.handlers.store.paths import version_key
+from ..dependency_bootstrap import (
+    python_environment,
+    python_executable,
+    user_scripts_path,
+)
 
 V6_ENVIRONMENT_VARIABLE = "MHM_QGIS_MHMV6"
 _MRM_OUTPUT_GROUP = re.compile(
@@ -32,6 +36,7 @@ def _require_executable(path, version_pattern: str, version_label: str) -> Path:
             text=True,
             timeout=15,
             check=False,
+            env=python_environment(),  # pip's `mhm` is a script run by QGIS's Python
         )
     except OSError as error:
         raise OSError(f"Could not start mHM executable {path}: {error}") from error
@@ -46,7 +51,7 @@ def _require_executable(path, version_pattern: str, version_label: str) -> Path:
 
 def _installed_v5() -> Path:
     name = "mhm.exe" if os.name == "nt" else "mhm"
-    candidates = [shutil.which("mhm")]
+    candidates = [str(Path(user_scripts_path()) / name), shutil.which("mhm")]
     scripts = sysconfig.get_path("scripts")
     if scripts:
         candidates.append(str(Path(scripts) / name))
@@ -62,7 +67,7 @@ def _installed_v5() -> Path:
         except (OSError, ValueError) as error:  # e.g. an old build on PATH missing its libraries
             problems.append(str(error))
     raise FileNotFoundError(
-        f"mhm 5.13 is not installed for {sys.executable}. "
+        f"mhm 5.13 is not installed for {python_executable()}. "
         "Install it with: python -m pip install 'mhm>=5.13.4,<5.14'"
         + "".join(f" Skipped: {problem}" for problem in problems)
     )

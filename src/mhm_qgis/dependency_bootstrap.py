@@ -10,6 +10,7 @@ import shlex
 import site
 import subprocess
 import sys
+import sysconfig
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -69,9 +70,9 @@ def ensure_qgis_runtime_dependencies(parent=None, prompt=True) -> BootstrapResul
     """
     Ensure QGIS can import mhm_qgis runtime dependencies.
 
-    Missing packages are installed into the current Python user's site-packages
-    with ``pip install --user``. QGIS-owned Qt bindings are deliberately skipped
-    even when they appear in the requirements file.
+    Missing packages are installed with ``pip install --user`` into the plugin's
+    folder in the QGIS profile (``packages_base``), not ``~/.local``. QGIS-owned
+    Qt bindings are deliberately skipped even when they appear in the requirements file.
     """
 
     global _LAST_RESULT  # noqa: PLW0603 -- one cached result per QGIS session
@@ -192,23 +193,83 @@ def can_import(dependency: Dependency) -> bool:
 
 
 def add_user_site() -> str:
-    """Add the current user's site-packages directory to sys.path."""
+    """Put the plugin's package folder first on sys.path, as Python does its user site."""
 
     path = user_site_path()
-    if path:
-        try:
-            site.addsitedir(path)
-        except Exception:
-            if path not in sys.path:
-                sys.path.append(path)
+    if os.path.isdir(path):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+        site.addsitedir(path)  # its .pth files
     importlib.invalidate_caches()
     return path
 
 
-def user_site_path() -> str:
-    """Return the current Python user's site-packages path."""
+def python_executable() -> str:
+    """QGIS's own Python. Embedded, sys.executable is the QGIS binary on macOS and Windows,
+    and running it with pip's arguments starts another QGIS ("Invalid data source: /-m")."""
 
-    return site.USER_SITE or site.getusersitepackages()
+    if Path(sys.executable).name.lower().startswith("python"):
+        return sys.executable
+    version = f"python{sys.version_info[0]}.{sys.version_info[1]}"
+    names = ["python.exe"] if os.name == "nt" else [version, "python3", "python"]
+    app = Path(sys.executable).parent
+    for folder in (Path(sys.exec_prefix), Path(sys.exec_prefix) / "bin", app, app / "bin"):
+        for name in names:
+            if (folder / name).is_file():
+                return str(folder / name)
+    raise RuntimeError(f"Could not find the Python of this QGIS under {sys.exec_prefix} or {app}.")
+
+
+def packages_base() -> str:
+    """pip's user base for the plugin: a folder in the QGIS profile, not ~/.local shared by every Python."""
+
+    try:
+        from qgis.core import QgsApplication
+    except ImportError:  # the standalone runtime: its own environment
+        return site.getuserbase()
+    return os.path.join(QgsApplication.qgisSettingsDirPath(), "python", "mhm-qgis-packages")
+
+
+def _user_path(kind: str) -> str:
+    return sysconfig.get_path(kind, sysconfig.get_preferred_scheme("user"), vars={"userbase": packages_base()})
+
+
+def user_site_path() -> str:
+    """The plugin's site-packages, where pip --user writes with PYTHONUSERBASE=packages_base()."""
+
+    return _user_path("purelib")
+
+
+def user_scripts_path() -> str:
+    """Where pip puts the installed packages' commands (e.g. `mhm`)."""
+
+    return _user_path("scripts")
+
+
+def python_environment() -> dict[str, str]:
+    """os.environ for a Python the plugin starts (pip, the worker, `mhm`, the terminal).
+
+    QGIS tells its embedded Python where the standard library is. The macOS bundle's
+    python3.12, started on its own, is not told: it looks on the build machine and fails
+    ("No module named 'encodings'"). It gets QGIS's home, QGIS's import path (its packages,
+    so pip reuses them) and the plugin's folder as its user site."""
+
+    environment = {
+        **os.environ,
+        "PYTHONUSERBASE": packages_base(),
+        "PYTHONPATH": os.pathsep.join(item for item in (*sys.path, os.environ.get("PYTHONPATH", "")) if item),
+    }
+    with contextlib.suppress(RuntimeError):
+        if python_executable() != sys.executable and os.path.isdir(sys.prefix):
+            environment["PYTHONHOME"] = sys.prefix
+    return environment
+
+
+def pip_environment() -> dict[str, str]:
+    """pip --user into the plugin's folder. PEP 668 refuses any install outside a venv on a
+    distro Python; with a private user base pip writes only there and never alters a system package."""
+
+    return {**python_environment(), "PIP_BREAK_SYSTEM_PACKAGES": "1"}
 
 
 def install_missing_dependencies(parent, missing: list[Dependency]) -> BootstrapResult:
@@ -221,7 +282,7 @@ def install_missing_dependencies(parent, missing: list[Dependency]) -> Bootstrap
     progress = create_progress_dialog(parent, missing)
     set_wait_cursor(True)
     try:
-        break_system_packages = pip_supports_break_system_packages()
+        environment = pip_environment()
         for index, dependency in enumerate(missing, start=1):
             if progress is not None:
                 progress.setLabelText(f"Installing {dependency.requirement}...")
@@ -232,13 +293,18 @@ def install_missing_dependencies(parent, missing: list[Dependency]) -> Bootstrap
                     f"QGIS comes with an older {dependency.package_name}; it is not replaced, as QGIS "
                     "was built against it. Use a newer QGIS.")
                 continue
-            command = pip_install_command(dependency.requirement, break_system_packages)
+            try:
+                command = pip_install_command(dependency.requirement)
+            except RuntimeError as error:  # no Python found: say so, never start another QGIS
+                failed[dependency.requirement] = str(error)
+                continue
             completed = subprocess.run(  # nosec B603: this Python's pip, a requirement from the plugin's requirements.txt, no shell
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 check=False,
+                env=environment,
             )
             add_user_site()
             if completed.returncode == 0 and can_import(dependency):
@@ -282,7 +348,7 @@ def install_missing_dependencies(parent, missing: list[Dependency]) -> Bootstrap
     return result
 
 
-def pip_install_command(requirement: str, break_system_packages=False) -> list[str]:
+def pip_install_command(requirement: str) -> list[str]:
     """Return the pip install command for one requirement, holding QGIS's NumPy.
 
     Without the pin, pip upgrades NumPy for a package whose newest release needs a
@@ -290,7 +356,7 @@ def pip_install_command(requirement: str, break_system_packages=False) -> list[s
     fails with `_ARRAY_API not found`. With it, pip picks the newest that still fits."""
 
     command = [
-        sys.executable,
+        python_executable(),
         "-m",
         "pip",
         "install",
@@ -299,28 +365,7 @@ def pip_install_command(requirement: str, break_system_packages=False) -> list[s
     ]
     with contextlib.suppress(importlib.metadata.PackageNotFoundError):
         command.append(f"numpy=={importlib.metadata.version('numpy')}")
-    if break_system_packages and sys.platform.startswith("linux"):
-        command.append("--break-system-packages")
     return command
-
-
-def pip_supports_break_system_packages() -> bool:
-    """Return whether the current pip supports PEP 668 override flag."""
-
-    if not sys.platform.startswith("linux"):
-        return False
-    try:
-        completed = subprocess.run(  # nosec B603: fixed arguments, no shell
-            [sys.executable, "-m", "pip", "install", "--help"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=15,
-            check=False,
-        )
-    except Exception:
-        return False
-    return "--break-system-packages" in (completed.stdout or "")
 
 
 def confirm_install(parent, missing: list[Dependency]) -> bool:
@@ -331,7 +376,7 @@ def confirm_install(parent, missing: list[Dependency]) -> bool:
     message = (
         "mHM QGIS needs these Python packages in the QGIS Python environment:\n\n"
         + "\n".join(dependency.requirement for dependency in missing)
-        + "\n\nThey will be installed with pip --user into:\n"
+        + "\n\nThey will be installed into the QGIS profile:\n"
         + user_site_path()
     )
     box = QMessageBox(parent)
@@ -410,25 +455,25 @@ def show_failure(parent, result: BootstrapResult) -> None:
     failed_names = result.failed_requirements or [
         dependency.requirement for dependency in result.missing
     ]
-    break_system_packages = pip_supports_break_system_packages()
-    command_lines = [
-        " ".join(
-            shlex.quote(part)
-            for part in pip_install_command(requirement, break_system_packages)
-        )
-        for requirement in failed_names
-    ]
+    environment = pip_environment()
+    names = [name for name in ("PYTHONHOME", "PYTHONUSERBASE") if name in environment]
+    prefix = ("".join(f'set "{name}={environment[name]}" && ' for name in names) if os.name == "nt"
+              else "".join(f"{name}={shlex.quote(environment[name])} " for name in names)
+              + "PIP_BREAK_SYSTEM_PACKAGES=1 ")
+    command_lines = []
+    with contextlib.suppress(RuntimeError):  # no Python found: the details say so
+        command_lines = [
+            prefix + " ".join(shlex.quote(part) for part in pip_install_command(requirement))
+            for requirement in failed_names
+        ]
     details = "\n\n".join(
         f"{requirement}:\n{output}"
         for requirement, output in result.failed.items()
         if output
     )
-    message = (
-        "mHM QGIS could not install or load these Python packages:\n\n"
-        + "\n".join(failed_names)
-        + "\n\nTry running these commands with the QGIS Python interpreter:\n\n"
-        + "\n".join(command_lines)
-    )
+    message = "mHM QGIS could not install or load these Python packages:\n\n" + "\n".join(failed_names)
+    if command_lines:
+        message += "\n\nTry running these commands:\n\n" + "\n".join(command_lines)
     if details:
         message += "\n\npip output:\n" + details[-3000:]
     show_warning(parent, "mHM QGIS Dependency Installation Failed", message)

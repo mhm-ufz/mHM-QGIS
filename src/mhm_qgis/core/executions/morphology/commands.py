@@ -5,10 +5,10 @@ import contextlib
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from ....dependency_bootstrap import python_environment, python_executable
 from ....externals.mhm_tools_handler import prepare_lai_file
 from ...handlers.raster.tasks import (
     dem_derivative_files,
@@ -173,18 +173,14 @@ def native_worker(task, payload, working_folder):
         result_file = temporary / "result.json"
         progress_file = temporary / "progress.txt"  # the child writes 0-100 here
         job_file.write_text(json.dumps({**payload, "progress": str(progress_file)}), encoding="utf-8")
-        environment = os.environ.copy()
+        environment = python_environment()  # it imports what QGIS imports, the plugin's packages included
         package_parent = str(Path(__file__).resolve().parents[4])
-        environment["PYTHONPATH"] = os.pathsep.join(
-            item
-            for item in (package_parent, environment.get("PYTHONPATH", ""))
-            if item
-        )
+        environment["PYTHONPATH"] = os.pathsep.join((package_parent, environment["PYTHONPATH"]))
         log_file = temporary / "worker.log"
         with log_file.open("w", encoding="utf-8") as log_stream:
             process = subprocess.Popen(  # nosec B603: this Python running the plugin's own worker on its own files
                 [
-                    sys.executable,
+                    python_executable(),
                     "-m",
                     "mhm_qgis.core.native_worker",
                     str(job_file),

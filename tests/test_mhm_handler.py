@@ -37,6 +37,7 @@ def test_a_broken_mhm_on_path_is_skipped_for_the_pip_installed_one(tmp_path, mon
         (tmp_path / folder).mkdir(parents=True)
     broken = _executable(tmp_path / "broken" / "mhm")
     good = _executable(tmp_path / "user" / "bin" / "mhm")
+    monkeypatch.setattr(mhm_handler, "user_scripts_path", lambda: str(tmp_path / "none"))
     monkeypatch.setattr(mhm_handler.shutil, "which", lambda name: str(broken))
     monkeypatch.setattr(mhm_handler.sysconfig, "get_path", lambda name: str(tmp_path / "none"))
     monkeypatch.setattr(mhm_handler.site, "getuserbase", lambda: str(tmp_path / "user"))

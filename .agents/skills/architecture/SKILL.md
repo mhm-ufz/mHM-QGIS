@@ -73,8 +73,9 @@ decision.
   `mhm_tools`, `nml_tools` and `pyflwdir` go through `mhm_tools_handler.py`,
   `nml_tools_handler.py` and `pyflwdir_handler.py`; `mhm_handler.py` resolves the
   installed `mhm` command (`mhm>=5.13.4,<5.14`, the latest 5.13) for v5 and validates
-  the user-selected v6 executable. It tries PATH, the interpreter's scripts folder and
-  the user base (`pip --user` in QGIS), skipping a candidate that fails `--version`:
+  the user-selected v6 executable. It tries the plugin's package folder in the QGIS
+  profile (`dependency_bootstrap.user_scripts_path`: pip `--user` with `PYTHONUSERBASE`
+  there), PATH, the interpreter's scripts folder and `~/.local`, skipping a candidate that fails `--version`:
   an old build in `/usr/local/bin` missing its libraries must not hide pip's.
   Heavy imports stay inside functions.
 - `vSpecific/`: version-specific initial values handed to the namelist editor.
