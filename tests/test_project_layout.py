@@ -14,8 +14,6 @@ from mhm_qgis.core.handlers.store.paths import (
     data_folder,
     meteo_folder,
     output_folder,
-    portable_path,
-    project_path,
     restart_folder,
     static_folder,
     temp_folder,
@@ -78,14 +76,3 @@ def test_ensure_project_structure_honours_the_requested_version(
     assert not (data / "static" / "morph").exists()
     assert not (data / "observation").exists()
 
-
-def test_generated_path_is_relative_to_outer_project(tmp_path: Path) -> None:
-    domain = tmp_path / "mhm-qgis" / "basin"
-    output = Path(morph_folder(domain)) / "dem.asc"
-
-    saved = portable_path(tmp_path, output)
-    assert saved == "mhm-qgis/basin/data/static/morph/dem.asc"
-    assert project_path(tmp_path, saved) == str(output)
-    outside = tmp_path.parent / "elsewhere.tif"
-    assert portable_path(tmp_path, outside) == str(outside)
-    assert project_path(tmp_path, str(outside)) == str(outside)

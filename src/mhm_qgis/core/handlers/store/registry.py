@@ -16,7 +16,6 @@ from pathlib import Path
 
 from ...utils.time import utc_timestamp
 from ..state import processing
-from .paths import workspace_folder
 
 #: Section of the shared processing state this module owns.
 SECTION = "outputs"
@@ -25,22 +24,6 @@ SECTION = "outputs"
 DISPLAY_SUFFIXES = ("_masked", "_crop")
 
 
-def key_for(project_folder, path) -> str:
-    """Return the stable registry key for one output path.
-
-    Workspace-relative where possible so a project stays portable; absolute
-    otherwise. Separators are normalised because the key is persisted.
-    """
-    if not path:
-        return ""
-    try:
-        if project_folder:
-            return os.path.relpath(
-                str(path), workspace_folder(project_folder)
-            ).replace("\\", "/")
-    except ValueError:
-        pass
-    return os.path.abspath(str(path)).replace("\\", "/")
 
 
 def variants(path) -> tuple[Path, ...]:
@@ -89,12 +72,9 @@ def register(project_folder, path, *, name=None, loaded=False, algorithm=None,
     """
     if not path or not os.path.exists(str(path)):
         return None
-    key = key_for(project_folder, path)
-    if not key:
-        return None
+    key = os.path.abspath(str(path))
     entry = {
         "path": key,
-        "absolute_path": os.path.abspath(str(path)),
         "exists": True,
         "loaded": bool(loaded),
         "updated_at": utc_timestamp(),
@@ -119,7 +99,7 @@ def available(project_folder, path) -> bool:
     """
     if not path:
         return False
-    key = key_for(project_folder, path)
+    key = os.path.abspath(str(path))
     outputs = registered(project_folder)
 
     if os.path.exists(str(path)):
@@ -142,7 +122,6 @@ __all__ = [
     "SECTION",
     "available",
     "first_existing",
-    "key_for",
     "outputs_in",
     "preferred",
     "register",

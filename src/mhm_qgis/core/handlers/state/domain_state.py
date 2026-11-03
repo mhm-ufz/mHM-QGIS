@@ -1,14 +1,12 @@
 """QGIS-free persistence helpers for watershed domain delineation."""
 from __future__ import annotations
 
-import json
-import os
-import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from ....core.handlers.store.paths import temp_folder, workspace_folder
+from ..file import json as jsonio
 
 STATE_FILENAME = "mhm_qgis_domain_delineation_state.json"
 STATE_VERSION = 2
@@ -132,19 +130,10 @@ def assign_domain_ids(state: dict[str, Any]) -> dict[str, Any]:
 
 def load_state(project_folder: PathInput) -> dict[str, Any]:
     """Load state, returning defaults for missing or malformed content."""
-    path = state_path(project_folder)
     try:
-        with path.open("r", encoding="utf-8") as state_file:
-            return _normalized_state(json.load(state_file))
-    except (OSError, ValueError, TypeError):
+        return _normalized_state(jsonio.read(state_path(project_folder)))
+    except (ValueError, TypeError):
         return default_state()
-
-
-def _absolute_path(base: Path, value: PathInput) -> Path:
-    path = Path(value).expanduser()
-    if not path.is_absolute():
-        path = base / path
-    return path.resolve()
 
 
 def _output_path(workspace: Path, value: PathInput) -> Path:
@@ -153,36 +142,6 @@ def _output_path(workspace: Path, value: PathInput) -> Path:
         path = workspace / path
     path = path.parent.resolve() / path.name
     return path.resolve() if path.is_dir() else path
-
-
-def serialize_input_path(project_folder: PathInput, value: PathInput) -> str:
-    """Serialize an input path relative to the outer project when possible."""
-    if not str(value):
-        return ""
-    project = Path(project_folder).resolve()
-    path = _absolute_path(project, value)
-    try:
-        return path.relative_to(project).as_posix()
-    except ValueError:
-        return str(path)
-
-
-def resolve_input_path(project_folder: PathInput, value: PathInput) -> Path:
-    """Resolve a stored input path relative to the outer project."""
-    return _absolute_path(Path(project_folder).resolve(), value)
-
-
-def serialize_output_path(project_folder: PathInput, value: PathInput) -> str:
-    """Serialize a generated output relative to the plugin workspace."""
-    if not str(value):
-        return ""
-    workspace = Path(workspace_folder(project_folder)).resolve()
-    path = _output_path(workspace, value)
-    try:
-        return path.relative_to(workspace).as_posix()
-    except ValueError as error:
-        message = "Domain outputs must be inside the plugin workspace."
-        raise ValueError(message) from error
 
 
 def resolve_output_path(project_folder: PathInput, value: PathInput) -> Path:
@@ -195,34 +154,6 @@ def resolve_output_path(project_folder: PathInput, value: PathInput) -> Path:
         message = "Domain outputs must be inside the plugin workspace."
         raise ValueError(message) from error
     return path
-
-
-def _serialized_state(
-    project_folder: PathInput,
-    value: Mapping[str, Any],
-) -> dict[str, Any]:
-    state = _normalized_state(value)
-    for record in state["outlets"].values():
-        if isinstance(record.get("delineation"), dict) and record["delineation"].get("raster_path"):
-            record["delineation"] = dict(record["delineation"])
-            record["delineation"]["raster_path"] = serialize_output_path(
-                project_folder, record["delineation"]["raster_path"]
-            )
-        if record.get("discharge_file"):
-            record["discharge_file"] = serialize_input_path(
-                project_folder, record["discharge_file"]
-            )
-        for key in ("mask_path", "vector_path", "domain_directory", "dem_path"):
-            if record.get(key):
-                record[key] = serialize_output_path(project_folder, record[key])
-        if record.get("gauge_path"):
-            record["gauge_path"] = serialize_output_path(
-                project_folder, record["gauge_path"]
-            )
-    for key in ("dem_domain_directory", "dem_domain_path", "dem_mask_path", "merged_mask_path"):
-        if state.get(key):
-            state[key] = serialize_output_path(project_folder, state[key])
-    return state
 
 
 def delineation_fingerprint(filled_dem, x, y):
@@ -266,23 +197,7 @@ def save_state(
     value: Mapping[str, Any],
 ) -> Path:
     """Atomically save normalized state and return its path."""
-    path = state_path(project_folder)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    state = _serialized_state(project_folder, value)
-    file_descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
-    )
-    try:
-        with os.fdopen(file_descriptor, "w", encoding="utf-8") as state_file:
-            json.dump(state, state_file, indent=2, sort_keys=True)
-            state_file.write("\n")
-            state_file.flush()
-            os.fsync(state_file.fileno())
-        os.replace(temporary_name, path)
-    finally:
-        if os.path.exists(temporary_name):
-            os.unlink(temporary_name)
-    return path
+    return jsonio.write(state_path(project_folder), _normalized_state(value), newline=True, fsync=True)
 
 
 def gauged_outlet_ids(state: Mapping[str, Any]) -> list[str]:

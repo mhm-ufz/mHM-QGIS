@@ -33,7 +33,7 @@ from ...core.grid import (
 )
 from ...core.handlers.state import processing
 from ...core.handlers.state import settings as project_settings
-from ...core.handlers.store.paths import data_folder, portable_path
+from ...core.handlers.store.paths import data_folder
 from ...core.meteorology.forcing import MeteoFolderSpec
 from ...qgis_bridge import layers as qgis_layers
 from ..dialogs.file_picker import open_directory
@@ -77,7 +77,7 @@ def select_precipitation_folder(dialog, folder):
     if index < 0:
         folder = os.path.abspath(folder)
         combo.addItem(
-            portable_path(dialog.project_folder, folder),
+            folder,
             {"origin": "folder", "path": folder, "manual": True},
         )
         index = combo.count() - 1

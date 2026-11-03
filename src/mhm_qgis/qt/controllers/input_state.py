@@ -12,27 +12,13 @@ from qgis.PyQt.QtCore import QSignalBlocker
 
 from ...core.handlers.file import json as jsonio
 from ...core.handlers.store.layout import input_state_path
-from ...core.handlers.store.paths import portable_path, project_path, version_key
+from ...core.handlers.store.paths import version_key
 from ...qgis_bridge import layers as qgis_layers
 from . import categorical, forcing, grid, main, model, process_cases, time, version
-
-_PATH_KEYS = ("input_path", "lookup_table", "classdefinition_path")
 
 
 def _state_path(dialog):
     return input_state_path(dialog.project_folder) if dialog.project_folder else None
-
-
-
-
-def _paths(config, convert, root):
-    """Return `config` with its known path keys passed through `convert`."""
-    if not isinstance(config, dict):
-        return {}
-    return {
-        key: convert(root, value) if key in _PATH_KEYS else value
-        for key, value in config.items()
-    }
 
 
 def save(dialog):
@@ -43,7 +29,6 @@ def save(dialog):
         or dialog._suspend_input_state_saves
     ):
         return
-    root = dialog.project_folder
     path = _state_path(dialog)
     if dialog._multi_domains is not None:
         # A combined setup holds no inputs of its own, only its domains.
@@ -89,7 +74,7 @@ def save(dialog):
         "l2_multiplier": int(dialog.spinBox_L2ResolutionMultiplier.value()),
         "l2_multiplier_user_selected": bool(dialog._l2_multiplier_user_selected),
         "precipitation": {
-            "folder": portable_path(root, grid.precipitation_folder(dialog)),
+            "folder": grid.precipitation_folder(dialog),
             "pattern": dialog.lineEdit_precipitationGlobDefinition.text(),
         },
         "variables": dialog._meteo_inputs,
@@ -109,15 +94,14 @@ def save(dialog):
             for kind in categorical.KINDS
         },
         "categorical_lookups": {
-            kind: _paths(config, portable_path, root)
-            for kind, config in dialog._categorical_lookup_configs.items()
-        },
-        "categorical_ready": {
-            kind: _paths(config, portable_path, root)
-            for kind, config in dialog._categorical_ready_configs.items()
+            kind: config for kind, config in dialog._categorical_lookup_configs.items()
             if isinstance(config, dict)
         },
-        "lai_netcdf": _paths(dialog._lai_input_config, portable_path, root),
+        "categorical_ready": {
+            kind: config for kind, config in dialog._categorical_ready_configs.items()
+            if isinstance(config, dict)
+        },
+        "lai_netcdf": dialog._lai_input_config if isinstance(dialog._lai_input_config, dict) else {},
         "thread_count": dialog.task_coordinator.max_threads,
         "advanced_inputs": {
             kind: value.as_dict() if hasattr(value, "as_dict") else value
@@ -262,17 +246,17 @@ def _restore_resolution_preferences(dialog, saved):
 
 def _restore_categorical_inputs(dialog, state):
     """Restore categorical modes and their source configs."""
-    root = dialog.project_folder
     for attribute, key in (
         ("_categorical_lookup_configs", "categorical_lookups"),
         ("_categorical_ready_configs", "categorical_ready"),
     ):
         setattr(dialog, attribute, {
-            kind: _paths(config, project_path, root)
+            kind: dict(config)
             for kind, config in state.get(key, {}).items()
             if kind in categorical.KINDS and isinstance(config, dict)
         })
-    dialog._lai_input_config = _paths(state.get("lai_netcdf", {}), project_path, root)
+    lai = state.get("lai_netcdf")
+    dialog._lai_input_config = dict(lai) if isinstance(lai, dict) else {}
     dialog.task_coordinator.set_max_threads(state.get("thread_count", 2))
 
     for kind, text in {"lai": state.get("lai_input_type", ""), **state.get("categorical_types", {})}.items():
@@ -284,7 +268,7 @@ def _restore_categorical_inputs(dialog, state):
 
     inputs = state.get("advanced_inputs", {})
     dialog._advanced_inputs = dict(inputs) if isinstance(inputs, dict) else {}
-    dialog._land_cover_ready_source = project_path(root, state.get("land_cover_ready_source", ""))
+    dialog._land_cover_ready_source = state.get("land_cover_ready_source", "")
 
 
 def _restore_input_layers(dialog, saved_layers):
@@ -374,7 +358,7 @@ def _restore_meteo_inputs(dialog, state):
     saved = state.get("precipitation", {})
     if not isinstance(saved, dict):
         return
-    folder = project_path(dialog.project_folder, str(saved.get("folder", "") or ""))
+    folder = str(saved.get("folder", "") or "")
     combo = dialog.comboBox_precipitationFile
     if folder and (os.path.isdir(folder) or grid.folder_combo_index(combo, folder) >= 0):
         grid.select_precipitation_folder(dialog, folder)

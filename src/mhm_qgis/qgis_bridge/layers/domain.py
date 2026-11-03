@@ -569,7 +569,7 @@ class DomainWorkflow:
             processing.remove_entry(
                 self.project_folder,
                 registry.SECTION,
-                registry.key_for(self.project_folder, merged_path),
+                os.path.abspath(merged_path),
             )
             return None
         merge_domain_masks(masks, merged_path)
@@ -625,7 +625,7 @@ class DomainWorkflow:
             processing.remove_entry(
                 self.project_folder,
                 registry.SECTION,
-                registry.key_for(self.project_folder, path),
+                os.path.abspath(path),
             )
         except OSError as error:
             self.log(f"WARNING: Could not remove old discharge output: {error}")

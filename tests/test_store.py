@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -70,9 +71,31 @@ def test_an_explicit_version_overrides_the_saved_one(project):
 
 # --- registry: what exists ---
 
-def test_the_key_is_workspace_relative_so_a_project_stays_portable(project):
-    key = registry.key_for(project, Path(paths.temp_morphology_folder(project)) / "dem.tif")
-    assert key == ".temp/Morphology/dem.tif"
+def test_state_paths_are_stored_relative_and_follow_a_moved_project(tmp_path):
+    project = tmp_path / "a" / "basin"
+    inside, outside = project / "data" / "dem.asc", tmp_path / "a" / "inputs" / "dem.tif"
+    payload = {"dem": str(inside), "source": str(outside), str(inside): ["*.nc", "EPSG:3035"]}
+    state = project / ".temp" / "state.json"
+    jsonio.write(state, payload)
+    assert str(tmp_path) not in state.read_text(encoding="utf-8")
+    assert jsonio.read(state) == payload
+
+    moved = tmp_path / "b" / "basin"
+    moved.parent.mkdir()
+    project.rename(moved)
+    assert jsonio.read(moved / ".temp" / "state.json")["dem"] == str(moved / "data" / "dem.asc")
+
+
+def test_a_copied_input_keeps_its_fingerprint(tmp_path):
+    from mhm_qgis.core.handlers.state.cache import fingerprint
+    original, copy = tmp_path / "a" / "dem.tif", tmp_path / "b" / "dem.tif"
+    for path in (original, copy):
+        path.parent.mkdir()
+    original.write_bytes(b"dem")
+    shutil.copy2(original, copy)
+    assert fingerprint([original], {"source": str(original)}) == fingerprint([copy], {"source": str(copy)})
+    copy.write_bytes(b"edited")
+    assert fingerprint([original]) != fingerprint([copy])
 
 
 def test_the_most_processed_variant_wins(project):
@@ -104,13 +127,13 @@ def test_the_filesystem_beats_the_journal(project):
     # A user clearing the folder must be noticed, whatever the journal says.
     output.unlink()
     assert registry.available(project, output) is False
-    assert registry.registered(project)[registry.key_for(project, output)][
+    assert registry.registered(project)[str(output)][
         "exists"
     ] is False
 
     output.write_bytes(b"")
     assert registry.available(project, output) is True
-    assert registry.registered(project)[registry.key_for(project, output)][
+    assert registry.registered(project)[str(output)][
         "exists"
     ] is True
 
@@ -121,7 +144,7 @@ def test_a_file_produced_outside_the_plugin_is_adopted(project):
     assert not registry.registered(project)
 
     assert registry.available(project, output) is True
-    assert registry.key_for(project, output) in registry.registered(project)
+    assert str(output) in registry.registered(project)
 
 
 def test_an_absent_file_is_never_recorded(project):

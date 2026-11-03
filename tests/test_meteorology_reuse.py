@@ -12,7 +12,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from mhm_qgis.core.handlers.store.layout import expected_meteo_outputs
 from mhm_qgis.core.meteorology.reuse import (
-    output_state_key,
     required_meteo_variables,
     stale_meteo_variables,
 )
@@ -47,7 +46,7 @@ def _prepare(project, variables, header=None):
             HEADER_TEXT.format(**(header or L2_HEADER)), encoding="utf-8"
         )
         for path in (paths["netcdf"], paths["header"]):
-            outputs[output_state_key(project, path)] = {"exists": True}
+            outputs[os.path.abspath(path)] = {"exists": True}
     return outputs
 
 

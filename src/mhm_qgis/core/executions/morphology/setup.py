@@ -261,7 +261,7 @@ def publish(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
             request.project_folder,
             dict(request.headers["L0"]),
             request.crs,
-            source=config.get("source_path", ""),
+            source=str(Path(request.project_folder) / config["source_path"]) if config.get("source_path") else "",
             target_timestep=config.get("target_timestep") or lai.DEFAULT_TIMESTEP,
             log=log,
         )

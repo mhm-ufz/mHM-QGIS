@@ -300,7 +300,7 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
     state = domain_state.load_state(tmp_path)
     assert not any(r.get("is_domain") for r in state["outlets"].values())  # Show does not commit choices.
     entry = state["outlets"]["1"]["delineation"]
-    assert not Path(entry["raster_path"]).is_absolute()
+    assert '"./mhm-qgis/first_' in domain_state.state_path(tmp_path).read_text(encoding="utf-8")
     assert domain_state.cached_delineation(tmp_path, source, 850, 150, entry)
     assert domain_state.cached_delineation(tmp_path, source, 851, 150, entry) is None
     first["cached"] = entry

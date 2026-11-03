@@ -6,13 +6,13 @@ grid the current run targets. A changed L2 grid always forces a rebuild.
 """
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 from ..grid import assert_header_file_matches, assert_netcdf_matches_header
 from ..handlers.store.layout import expected_meteo_outputs
-from ..handlers.store.registry import key_for
 
 BASE_VARIABLES = ("pre", "tavg", "tmin", "tmax")
 
@@ -24,9 +24,6 @@ def required_meteo_variables(include_pet: bool) -> tuple[str, ...]:
     return BASE_VARIABLES
 
 
-def output_state_key(project_folder, path) -> str:
-    """Return the processing-state key recorded for a meteorology output."""
-    return key_for(project_folder, path)
 
 
 def stale_meteo_variables(
@@ -46,7 +43,7 @@ def stale_meteo_variables(
         if paths["header"] is not None:
             expected_paths.append(paths["header"])
         for path in expected_paths:
-            key = output_state_key(project_folder, path)
+            key = os.path.abspath(path)
             entry = recorded_outputs.get(key)
             if not isinstance(entry, Mapping) or not entry.get("exists"):
                 stale[variable] = f"{path.name} is not recorded as prepared"
@@ -70,7 +67,6 @@ def stale_meteo_variables(
 
 
 __all__ = [
-    "output_state_key",
     "required_meteo_variables",
     "stale_meteo_variables",
 ]

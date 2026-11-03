@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..store.registry import key_for, register
+from ..store.registry import register
 from . import processing
 
 STATE_FILENAME = processing.STATE_FILENAME
@@ -55,10 +55,6 @@ class MeteorologyOutputState:
     def _log(self, message: str) -> None:
         if self.log is not None:
             self.log(message)
-
-    def output_key(self, path: Path) -> str:
-        """Return the registry key recorded for one output."""
-        return key_for(self.project_folder, path)
 
     def mark_prepared(self, path: PathInput, name: str | None = None) -> None:
         """Record one prepared forcing file.

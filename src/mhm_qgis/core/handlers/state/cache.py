@@ -15,10 +15,11 @@ import os
 from pathlib import Path
 
 from ...utils.time import utc_timestamp
+from ..file import json as jsonio
 from . import processing
 
 STATE_FILENAME = processing.STATE_FILENAME
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def state_path(project_folder) -> Path:
@@ -37,23 +38,26 @@ def save_state(project_folder, state: dict) -> None:
 
 
 def fingerprint(paths=(), config=None) -> str:
-    """Return a digest of input paths plus a scalar configuration mapping.
+    """Return a digest of input files plus a scalar configuration mapping.
 
     Missing paths are recorded as missing rather than skipped, so a deleted
-    input invalidates the cache instead of silently matching.
+    input invalidates the cache instead of silently matching. Folders are left
+    out of the digest, so a project copied to another computer keeps its caches.
     """
     digest = hashlib.sha256()
     digest.update(f"v{CACHE_VERSION}\n".encode())
-    for value in sorted(
-        str(Path(path).expanduser().resolve()) for path in paths if str(path)
-    ):
+    lines = []
+    for path in (Path(path) for path in paths if str(path)):
         try:
-            status = os.stat(value)
-            digest.update(
-                f"{value}|{status.st_size}|{status.st_mtime_ns}\n".encode())
+            status = path.expanduser().stat()
+            # ponytail: a same-named file of equal size and mtime second counts as unchanged
+            lines.append(f"{path.name}|{status.st_size}|{int(status.st_mtime)}")
         except OSError:
-            digest.update(f"{value}|missing\n".encode())
+            lines.append(f"{path.name}|missing")
+    for line in sorted(lines):
+        digest.update(f"{line}\n".encode())
     if config:
+        config = jsonio.map_strings(config, lambda text: os.path.basename(text) if os.path.isabs(text) else text)
         digest.update(
             json.dumps(config, sort_keys=True, default=str).encode("utf-8"))
     return digest.hexdigest()

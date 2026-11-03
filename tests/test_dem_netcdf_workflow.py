@@ -1,4 +1,5 @@
 """Real NetCDF I/O from DEM preparation through the final domain exports."""
+import os
 from pathlib import Path
 
 import numpy as np
@@ -98,6 +99,7 @@ def test_missing_filled_file_reuses_bundle_but_changed_pixels_recompute(tmp_path
     values = raster.ReadAsArray() + 100
     raster.GetRasterBand(1).WriteArray(values)
     raster = None
+    os.utime(original, (original.stat().st_mtime + 1,) * 2)  # an edit is at least a second later
     result = dem_derivative_files(original, folder)
     assert not result["reused"]
     np.testing.assert_array_equal(gdal.Open(result["filled_dem"]).ReadAsArray(), values)

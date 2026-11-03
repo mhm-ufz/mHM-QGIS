@@ -30,7 +30,6 @@ from ...core.handlers.state.domain_state import (
     DOMAIN_MODE_DELINEATOR,
     assign_domain_ids,
     cached_delineation,
-    resolve_input_path,
     save_preview,
     save_state,
 )
@@ -300,7 +299,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
             threshold = 1000
         self.spinBox_channelThreshold.setValue(threshold)
 
-        discharge = self._resolved_input(record.get("discharge_file"))
+        discharge = str(record.get("discharge_file") or "")
         self._populate_discharge_files(discharge)
         area = record.get("catchment_area_m2")
         self._show_area(area)
@@ -316,18 +315,12 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
     def _normal_path(path):
         return os.path.normcase(os.path.abspath(str(path)))
 
-    def _resolved_input(self, value):
-        if not value:
-            return ""
-        return str(resolve_input_path(self.project_folder, value))
-
     def _used_discharge_paths(self, exclude_outlet=None):
         paths = set(self.main_dialog.selected_input_file_paths())
         for outlet_id, record in self._draft_state["outlets"].items():
             if outlet_id == exclude_outlet or not record.get("discharge_file"):
                 continue
-            paths.add(self._normal_path(self._resolved_input(
-                record["discharge_file"])))
+            paths.add(self._normal_path(record["discharge_file"]))
         return paths
 
     def _populate_discharge_files(self, current_path=""):
@@ -588,7 +581,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         assignments = []
         for outlet_id in self.outlet_ids:
             record = self._draft_state["outlets"].get(outlet_id, {})
-            discharge_path = self._resolved_input(record.get("discharge_file"))
+            discharge_path = str(record.get("discharge_file") or "")
             assignments.append(
                 OutletAssignment(
                     outlet_id=outlet_id,

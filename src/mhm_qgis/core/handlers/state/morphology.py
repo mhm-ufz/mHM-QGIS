@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 
 from ...utils.time import utc_timestamp
-from ..store.registry import available, key_for, register
+from ..store.registry import available, register
 from . import processing
 
 STATE_FILENAME = processing.STATE_FILENAME
@@ -65,11 +65,6 @@ def _empty() -> dict:
         key: value if not isinstance(value, dict) else {}
         for key, value in EMPTY.items()
     }
-
-
-def output_key(session, path) -> str:
-    """Return a stable registry key for an output path."""
-    return key_for(session.project_folder, path)
 
 
 def mark_prepared(session, path, name=None, loaded=False, algorithm=None) -> None:
@@ -201,7 +196,7 @@ def saved_grid_contract(session):
 
 __all__ = [
     "EMPTY", "OWNED_SECTIONS", "STATE_FILENAME",
-    "is_prepared", "load", "mark_prepared", "mark_workflow", "output_key",
+    "is_prepared", "load", "mark_prepared", "mark_workflow",
     "record_outputs", "save", "save_domain_plan", "save_grid_contract",
     "saved_domain_plan", "saved_grid_contract", "state_path", "workflow_status",
 ]

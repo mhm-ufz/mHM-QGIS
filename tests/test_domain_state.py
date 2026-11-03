@@ -15,11 +15,8 @@ from mhm_qgis.core.handlers.state.domain_state import (
     gauge_records,
     gauged_outlet_ids,
     load_state,
-    resolve_input_path,
     resolve_output_path,
     save_state,
-    serialize_input_path,
-    serialize_output_path,
     state_path,
 )
 # isort: on
@@ -39,29 +36,18 @@ def test_missing_and_malformed_state_return_fresh_defaults(tmp_path: Path) -> No
     assert load_state(project) == default_state()
 
 
-def test_path_serialization_uses_project_and_workspace_roots(
-    tmp_path: Path,
-) -> None:
+def test_paths_are_saved_relative_and_outputs_stay_in_the_workspace(tmp_path: Path) -> None:
     project = tmp_path / "project"
-    discharge = project / "inputs" / "gauge.csv"
     external = tmp_path / "external" / "gauge.csv"
     mask = project / ".temp" / "Morphology" / "mask.tif"
 
-    assert serialize_input_path(project, discharge) == "inputs/gauge.csv"
-    assert resolve_input_path(project, "inputs/gauge.csv") == discharge.resolve()
-    assert serialize_input_path(project, external) == str(external.resolve())
-    assert resolve_input_path(project, external) == external.resolve()
+    saved = save_state(project, {"pour_points_source": str(external), "merged_mask_path": str(mask)})
+    raw = json.loads(saved.read_text(encoding="utf-8"))
+    assert raw["pour_points_source"] == "../external/gauge.csv"
+    assert raw["merged_mask_path"] == "./.temp/Morphology/mask.tif"
+    assert load_state(project)["merged_mask_path"] == str(mask)
 
-    assert (
-        serialize_output_path(project, mask)
-        == ".temp/Morphology/mask.tif"
-    )
-    assert (
-        resolve_output_path(project, ".temp/Morphology/mask.tif")
-        == mask.resolve()
-    )
-    with pytest.raises(ValueError, match="plugin workspace"):
-        serialize_output_path(project, external)
+    assert resolve_output_path(project, ".temp/Morphology/mask.tif") == mask.resolve()
     with pytest.raises(ValueError, match="plugin workspace"):
         resolve_output_path(project, "../outside.tif")
 
@@ -77,11 +63,10 @@ def test_output_paths_keep_cloned_file_links_inside_the_new_domain(
     linked.parent.mkdir(parents=True)
     linked.symlink_to(source)
 
-    assert serialize_output_path(project, linked) == ".temp/Morphology/mask.tif"
     assert resolve_output_path(project, ".temp/Morphology/mask.tif") == linked
     saved = save_state(project, {"outlets": {"1": {"mask_path": str(linked)}}})
     assert json.loads(saved.read_text())["outlets"]["1"]["mask_path"] == (
-        ".temp/Morphology/mask.tif"
+        "./.temp/Morphology/mask.tif"
     )
 
     outside = tmp_path / "outside"
@@ -127,14 +112,14 @@ def test_save_is_atomic_normalized_and_does_not_mutate_input(
     assert saved["outlet_order"] == ["7"]
     assert saved["outlets"]["7"]["domain_id"] == 1
     assert saved["dem_domain_id"] is None
-    assert saved["outlets"]["7"]["discharge_file"] == "inputs/gauge.csv"
-    assert saved["outlets"]["7"]["mask_path"] == ".temp/Morphology/mask.tif"
-    assert saved["outlets"]["7"]["vector_path"] == ".temp/Morphology/mask.gpkg"
-    assert saved["outlets"]["7"]["domain_directory"] == "data/7"
-    assert saved["outlets"]["7"]["dem_path"] == "data/7/dem.asc"
+    assert saved["outlets"]["7"]["discharge_file"] == "./inputs/gauge.csv"
+    assert saved["outlets"]["7"]["mask_path"] == "./.temp/Morphology/mask.tif"
+    assert saved["outlets"]["7"]["vector_path"] == "./.temp/Morphology/mask.gpkg"
+    assert saved["outlets"]["7"]["domain_directory"] == "./data/7"
+    assert saved["outlets"]["7"]["dem_path"] == "./data/7/dem.asc"
     assert state["outlets"][7]["mask_path"] == str(mask)
     assert not list(path.parent.glob(f".{path.name}.*.tmp"))
-    assert load_state(project) == saved
+    assert load_state(project)["outlets"]["7"]["mask_path"] == str(mask)
 
 
 def test_active_domains_include_optional_dem_domain_and_gauges() -> None:
@@ -230,16 +215,15 @@ def test_saved_order_and_gauge_metadata_survive_sorted_json(tmp_path: Path) -> N
     assert loaded["outlet_order"] == ["20", "001", "3"]
     assert loaded["outlets"]["20"]["domain_id"] == 1
     assert loaded["outlets"]["001"]["domain_id"] == 1
-    assert loaded["outlets"]["001"]["gauge_path"] == (
-        "data/observation/streamflow/001.txt"
-    )
+    assert loaded["outlets"]["001"]["gauge_path"] == str(output)
+    assert '"./data/observation/streamflow/001.txt"' in path.read_text(encoding="utf-8")
     assert loaded["outlets"]["001"]["gauge_point"]["source"] == "picked"
     assert gauge_records(loaded) == [
         {
             "outlet_id": "001",
             "gauge_id": 1,
             "gauge_filename": "001.txt",
-            "gauge_path": "data/observation/streamflow/001.txt",
+            "gauge_path": str(output),
             "domain_ids": [1],
         }
     ]

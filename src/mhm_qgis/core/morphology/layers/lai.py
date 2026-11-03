@@ -92,7 +92,7 @@ def publish_to_l0(
         source_path, source_variable = parse_source(source)
         settings = {
             "mode": "netcdf",
-            "source_path": str(Path(source_path).resolve()) if source_path else "",
+            "source_path": relative_workspace_path(project_folder, source_path) if source_path else "",
             "source_variable": str(source_variable or ""),
             "target_timestep": target_timestep or DEFAULT_TIMESTEP,
             "time_step": lai_time_step(target_timestep or DEFAULT_TIMESTEP),

@@ -26,6 +26,17 @@ Four JSON files live under each domain's `.temp/` directory.
   in-memory state copy. `tests/test_shared_processing_state.py` covers parallel and
   cross-feature updates.
 
+The setup is shared between computers, so paths stay portable at one boundary.
+- `core/handlers/file/json` writes every absolute string (keys too) of a `.temp/*.json`
+  file as `./…` or `../…` relative to the project, and resolves those strings back on read.
+  - In memory, state is absolute; no writer or reader relativizes on its own.
+  - `nml-settings.json` is excluded: its values are namelist content, already
+    relative to the run folder through `relative_workspace_path`. That includes gauge paths,
+    which `sync_domain_settings` relativizes.
+- `state/cache.fingerprint` hashes file name, size and whole-second mtime and strips
+  folders from its config. A copy that keeps mtimes (Nextcloud, `rsync -a`, `cp -p`) reuses its
+  caches. A test that edits a file must move its mtime by a second.
+
 ## Domain Delineator And Project Settings
 
 - `core/handlers/state/settings.py` copies packaged defaults to the active domain's

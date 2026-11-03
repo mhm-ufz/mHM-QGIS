@@ -20,7 +20,6 @@ from qgis.PyQt import QtCore
 from ...core.executions import morphology
 from ...core.executions.morphology import commands
 from ...core.handlers.state import processing
-from ...core.handlers.store import registry
 from ...core.handlers.store.paths import morph_staging_folder, temp_morphology_folder
 from ...core.morphology.hydrology.outlets import (
     configured_gauge_points,
@@ -583,7 +582,7 @@ class MorphologyTaskBridge:
             self.dialog.project_folder,
             f"{'land_cover' if kind == 'lc' else kind}_processing",
             "completed",
-            outputs=[registry.key_for(self.dialog.project_folder, path) for path in paths],
+            outputs=[os.path.abspath(path) for path in paths],
             reused=bool(reused),
         )
 

@@ -39,9 +39,11 @@ def read(path, default=None):
     except (OSError, UnicodeError):
         return default
     try:
-        return json.loads(text)
+        value = json.loads(text)
     except ValueError:
         return default
+    root = _project(path)
+    return map_strings(value, _absolute(root)) if root else value
 
 
 def read_mapping(path, **defaults) -> dict:
@@ -61,6 +63,9 @@ def write(path, payload, *, newline: bool = False, fsync: bool = False) -> Path:
     in a sibling temporary file and is renamed over the target.
     """
     path = Path(path)
+    root = _project(path)
+    if root:
+        payload = map_strings(payload, _relative(root))
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
@@ -93,6 +98,46 @@ def merge_sections(path, sections: dict[str, Any], **write_kwargs) -> Path:
     return write(path, merged, **write_kwargs)
 
 
+def map_strings(value, convert):
+    """`convert` every string or path in a JSON-like value, keys included."""
+    if isinstance(value, dict):
+        return {map_strings(key, convert): map_strings(item, convert) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [map_strings(item, convert) for item in value]
+    return convert(os.fspath(value)) if isinstance(value, (str, os.PathLike)) else value
+
+
+def _project(path):
+    """The project folder of a state file in its `.temp`, whose paths are stored relative to it.
+
+    `nml-settings.json` is excluded: it holds namelist values, already relative to the run folder.
+    """
+    path = Path(path)
+    if path.parent.name != ".temp" or path.name == "nml-settings.json":
+        return None
+    return os.path.abspath(path.parent.parent)
+
+
+def _relative(root):
+    def convert(text):
+        if not os.path.isabs(text) or text.startswith("/vsi"):  # /vsizip//abs breaks when normalised
+            return text
+        try:
+            relative = os.path.relpath(text, root).replace("\\", "/")
+        except ValueError:  # another Windows drive
+            return text
+        return relative if relative.split("/")[0] == ".." else f"./{relative}"
+    return convert
+
+
+def _absolute(root):
+    def convert(text):
+        if text == "." or text.startswith(("./", "../")):
+            return os.path.normpath(os.path.join(root, text))
+        return text
+    return convert
+
+
 def read_compact(path, default=None):
     """Read a transient payload written by `write_compact`."""
     return read(path, default)
@@ -106,6 +151,7 @@ def write_compact(path, payload) -> Path:
 
 
 __all__ = [
+    "map_strings",
     "merge_sections",
     "read",
     "read_compact",

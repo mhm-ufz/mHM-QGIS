@@ -1,6 +1,7 @@
 """Post P2: the scan's products equal brute force; disk check, cancel, progress."""
 import collections
 import json
+import os
 import subprocess
 
 import numpy as np
@@ -99,7 +100,8 @@ def test_scan_runs_in_the_worker_and_is_fingerprinted(tmp_path):
     assert index["variables"]["Q"]["fingerprint"] == job["fingerprints"]["Q"]
     assert index["domain_source"] == "restart"
     assert _job(tmp_path, variables=("aET", "Q"), series=("Q",))[1]["variables"] == []
-    (tmp_path / "output" / "mHM_Fluxes_States.nc").touch()
+    rerun = tmp_path / "output" / "mHM_Fluxes_States.nc"
+    os.utime(rerun, (rerun.stat().st_mtime + 1,) * 2)  # a rerun is at least a second later
     assert len(_job(tmp_path, variables=("aET", "Q"), series=("Q",))[1]["variables"]) == 3
 
 

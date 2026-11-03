@@ -5,7 +5,7 @@ from pathlib import Path
 
 from mhm_qgis.core.handlers.state import processing
 from mhm_qgis.core.handlers.state.meteo_outputs import MeteorologyOutputState
-from mhm_qgis.core.handlers.store.paths import temp_folder, workspace_folder
+from mhm_qgis.core.handlers.store.paths import temp_folder
 
 
 def test_processing_state_is_saved_in_workspace(tmp_path: Path) -> None:
@@ -17,13 +17,10 @@ def test_processing_state_is_saved_in_workspace(tmp_path: Path) -> None:
     assert expected.is_file()
 
 
-def test_meteorology_state_and_output_keys_use_workspace(tmp_path: Path) -> None:
+def test_meteorology_state_uses_the_processing_state(tmp_path: Path) -> None:
     state = MeteorologyOutputState(tmp_path)
-    workspace = Path(workspace_folder(tmp_path))
-    output = workspace / "data" / "meteo" / "pre" / "pre.nc"
 
     assert state.state_path() == processing.state_path(tmp_path)
-    assert state.output_key(output) == "data/meteo/pre/pre.nc"
     state.save({"version": 1, "outputs": {}})
 
     assert state.state_path().is_file()

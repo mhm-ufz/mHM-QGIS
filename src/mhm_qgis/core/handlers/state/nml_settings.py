@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import os
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from ....core.handlers.store.paths import temp_folder, workspace_folder
+from ..file import json as jsonio
 
 
 def settings_path(project_folder: str | Path) -> Path:
@@ -17,15 +16,7 @@ def settings_path(project_folder: str | Path) -> Path:
 
 
 def load_settings(project_folder: str | Path) -> dict[str, Any]:
-    path = settings_path(project_folder)
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        value = {}
-    if not isinstance(value, dict):
-        value = {}
-    value.setdefault("version", 1)
-    return value
+    return jsonio.read_mapping(settings_path(project_folder), version=1)
 
 
 def update_section(
@@ -55,22 +46,7 @@ def save_settings(
     project_folder: str | Path,
     state: dict[str, Any],
 ) -> Path:
-    path = settings_path(project_folder)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = dict(state)
-    payload["version"] = 1
-    descriptor, temporary = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
-    )
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            json.dump(payload, stream, indent=2, sort_keys=True)
-            stream.write("\n")
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-    return path
+    return jsonio.write(settings_path(project_folder), {**state, "version": 1}, newline=True)
 
 
 def relative_workspace_path(project_folder: str | Path, value: str | Path) -> str:
@@ -104,7 +80,8 @@ def sync_domain_settings(project_folder: str | Path) -> Path:
         "gauge_ids": [int(gauge["gauge_id"]) for gauge in gauges
                       if gauge.get("gauge_id") is not None and gauge.get("domain_ids")],
     }]
-    state["gauges"] = gauges
+    state["gauges"] = [{**gauge, "gauge_path": gauge["gauge_path"] and relative_workspace_path(project_folder, gauge["gauge_path"])}
+                       for gauge in gauges]
     return save_settings(project_folder, state)
 
 

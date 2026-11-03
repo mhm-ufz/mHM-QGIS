@@ -14,7 +14,6 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ...core.handlers.store.morphology import resolve_display_output
-from ...core.handlers.store.paths import portable_path
 from ...core.morphology.hydrology.outlets import StationIdError, outlet_ids_from_layer
 from ..dialogs.file_picker import open_file
 from ..dialogs.input_selection import (
@@ -129,7 +128,7 @@ def add_file_input(dialog, kind, path, *, manual, variable="", source_crs=""):
             else:
                 combo.setCurrentIndex(index)
             return
-    label = portable_path(dialog.project_folder, path)
+    label = str(path)
     combo.addItem(label, {
         "origin": "file", "kind": kind, "path": path, "label": label,
         "manual": manual, "variable": variable, "source_crs": source_crs,

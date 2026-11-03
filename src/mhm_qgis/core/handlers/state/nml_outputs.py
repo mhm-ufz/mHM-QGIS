@@ -45,10 +45,10 @@ def register_meteo(project_folder, outputs, mask=None, *, v6):
     for variable, path in outputs.items():
         stem = METEO_FIELDS.get(variable)
         if stem:
-            values[f"{stem}_path"] = [_relative(project_folder, path)]
+            values[f"{stem}_path"] = [relative_workspace_path(project_folder, path)]
             values[f"{stem}_var"] = [variable]
     if mask:
-        values.update(meteo_mask_path=[_relative(project_folder, mask)],
+        values.update(meteo_mask_path=[relative_workspace_path(project_folder, mask)],
                       meteo_mask_var=["mask"])
     managed = {
         f"{stem}_{suffix}"
@@ -78,22 +78,22 @@ def register_morphology(project_folder, *, bundle, dem, mask, latlon):
     soil = load_settings(project_folder).get("soil") or {}
     layered = isinstance(soil, dict) and int(soil.get("soil_db_mode") or 0) == 1 and horizons.is_file()
     values = {
-        "latlon_path": [_relative(project_folder, latlon)],
-        "dem_path": [_relative(project_folder, dem)], "dem_var": ["dem"],
-        "morph_mask_path": [_relative(project_folder, mask)],
+        "latlon_path": [relative_workspace_path(project_folder, latlon)],
+        "dem_path": [relative_workspace_path(project_folder, dem)], "dem_var": ["dem"],
+        "morph_mask_path": [relative_workspace_path(project_folder, mask)],
         "morph_mask_var": ["mask"], "morph_lat_var": ["lat"],
         "morph_lon_var": ["lon"],
     }
     for field, variable in BUNDLE_FIELDS:
         if (held is None or variable in held) and not (layered and field == "soil_class"):
-            values[f"{field}_path"] = [_relative(project_folder, bundle)]
+            values[f"{field}_path"] = [relative_workspace_path(project_folder, bundle)]
             values[f"{field}_var"] = [variable]
     fdir = Path(bundle).with_name("fdir.nc")
     if "fdir" in (_variables(fdir) or {}):
-        values.update(fdir_path=[_relative(project_folder, fdir)], fdir_var=["fdir"])
+        values.update(fdir_path=[relative_workspace_path(project_folder, fdir)], fdir_var=["fdir"])
     if layered:
         variable = next((name for name, ndim in (_variables(horizons) or {}).items() if ndim == 3), "soil_class")
-        values.update(soil_horizon_class_path=[_relative(project_folder, horizons)], soil_class_var=[variable])
+        values.update(soil_horizon_class_path=[relative_workspace_path(project_folder, horizons)], soil_class_var=[variable])
     register_values(project_folder, "main", "config_input", values, managed=MORPHOLOGY_FIELDS)
 
 
@@ -110,7 +110,7 @@ def _variables(path) -> dict[str, int] | None:
 
 def register_observations(project_folder, outputs, specs=(), *, v6):
     values = {
-        OBSERVATION_FIELDS[variable]: [_relative(project_folder, path)]
+        OBSERVATION_FIELDS[variable]: [relative_workspace_path(project_folder, path)]
         for variable, path in outputs.items() if variable in OBSERVATION_FIELDS
     }
     for spec in specs:
@@ -125,14 +125,10 @@ def register_observations(project_folder, outputs, specs=(), *, v6):
         managed=managed, v6=v6)
     state = load_settings(project_folder)
     state["observations"] = {
-        variable: {"path": _relative(project_folder, path), "variable": variable}
+        variable: {"path": relative_workspace_path(project_folder, path), "variable": variable}
         for variable, path in outputs.items()
     }
     save_settings(project_folder, state)
-
-
-def _relative(project_folder, path):
-    return relative_workspace_path(project_folder, Path(path))
 
 
 __all__ = [
