@@ -142,7 +142,7 @@ def clear_precipitation_resolution_labels(dialog):
 # --- The common grid ------------------------------------------------------
 
 def invalidate_grid(dialog):
-    if dialog._loading_input_state:
+    if dialog._loading_input_state or dialog._preserve_missing_layer_state:  # not a user change
         return
     dialog._grid_l2_metadata = None
     dialog._grid_l2_header = None
@@ -161,7 +161,7 @@ def invalidate_grid(dialog):
 
 def crs_changed(dialog):
     """A new domain CRS: L0 again now; L2, and so L1/L11, after a new precipitation scan."""
-    if dialog._loading_input_state:
+    if dialog._loading_input_state or dialog._preserve_missing_layer_state:
         return
     dialog._preferred_l1_resolution = dialog._preferred_l11_resolution = None
     dialog._l2_multiplier_user_selected = False
@@ -250,6 +250,10 @@ def handle_l2_multiplier_changed(dialog, value=None):
     invalidate_grid(dialog)
     if metadata:
         precipitation_scanned(dialog, metadata)
+    elif precipitation_folder(dialog) and "pre" in dialog._meteo_inputs:
+        from . import forcing
+
+        forcing.submit_meteo_input(dialog, "pre", precipitation_spec(dialog))  # a reopened setup: its cached scan
 
 
 def _set_default_l2_multiplier(dialog, metadata, converted, l0_resolution):

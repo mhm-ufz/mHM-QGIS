@@ -128,6 +128,7 @@ def save(dialog):
         "observation_inputs": dialog._observation_inputs,
         "pour_point_outlet_id_field": main.selected_outlet_id_field(dialog),
         "domain_definition_type": dialog._domain_definition_mode,
+        "gauges": dialog.checkBox_gaugeOption.isChecked(),
         "crs_authid": crs.authid() if crs and crs.isValid() else "",
         "intro": dialog._intro_answers,
         "process_cases": process_cases.current(dialog),
@@ -234,6 +235,7 @@ def clear(dialog):
     dialog._advanced_inputs = {}
     dialog._land_cover_ready_source = ""
     dialog._domain_definition_mode = ""
+    dialog.checkBox_gaugeOption.setChecked(False)
     dialog._preferred_l1_resolution = None
     dialog._preferred_l11_resolution = None
     dialog.task_coordinator.set_max_threads(2)
@@ -331,6 +333,9 @@ def _find_or_load_layer(dialog, layer_info):
     return layer
 
 
+_OLD_DOMAIN_TYPES = ("Single Domain [DEM extent]", "Select Domains [using Domain Delineator]")  # saved before the rename
+
+
 def _restore_domain_inputs(dialog, state):
     """Restore the selected outlet ID field and domain mode."""
     preferred = str(state.get("pour_point_outlet_id_field", "") or "")
@@ -344,8 +349,10 @@ def _restore_domain_inputs(dialog, state):
     text = str(state.get("domain_definition_type", "") or "")
     if not text and state.get("dem_domain"):
         text = main.DOMAIN_TYPES[0]
+    text = dict(zip(_OLD_DOMAIN_TYPES, main.DOMAIN_TYPES, strict=True)).get(text, text)
     main.check(dialog, "domainDefinition", text)
     dialog._domain_definition_mode = text
+    dialog.checkBox_gaugeOption.setChecked(bool(state.get("gauges", text)))  # older setups: gauges if a domain was defined
 
 
 def _restore_meteo_inputs(dialog, state):

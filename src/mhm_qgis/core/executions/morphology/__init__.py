@@ -21,6 +21,7 @@ class Stage:
 EXECUTE_ALL_STAGES = (
     Stage("dem_derivatives", "DEM derivatives", options={"key": "execute-all-dem"}),
     Stage("gauge_position", "Gauge positions", condition="gauged_outlets"),
+    Stage("whole_dem_domain", "DEM-extent domain", condition="no_gauges"),
     Stage("morph_mask", "Morphology mask"),
     Stage(
         "categorical",

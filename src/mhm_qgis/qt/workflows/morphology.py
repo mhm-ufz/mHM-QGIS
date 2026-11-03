@@ -68,15 +68,19 @@ class MorphologyTaskBridge:
         starters = {
             "dem_derivatives": partial(hydrology.start_dem_derivatives, self.dialog),
             "gauge_position": self.start_gauge_position,
+            "whole_dem_domain": self.start_whole_dem_domain,
             "morph_mask": self.start_morph_mask,
             "categorical": self.start_categorical,
             "lai": self.start_lai,
             "publication": self.start_publication,
         }
 
+        gauges = self.dialog.checkBox_gaugeOption.isChecked()
+
         def start(stage, advance):
-            if stage.condition == "gauged_outlets" and not configured_gauged_outlet_ids(
-                    self.dialog.project_folder):
+            if (stage.condition == "gauged_outlets" and not (
+                    gauges and configured_gauged_outlet_ids(self.dialog.project_folder))) or (
+                    stage.condition == "no_gauges" and gauges):
                 QtCore.QTimer.singleShot(0, advance)
                 return True
             return starters[stage.command](
@@ -105,6 +109,24 @@ class MorphologyTaskBridge:
         )
 
     # --- Stages -------------------------------------------------------------
+
+    def start_whole_dem_domain(self, *, done, failed):
+        """Without gauges the domain is every valid DEM cell, as Entire DEM extent with no gauge
+        or catchment: the saved outlets are dropped."""
+        from ...core.executions.morphology import delineation
+        from ...core.handlers.state import domain_state
+
+        folder = self.dialog.project_folder
+        domain_state.save_state(folder, {**domain_state.load_state(folder), "outlets": {}, "outlet_order": []})
+        return self.coordinator.submit(
+            "execute-all-whole-dem-domain",
+            "Prepare the DEM-extent domain",
+            partial(delineation.domain_mask, project_folder=folder, filled_dem=self.filled_dem_path,
+                    crs=self.dialog.selected_meteo_crs()),
+            resource="morphology-files",
+            on_success=done,
+            on_error=lambda message: lifecycle.fail(self.dialog, "DEM-extent domain", message, failed),
+        )
 
     def start_gauge_position(self, *, key="gauge-position", done=None, failed=None):
         """Burn the locations already saved by Domain Delineator."""

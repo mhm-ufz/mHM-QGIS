@@ -1,7 +1,6 @@
 """Controllers for the historical land-use and multi-horizon soil forms."""
 from __future__ import annotations
 
-import contextlib
 import os
 import re
 from dataclasses import dataclass
@@ -56,11 +55,6 @@ class _SoilRow:
 
 class _DynamicInputDialogMixin:
     """Shared path-combo and dynamic-row helpers."""
-
-    def _replace_accept_handler(self, button_box) -> None:
-        with contextlib.suppress(TypeError):
-            button_box.accepted.disconnect()
-        button_box.accepted.connect(self._accept)
 
     def _new_adapter(self, combo, kind: str) -> InputComboAdapter:
         adapter = InputComboAdapter(combo, kind, self)
@@ -163,7 +157,7 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
 
         self._rows.append(self._first_row())
         bind_historical_land_use(self)
-        self._replace_accept_handler(self.buttonBox)
+        self.pushButton_set.clicked.connect(self._accept)
         land_use_controller.set_layer_count(self, 1)
         if initial:
             land_use_controller.set_input(self, initial)
@@ -294,7 +288,7 @@ class MultiHorizonSoilDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_Soi
                 )
             ]
         bind_multi_horizon_soil(self)
-        self._replace_accept_handler(self.buttonBox_cancelAndOK)
+        self.pushButton_set.clicked.connect(self._accept)
         soil_controller.set_horizon_count(self, 1)
         if initial:
             soil_controller.set_input(self, initial)

@@ -2,7 +2,7 @@
 one tab (`tab_project`), titled after the row.
 
 Rows are made in Designer; `tree.yml` gives each its key, page, status, inputs, display,
-action and summary table, matched by title. Columns: name | status | add, edit or run | eye.
+action and summary table, matched by title. Columns: ➤ next step | name | status or ▶ | eye.
 """
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ from pathlib import Path
 
 import yaml
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtGui import QColor, QIcon
 from qgis.PyQt.QtWidgets import QHeaderView, QPushButton, QTableWidgetItem
 
-COLUMNS = ("Project structure", "", "", "")  # name | status | add/edit/run | view
-STATUS_COLUMN, ACTION, VIEW = 1, 2, 3
+COLUMNS = ("Project structure", "", "", "")  # name | status or ▶ | view | next step (shown first)
+STATUS_COLUMN, VIEW, NEXT = 1, 2, 3
 SYMBOLS = {"empty": ("⚪", "Empty: no inputs added"),
            "added": ("🟢", "Inputs added, not processed yet"),
            "processed": ("✅", "Processed")}
@@ -90,9 +90,15 @@ def _l0(dialog, _node):
 
 
 def _l2(dialog, _node):
-    from ..controllers.grid import precipitation_folder
+    """Processed while the saved common grid still matches its inputs, as Execute All requires."""
+    from ..controllers.grid import grid_fingerprint, precipitation_folder
 
-    return "processed" if dialog._grid_l2_header else "added" if precipitation_folder(dialog) else "empty"
+    saved = (dialog._grid_l2_metadata or {}).get("configuration_fingerprint")
+    try:
+        current = bool(dialog._grid_l2_header) and saved == grid_fingerprint(dialog)
+    except (OSError, ValueError):  # precipitation not configured
+        current = False
+    return "processed" if current else "added" if precipitation_folder(dialog) else "empty"
 
 
 def _resolution(dialog, _node):
@@ -112,18 +118,14 @@ def _namelists(dialog, _node):
     return "processed" if folder and any(Path(workspace_folder(folder)).glob("*.nml")) else "empty"
 
 
-def _derivatives(dialog, node):
-    """Processed when every shown derivative is; added once the DEM is read (▶ makes them)."""
-    row = item(dialog, node["key"])
-    children = [row.child(i) for i in range(row.childCount()) if not row.child(i).isHidden()]
-    if children and all(_state(dialog, _node(child)) == "processed" for child in children):
-        return "processed"
+def _dem(dialog, _node):
+    """Added once the DEM is read; ▶ fills it and makes the derivatives."""
     return "added" if dialog._grid_l0_info else "empty"
 
 
 STATUS = {"intro": _intro, "project_setup": _project_setup, "gauges": _gauges,
           "categorical": _categorical, "domain": _domain, "meteo": _meteo, "l0": _l0, "l2": _l2,
-          "resolution": _resolution, "namelists": _namelists, "derivatives": _derivatives}
+          "resolution": _resolution, "namelists": _namelists, "dem": _dem}
 
 
 def _state(dialog, node):
@@ -154,11 +156,15 @@ def build(dialog) -> None:
     header.setStretchLastSection(False)
     header.setMinimumSectionSize(28)
     header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-    for column in (STATUS_COLUMN, ACTION, VIEW):
+    for column in (STATUS_COLUMN, VIEW, NEXT):
         header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
         tree.setColumnWidth(column, 28)
+    header.moveSection(NEXT, 0)
+    tree.setTreePosition(0)  # the branches stay with the names
     for row in _rows(dialog):
         row.setData(0, Qt.ItemDataRole.UserRole, _node(row)["key"])
+        row.setForeground(NEXT, QColor("#0000FF"))
+        row.setTextAlignment(NEXT, Qt.AlignmentFlag.AlignCenter)
     tree.expandAll()
     dialog.splitter.setSizes([310, 850])
     _action(dialog, item(dialog, "outputs"), "↺", "Reset the view's layout", lambda: post_context.reset_layout(dialog))
@@ -170,15 +176,15 @@ def build(dialog) -> None:
 
 
 def _action(dialog, row, symbol, tip, slot):
-    """The row's button in the action column, made on first use."""
+    """The row's button in the status column (rows without a status), made on first use."""
     tree = dialog.treeWidget_projectStructure
-    button = tree.itemWidget(row, ACTION)
+    button = tree.itemWidget(row, STATUS_COLUMN)
     if button is None:
         button = QPushButton()
         button.setFlat(True)
         button.setFixedSize(24, 24)
         button.clicked.connect(lambda _checked=False: slot())
-        tree.setItemWidget(row, ACTION, button)
+        tree.setItemWidget(row, STATUS_COLUMN, button)
     button.setText(symbol)
     button.setToolTip(tip)
     return button
@@ -186,7 +192,7 @@ def _action(dialog, row, symbol, tip, slot):
 
 def button(dialog, key):
     """The row's action button (▶ of A. Morphology / B. Meteorology for `workflow_state`)."""
-    return dialog.treeWidget_projectStructure.itemWidget(item(dialog, key), ACTION)
+    return dialog.treeWidget_projectStructure.itemWidget(item(dialog, key), STATUS_COLUMN)
 
 
 def item(dialog, key):
@@ -213,7 +219,7 @@ def select(dialog, row) -> None:
     elif key.startswith("meteo_"):
         forcing.show_meteo_input(dialog, key.removeprefix("meteo_"))
     elif node["page"] == "page_demDerivatives":
-        main.show_dem_derivatives(dialog, node.get("input"))
+        main.show_dem_derivatives(dialog)
     else:
         hook = {"intro": intro.embed, "resolution": grid.show_resolution_summary, "settings": process_cases.show,
                 "domain_definition": main.show_domain_definition}
@@ -290,19 +296,23 @@ def go_to(dialog, key) -> None:
 
 
 def show_inputs(dialog, findings) -> None:
-    """Show the input rows the process cases need (`datamodel.check` findings), and none under
-    A, B and C before Domain Setup has run; then refresh."""
+    """Show the input rows the process cases need (`datamodel.check` findings), none under
+    A, B and C before Domain Setup has run, and Gauges and Domain Definition only with gauges;
+    then refresh."""
     from ...core.handlers.state import processing
 
     dialog._input_findings = {name: finding for finding in findings for name in finding.input.split("|")}
     set_up = bool(dialog.project_folder) and \
         processing.workflow(dialog.project_folder, "project_structure").get("status") == "completed"
+    gauges = dialog.checkBox_gaugeOption.isChecked()
     for row in _rows(dialog):
-        names = _inputs(_node(row))
+        node = _node(row)
+        names = _inputs(node)
         grouped = row.parent() is not None and _node(row.parent())["key"] in ("morphology", "meteorology", "observations")
         if names or grouped:
             row.setHidden((grouped and not set_up)
-                          or (bool(names) and not any(name in dialog._input_findings for name in names)))
+                          or (bool(names) and not any(name in dialog._input_findings for name in names))
+                          or (node["key"] in ("gauges", "domain_definition") and not gauges))
     tree, row = dialog.treeWidget_projectStructure, dialog.treeWidget_projectStructure.currentItem()
     while row is not None and not _shown(row):
         row = row.parent()
@@ -355,8 +365,20 @@ def _run(dialog, key) -> None:
         meteorology.start(dialog)
 
 
+def _waits(dialog, row) -> bool:
+    """The user's next step: a ready ▶ with inputs to prepare, an empty row, or an added one
+    outside a ▶ group (the precipitation scan, latlon). Introduction is optional."""
+    node, status = _node(row), row.text(STATUS_COLUMN)
+    if node.get("action") == "run":
+        return dialog.treeWidget_projectStructure.itemWidget(row, STATUS_COLUMN).isEnabled() and any(
+            child.text(STATUS_COLUMN) == SYMBOLS["added"][0] for child in _rows(dialog, row) if _shown(child))
+    grouped = row.parent() is not None and _node(row.parent()).get("action") == "run"
+    return node["key"] != "intro" and (
+        status == SYMBOLS["empty"][0] or (status == SYMBOLS["added"][0] and not grouped))
+
+
 def refresh(dialog) -> None:
-    """Every row's status, its add, edit or run button, and its eye when processed."""
+    """Every row's status, the ▶ of its group, its eye when processed, and ➤ at the next step."""
     from ..controllers import workflow_state
 
     tree, runs = dialog.treeWidget_projectStructure, []
@@ -370,12 +392,7 @@ def refresh(dialog) -> None:
             row.setTextAlignment(STATUS_COLUMN, Qt.AlignmentFlag.AlignCenter)
         if node.get("action") == "run":
             runs.append(row)
-        elif node.get("action") == "edit":
-            derived = "status" not in node  # a DEM derivative: made by ▶, only replaced
-            edit = derived or state != "empty"
-            _action(dialog, row, "✏️" if edit else "\N{HEAVY PLUS SIGN}", "Edit" if edit else "Add",
-                    lambda row=row: tree.setCurrentItem(row)).setEnabled(not derived or state == "processed")
-        if node.get("action") == "edit" or {"grid", "view"} & node.keys():
+        if {"display", "input", "grid", "view"} & node.keys():
             if state == "processed":
                 set_view(dialog, node["key"], node["key"] in dialog._viewed)
             else:
@@ -390,6 +407,9 @@ def refresh(dialog) -> None:
         key = _node(row)["key"]
         _action(dialog, row, "▶", "Run", lambda key=key: _run(dialog, key)).setEnabled(
             ready and workflow_state.running_key(dialog) is None)
+    pointed = next((row for row in _rows(dialog) if _shown(row) and _waits(dialog, row)), item(dialog, "execution"))
+    for row in _rows(dialog):
+        row.setText(NEXT, "➤" if row is pointed else "")
     current = tree.currentItem()
     if current is not None and "summary" in _node(current):
         _summary(dialog, getattr(dialog, _node(current)["summary"]), current)

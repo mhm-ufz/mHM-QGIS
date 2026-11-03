@@ -8,7 +8,6 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QDialog,
-    QDialogButtonBox,
     QMessageBox,
     QRadioButton,
     QTableWidgetItem,
@@ -191,6 +190,8 @@ def populate_pour_point_outlet_fields(dialog, layer=None, preferred=None):
     previous = str(preferred or combo.currentText() or "").strip()
     if layer is None:
         layer = dialog.input_combo("pour_points").currentLayer()
+    if layer is None and dialog._preserve_missing_layer_state:
+        return  # QGIS is removing its layers: the saved field stays
     names = list(layer.fields().names()) if layer is not None and layer.isValid() else []
 
     combo.blockSignals(True)
@@ -242,7 +243,7 @@ def update_gauged_outlet_count(dialog, layer=None):
     return count
 
 
-DOMAIN_TYPES = ("Single Domain [DEM extent]", "Select Domains [using Domain Delineator]")
+DOMAIN_TYPES = ("Entire DEM extent in Domain", "Select Catchments in Domain [using Domain Delineator]")
 
 
 def radios(dialog, name, chosen):
@@ -265,7 +266,7 @@ def check(dialog, name, text):
 
 
 def embed(dialog, name, child):
-    """Show the dialog `child` (or nothing) in `widget_<name>Form`, its OK/Cancel as one Set button.
+    """Show the dialog `child` (or nothing) in `widget_<name>Form`.
 
     The form it replaces is closed silently: its own close handling runs, but not the
     `rejected`/`finished` slots that would show a form again.
@@ -279,10 +280,6 @@ def embed(dialog, name, child):
             old.deleteLater()
     if child is not None:
         child.setWindowFlags(Qt.WindowType.Widget)
-        box = child.findChild(QDialogButtonBox)
-        if box is not None:
-            box.setStandardButtons(QDialogButtonBox.StandardButton.NoButton)
-            box.addButton("Set", QDialogButtonBox.ButtonRole.AcceptRole)
         layout.addWidget(child)
         child.show()
 
@@ -435,7 +432,8 @@ DEM_BUNDLE_VARIABLES = {"dem": "dem_filled", "slope": "slope", "aspect": "aspect
 
 
 def show_dem_derivatives(dialog, variable=None):
-    """The DEM Derivatives page: every derivative in dem_derivatives.nc, or only `variable`'s with its Replace row."""
+    """The DEM page: the DEM and the derivatives the data model needs, from dem_derivatives.nc;
+    `variable`, a clicked row, gets the Replace row."""
     from ...core.handlers.file.netcdf.raster import describe
     from ...core.handlers.store.paths import temp_morphology_folder
 
@@ -448,7 +446,7 @@ def show_dem_derivatives(dialog, variable=None):
         file = os.path.relpath(path, dialog.project_folder) if name in present else "—"
         for column, text in enumerate((key, name, " \N{MULTIPLICATION SIGN} ".join(map(str, shape[-2:])) or "—", units, file)):
             table.setItem(row, column, QTableWidgetItem(text))
-        table.setRowHidden(row, variable not in (None, key))
+        table.setRowHidden(row, key != "dem" and key not in dialog._input_findings)
     for column in range(table.columnCount() - 1):  # the last one stretches
         table.resizeColumnToContents(column)
     dialog._dem_override = variable

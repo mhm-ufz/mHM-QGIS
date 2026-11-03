@@ -3,7 +3,7 @@
 # child's); `status`: a key of STATUS in __init__.py (added or empty); `children`: nested rows.
 # `input`: data-model id(s); the row shows only when the process cases need one.
 # `display`: a `resolve_display_output` key, processed when its file exists, shown by the eye.
-# `action`: edit (➕ Add / ✏️ Edit selects the row) or run (▶ prepares the children).
+# `action: run`: ▶ in the status column prepares the children.
 # `summary`: a table on its page listing the rows below with their status and prepared file.
 # `grid`: the model grid levels its eye shows; `view`: the button its eye clicks.
 nodes:
@@ -32,38 +32,29 @@ nodes:
         summary: tableWidget_morphologySummary
         action: run
         children:
-          - key: dem_derivatives
-            title: I. DEM Derivatives
-            page: page_demDerivatives
-            status: derivatives
-            children:
-              - {key: dem, title: i. DEM (filled), page: page_demDerivatives, input: dem, display: dem, action: edit}
-              - {key: slope, title: ii. Slope, page: page_demDerivatives, input: slope, display: slope, action: edit}
-              - {key: aspect, title: iii. Aspect, page: page_demDerivatives, input: aspect, display: aspect, action: edit}
-              - {key: fdir, title: iv. Flow Direction, page: page_demDerivatives, input: fdir, display: flow_direction, action: edit}
-              - {key: facc, title: v. Flow Accumulation, page: page_demDerivatives, input: facc, display: flow_accumulation, action: edit}
-          - {key: gauges, title: II. Gauges, page: page_gauges, display: idgauges, status: gauges, action: edit}
-          - {key: lc, title: III. Land use, page: page_landUse, display: land_cover, status: categorical, action: edit}
-          - {key: soil, title: IV. Soil, page: page_soil, input: soil_class, display: soil, status: categorical, action: edit}
-          - {key: geology, title: V. Geology, page: page_geology, input: geo_class, display: geology, status: categorical, action: edit}
-          - {key: lai, title: VI. LAI, page: page_lai, input: [lai_class, lai_gridded], display: lai, status: categorical, action: edit}
-          - {key: domain_definition, title: VII. Domain Definition, page: page_domainDefinition, display: domain_mask, status: domain, action: edit}
+          - {key: dem, title: DEM, page: page_demDerivatives, display: dem, status: dem}
+          - {key: lc, title: Land use, page: page_landUse, display: land_cover, status: categorical}
+          - {key: soil, title: Soil, page: page_soil, input: soil_class, display: soil, status: categorical}
+          - {key: geology, title: Geology, page: page_geology, input: geo_class, display: geology, status: categorical}
+          - {key: lai, title: LAI, page: page_lai, input: [lai_class, lai_gridded], display: lai, status: categorical}
+          - {key: gauges, title: Gauges, page: page_gauges, display: idgauges, status: gauges}
+          - {key: domain_definition, title: Domain Definition, page: page_domainDefinition, display: domain_mask, status: domain}
       - key: meteorology
         title: B. Meteorology
         page: tab_meteo
         action: run
         children:
-          - {key: meteo_pre, title: Precipitation, page: page_meteoVar, input: pre, status: meteo, action: edit}
-          - {key: meteo_pet, title: Potential evapotranspiration, page: page_meteoVar, input: pet, status: meteo, action: edit}
-          - {key: meteo_tavg, title: Mean air temperature, page: page_meteoVar, input: tavg, status: meteo, action: edit}
-          - {key: meteo_tmin, title: Minimum air temperature, page: page_meteoVar, input: tmin, status: meteo, action: edit}
-          - {key: meteo_tmax, title: Maximum air temperature, page: page_meteoVar, input: tmax, status: meteo, action: edit}
-          - {key: meteo_netrad, title: Net radiation, page: page_meteoVar, input: netrad, status: meteo, action: edit}
-          - {key: meteo_eabs, title: Vapour pressure, page: page_meteoVar, input: eabs, status: meteo, action: edit}
-          - {key: meteo_windspeed, title: Wind speed, page: page_meteoVar, input: wind, status: meteo, action: edit}
-          - {key: meteo_ssrd, title: Shortwave radiation, page: page_meteoVar, input: ssrd, status: meteo, action: edit}
-          - {key: meteo_strd, title: Longwave radiation, page: page_meteoVar, input: strd, status: meteo, action: edit}
-          - {key: meteo_tann, title: Annual mean air temperature, page: page_meteoVar, input: tann, status: meteo, action: edit}
+          - {key: meteo_pre, title: Precipitation, page: page_meteoVar, input: pre, status: meteo}
+          - {key: meteo_pet, title: Potential evapotranspiration, page: page_meteoVar, input: pet, status: meteo}
+          - {key: meteo_tavg, title: Mean air temperature, page: page_meteoVar, input: tavg, status: meteo}
+          - {key: meteo_tmin, title: Minimum air temperature, page: page_meteoVar, input: tmin, status: meteo}
+          - {key: meteo_tmax, title: Maximum air temperature, page: page_meteoVar, input: tmax, status: meteo}
+          - {key: meteo_netrad, title: Net radiation, page: page_meteoVar, input: netrad, status: meteo}
+          - {key: meteo_eabs, title: Vapour pressure, page: page_meteoVar, input: eabs, status: meteo}
+          - {key: meteo_windspeed, title: Wind speed, page: page_meteoVar, input: wind, status: meteo}
+          - {key: meteo_ssrd, title: Shortwave radiation, page: page_meteoVar, input: ssrd, status: meteo}
+          - {key: meteo_strd, title: Longwave radiation, page: page_meteoVar, input: strd, status: meteo}
+          - {key: meteo_tann, title: Annual mean air temperature, page: page_meteoVar, input: tann, status: meteo}
       - {key: observations, title: C. Observations, page: tab_hydro}
   - {key: execution, title: 3. Execution, page: tab_execution}
   - key: outputs

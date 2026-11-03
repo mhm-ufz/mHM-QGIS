@@ -103,6 +103,7 @@ def test_execute_all_plan_contains_every_user_visible_command():
     assert [stage.command for stage in stages] == [
         "dem_derivatives",
         "gauge_position",
+        "whole_dem_domain",
         "morph_mask",
         "categorical",
         "categorical",

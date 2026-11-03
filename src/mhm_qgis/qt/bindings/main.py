@@ -133,6 +133,8 @@ def bind(dialog):
     # pushButton_browseDemOverride / pushButton_demOverride → main.browse_dem_override / override_dem_derivative
     dialog.pushButton_browseDemOverride.clicked.connect(lambda: main.browse_dem_override(dialog))
     dialog.pushButton_demOverride.clicked.connect(lambda: main.override_dem_derivative(dialog))
+    dialog.tableWidget_demDerivatives.cellClicked.connect(lambda row, _column: main.show_dem_derivatives(
+        dialog, dialog.tableWidget_demDerivatives.item(row, 0).text()))
 
     pour_points = dialog.input_combo("pour_points")
     pour_points.layerChanged.connect(
@@ -142,6 +144,7 @@ def bind(dialog):
     dialog.comboBox_pourPointOutletID.currentIndexChanged.connect(
         lambda _index: main.handle_model_input_changed(dialog)
     )
+    dialog.checkBox_gaugeOption.toggled.connect(lambda _checked: main.handle_model_input_changed(dialog))
     # Outputs tab: the post-processing context bar, pages and time bar
     post_context.bind(dialog)
 

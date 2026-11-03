@@ -4,7 +4,7 @@ import pytest
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
-from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox
+from qgis.PyQt.QtWidgets import QDialog
 
 from mhm_qgis.qt import project_tree
 from mhm_qgis.qt.dialogs.intro_wizard import IntroWizard
@@ -41,9 +41,9 @@ def test_each_row_shows_its_page_titled_after_it(dialog):
     for key, page, title in (("domain_setup", dialog.tab, "Domain Setup"),
                              ("inputs", dialog.page_inputs, "2. Inputs"),
                              ("morphology", dialog.page_morphology, "A. Morphology"),
-                             ("dem_derivatives", dialog.page_demDerivatives, "I. DEM Derivatives"),
-                             ("lc", dialog.page_landUse, "III. Land use"),
-                             ("domain_definition", dialog.page_domainDefinition, "VII. Domain Definition"),
+                             ("dem", dialog.page_demDerivatives, "DEM"),
+                             ("lc", dialog.page_landUse, "Land use"),
+                             ("domain_definition", dialog.page_domainDefinition, "Domain Definition"),
                              ("meteorology", dialog.tab_meteo, "B. Meteorology"),
                              ("meteo_pre", dialog.page_meteoVar, "Precipitation"),
                              ("observations", dialog.tab_hydro, "C. Observations"),
@@ -158,8 +158,11 @@ def test_input_rows_wait_for_domain_setup(dialog, tmp_path):
 
     processing.mark_workflow(tmp_path, "project_structure", "completed")
     process_cases.inputs(dialog)
-    assert not project_tree.item(dialog, "gauges").isHidden()
     assert not project_tree.item(dialog, "meteo_pre").isHidden()
+    gauges = [project_tree.item(dialog, key) for key in ("gauges", "domain_definition")]
+    assert all(row.isHidden() for row in gauges)  # gauges are optional
+    dialog.checkBox_gaugeOption.setChecked(True)
+    assert not any(row.isHidden() for row in gauges)
 
 
 def test_process_cases_are_kept_in_the_state_and_the_namelists(dialog, tmp_path):
@@ -180,7 +183,8 @@ def test_process_cases_are_kept_in_the_state_and_the_namelists(dialog, tmp_path)
     assert all(row.isHidden() for row in temperatures)
     process_cases.changed(dialog, {"pet": 1})  # Hargreaves-Samani: tavg, tmin, tmax and aspect
     assert not any(row.isHidden() for row in temperatures)
-    assert project_tree.item(dialog, "aspect").text(project_tree.STATUS_COLUMN) == "⚪"  # not derived yet
+    dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "dem"))
+    assert not dialog.tableWidget_demDerivatives.isRowHidden(2)  # aspect, now needed
     state = json.loads((tmp_path / ".temp" / "mhm_qgis_input_state.json").read_text())
     assert state["process_cases"]["pet"] == 1
     assert nml_settings.load_settings(tmp_path)["intro_values"]["main"]["config_processes"]["pet"] == 1  # no namelist yet
@@ -199,14 +203,19 @@ def test_summary_tables_on_the_inputs_morphology_and_dem_derivative_pages(dialog
     tree.setCurrentItem(project_tree.item(dialog, "inputs"))
     table = dialog.tableWidget_inputsSummary
     names = [table.item(row, 0).text() for row in range(table.rowCount())]
-    assert {"II. Gauges", "Precipitation"} <= set(names)
+    assert {"DEM", "Precipitation"} <= set(names)
     assert table.item(names.index("Precipitation"), 1).text().startswith("⚪")
     tree.setCurrentItem(project_tree.item(dialog, "morphology"))
     table = dialog.tableWidget_morphologySummary
     assert "Precipitation" not in [table.item(row, 0).text() for row in range(table.rowCount())]
-    tree.setCurrentItem(project_tree.item(dialog, "slope"))
+    tree.setCurrentItem(project_tree.item(dialog, "dem"))
     table = dialog.tableWidget_demDerivatives
-    assert [table.isRowHidden(row) for row in range(table.rowCount())] == [True, False, True, True, True]
+    needed = [not table.isRowHidden(row) for row in range(table.rowCount())]
+    assert needed == [True] + [name in dialog._input_findings for name in ("slope", "aspect", "fdir", "facc")]
+    assert not dialog.widget_demOverride.isVisibleTo(dialog)
+    table.cellClicked.emit(1, 0)
+    assert dialog._dem_override == "slope"
+    assert dialog.widget_demOverride.isVisibleTo(dialog)
     dialog.pushButton_refL0Derivatives.click()
     assert tree.currentItem() is project_tree.item(dialog, "l0_reference")
 
@@ -215,11 +224,11 @@ def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_pa
     from types import SimpleNamespace
 
     from mhm_qgis.qgis_bridge.display import grid as grid_display
-    from mhm_qgis.qt.controllers import process_cases
+    from mhm_qgis.qt.controllers import grid, process_cases
 
     _set_up(dialog, tmp_path)
     process_cases.inputs(dialog)
-    keys =("l0_reference", "l2_reference", "resolution", "settings", "dem_derivatives", "aspect")
+    keys = ("l0_reference", "l2_reference", "resolution", "settings", "dem")
 
     def statuses():
         project_tree.refresh(dialog)
@@ -228,20 +237,22 @@ def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_pa
     def eye(key):
         return not project_tree.item(dialog, key).icon(project_tree.VIEW).isNull()
 
-    assert statuses() == ["⚪"] * 6
+    assert statuses() == ["⚪"] * 5
     assert not any(eye(key) for key in keys[:4])
     dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
     dialog._grid_l2_header = {"cellsize": 1000.0}
+    dialog._grid_l2_metadata = {"configuration_fingerprint": "scanned"}
+    monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "scanned")
     dialog.lineEdit_L1Resolution.setText("1000")
     dialog.lineEdit_L11Resolution.setText("1000")
     (tmp_path / "mhm.nml").write_text("")
-    assert statuses() == ["✅", "✅", "✅", "✅", "🟢", "⚪"]  # derivatives: the DEM is read, ▶ makes them
+    assert statuses() == ["✅", "✅", "✅", "✅", "🟢"]  # the DEM is read, ▶ fills it and derives
     assert all(eye(key) for key in keys[:4])
     dialog._input_findings["latlon"] = SimpleNamespace(ok=False)  # v5.13 also needs latlon.nc
     assert statuses()[2] == "🟢"
     del dialog._input_findings["latlon"]
-    dialog._input_findings.update({name: SimpleNamespace(ok=True, reasons=[]) for name in ("dem", "slope", "aspect", "fdir", "facc")})
-    assert statuses()[4:] == ["✅", "✅"]
+    monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "changed")  # e.g. new precipitation files
+    assert statuses()[1] == "⚪"  # the saved grid no longer counts; no folder to scan
 
     shown, opened = [], []
     monkeypatch.setattr(grid_display, "display_grids", lambda _dialog, levels: shown.append(levels) or ["L1", "L11/L3"])
@@ -330,17 +341,33 @@ def test_the_parameter_namelist_widgets_follow_their_checkbox(dialog):
     assert all(widget.isEnabled() for widget in widgets)
 
 
-def test_columns_and_the_add_edit_run_buttons(dialog):
+def test_columns_the_run_buttons_and_the_next_step(dialog, tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import grid
+
     tree = dialog.treeWidget_projectStructure
-    assert (project_tree.STATUS_COLUMN, project_tree.ACTION, project_tree.VIEW) == (1, 2, 3)
-    run, add, edit = (project_tree.button(dialog, key) for key in ("morphology", "lc", "slope"))
+    assert (project_tree.STATUS_COLUMN, project_tree.VIEW, project_tree.NEXT) == (1, 2, 3)
+    assert tree.header().visualIndex(project_tree.NEXT) == 0  # left of the rows
+    run = project_tree.button(dialog, "morphology")
     assert (run.text(), run.toolTip(), run.isEnabled()) == ("▶", "Run", False)  # nothing added, no setup
-    assert (add.text(), add.toolTip()) == ("\N{HEAVY PLUS SIGN}", "Add")
-    assert (edit.text(), edit.toolTip(), edit.isEnabled()) == ("✏️", "Edit", False)  # nothing to replace yet
-    assert {button.size().width() for button in (run, add, edit, project_tree.button(dialog, "outputs"))} == {24}
-    add.click()
-    assert tree.currentItem() is project_tree.item(dialog, "lc")
-    assert dialog.stackedWidget_project.currentWidget() is dialog.page_landUse
+    assert project_tree.button(dialog, "lc") is None  # no add or edit buttons
+    assert {button.size().width() for button in (run, project_tree.button(dialog, "outputs"))} == {24}
+
+    def pointed():
+        project_tree.refresh(dialog)
+        return [row.data(0, Qt.ItemDataRole.UserRole) for row in project_tree._rows(dialog)
+                if row.text(project_tree.NEXT) == "➤"]
+
+    assert pointed() == ["project_configuration"]  # no project folder yet
+    assert project_tree.item(dialog, "intro").foreground(project_tree.NEXT).color().name() == "#0000ff"
+    _set_up(dialog, tmp_path)
+    dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
+    assert pointed() == ["l0_reference"]
+    dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
+    dialog._grid_l2_header = {"cellsize": 1000.0}
+    dialog._grid_l2_metadata = {"configuration_fingerprint": "scanned"}
+    monkeypatch.setattr(grid, "precipitation_folder", lambda _dialog: str(tmp_path))
+    monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "changed")
+    assert pointed() == ["l2_reference"]  # scan the precipitation again
 
 
 def test_a_type_radio_shows_its_form_and_ok_commits_it(dialog, tmp_path):
@@ -353,7 +380,7 @@ def test_a_type_radio_shows_its_form_and_ok_commits_it(dialog, tmp_path):
     radios[1].click()
     form = dialog.verticalLayout_landUseForm.itemAt(0).widget()
     assert isinstance(form, SingleLayerInputDialog)
-    assert [button.text() for button in form.findChild(QDialogButtonBox).buttons()] == ["Set"]
+    assert form.pushButton_set.text() == "Set"
     assert dialog._categorical_modes.get("lc", "") == ""  # not before Set
 
 

@@ -155,22 +155,29 @@ A module belongs to exactly one layer.
   `stackedWidget_project` and its status rule (`STATUS`). The dialog's one tab, `tab_project`,
   holds that stack and is titled after the selected row. The old step tabs are its pages under
   their old names (`tab`, `tab_meteo`, …). Plan: `.development/polishing/plan.md`.
-  Columns: status, then a button made by `_action` (Add or Edit selects the row; Run on
-  A. Morphology / B. Meteorology, also `workflow_state`'s button for those workflows), then the
-  eye, which shows a processed row's layers: a `grid` row (L0, L2, Resolution) its model grids
-  through `display_grids`, all levels on one eye; a `view` row (Settings) clicks that button
-  instead. Every row with a state shows its symbol; the DEM derivatives have no `status`, so
-  their ✏️ only replaces and they do not hold back ▶, while I. DEM Derivatives is 🟢 once the
-  DEM is read. `show_inputs` hides the rows under A, B and C until Domain Setup has run (the
-  `project_structure` workflow is completed), and rows whose `input` the Settings page's
-  process cases do not need (`qt/controllers/process_cases.py`, `datamodel.check`). A row with
+  Columns, as shown: ➤ (`NEXT`, logical column 3 moved first; `tree.setTreePosition(0)` keeps the
+  branches on the names) marks the user's next step (`_waits`: a ready ▶ with 🟢 inputs, a ⚪ row,
+  or a 🟢 one outside a ▶ group such as L2 before a scan; Introduction is optional; otherwise
+  3. Execution); then the name; then the status, where A. Morphology / B. Meteorology hold their
+  ▶ instead (`_action`, also `workflow_state`'s button for those workflows); then the eye, which
+  shows a processed row's layers: a `grid` row (L0, L2, Resolution) its model grids through
+  `display_grids`, all levels on one eye; a `view` row (Settings) clicks that button instead.
+  L2 is ✅ only while the saved grid's `configuration_fingerprint` matches `grid_fingerprint`,
+  the check Execute All makes. The DEM row is 🟢 once the DEM is read; its page lists the DEM
+  and the derivatives the data model needs, and a clicked one gets the Replace row.
+  `show_inputs` hides the rows under A, B and C until Domain Setup has run (the
+  `project_structure` workflow is completed), rows whose `input` the Settings page's
+  process cases do not need (`qt/controllers/process_cases.py`, `datamodel.check`), and Gauges
+  and Domain Definition unless `checkBox_gaugeOption` is checked. Without gauges Execute All
+  skips the gauge stage and runs `whole_dem_domain` (`delineation.domain_mask` on every valid
+  DEM cell, with the saved outlets dropped). A row with
   `summary` fills that table on its page from the rows below it. An input page embeds its
   child dialog in its Designer host `widget_<name>Form`, under its Designer type radios
   (`main.radios` groups `radioButton_<name>*` by name, wherever they are laid out; their texts are the saved modes, `categorical.MODES` /
-  `main.DOMAIN_TYPES`). `main.embed` turns the dialog's OK/Cancel into one Set button
-  (Set commits, as in `categorical.show`) and closes the form it replaces with its signals
+  `main.DOMAIN_TYPES`). Embedded forms have a Designer `pushButton_set` wired to `accept()`
+  (Set commits, as in `categorical.show`); `main.embed` closes the form it replaces with its signals
   blocked, so no `rejected` slot shows a form again; the delineator's `closeEvent` cleanup
-  still runs. A type is `dialog._categorical_modes`, not a widget. Selecting VII. Domain Definition shows the
+  still runs. A type is `dialog._categorical_modes`, not a widget. Selecting Domain Definition shows the
   checked radio's form (`main.show_domain_definition`) unless one is already embedded. A `toolButton_*Info`
   shows its plain-text toolTip (a table format) in a message box, as nml-tools does.
 - `qt/tooltip/`: the Help tour. `Closure.helpRequested` starts it on the visible page:

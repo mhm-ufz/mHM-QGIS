@@ -117,40 +117,38 @@
     </spacer>
    </item>
    <item>
-    <widget class="QDialogButtonBox" name="buttons">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="horizontalLayout_set">
+     <item>
+      <spacer name="horizontalSpacer_set">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_set">
+       <property name="text">
+        <string>Set</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>
  <resources/>
  <connections>
   <connection>
-   <sender>buttons</sender>
-   <signal>accepted()</signal>
+   <sender>pushButton_set</sender>
+   <signal>clicked()</signal>
    <receiver>SingleLayerInputDialog</receiver>
    <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>20</x>
-     <y>20</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>20</x>
-     <y>20</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>buttons</sender>
-   <signal>rejected()</signal>
-   <receiver>SingleLayerInputDialog</receiver>
-   <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>20</x>

@@ -120,7 +120,7 @@ def test_execute_all_stage_order_uses_saved_hydrology_inputs():
 
     order = [stage.command for stage in EXECUTE_ALL_STAGES]
     assert order == [
-        "dem_derivatives", "gauge_position", "morph_mask", "categorical",
+        "dem_derivatives", "gauge_position", "whole_dem_domain", "morph_mask", "categorical",
         "categorical", "categorical", "lai", "publication",
     ]
     assert "hydrology" not in order
@@ -397,4 +397,26 @@ def test_prerequisites_run_dem_first_then_their_own_stage(tmp_path):
     assert not published
     complete({"filled_dem": str(tmp_path / "filled.nc"), "dem_derivatives": str(tmp_path / "d.nc")})
     assert published == [("soil", {"key": "ready-soil", "publish": True, "failed": None})]
+    dialog.close()
+
+
+def test_without_gauges_execute_all_skips_them_and_takes_the_whole_dem(monkeypatch):
+    from mhm_qgis.qt.workflows import morphology as workflow
+
+    _app()
+    dialog = MhmQgisDialog()
+    bridge, calls = dialog.morphology_tasks, []
+    monkeypatch.setattr(bridge, "start_gauge_position", lambda **_k: calls.append("gauges"))
+    monkeypatch.setattr(bridge, "start_morph_mask", lambda **_k: calls.append("mask") or True)
+    monkeypatch.setattr(bridge, "start_whole_dem_domain", lambda **_k: calls.append("whole DEM") or True)
+    monkeypatch.setattr(workflow, "configured_gauged_outlet_ids", lambda _folder: ["1"])
+    monkeypatch.setattr(workflow.morphology, "run_stages", lambda stages, start, **_k: [
+        start(stage, lambda: None) for stage in stages
+        if stage.command in ("gauge_position", "whole_dem_domain", "morph_mask")])
+    bridge._run_execute_all(None, lambda *_args: None)
+    assert calls == ["whole DEM", "mask"]
+    calls.clear()
+    dialog.checkBox_gaugeOption.setChecked(True)
+    bridge._run_execute_all(None, lambda *_args: None)
+    assert calls == ["gauges", "mask"]
     dialog.close()

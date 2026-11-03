@@ -195,7 +195,7 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["pour_point_outlet_id_field"] == "outlet_name"
     assert "dem_domain" not in state
-    assert state["domain_definition_type"] == "Single Domain [DEM extent]"
+    assert state["domain_definition_type"] == main.DOMAIN_TYPES[0]
 
     from mhm_qgis.core.handlers.state.domain_state import save_state
 
@@ -314,3 +314,29 @@ def test_meteorology_completion_is_independent_of_latlon(tmp_path):
     assert "#2e7d32" in project_tree.button(restored, "meteorology").styleSheet()
     assert processing.workflow(tmp_path, "execute_all_meteo")["status"] == "completed"
     restored.close()
+
+
+def test_qgis_removing_layers_keeps_the_saved_grid_and_outlet_field(tmp_path):
+    from qgis.core import QgsProject, QgsRasterLayer
+
+    _app()
+    dem_path = tmp_path / "dem.asc"
+    dem_path.write_text("ncols 2\nnrows 2\nxllcorner 0\nyllcorner 0\ncellsize 1\nNODATA_value -9999\n1 2\n3 4\n")
+    dem = QgsRasterLayer(str(dem_path), "dem", "gdal")
+    pour_points = tmp_path / "pour_points.geojson"
+    pour_points.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"station_id": 1}, "geometry": {"type": "Point", "coordinates": [1, 1]}}]}))
+    points = QgsVectorLayer(str(pour_points), "pour points", "ogr")
+    QgsProject.instance().addMapLayers([dem, points])
+    dialog = MhmQgisDialog()
+    dialog.project_folder = str(tmp_path)
+    dialog.input_combo("dem").setLayer(dem)
+    dialog.input_combo("pour_points").setLayer(points)
+    assert main.selected_outlet_id_field(dialog) == "station_id"
+    processing.overlay(tmp_path, {"grid": {"l2_header": {"cellsize": 2.0}, "configuration_fingerprint": "saved"}})
+
+    QgsProject.instance().removeAllMapLayers()  # closing the QGIS project, quitting or reloading the plugin
+
+    assert processing.grid_metadata(tmp_path)["configuration_fingerprint"] == "saved"
+    assert main.selected_outlet_id_field(dialog) == "station_id"
+    dialog.close()

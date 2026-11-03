@@ -70,62 +70,37 @@
         </property>
         <item>
          <property name="text">
-          <string>I. DEM Derivatives</string>
-         </property>
-         <item>
-          <property name="text">
-           <string>i. DEM (filled)</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>ii. Slope</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>iii. Aspect</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>iv. Flow Direction</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>v. Flow Accumulation</string>
-          </property>
-         </item>
-        </item>
-        <item>
-         <property name="text">
-          <string>II. Gauges</string>
+          <string>DEM</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>III. Land use</string>
+          <string>Land use</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>IV. Soil</string>
+          <string>Soil</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>V. Geology</string>
+          <string>Geology</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>VI. LAI</string>
+          <string>LAI</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>VII. Domain Definition</string>
+          <string>Gauges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Domain Definition</string>
          </property>
         </item>
        </item>
@@ -1984,6 +1959,40 @@
           <widget class="QWidget" name="page_settings">
            <layout class="QVBoxLayout" name="verticalLayout_page_settings">
             <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_gaugeOption">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="label_gaugeOption">
+                <property name="text">
+                 <string>Enable Gauges and Hydrological Observations:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="checkBox_gaugeOption">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_gaugeOption">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </item>
+            <item>
              <widget class="QLabel" name="label_processCases">
               <property name="text">
                <string>Process cases:</string>
@@ -1991,7 +2000,14 @@
              </widget>
             </item>
             <item>
-             <layout class="QFormLayout" name="formLayout_processCases"/>
+             <layout class="QFormLayout" name="formLayout_processCases">
+              <property name="horizontalSpacing">
+               <number>6</number>
+              </property>
+              <property name="verticalSpacing">
+               <number>2</number>
+              </property>
+             </layout>
             </item>
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_nml">
@@ -2873,14 +2889,14 @@ date,discharge
               <item>
                <widget class="QRadioButton" name="radioButton_domainDefinitionDemExtent">
                 <property name="text">
-                 <string>Single Domain [DEM extent]</string>
+                 <string>Entire DEM extent in Domain</string>
                 </property>
                </widget>
               </item>
               <item>
                <widget class="QRadioButton" name="radioButton_domainDefinitionDelineator">
                 <property name="text">
-                 <string>Select Domains [using Domain Delineator]</string>
+                 <string>Select Catchments in Domain [using Domain Delineator]</string>
                 </property>
                </widget>
               </item>
