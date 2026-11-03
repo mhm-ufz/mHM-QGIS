@@ -105,7 +105,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
 - nml-tools reads/writes namelist files directly; do not restore its removed nml.json
   document APIs. Shrinking legacy domain arrays is previewed in a scratch workspace
   using schema defaults plus explicit plugin values. Only files actually saved by
-  the editor replace originals; keep `.nml.before-single-domain` backups.
+  the editor replace originals; no backup copy is written.
 - v6 geological-unit parameters map to `parameter_baseflow_1.yml`'s structured
   `baseflow_recession` array; v5 keeps `geoparameter.GeoParam`.
 - `qt/controllers/model.py` owns version changes, Edit Namelists and Run mHM, wired

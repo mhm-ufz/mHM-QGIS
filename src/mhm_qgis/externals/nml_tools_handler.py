@@ -142,11 +142,7 @@ def _editor_folder(schemas, request, log=None):
         for path in folder.glob("*.nml"):
             if before.get(path) == path.stat().st_mtime_ns:
                 continue
-            target = output / path.name
-            backup = target.with_suffix(".nml.before-single-domain")
-            if target.exists() and not backup.exists():
-                shutil.copy2(target, backup)
-            os.replace(path, target)
+            os.replace(path, output / path.name)
 
 
 __all__ = ["launch_editor", "read_namelists"]

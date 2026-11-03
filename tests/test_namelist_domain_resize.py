@@ -37,7 +37,7 @@ def test_legacy_domain_migration_preserves_original_until_editor_save(tmp_path, 
             model.save_profiles(staged, [(staged.profile("main"), values["main"], {"n_domains": 1})])
     if save:
         assert model.recover_dimensions(project)["n_domains"] == 1
-        assert target.with_suffix(".nml.before-single-domain").read_bytes() == before
+        assert not list(tmp_path.glob("*.before-single-domain"))
     else:
         assert target.read_bytes() == before
 
