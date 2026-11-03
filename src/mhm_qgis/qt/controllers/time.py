@@ -38,6 +38,24 @@ def save(dialog):
         invalidate(dialog, "run_mhm")
     else:
         invalidate_meteo(dialog)
+    show_period(dialog)
+
+
+def show_period(dialog):
+    """The plugin's time toolbar on the simulation period, a step a day, unless a run's outputs hold it.
+
+    Without QGIS Desktop the toolbar lives in the map window, so it is only updated once it exists.
+    """
+    if dialog._post.intervals is not None or (dialog.iface is None and dialog._post.toolbar is None):
+        return
+    import numpy as np
+
+    from . import post_context
+
+    period = _widget_values(dialog)
+    days = np.arange(np.datetime64(period["sim_start"][:10]), np.datetime64(period["sim_end"][:10]) + 1)
+    if len(days):
+        post_context.time_axis(dialog, np.column_stack([days, days]), lambda _index: None)
 
 
 def restore(dialog):
@@ -61,4 +79,5 @@ def restore(dialog):
         if value.isValid():
             with QSignalBlocker(widget):
                 widget.setDateTime(value)
-
+    if saved:
+        show_period(dialog)

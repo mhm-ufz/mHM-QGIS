@@ -386,10 +386,22 @@ def grid_level_headers(dialog):
     return validate_grid_headers(headers)[0]
 
 
+def resolution_error(dialog):
+    """Why L0, L1, L11 and L2 do not nest by whole factors, or None."""
+    try:
+        grid_level_headers(dialog)
+    except ValueError as error:
+        return str(error)
+    return None
+
+
 def process_lat_lon(dialog):
     """Create the v5 coordinate input through the core setup API."""
     dialog.log_selected_input_paths("Create LatLon")
     dialog.save_input_state()
+    if error := resolution_error(dialog):
+        QMessageBox.warning(dialog, "Create LatLon", error)
+        return False
     request = morphology_setup.SetupRequest(
         project_folder=dialog.project_folder,
         headers=grid_level_headers(dialog),
@@ -632,6 +644,9 @@ def update_latlon_button_state(dialog):
         and current_l11_resolution(dialog)
         and dialog._grid_l2_header
     ))
+    from .. import project_tree
+
+    project_tree.refresh(dialog)  # Resolution's status shows whether the levels nest
 
 
 def _set_resolution_labels(dialog, level, value_text, unit_text):

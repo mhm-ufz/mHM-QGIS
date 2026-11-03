@@ -27,6 +27,7 @@ from ..ui import load_form
 from .file_picker import open_file
 from .input_selection import (
     INPUT_EXTENSIONS,
+    VECTOR_EXTENSIONS,
     InputComboAdapter,
     loaded_qgis_items,
 )
@@ -67,7 +68,7 @@ class _DynamicInputDialogMixin:
         return adapter
 
     def _browse_raster(self, adapter: InputComboAdapter, kind: str) -> None:
-        extensions = sorted(INPUT_EXTENSIONS[kind] - {".shp"})
+        extensions = sorted(INPUT_EXTENSIONS[kind] - VECTOR_EXTENSIONS)
         patterns = " ".join(f"*{extension}" for extension in extensions)
         path, _ = open_file(
             self,
@@ -201,6 +202,18 @@ class HistoricalLandUseDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_La
         self.verticalLayout_4.insertLayout(self.verticalLayout_4.count() - 1, layout)
         return _LandUseRow(layout, start, end, combo, browse, adapter)
 
+    def draft(self) -> dict:
+        """`set_input`'s shape, unchecked; a row without a file keeps it empty."""
+        table = self.tableWidget_landUseTimeInputs
+        return {
+            "periods": [{"start_time": table.cellWidget(index, 0).dateTime().toString("yyyy-MM-ddTHH:mm:ss"),
+                         "end_time": table.cellWidget(index, 1).dateTime().toString("yyyy-MM-ddTHH:mm:ss"),
+                         "file_path": str(row.adapter.source_path() or "")} for index, row in enumerate(self._rows)],
+            "lookup_table": self._lookup_path,
+            "mapping_field": self.comboBox_mappingFieldInput.currentText().strip(),
+            "class_field": self.comboBox_classFieldInput.currentText().strip(),
+        }
+
     def selected_input(self) -> LandUseInput:
         if self._lookup_error:
             raise ValueError(self._lookup_error)
@@ -310,6 +323,20 @@ class MultiHorizonSoilDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_Soi
         )
         parent_layout.insertLayout(parent_layout.count() - 1, layout)
         return _SoilRow(layout, combo, browse, adapter)
+
+    def draft(self) -> dict:
+        """`set_input`'s shape, unchecked; empty cells and files stay empty."""
+        table = self.tableWidget_soilHorizonDepthInputs
+        return {
+            "horizons": [{"horizon": index + 1, "upper_depth": self._cell_text(table, index, 0),
+                          "lower_depth": self._cell_text(table, index, 1),
+                          **{f"{component}_layer": str(rows[index].adapter.source_path() or "")
+                             for component, rows in self._soil_rows.items()}}
+                         for index in range(table.rowCount())],
+            "bulk_density_unit": self.comboBox_bulkDensityUnit.currentText().strip(),
+            "composition_step": self.doubleSpinBox_compositionStepValue.value(),
+            "bulk_density_step": self.doubleSpinBox_bulkDensityStepValue.value(),
+        }
 
     def selected_input(self) -> SoilInput:
         horizons = []

@@ -108,6 +108,7 @@ def save(dialog):
             for kind, value in dialog._advanced_inputs.items()
         },
         "land_cover_ready_source": dialog._land_cover_ready_source,
+        "drafts": dialog._drafts,
         "meteo_inputs": meteo_inputs,
         "observation_inputs": dialog._observation_inputs,
         "pour_point_outlet_id_field": main.selected_outlet_id_field(dialog),
@@ -217,6 +218,7 @@ def clear(dialog):
     dialog._lai_input_config = {}
     dialog._categorical_modes = {}
     dialog._advanced_inputs = {}
+    dialog._drafts = {}
     dialog._land_cover_ready_source = ""
     dialog._domain_definition_mode = ""
     dialog.checkBox_gaugeOption.setChecked(False)
@@ -269,6 +271,8 @@ def _restore_categorical_inputs(dialog, state):
     inputs = state.get("advanced_inputs", {})
     dialog._advanced_inputs = dict(inputs) if isinstance(inputs, dict) else {}
     dialog._land_cover_ready_source = state.get("land_cover_ready_source", "")
+    drafts = state.get("drafts")
+    dialog._drafts = dict(drafts) if isinstance(drafts, dict) else {}
 
 
 def _restore_input_layers(dialog, saved_layers):

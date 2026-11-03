@@ -4,7 +4,7 @@ from __future__ import annotations
 from ..controllers import single_layer_input as controller
 from ..dialogs.input_selection import _browse_raster_into_combo as browse
 
-INPUT_FILTER = "Input layers (*.asc *.nc *.shp *.tif *.tiff);;All files (*)"
+INPUT_FILTER = "Input layers (*.asc *.nc *.gpkg *.shp *.tif *.tiff);;All files (*)"
 
 
 def bind_single_layer_lookup(dialog, title: str) -> None:

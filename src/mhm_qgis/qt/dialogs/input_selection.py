@@ -7,19 +7,20 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from qgis.core import QgsCoordinateReferenceSystem, QgsMapLayer, QgsProject
+from qgis.core import Qgis, QgsCoordinateReferenceSystem, QgsMapLayer, QgsProject
 from qgis.PyQt import QtCore, QtWidgets
 
 from ...qgis_bridge import layers
 from .file_picker import open_file
 
+VECTOR_EXTENSIONS = {".shp", ".gpkg"}
 INPUT_EXTENSIONS = {
     "dem": {".asc", ".nc", ".tif"},
-    "pour_points": {".shp"},
-    "land_cover": {".asc", ".nc", ".shp", ".tif"},
-    "soil": {".asc", ".nc", ".shp", ".tif"},
-    "geology": {".asc", ".nc", ".shp", ".tif"},
-    "lai": {".asc", ".nc", ".shp", ".tif"},
+    "pour_points": VECTOR_EXTENSIONS,
+    "land_cover": {".asc", ".nc", ".tif", *VECTOR_EXTENSIONS},
+    "soil": {".asc", ".nc", ".tif", *VECTOR_EXTENSIONS},
+    "geology": {".asc", ".nc", ".tif", *VECTOR_EXTENSIONS},
+    "lai": {".asc", ".nc", ".tif", *VECTOR_EXTENSIONS},
     "lookup": {".csv", ".txt"},
 }
 _KIND_ALIASES = {"lc": "land_cover"}
@@ -101,9 +102,15 @@ def _accepts_layer(kind: str, layer) -> bool:
     layer_type = _layer_type(layer)
     if kind == "dem":
         return layer_type == QgsMapLayer.LayerType.RasterLayer
-    if kind in {"pour_points", "lookup"}:
+    if kind == "pour_points":
+        return layer_type == QgsMapLayer.LayerType.VectorLayer and is_point_layer(layer)
+    if kind == "lookup":
         return layer_type == QgsMapLayer.LayerType.VectorLayer
     return layer_type in {QgsMapLayer.LayerType.RasterLayer, QgsMapLayer.LayerType.VectorLayer}
+
+
+def is_point_layer(layer) -> bool:
+    return layer is not None and layer.geometryType() == Qgis.GeometryType.Point
 
 
 def qgis_layer_item(layer, kind: str) -> InputItem | None:
@@ -184,7 +191,7 @@ def _file_layer(path: str, kind: str, variable: str = ""):
     path = str(path or "")
     if not path:
         return None
-    vector = kind in {"pour_points", "lookup"} or Path(path).suffix.lower() == ".shp"
+    vector = kind in {"pour_points", "lookup"} or Path(path.split("|", 1)[0]).suffix.lower() in VECTOR_EXTENSIONS
     if variable and Path(path).suffix.lower() == ".nc":
         from ...core.handlers.file.netcdf.raster import source
 
@@ -348,6 +355,13 @@ def _combo_raster_details(combo_box):
     return dict(value) if isinstance(value, dict) else {}
 
 
+def raster_draft(combo_box) -> dict:
+    """A file combo's selection in the `initial` keys `_restore_raster_details` reads."""
+    details = _combo_raster_details(combo_box)
+    return {"input_path": _combo_path(combo_box), "variable": details.get("variable", ""),
+            "source_crs": details.get("source_crs", "")}
+
+
 def _restore_raster_details(combo_box, initial):
     if not isinstance(initial, dict) or not initial.get("input_path"):
         return
@@ -368,6 +382,10 @@ def _restore_raster_details(combo_box, initial):
 def raster_details(parent, path):
     """Return file metadata, prompting only for NetCDF and ASCII rasters."""
     path = str(Path(path).resolve())
+    if Path(path).suffix.lower() in VECTOR_EXTENSIONS:
+        path = _vector_layer(parent, path)
+        crs = layers.crs_of(path, is_raster=False) if path else None
+        return RasterInputConfig(path, "", layers.crs_string(crs) if crs is not None else "") if path else None
     if Path(path).suffix.lower() not in {".asc", ".nc"}:
         crs = layers.crs_of(path)
         return RasterInputConfig(
@@ -377,6 +395,26 @@ def raster_details(parent, path):
 
     prompt = RasterDetailsDialog(path, parent)
     return prompt.selected_config() if prompt.exec() == QtWidgets.QDialog.DialogCode.Accepted else None
+
+
+def _vector_layer(parent, path):
+    """`path`, or `path|layername=<layer>` for a GeoPackage, asking when it holds several."""
+    if Path(path).suffix.lower() != ".gpkg":
+        return path
+    from osgeo import ogr
+
+    dataset = ogr.Open(path)
+    names = [dataset.GetLayer(index).GetName() for index in range(dataset.GetLayerCount())] if dataset else []
+    if len(names) > 1:
+        name, ok = QtWidgets.QInputDialog.getItem(
+            parent, "GeoPackage layer", f"Layer of {Path(path).name}:", names, 0, False)
+        if not ok:
+            return None
+    elif names:
+        name = names[0]
+    else:
+        return path
+    return f"{path}|layername={name}"
 
 
 def _ensure_raster_details(parent, combo_box):
@@ -445,13 +483,16 @@ def _combo_path_at(combo_box, index):
 
 __all__ = [
     "INPUT_EXTENSIONS",
+    "VECTOR_EXTENSIONS",
     "InputComboAdapter",
     "InputItem",
     "LaiNetcdfConfig",
     "RasterInputConfig",
     "ReadyInputConfig",
     "SingleLayerLookupConfig",
+    "is_point_layer",
     "loaded_qgis_items",
     "qgis_layer_item",
     "raster_details",
+    "raster_draft",
 ]

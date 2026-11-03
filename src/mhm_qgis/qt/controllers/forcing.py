@@ -38,7 +38,10 @@ def edit_meteo_input(dialog, variable=None):
 
 def show_meteo_input(dialog, variable):
     """A meteorology row's page: the variable's metadata form, filled in; OK scans it."""
-    prompt = MeteoVarDetailsDialog(variable, dialog.project_directory, _meteo_initial(dialog, variable), dialog)
+    key = f"meteo:{variable}"
+    prompt = MeteoVarDetailsDialog(
+        variable, dialog.project_directory, {**_meteo_initial(dialog, variable), **dialog._drafts.get(key, {})}, dialog)
+    main.draftable(dialog, prompt, key)
     prompt.accepted.connect(lambda: require_active(dialog) and not switch_busy(dialog) and submit_meteo_input(
         dialog, variable, prompt.spec))
     prompt.finished.connect(lambda _result: show_meteo_input(dialog, variable))
@@ -60,13 +63,31 @@ def _meteo_initial(dialog, variable):
     return initial
 
 
+def _outside_period(dialog, variable, metadata):
+    """Why `metadata` does not span the saved simulation period (by date), or None."""
+    from ...core.handlers.state.nml_settings import load_settings
+
+    period = load_settings(dialog.project_folder).get("time") or {}
+    start, end = period.get("sim_start", "")[:10], period.get("sim_end", "")[:10]
+    if start and end and (metadata.start_time[:10] > start or metadata.end_time[:10] < end):
+        return (f"{variable} data cover {metadata.start_time[:10]} to {metadata.end_time[:10]}, "
+                f"not the simulation period {start} to {end}.")
+    return None
+
+
 def submit_meteo_input(dialog, variable, spec):
     """Scan an accepted spec; a failed scan keeps the old input."""
     if variable == "pre":
         set_status(dialog, "scan_precipitation", "running")
 
     def scanned(metadata):
+        if variable != "pre" and (error := _outside_period(dialog, variable, metadata)):
+            failed(ValueError(error))
+            return
         dialog._meteo_inputs[variable] = _spec_state(spec)
+        if dialog._drafts.pop(f"meteo:{variable}", None) is not None and getattr(
+                main.form_on(dialog, "meteoVar"), "draft_key", None) == f"meteo:{variable}":
+            show_meteo_input(dialog, variable)  # rebuilt clean from the scanned input
         dialog._meteo_inspections[variable] = metadata
         if variable == "pre":
             with QSignalBlocker(dialog.comboBox_precipitationFile):

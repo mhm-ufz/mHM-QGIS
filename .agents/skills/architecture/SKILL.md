@@ -177,7 +177,17 @@ A module belongs to exactly one layer.
   `main.DOMAIN_TYPES`). Embedded forms have a Designer `pushButton_set` wired to `accept()`
   (Set commits, as in `categorical.show`); `main.embed` closes the form it replaces with its signals
   blocked, so no `rejected` slot shows a form again; the delineator's `closeEvent` cleanup
-  still runs. A type is `dialog._categorical_modes`, not a widget. Selecting Domain Definition shows the
+  still runs.
+  - **Unsaved form input is kept as drafts.**
+    - Each embedded form has `draft()`, which returns its values in its `initial` shape without validation. `main.draftable` keys it, as `"<kind>:<mode>"` or `"meteo:<variable>"`.
+    - `project_tree.select` calls `main.stash` for every form page and then saves the input state, where drafts live under `"drafts"`.
+    - A form is built from `{**committed, **draft}`.
+    - A draft is dropped only by a successful Set (`categorical._commit`, the forcing `scanned`). A form built clean records a draft only once its values change.
+  - **Domain Setup is ✅ once a domain folder is active.** Resolution stays 🟢 while `grid.resolution_error` reports levels that do not nest by whole factors. LatLon shows that error.
+  - **The time toolbar follows the simulation period** (`time.show_period`) until a run's outputs take it. A forcing scan that does not cover the period is refused (`forcing._outside_period`).
+  - **Vector inputs** (`input_selection.VECTOR_EXTENSIONS`) take their CRS from OGR. A GeoPackage asks for its layer and becomes `path|layername=…`. Pour points must be point layers (`is_point_layer`).
+
+  A type is `dialog._categorical_modes`, not a widget. Selecting Domain Definition shows the
   checked radio's form (`main.show_domain_definition`) unless one is already embedded. A `toolButton_*Info`
   shows its plain-text toolTip (a table format) in a message box, as nml-tools does.
 - `qt/tooltip/`: the Help tour. `Closure.helpRequested` starts it on the visible page:

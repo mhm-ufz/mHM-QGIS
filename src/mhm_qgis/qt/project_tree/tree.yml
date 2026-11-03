@@ -16,6 +16,7 @@ nodes:
       - key: domain_setup
         title: Domain Setup
         page: tab
+        status: domain_setup
         children:
           - {key: l0_reference, title: L0 Reference (DEM), page: page_l0Reference, status: l0, grid: [L0]}
           - {key: l2_reference, title: L2 Reference (Precipitation), page: page_l2Reference, status: l2, grid: [L2]}

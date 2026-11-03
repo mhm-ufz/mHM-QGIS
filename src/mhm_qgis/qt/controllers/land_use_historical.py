@@ -78,7 +78,7 @@ def set_input(dialog, value) -> None:
             with QSignalBlocker(editor):
                 editor.setDateTime(QDateTime.fromString(
                     min(max(moment, lower), upper).isoformat(), "yyyy-MM-ddTHH:mm:ss"))
-        dialog._select_path(dialog._rows[index].adapter, period.file_path)
+        dialog._select_path(dialog._rows[index].adapter, saved_period.get("file_path"))  # a draft's may be empty
     if clamped:
         dialog.label_landUseDescription.setText(
             f"<span style='color:#c0392b'>Saved periods lie outside the simulation period "

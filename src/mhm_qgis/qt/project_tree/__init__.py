@@ -69,6 +69,10 @@ def _project_setup(dialog, _node):
     return "processed" if folder and Path(folder).is_dir() else "empty"
 
 
+def _domain_setup(dialog, _node):
+    return "processed" if dialog.project_folder and Path(dialog.project_folder).is_dir() else "empty"
+
+
 def _gauges(dialog, _node):
     return "added" if dialog.comboBox_pourPointInput.currentIndex() >= 0 and dialog.comboBox_pourPointOutletID.currentText().strip() else "empty"
 
@@ -103,10 +107,16 @@ def _l2(dialog, _node):
 
 def _resolution(dialog, _node):
     """L1 and L11 set; processed once latlon.nc exists where the version needs it (v5.13)."""
-    from ..controllers.grid import current_l1_resolution, current_l11_resolution
+    from ..controllers.grid import (
+        current_l1_resolution,
+        current_l11_resolution,
+        resolution_error,
+    )
 
     if not (current_l1_resolution(dialog) and current_l11_resolution(dialog)):
         return "empty"
+    if dialog._grid_l2_header and resolution_error(dialog):
+        return "added"
     latlon = dialog._input_findings.get("latlon")
     return "added" if latlon and not latlon.ok else "processed"
 
@@ -123,7 +133,7 @@ def _dem(dialog, _node):
     return "added" if dialog._grid_l0_info else "empty"
 
 
-STATUS = {"intro": _intro, "project_setup": _project_setup, "gauges": _gauges,
+STATUS = {"intro": _intro, "project_setup": _project_setup, "domain_setup": _domain_setup, "gauges": _gauges,
           "categorical": _categorical, "domain": _domain, "meteo": _meteo, "l0": _l0, "l2": _l2,
           "resolution": _resolution, "namelists": _namelists, "dem": _dem}
 
@@ -211,6 +221,9 @@ def select(dialog, row) -> None:
         return
     from ..controllers import categorical, forcing, grid, intro, main, process_cases
 
+    for name in {*categorical.PAGES.values(), "meteoVar"}:  # unsaved form input survives the switch
+        main.stash(dialog, name)
+    dialog.save_input_state()
     key = node["key"]
     if "summary" in node:
         _summary(dialog, getattr(dialog, node["summary"]), row)

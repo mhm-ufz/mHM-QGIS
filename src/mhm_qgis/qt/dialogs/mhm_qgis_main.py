@@ -44,6 +44,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._categorical_modes = {}
         self._advanced_inputs = {}
         self._lai_input_config = {}
+        self._drafts = {}  # unsaved form values by form key, see main.stash
         self._land_cover_ready_source = ""
         self._domain_definition_mode = ""
         self._meteo_inputs = {}

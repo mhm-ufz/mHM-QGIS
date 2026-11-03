@@ -16,6 +16,7 @@ from .input_selection import (
     _populate_file_combo,
     _populate_layer_combo,
     _restore_raster_details,
+    raster_draft,
 )
 
 
@@ -55,6 +56,12 @@ class SingleLayerInputDialog(
         self._initial = initial
         bind_single_layer_lookup(self, title)
         controller._refresh_fields(self)
+
+    def draft(self) -> dict:
+        return {**raster_draft(self.comboBox_inputLayer), "input_path": self.input_adapter.source_path(),
+                "lookup_table": _combo_path(self.lookup_table_combo),
+                "mapping_field": self.mapping_field_combo.currentText().strip(),
+                "class_field": self.class_field_combo.currentText().strip()}
 
     def selected_config(self) -> SingleLayerLookupConfig | None:
         source = self.input_adapter.source_path()

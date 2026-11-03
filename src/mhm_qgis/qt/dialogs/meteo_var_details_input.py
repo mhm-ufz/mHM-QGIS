@@ -16,6 +16,9 @@ class MeteoVarDetailsDialog(QDialog, load_form("meteo_var_details_input.ui")):
         controller.populate(self, initial or {})
         bind(self)
 
+    def draft(self):
+        return controller.draft(self)
+
     def accept(self):
         if controller.validate(self):
             super().accept()

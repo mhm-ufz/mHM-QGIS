@@ -3,7 +3,7 @@ import pytest
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
+from qgis.PyQt.QtCore import QCoreApplication, QDateTime, QEvent, Qt
 from qgis.PyQt.QtWidgets import QDialog
 
 from mhm_qgis.qt import project_tree
@@ -240,7 +240,7 @@ def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_pa
     assert statuses() == ["⚪"] * 5
     assert not any(eye(key) for key in keys[:4])
     dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
-    dialog._grid_l2_header = {"cellsize": 1000.0}
+    dialog._grid_l2_header = {"ncols": 4, "nrows": 4, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1000.0}
     dialog._grid_l2_metadata = {"configuration_fingerprint": "scanned"}
     monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "scanned")
     dialog.lineEdit_L1Resolution.setText("1000")
@@ -425,3 +425,58 @@ def test_a_forcing_row_embeds_its_details_and_steps_on_the_time_toolbar(dialog):
     post_context.time_axis(dialog, np.column_stack([steps, steps]), print)  # standalone: made on first use
     assert dialog._post.ui.horizontalSlider_postTime.maximum() == 2
     assert dialog._post.axis[1] is print
+
+
+def test_next_step_waits_on_domain_setup_then_on_nesting_resolutions(dialog, tmp_path):
+    def status(key):
+        project_tree.refresh(dialog)
+        return project_tree.item(dialog, key).text(project_tree.STATUS_COLUMN)
+
+    dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
+    assert status("domain_setup") == "⚪"
+    assert project_tree.item(dialog, "domain_setup").text(project_tree.NEXT) == "➤"
+    _set_up(dialog, tmp_path)
+    assert status("domain_setup") == "✅"
+    dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
+    dialog._grid_l2_header = {"ncols": 4, "nrows": 4, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1000.0}
+    dialog.lineEdit_L11Resolution.setText("1000")
+    dialog.lineEdit_L1Resolution.setText("300")  # 3 x L0, but not a whole factor of L2
+    assert status("resolution") == "🟢"
+    dialog.lineEdit_L1Resolution.setText("500")
+    assert status("resolution") == "✅"
+
+
+def test_unsaved_form_input_survives_a_tree_switch_and_a_reload(dialog, tmp_path):
+    from mhm_qgis.qt.controllers import main
+
+    _set_up(dialog, tmp_path)
+    tree = dialog.treeWidget_projectStructure
+    tree.setCurrentItem(project_tree.item(dialog, "meteo_tavg"))
+    main.form_on(dialog, "meteoVar").lineEdit_fileNameGlobDefinition.setText("tavg_*.nc")
+    tree.setCurrentItem(project_tree.item(dialog, "meteo_tmin"))
+    tree.setCurrentItem(project_tree.item(dialog, "meteo_tavg"))
+    assert main.form_on(dialog, "meteoVar").lineEdit_fileNameGlobDefinition.text() == "tavg_*.nc"
+    dialog._drafts = {}
+    dialog.load_input_state()
+    assert dialog._drafts["meteo:tavg"]["pattern"] == "tavg_*.nc"
+    assert "meteo:tmin" not in dialog._drafts  # untouched forms leave no draft
+
+
+def test_forcing_must_cover_the_simulation_period_shown_on_the_time_bar(dialog, tmp_path):
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from mhm_qgis.qt.controllers import forcing, post_context, time
+
+    _set_up(dialog, tmp_path)
+    dialog.dateTimeEdit_simulationStartTimeInput.setDateTime(QDateTime.fromString("2000-01-01T00:00", Qt.DateFormat.ISODate))
+    dialog.dateTimeEdit_simulationEndTimeInput.setDateTime(QDateTime.fromString("2000-01-10T00:00", Qt.DateFormat.ISODate))
+    steps = np.array(["2000-01-01"], dtype="datetime64[s]")
+    post_context.time_axis(dialog, np.column_stack([steps, steps]), print)  # standalone: the bar exists once used
+    time.save(dialog)
+    assert dialog._post.ui.horizontalSlider_postTime.maximum() == 9  # ten days
+    short = SimpleNamespace(start_time="2000-01-01T00:00", end_time="2000-01-05T00:00")
+    assert "not the simulation period 2000-01-01 to 2000-01-10" in forcing._outside_period(dialog, "tavg", short)
+    long = SimpleNamespace(start_time="1999-12-31T00:00", end_time="2000-01-10T00:00")
+    assert forcing._outside_period(dialog, "tavg", long) is None

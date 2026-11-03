@@ -53,6 +53,9 @@ def _stub(result):
         def selected_input(self):
             return result
 
+        def draft(self):
+            return {}
+
     return _Child
 
 

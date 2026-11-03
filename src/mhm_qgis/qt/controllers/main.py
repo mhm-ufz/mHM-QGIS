@@ -19,6 +19,7 @@ from ..dialogs.file_picker import open_file
 from ..dialogs.input_selection import (
     INPUT_EXTENSIONS,
     InputComboAdapter,
+    is_point_layer,
     loaded_qgis_items,
     raster_details,
 )
@@ -112,6 +113,13 @@ def browse_input_file(dialog, kind):
     details = raster_details(dialog, path)
     if details is None:
         return
+    if kind == "pour_points":
+        from ...qgis_bridge import layers
+
+        if not is_point_layer(layers.open_layer(details.input_path, "gauges", is_raster=False)):
+            QMessageBox.warning(dialog, "Unsupported Input", "Gauges need a point layer.")
+            return
+        path = details.input_path  # a GeoPackage's chosen layer
     add_file_input(dialog, kind, path, manual=True,
                    variable=details.variable, source_crs=details.source_crs)
 
@@ -281,6 +289,33 @@ def embed(dialog, name, child):
         child.setWindowFlags(Qt.WindowType.Widget)
         layout.addWidget(child)
         child.show()
+
+
+def form_on(dialog, name):
+    """The form embedded on page `name`, or None."""
+    layout = getattr(dialog, f"verticalLayout_{name}Form")
+    return layout.itemAt(0).widget() if layout.count() else None
+
+
+def draftable(dialog, form, key):
+    """Let `form` keep unsaved values as the draft `key`. A form built from a draft keeps it
+    until a successful Set drops it; one built clean records a draft only once its values change."""
+    form.draft_key = key
+    form.draft_base = None if key in dialog._drafts else form.draft()
+    form.accepted.connect(lambda: dialog._drafts.__setitem__(key, form.draft()))  # a failed Set keeps them
+
+
+def stash(dialog, name):
+    """Record the unsaved values of the form on page `name` (see `draftable`)."""
+    form = form_on(dialog, name)
+    key = getattr(form, "draft_key", None)
+    if key is None:
+        return
+    values = form.draft()
+    if values == form.draft_base:
+        dialog._drafts.pop(key, None)
+    else:
+        dialog._drafts[key] = values
 
 
 def handle_domain_definition_type(dialog, text):

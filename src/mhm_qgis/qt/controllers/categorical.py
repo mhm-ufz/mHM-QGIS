@@ -76,6 +76,7 @@ def show(dialog, kind, text=None):
         main.embed(dialog, PAGES[kind], None)
         return
     child, result, apply = _form(dialog, kind, text)
+    main.draftable(dialog, child, f"{kind}:{text}")
     child.accepted.connect(lambda: _commit(dialog, kind, text, getattr(child, result)(), apply))
     child.rejected.connect(lambda: show(dialog, kind))
     main.embed(dialog, PAGES[kind], child)
@@ -84,20 +85,27 @@ def show(dialog, kind, text=None):
 def _form(dialog, kind, text):
     """The child dialog for a type, the method giving its value, and how to apply that."""
     mode, folder = text.lower(), dialog.project_folder
+    draft = dialog._drafts.get(f"{kind}:{text}", {})
+
+    def initial(committed):
+        committed = committed.as_dict() if hasattr(committed, "as_dict") else committed
+        return {**(committed or {}), **draft}
+
     if mode == "mhm ready":
-        return MhmReadyInputDialog(folder, kind, dialog, initial=dialog._categorical_ready_configs.get(kind)), \
+        return MhmReadyInputDialog(folder, kind, dialog, initial=initial(dialog._categorical_ready_configs.get(kind))), \
             "selected_config", _configure_ready
     if kind == "lai" and "netcdf" in mode:
-        return LaiNetcdfInputDialog(folder, dialog, initial=dialog._lai_input_config), \
+        return LaiNetcdfInputDialog(folder, dialog, initial=initial(dialog._lai_input_config)), \
             "selected_config", _configure_lai_netcdf
     if kind == "lc" and "single categorical" not in mode:
         return advanced_inputs.HistoricalLandUseDialog(
-            folder, dialog, initial=dialog._advanced_inputs.get("land_cover"), all_time="single layer" in mode,
+            folder, dialog, initial=initial(dialog._advanced_inputs.get("land_cover")), all_time="single layer" in mode,
         ), "selected_input", _configure_historical_land_use
     if kind == "soil" and "multi-horizon" in mode:
-        return advanced_inputs.MultiHorizonSoilDialog(folder, dialog, initial=dialog._advanced_inputs.get("soil")), \
+        return advanced_inputs.MultiHorizonSoilDialog(
+            folder, dialog, initial=initial(dialog._advanced_inputs.get("soil"))), \
             "selected_input", _configure_multi_horizon_soil
-    return SingleLayerInputDialog(folder, kind, dialog, initial=dialog._categorical_lookup_configs.get(kind)), \
+    return SingleLayerInputDialog(folder, kind, dialog, initial=initial(dialog._categorical_lookup_configs.get(kind))), \
         "selected_config", _configure_lookup
 
 
@@ -107,6 +115,7 @@ def _commit(dialog, kind, text, value, apply):
     if value is None or not apply(dialog, kind, value):
         return
     dialog._categorical_modes[kind] = text
+    dialog._drafts.pop(f"{kind}:{text}", None)
     show(dialog, kind)
     dialog.save_input_state()
     invalidate_meteo(dialog)

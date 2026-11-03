@@ -65,24 +65,32 @@ def browse(dialog):
         dialog.comboBox_inputFolder.setCurrentText(folder)
 
 
+def draft(dialog):
+    """The form's values in `populate`'s shape, unchecked."""
+    return {
+        "folder": dialog.comboBox_inputFolder.currentText().strip(),
+        "pattern": dialog.lineEdit_fileNameGlobDefinition.text().strip(),
+        "temporal_resolution": dialog.comboBox_temporalResolutionInput.currentText(),
+        "output_temporal_resolution": dialog.comboBox_temporalResolutionOutput.currentText(),
+        "aggregation": ("" if not dialog.comboBox_temporalAggregationTypeMeteoOutput.isEnabled()
+                        else dialog.comboBox_temporalAggregationTypeMeteoOutput.currentText()),
+        "unit": dialog.comboBox_unitInput.currentText(),
+        "crs": crs_string(dialog.mProjectionSelectionWidget_crs.crs()),
+    }
+
+
 def validate(dialog):
     """Validate user choices; the caller scans only after this dialog accepts."""
     try:
-        text = dialog.comboBox_inputFolder.currentText().strip()
-        if not text:
+        values = draft(dialog)
+        if not values["folder"]:
             raise ValueError("Select an input folder.")
-        folder = Path(text).expanduser()
-        pattern = dialog.lineEdit_fileNameGlobDefinition.text().strip()
+        folder, pattern = Path(values["folder"]).expanduser(), values["pattern"]
         if not folder.is_dir() or not pattern or Path(pattern).is_absolute() or ".." in Path(pattern).parts:
             raise ValueError("Select an existing input folder and a relative NetCDF glob.")
+        options = {key: value for key, value in values.items() if key != "folder"}
         dialog.spec = MeteoFolderSpec(
-            dialog.variable, folder.resolve(), pattern=pattern,
-            temporal_resolution=dialog.comboBox_temporalResolutionInput.currentText(),
-            output_temporal_resolution=dialog.comboBox_temporalResolutionOutput.currentText(),
-            aggregation=("" if not dialog.comboBox_temporalAggregationTypeMeteoOutput.isEnabled()
-                         else dialog.comboBox_temporalAggregationTypeMeteoOutput.currentText()),
-            unit=dialog.comboBox_unitInput.currentText(),
-            crs=crs_string(dialog.mProjectionSelectionWidget_crs.crs()) or None).normalized()
+            dialog.variable, folder.resolve(), **{**options, "crs": options["crs"] or None}).normalized()
         validate_spec(dialog.spec)
     except (OSError, ValueError) as error:
         QMessageBox.warning(dialog, "Meteorology input", str(error))

@@ -315,3 +315,29 @@ def _points(path):
     path.write_text(json.dumps({"type": "FeatureCollection", "features": [
         {"type": "Feature", "properties": {}, "geometry": {"type": "Point", "coordinates": [0, 0]}}]}))
     return path
+
+
+def test_vector_files_browse_with_their_crs_and_geopackage_layer(tmp_path, monkeypatch):
+    pytest.importorskip("osgeo")
+    from osgeo import ogr, osr
+
+    from mhm_qgis.qgis_bridge import layers
+    from mhm_qgis.qt.dialogs.input_selection import is_point_layer, raster_details
+
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(32632)
+    gpkg = ogr.GetDriverByName("GPKG").CreateDataSource(str(tmp_path / "inputs.gpkg"))
+    for name, kind in (("gauges", ogr.wkbPoint), ("rivers", ogr.wkbLineString)):
+        gpkg.CreateLayer(name, srs, kind)
+    gpkg = None
+    shp = ogr.GetDriverByName("ESRI Shapefile").CreateDataSource(str(tmp_path / "geology.shp"))
+    shp.CreateLayer("geology", srs, ogr.wkbPolygon)
+    shp = None
+
+    assert raster_details(None, tmp_path / "geology.shp").source_crs.endswith("32632")
+    monkeypatch.setattr(QtWidgets.QInputDialog, "getItem", lambda *_args: ("rivers", True))
+    rivers = raster_details(None, tmp_path / "inputs.gpkg").input_path
+    assert rivers.endswith("inputs.gpkg|layername=rivers")
+    assert not is_point_layer(layers.open_layer(rivers, "rivers", is_raster=False))  # refused as gauges
+    gauges = rivers.replace("rivers", "gauges")
+    assert is_point_layer(layers.open_layer(gauges, "gauges", is_raster=False))

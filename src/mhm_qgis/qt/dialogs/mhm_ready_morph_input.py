@@ -13,6 +13,7 @@ from .input_selection import (
     _ensure_raster_details,
     _populate_file_combo,
     _restore_raster_details,
+    raster_draft,
 )
 
 
@@ -50,6 +51,11 @@ class MhmReadyInputDialog(
             else "",
         )
         bind_mhm_ready(self, title)
+
+    def draft(self) -> dict:
+        definition = self.groupBox_classDefinitionInput.isChecked()
+        return {**raster_draft(self.comboBox_inputFile),
+                "classdefinition_path": _combo_path(self.comboBox_classDefinitionInputFile) if definition else ""}
 
     def selected_config(self) -> ReadyInputConfig | None:
         source = _combo_path(self.comboBox_inputFile)

@@ -464,12 +464,13 @@ class MorphologyTaskBridge:
             source.split("|", 1)[0]
         ).suffix.lower() in {".shp", ".gpkg", ".geojson"}
         local = layers.local_layer_source(layer) if layer is not None else None
-        if local is None:
-            candidate = Path(source.split("|", 1)[0])
+        if local is None and "|" not in source:  # a GeoPackage layer is materialized below
+            candidate = Path(source)
             if candidate.is_file():
                 local = str(candidate)
         if local is None:
             with TemporaryDirectory(prefix=f"mhm_qgis_{kind}_boundary_") as temporary:
+                layer = layer or layers.open_layer(source, kind, is_raster=not is_vector)
                 if layer is None:
                     raise ValueError(f"Input is not a readable local file: {source}")
                 materialized = (

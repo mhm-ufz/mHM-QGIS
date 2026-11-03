@@ -13,6 +13,7 @@ from .input_selection import (
     _ensure_raster_details,
     _populate_file_combo,
     _restore_raster_details,
+    raster_draft,
 )
 
 
@@ -35,6 +36,10 @@ class LaiNetcdfInputDialog(
         )
         self.comboBox_timestepLAIInput.setCurrentIndex(index)
         bind_lai_netcdf(self)
+
+    def draft(self) -> dict:
+        return {**raster_draft(self.comboBox_laiNetCDFInput),
+                "target_timestep": self.comboBox_timestepLAIInput.currentText().strip()}
 
     def selected_config(self) -> LaiNetcdfConfig | None:
         source = _combo_path(self.comboBox_laiNetCDFInput)
