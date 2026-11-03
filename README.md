@@ -56,9 +56,10 @@ Install **mHM QGIS** from the QGIS Plugin Manager (QGIS 3.34 or newer, including
 QGIS 4). Enable *Show also experimental plugins* while the plugin is experimental. On
 first start the plugin lists its missing Python dependencies (see `requirements.txt`)
 and offers to install them for the Python that QGIS uses, into its own folder in the
-QGIS profile (`<profile>/python/mhm-qgis-packages`), not `~/.local`: removing the
-profile removes them, and no other Python sees them. QGIS's own packages (NumPy, GDAL)
-are reused, never replaced. If that fails, the plugin shows the exact commands to run
+QGIS profile (`<profile>/python/mhm-qgis-packages/numpy<major>`), not `~/.local`: removing
+the profile removes them, no other Python sees them, and a QGIS on another NumPy major
+version gets its own. QGIS's own packages (NumPy, GDAL) are reused, never replaced; if a
+NumPy installed elsewhere (e.g. in `~/.local`) hides QGIS's, the plugin names it for removal. If that fails, the plugin shows the exact commands to run
 with that same Python (on Windows, in the OSGeo4W Shell).
 
 ### mHM executables

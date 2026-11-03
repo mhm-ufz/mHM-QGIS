@@ -78,6 +78,19 @@ def ensure_qgis_runtime_dependencies(parent=None, prompt=True) -> BootstrapResul
     global _LAST_RESULT  # noqa: PLW0603 -- one cached result per QGIS session
 
     configure_qtpy_api()
+    try:
+        from osgeo import gdal_array  # noqa: F401 -- needs the NumPy QGIS ships
+    except ImportError as error:
+        if error.name != "osgeo":  # no GDAL at all is a plain Python; anything else is a foreign NumPy
+            import numpy as np
+
+            folder = Path(np.__file__).parent
+            raise RuntimeError(
+                f"QGIS's GDAL cannot use NumPy {np.__version__} from {folder} ({error}). "
+                "A NumPy installed outside QGIS, e.g. by an earlier `pip install --user`, hides QGIS's own. "
+                f"Delete the folders {folder.name} and numpy-{np.__version__}.dist-info in {folder.parent} "
+                "and restart QGIS."
+            ) from error
     add_user_site()
     dependencies = read_qgis_requirements()
     missing = [dependency for dependency in dependencies if not can_import(dependency)]
@@ -181,7 +194,7 @@ def can_import(dependency: Dependency) -> bool:
 
     try:
         importlib.import_module(dependency.import_name)
-    except ImportError:
+    except Exception:  # built for another NumPy: "numpy.dtype size changed" is a ValueError
         return False
     parsed = _parsed(dependency.requirement)
     if parsed is None or not parsed.specifier:
@@ -227,7 +240,10 @@ def packages_base() -> str:
         from qgis.core import QgsApplication
     except ImportError:  # the standalone runtime: its own environment
         return site.getuserbase()
-    return os.path.join(QgsApplication.qgisSettingsDirPath(), "python", "mhm-qgis-packages")
+    import numpy as np
+
+    major = np.__version__.split(".")[0]  # binaries built for NumPy 1 and 2 never share a folder
+    return os.path.join(QgsApplication.qgisSettingsDirPath(), "python", "mhm-qgis-packages", f"numpy{major}")
 
 
 def _user_path(kind: str) -> str:

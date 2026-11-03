@@ -74,3 +74,31 @@ def test_packages_go_to_the_plugins_folder_not_the_users(tmp_path, monkeypatch):
     os.makedirs(site)
     bootstrap.add_user_site()
     assert sys.path[0] == site  # ahead of QGIS's own site-packages, as the user site was
+
+
+def test_a_package_built_for_another_numpy_counts_as_missing(monkeypatch):
+    def broken(_name):
+        raise ValueError("numpy.dtype size changed, may indicate binary incompatibility")
+
+    monkeypatch.setattr(bootstrap.importlib, "import_module", broken)
+    assert not bootstrap.can_import(bootstrap.dependency_from_requirement_line("pandas>=2.0"))
+
+
+def test_a_numpy_hiding_qgiss_own_is_named_not_installed_over(tmp_path, monkeypatch):
+    pytest.importorskip("qgis.core")
+    (tmp_path / "osgeo").mkdir()
+    (tmp_path / "osgeo" / "__init__.py").write_text("")
+    (tmp_path / "osgeo" / "gdal_array.py").write_text('raise ImportError("numpy.core.multiarray failed to import")')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in ("osgeo", "osgeo.gdal_array"):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    monkeypatch.setattr(bootstrap, "read_qgis_requirements", lambda: pytest.fail("checked before any install"))
+    with pytest.raises(RuntimeError, match=r"multiarray.*Delete the folders numpy and numpy-"):
+        bootstrap.ensure_qgis_runtime_dependencies(prompt=False)
+
+
+def test_each_numpy_major_has_its_own_package_folder():
+    pytest.importorskip("qgis.core")
+    import numpy as np
+
+    assert bootstrap.packages_base().endswith(f"mhm-qgis-packages{os.sep}numpy{np.__version__.split('.')[0]}")
