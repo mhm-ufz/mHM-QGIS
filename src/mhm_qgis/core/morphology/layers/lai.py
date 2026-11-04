@@ -43,6 +43,7 @@ def task_options(
     filled_dem: str,
     *,
     crs: str = "",
+    source_crs: str = "",
     target_timestep: str = DEFAULT_TIMESTEP,
     l0_header: dict | None = None,
 ) -> dict | None:
@@ -56,6 +57,7 @@ def task_options(
         "output_path": lai_dem_staging_path(project_folder),
         "filled_dem": str(filled_dem),
         "dem_crs": str(crs or ""),
+        "source_crs": str(source_crs or ""),
         "target_timestep": target_timestep or DEFAULT_TIMESTEP,
         "method": "bilinear",
         "l0_header": l0_header,

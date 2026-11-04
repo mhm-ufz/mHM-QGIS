@@ -65,6 +65,7 @@ def lai(task, options, messages):
         options["output_path"],
         output_temporal_resolution=options["target_timestep"],
         source_variable=options.get("source_variable"),
+        input_crs=options.get("source_crs") or None,
         dem_crs=options.get("dem_crs") or None,
         resampling=options.get("method") or "bilinear",
         l0_header=options.get("l0_header"),

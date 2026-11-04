@@ -381,6 +381,12 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   it in the UI.
 - Clip/resample LAI to the filled DEM L0 grid. The filled DEM may be projected while LAI
   may be lat/lon.
+- `prepare_lai_file` lets mhm-tools' `locate_lai_cube` decide whether a file has a grid.
+  - Whatever it reads is warped in one step:
+    - 1-D lat/lon or projected x/y, in any naming, from `input_crs` (the form's `source_crs`), else the CF grid mapping, else EPSG:4326;
+    - 2-D curvilinear lat/lon, through GDAL geolocation arrays.
+  - A file with no grid must have the exact L0 shape and is copied as is (`_lai_on_l0`). This keeps mHM-ready LAI without coordinates working.
+  - Do not look up lat/lon by variable name here; mhm-tools owns that detection.
 - **Execute All has one plan.** The ▶ of A. Morphology goes to
   `MorphologyTaskBridge.start_execute_all()`, which schedules
   `core/executions/morphology.EXECUTE_ALL_STAGES`. Every user-visible execution command,

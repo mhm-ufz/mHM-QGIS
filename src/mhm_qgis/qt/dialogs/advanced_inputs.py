@@ -23,6 +23,7 @@ from ...qt.bindings.land_use_historical import bind_historical_land_use
 from ...qt.bindings.soil_multi_horizon import bind_multi_horizon_soil
 from ...qt.controllers import land_use_historical as land_use_controller
 from ...qt.controllers import soil_multi_horizon as soil_controller
+from ..reporting import dialog_confirmer
 from ..ui import load_form
 from .file_picker import open_file
 from .input_selection import (
@@ -363,9 +364,15 @@ class MultiHorizonSoilDialog(_DynamicInputDialogMixin, QtWidgets.QDialog, Ui_Soi
 
     def _accept(self) -> None:
         try:
-            self.selected_input()
+            value = self.selected_input()
         except ValueError as error:
             QtWidgets.QMessageBox.warning(self, "Invalid Soil Input", str(error))
+            return
+        depth = value.lower_depths[-1]
+        if depth < 100 and not dialog_confirmer(self)(
+            "Shallow Soil", f"The deepest soil horizon ends at {depth:g} mm. "
+            "Soil depths are in mm; continue anyway?"
+        ):
             return
         self.accept()
 

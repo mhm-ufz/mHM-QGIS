@@ -122,6 +122,7 @@ def test_lai_adapter_uses_the_mhm_tools_api(tmp_path, monkeypatch):
         return output_file
 
     format_lai.format_lai_netcdf_file = format_lai_netcdf_file
+    format_lai.locate_lai_cube = lambda *_args: None  # a grid it can read
     format_lai.lai_time_step = lambda resolution: {
         "long-term-mean-monthly": 1
     }[resolution]
@@ -135,12 +136,13 @@ def test_lai_adapter_uses_the_mhm_tools_api(tmp_path, monkeypatch):
         tmp_path / "dem.tif",
         tmp_path / "lai.nc",
         output_temporal_resolution="monthly",
+        input_crs="EPSG:3035",
         dem_crs="EPSG:4326",
     )
 
     assert output == tmp_path / "lai.nc"
     assert calls[0][3]["output_temporal_resolution"] == "monthly"
-    assert calls[0][3]["dem_crs"] == "EPSG:4326"
+    assert (calls[0][3]["input_crs"], calls[0][3]["dem_crs"]) == ("EPSG:3035", "EPSG:4326")
     assert lai_time_step("long-term-mean-monthly") == 1
 
 
@@ -179,23 +181,23 @@ def test_lai_without_coordinates_is_used_as_is_on_the_l0_grid(tmp_path):
                          source_variable="lai", l0_header={**header, "nrows": 4})
 
 
-def test_lai_on_2d_lat_lon_is_put_on_a_regular_grid_for_mhm_tools(tmp_path, monkeypatch):
+def test_lai_on_x_y_axes_goes_to_mhm_tools_not_the_l0_copy(tmp_path, monkeypatch):
+    """GIMMS names its lon/lat axes x/y; any grid mHM-tools reads is resampled, whatever its shape."""
     import numpy as np
 
     format_lai = pytest.importorskip("mhm_tools.pre.format_lai")
     xr = pytest.importorskip("xarray")
-    rows, cols = np.meshgrid(np.arange(4.0), np.arange(5.0), indexing="ij")
-    _monthly_lai(tmp_path / "lai.nc", (4, 5), lat=50 - 0.1 * rows + 0.01 * cols, lon=10 + 0.1 * cols + 0.01 * rows)
+    x = xr.DataArray(79 + 0.1 * np.arange(5), dims="x", attrs={"standard_name": "longitude"})
+    y = xr.DataArray(26 + 0.1 * np.arange(3), dims="y", attrs={"standard_name": "latitude"})
+    _monthly_lai(tmp_path / "lai.nc", (3, 5))
+    with xr.open_dataset(tmp_path / "lai.nc") as lai:
+        lai.load().assign_coords(x=x, y=y).to_netcdf(tmp_path / "gimms.nc")
     seen = []
+    monkeypatch.setattr(format_lai, "format_lai_netcdf_file",
+                        lambda source, _dem, output, **_kwargs: seen.append(source) or output)
+    (tmp_path / "out.nc").write_bytes(b"nc")
 
-    def format_lai_netcdf_file(input_file, _dem, output_file, **_kwargs):
-        with xr.open_dataset(input_file) as regular:
-            seen.append((regular["lat"].ndim, regular["lon"].ndim, int(np.isfinite(regular["lai"]).sum())))
-        output_file.write_bytes(b"nc")
-        return output_file
+    prepare_lai_file(tmp_path / "gimms.nc", tmp_path / "dem.tif", tmp_path / "out.nc", source_variable="lai",
+                     l0_header={"ncols": 9, "nrows": 9, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1.0})
 
-    monkeypatch.setattr(format_lai, "format_lai_netcdf_file", format_lai_netcdf_file)
-    prepare_lai_file(tmp_path / "lai.nc", tmp_path / "dem.tif", tmp_path / "out.nc", source_variable="lai")
-
-    assert seen[0][:2] == (1, 1)
-    assert seen[0][2] > 0
+    assert seen == [tmp_path / "gimms.nc"]
