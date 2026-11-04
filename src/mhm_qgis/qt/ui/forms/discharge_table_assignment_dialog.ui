@@ -17,7 +17,7 @@
    <item>
     <widget class="QLabel" name="intro_label">
      <property name="text">
-      <string>Select one discharge table layer for each STATION_ID.</string>
+      <string>Select discharge table csv for relevant stations:</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -25,82 +25,115 @@
     </widget>
    </item>
    <item>
-    <widget class="QScrollArea" name="scroll_area">
-     <property name="widgetResizable">
-      <bool>true</bool>
+    <layout class="QHBoxLayout" name="horizontalLayout_dischargeInput" stretch="0,1,0,2,1,0,0">
+     <property name="topMargin">
+      <number>0</number>
      </property>
-     <widget class="QWidget" name="rows_widget">
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>0</y>
-        <width>658</width>
-        <height>410</height>
-       </rect>
+     <item>
+      <widget class="QLabel" name="label_gaugeID">
+       <property name="text">
+        <string>Gauge ID:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="comboBox_selectGaugeID">
+       <property name="toolTip">
+        <string>Select the Gauge ID for the discharge in[ut</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_gaugeSeperator">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QComboBox" name="comboBox_dischargeTableInput">
+       <property name="toolTip">
+        <string>Select the discharge file from canvas or browse...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_browseDischargeTable">
+       <property name="maximumSize">
+        <size>
+         <width>40</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Select Discharge CSV file</string>
+       </property>
+       <property name="text">
+        <string>...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="checkBox_bulkDischargeInputbyStationID">
+       <property name="toolTip">
+        <string>Auto load CSVs with matching station ID in the folder</string>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_addDischargeInput">
+       <property name="maximumSize">
+        <size>
+         <width>30</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>+</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="tableWidget_dischargeInput">
+     <attribute name="horizontalHeaderDefaultSectionSize">
+      <number>150</number>
+     </attribute>
+     <column>
+      <property name="text">
+       <string>Gauge ID</string>
       </property>
-      <layout class="QGridLayout" name="rows_layout" columnstretch="2,1,2,5,1">
-       <item row="0" column="1">
-        <widget class="QLabel" name="label_pourPointIDValue">
-         <property name="text">
-          <string/>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QLabel" name="label_pourPointID">
-         <property name="text">
-          <string>Pour Point ID:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <spacer name="verticalSpacer_pourPoint">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>40</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-       <item row="0" column="4">
-        <widget class="QPushButton" name="pushButton_browseDischargeTable1">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>40</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="toolTip">
-          <string>Select Project Folder</string>
-         </property>
-         <property name="text">
-          <string>...</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="3">
-        <widget class="QComboBox" name="comboBox_dischargeTableInput">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="2">
-        <widget class="QCheckBox" name="checkBox_isGauge">
-         <property name="text">
-          <string>Is Gauge?</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
+     </column>
+     <column>
+      <property name="text">
+       <string>CSV File Path</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Browse</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Start DateTime</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>End DateTime</string>
+      </property>
+     </column>
     </widget>
    </item>
    <item>

@@ -174,6 +174,21 @@ def crs_changed(dialog):
     update_l0_resolution_from_dem(dialog)
 
 
+def set_crs(dialog):
+    """Apply a changed domain CRS: L0 again, and the morphology and meteorology runs are due."""
+    authid = dialog.get_crs().authid()
+    if authid == dialog._set_crs:
+        return
+    dialog._set_crs = authid
+    crs_changed(dialog)
+    invalidate_workflows(dialog, "execute_all_morphology")
+    invalidate_meteo(dialog)
+    dialog.save_input_state()
+    from .. import project_tree
+
+    project_tree.refresh(dialog)
+
+
 def grid_fingerprint(dialog):
     from ...core.handlers.file.netcdf.raster import file_path
     from ...core.handlers.state.cache import fingerprint
@@ -254,6 +269,15 @@ def handle_l2_multiplier_changed(dialog, value=None):
         from . import forcing
 
         forcing.submit_meteo_input(dialog, "pre", precipitation_spec(dialog))  # a reopened setup: its cached scan
+
+
+def set_precipitation_input(dialog):
+    """The L2 page's Set: a changed multiplier rebuilds the common grid; the period is saved."""
+    value = dialog.spinBox_L2ResolutionMultiplier.value()
+    if value != (dialog._grid_l2_metadata or {}).get("l2_ratio_to_l0"):
+        handle_l2_multiplier_changed(dialog, value)
+    time.save(dialog)
+    dialog.save_input_state()
 
 
 def _set_default_l2_multiplier(dialog, metadata, converted, l0_resolution):

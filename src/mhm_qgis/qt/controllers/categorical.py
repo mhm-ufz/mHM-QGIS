@@ -20,7 +20,7 @@ from ..dialogs.mhm_ready_morph_input import MhmReadyInputDialog
 from ..dialogs.single_layer_input import SingleLayerInputDialog
 from . import main
 from .grid import require_common_grid
-from .workflow_state import invalidate_meteo
+from .workflow_state import invalidate, invalidate_meteo
 
 KINDS = ("lc", "soil", "geology", "lai")
 _LABELS = {"lc": "land use", "soil": "soil", "geology": "geology", "lai": "LAI"}
@@ -116,6 +116,7 @@ def _commit(dialog, kind, text, value, apply):
         return
     dialog._categorical_modes[kind] = text
     dialog._drafts.pop(f"{kind}:{text}", None)
+    invalidate(dialog, "execute_all_morphology")  # A's ▶ is due again
     show(dialog, kind)
     dialog.save_input_state()
     invalidate_meteo(dialog)

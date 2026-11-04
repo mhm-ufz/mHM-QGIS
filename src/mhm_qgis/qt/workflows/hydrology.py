@@ -37,6 +37,11 @@ def _dem_ready(dialog):
     return all(os.path.isfile(path(dialog, name)) for name in ("filled_dem.nc", "dem_derivatives.nc"))
 
 
+def domain_prepared(dialog):
+    """The drainage network and flow accumulation the Domain Delineator opens on exist (Set Gauges)."""
+    return bool(dialog.project_folder) and _dem_ready(dialog) and os.path.isfile(channel_network_path(dialog))
+
+
 def _locked(dialog, controls):
     """Also lock the project selector while a task started from a form runs."""
     controls = tuple(controls)
@@ -156,7 +161,7 @@ def start_domain_preflight(dialog, controls, done, failed=None):
     except Exception as error:
         lifecycle.fail(dialog, "Domain Delineator", error, failed)
         return False
-    if _dem_ready(dialog) and os.path.isfile(channel_network_path(dialog)):
+    if domain_prepared(dialog):
         QtCore.QTimer.singleShot(0, lambda: done({"prepared": True}))
         return True
 

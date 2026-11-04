@@ -58,6 +58,8 @@ def test_project_setup_status_follows_the_folder(dialog, tmp_path):
     assert row.text(project_tree.STATUS_COLUMN) == "⚪"
     assert row.toolTip(project_tree.STATUS_COLUMN) == "Empty: no inputs added"
     dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
+    assert row.text(project_tree.STATUS_COLUMN) == "🟢"  # browsed, not yet Set
+    dialog.pushButton_setProject.click()
     assert row.text(project_tree.STATUS_COLUMN) == "✅"
 
 
@@ -361,6 +363,7 @@ def test_columns_the_run_buttons_and_the_next_step(dialog, tmp_path, monkeypatch
     assert project_tree.item(dialog, "intro").foreground(project_tree.NEXT).color().name() == "#0000ff"
     _set_up(dialog, tmp_path)
     dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
+    dialog.project_directory = str(tmp_path)  # as Set does
     assert pointed() == ["l0_reference"]
     dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
     dialog._grid_l2_header = {"cellsize": 1000.0}
@@ -433,6 +436,7 @@ def test_next_step_waits_on_domain_setup_then_on_nesting_resolutions(dialog, tmp
         return project_tree.item(dialog, key).text(project_tree.STATUS_COLUMN)
 
     dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
+    dialog.project_directory = str(tmp_path)  # as Set does
     assert status("domain_setup") == "⚪"
     assert project_tree.item(dialog, "domain_setup").text(project_tree.NEXT) == "➤"
     _set_up(dialog, tmp_path)
@@ -480,3 +484,51 @@ def test_forcing_must_cover_the_simulation_period_shown_on_the_time_bar(dialog, 
     assert "not the simulation period 2000-01-01 to 2000-01-10" in forcing._outside_period(dialog, "tavg", short)
     long = SimpleNamespace(start_time="1999-12-31T00:00", end_time="2000-01-10T00:00")
     assert forcing._outside_period(dialog, "tavg", long) is None
+
+
+def test_inputs_count_after_their_run_until_a_new_crs_and_a_failed_stage_gets_the_pointer(dialog, tmp_path, monkeypatch):
+    from qgis.core import QgsCoordinateReferenceSystem
+
+    from mhm_qgis.core.handlers.state import processing
+    from mhm_qgis.core.handlers.store import morphology as store
+    from mhm_qgis.qt.controllers import process_cases
+
+    _set_up(dialog, tmp_path)
+    process_cases.inputs(dialog)
+    monkeypatch.setattr(store, "resolve_display_output", lambda *_args: "prepared.nc")  # every output exists
+    dem = project_tree.item(dialog, "dem")
+
+    def status():
+        project_tree.refresh(dialog)
+        return dem.text(project_tree.STATUS_COLUMN)
+
+    dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
+    assert status() == "🟢"  # A has not run: its files do not count
+    processing.mark_workflow(tmp_path, "execute_all_morphology", "completed")
+    assert status() == "✅"
+    dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:3035"))
+    assert status() == "✅"  # nothing applies before Set
+    dialog.pushButton_setCRS.click()
+    assert processing.workflow(tmp_path, "execute_all_morphology")["status"] == "pending"
+    dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}  # re-read from the DEM, which this test has not
+    assert status() == "🟢"
+    dialog._failed_step = "dem"
+    project_tree.refresh(dialog)
+    assert dem.text(project_tree.NEXT) == "➤"
+
+
+def test_set_gauges_builds_the_network_the_delineator_opens_on(dialog, tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt.workflows import hydrology
+
+    started, notes = [], []
+    monkeypatch.setattr(main, "_selected_outlets", lambda *_args: ["1"])
+    monkeypatch.setattr(hydrology, "start_domain_preflight", lambda *args: started.append(args) or True)
+    monkeypatch.setattr(main.QMessageBox, "information", lambda *args: notes.append(args[2]))
+    dialog.project_folder = str(tmp_path)
+    assert main.open_domain_delineator(dialog) is False  # Set the Gauges first
+    assert not started
+    assert "Set on the Gauges page" in notes[-1]
+    dialog.pushButton_setGauges.click()
+    assert started
+    assert "being created" in notes[-1]

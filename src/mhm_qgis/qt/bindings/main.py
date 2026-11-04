@@ -20,7 +20,6 @@ from ..controllers import (
     post_context,
     process_cases,
     project,
-    time,
     version,
 )
 from ..workflows import observations
@@ -74,10 +73,9 @@ def bind(dialog):
     dialog.pushButton_refL2.clicked.connect(lambda: project_tree.go_to(dialog, "l2_reference"))
 
     # Project management
-    # pushButton_BrowseProjectFolder → project.select_folder
-    dialog.pushButton_BrowseProjectFolder.clicked.connect(
-        lambda: project.select_folder(dialog)
-    )
+    # pushButton_BrowseProjectFolder → project.browse_folder; pushButton_setProject → project.set_folder
+    dialog.pushButton_BrowseProjectFolder.clicked.connect(lambda: project.browse_folder(dialog))
+    dialog.pushButton_setProject.clicked.connect(lambda: project.set_folder(dialog))
     # pushButton_createOrLoadDomainStructure → project.create_structure
     dialog.pushButton_createOrLoadDomainStructure.clicked.connect(
         lambda: project.create_structure(dialog)
@@ -116,9 +114,10 @@ def bind(dialog):
     # pushButton_executeAllObservation → observations.start
     dialog.pushButton_executeAllObservation.clicked.connect(
         lambda: observations.start(dialog))
-    for name in ("simulationStart", "evaluationStart", "simulationEnd"):
-        getattr(dialog, f"dateTimeEdit_{name}TimeInput").dateTimeChanged.connect(
-            lambda: time.save(dialog))
+    # pushButton_setPrecipitationInput → the L2 multiplier and the simulation period
+    dialog.pushButton_setPrecipitationInput.clicked.connect(lambda: grid.set_precipitation_input(dialog))
+    # pushButton_setGauges → main.set_gauges: the drainage network and flow accumulation
+    dialog.pushButton_setGauges.clicked.connect(lambda: main.set_gauges(dialog))
     dialog.stackedWidget_project.currentChanged.connect(
         lambda index: main.on_page_changed(dialog, dialog.stackedWidget_project.widget(index))
     )
@@ -200,10 +199,8 @@ def _bind_grid(dialog):
     dem = dialog.input_combo("dem")
     dem.layerChanged.connect(lambda layer=None: grid.update_l0_resolution_from_dem(dialog, layer))
     dem.layerChanged.connect(lambda layer=None: grid.invalidate_grid(dialog))
-    dialog.mProjectionSelectionWidget_crs.crsChanged.connect(lambda crs=None: grid.crs_changed(dialog))
-    dialog.spinBox_L2ResolutionMultiplier.valueChanged.connect(
-        lambda value: grid.handle_l2_multiplier_changed(dialog, value)
-    )
+    # pushButton_setCRS → grid.set_crs; the CRS widget alone applies nothing
+    dialog.pushButton_setCRS.clicked.connect(lambda: grid.set_crs(dialog))
     # pushButton_browsePrecipitationFile → grid.browse_precipitation_folder
     dialog.pushButton_browsePrecipitationFile.clicked.connect(
         lambda: grid.browse_precipitation_folder(dialog)
@@ -238,4 +235,3 @@ def _bind_input_state(dialog):
             lambda level=level: (grid.sync_multiplier(dialog, level, snap=True), changed()))
         getattr(dialog, f"spinBox_{level}ResolutionMultiplier").valueChanged.connect(
             lambda n, level=level: (grid.multiplier_changed(dialog, level, n), changed()))
-    dialog.mProjectionSelectionWidget_crs.crsChanged.connect(changed)

@@ -45,6 +45,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._advanced_inputs = {}
         self._lai_input_config = {}
         self._drafts = {}  # unsaved form values by form key, see main.stash
+        self._set_crs = ""  # the domain CRS last Set, see grid.set_crs
+        self._failed_step = None  # the tree row of a failed Execute All stage, for ➤
         self._land_cover_ready_source = ""
         self._domain_definition_mode = ""
         self._meteo_inputs = {}

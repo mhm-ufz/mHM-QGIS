@@ -184,6 +184,14 @@ A module belongs to exactly one layer.
     - A form is built from `{**committed, **draft}`.
     - A draft is dropped only by a successful Set (`categorical._commit`, the forcing `scanned`). A form built clean records a draft only once its values change.
   - **Domain Setup is ✅ once a domain folder is active.** Resolution stays 🟢 while `grid.resolution_error` reports levels that do not nest by whole factors. LatLon shows that error.
+  - **Page Set buttons apply a page; nothing applies on edit.**
+    - `pushButton_setProject` opens the browsed folder (`project.set_folder`).
+    - `pushButton_setCRS` applies a changed CRS (`grid.set_crs`), and A's and B's runs become due again. Only a CRS that was Set is saved (`dialog._set_crs`).
+    - `pushButton_setPrecipitationInput` applies the L2 multiplier and the simulation period.
+    - `pushButton_setGauges` builds the drainage network and flow accumulation (`hydrology.start_domain_preflight`). The Domain Delineator opens only on those (`hydrology.domain_prepared`).
+  - **Rows under A or B (`project_tree.RUNS`) are ✅ from their files only once that run has completed** (`_pending`). Before that they stay 🟢, so ➤ waits on ▶.
+  - **A failed Execute All stage sets `dialog._failed_step`,** and ➤ points at that input until the next run.
+  - **The discharge assignment is one table:** Add a gauge's file, optionally matching `<station id>.csv/.txt` in its folder. A station without a file is not a gauge.
   - **The time toolbar follows the simulation period** (`time.show_period`) until a run's outputs take it. A forcing scan that does not cover the period is refused (`forcing._outside_period`).
   - **Vector inputs** (`input_selection.VECTOR_EXTENSIONS`) take their CRS from OGR. A GeoPackage asks for its layer and becomes `path|layername=…`. Pour points must be point layers (`is_point_layer`).
 

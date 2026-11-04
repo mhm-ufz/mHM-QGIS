@@ -79,7 +79,6 @@ def save(dialog):
         },
         "variables": dialog._meteo_inputs,
     }
-    crs = dialog.get_crs()
     state = {
         "version": 4,
         "mhm_version": version.selected(dialog),
@@ -114,7 +113,7 @@ def save(dialog):
         "pour_point_outlet_id_field": main.selected_outlet_id_field(dialog),
         "domain_definition_type": dialog._domain_definition_mode,
         "gauges": dialog.checkBox_gaugeOption.isChecked(),
-        "crs_authid": crs.authid() if crs and crs.isValid() else "",
+        "crs_authid": dialog._set_crs,  # a CRS not yet Set is not kept
         "intro": dialog._intro_answers,
         "process_cases": process_cases.current(dialog),
     }
@@ -165,6 +164,7 @@ def load(dialog):
         crs = QgsCoordinateReferenceSystem(state.get("crs_authid", "") or "")
         if crs.isValid():
             dialog.mProjectionSelectionWidget_crs.setCrs(crs)
+        dialog._set_crs = dialog.get_crs().authid()
         _restore_categorical_inputs(dialog, state)
         main.refresh_input_sources(dialog)
         grid.refresh_precipitation_folder(dialog)
@@ -219,6 +219,8 @@ def clear(dialog):
     dialog._categorical_modes = {}
     dialog._advanced_inputs = {}
     dialog._drafts = {}
+    dialog._failed_step = None
+    dialog._set_crs = dialog.get_crs().authid()
     dialog._land_cover_ready_source = ""
     dialog._domain_definition_mode = ""
     dialog.checkBox_gaugeOption.setChecked(False)

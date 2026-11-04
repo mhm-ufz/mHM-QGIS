@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>mHM QGIS</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_15" stretch="1,0,0,0,0">
+  <layout class="QVBoxLayout" name="verticalLayout_15" stretch="1,0,0,0,0,0">
    <item>
     <widget class="QSplitter" name="splitter">
      <property name="orientation">
@@ -456,6 +456,33 @@
              </layout>
             </item>
             <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_setProject">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <spacer name="horizontalSpacer_setProject">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_setProject">
+                <property name="text">
+                 <string>Set</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
              <spacer name="verticalSpacer_projectSetup">
               <property name="orientation">
                <enum>Qt::Vertical</enum>
@@ -498,7 +525,7 @@
                  <x>0</x>
                  <y>0</y>
                  <width>808</width>
-                 <height>593</height>
+                 <height>559</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -560,15 +587,15 @@
                          </size>
                         </property>
                         <property name="toolTip">
-                         <string>Create Project Structure</string>
+                         <string>Scanning of precipitation files</string>
                         </property>
                         <property name="autoFillBackground">
                          <bool>false</bool>
                         </property>
                         <property name="styleSheet">
                          <string notr="true">    QPushButton {
-                text-align: left;
-            }</string>
+                            text-align: left;
+                        }</string>
                         </property>
                         <property name="text">
                          <string/>
@@ -628,7 +655,34 @@
                      </layout>
                     </item>
                     <item>
-                     <spacer name="verticalSpacer_3">
+                     <layout class="QHBoxLayout" name="horizontalLayout_setCRS">
+                      <property name="topMargin">
+                       <number>0</number>
+                      </property>
+                      <item>
+                       <spacer name="horizontalSpacer_setCRS">
+                        <property name="orientation">
+                         <enum>Qt::Horizontal</enum>
+                        </property>
+                        <property name="sizeHint" stdset="0">
+                         <size>
+                          <width>40</width>
+                          <height>20</height>
+                         </size>
+                        </property>
+                       </spacer>
+                      </item>
+                      <item>
+                       <widget class="QPushButton" name="pushButton_setCRS">
+                        <property name="text">
+                         <string>Set</string>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                    <item>
+                     <spacer name="verticalSpacer_pageDomain">
                       <property name="orientation">
                        <enum>Qt::Vertical</enum>
                       </property>
@@ -816,47 +870,6 @@
                           <number>0</number>
                          </property>
                          <item>
-                          <widget class="QLabel" name="label_checkAndMergeDomains">
-                           <property name="text">
-                            <string>2. Prepare Multi Domain Setup:</string>
-                           </property>
-                          </widget>
-                         </item>
-                         <item>
-                          <widget class="QPushButton" name="pushButton_prepareMultiDomainSetup">
-                           <property name="minimumSize">
-                            <size>
-                             <width>23</width>
-                             <height>23</height>
-                            </size>
-                           </property>
-                           <property name="maximumSize">
-                            <size>
-                             <width>23</width>
-                             <height>16777215</height>
-                            </size>
-                           </property>
-                           <property name="toolTip">
-                            <string>Create Project Structure</string>
-                           </property>
-                           <property name="autoFillBackground">
-                            <bool>false</bool>
-                           </property>
-                           <property name="styleSheet">
-                            <string notr="true">    QPushButton {
-                text-align: left;
-            }</string>
-                           </property>
-                           <property name="text">
-                            <string/>
-                           </property>
-                           <property name="icon">
-                            <iconset>
-                             <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
-                           </property>
-                          </widget>
-                         </item>
-                         <item>
                           <spacer name="horizontalSpacer_checkAndMergeDomain">
                            <property name="orientation">
                             <enum>Qt::Horizontal</enum>
@@ -868,6 +881,13 @@
                             </size>
                            </property>
                           </spacer>
+                         </item>
+                         <item>
+                          <widget class="QPushButton" name="pushButton_prepareMultiDomainSetup">
+                           <property name="text">
+                            <string>Set</string>
+                           </property>
+                          </widget>
                          </item>
                         </layout>
                        </item>
@@ -930,6 +950,46 @@
              </layout>
             </item>
             <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_setDEM">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <spacer name="horizontalSpacer_setDEM">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_setDEM">
+                <property name="text">
+                 <string>Set</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="verticalSpacer_page_l0Reference">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
              <layout class="QHBoxLayout" name="horizontalLayout_L0" stretch="0,0,0,0">
               <item>
                <widget class="QLabel" name="label_L0">
@@ -990,19 +1050,6 @@
                </spacer>
               </item>
              </layout>
-            </item>
-            <item>
-             <spacer name="verticalSpacer_page_l0Reference">
-              <property name="orientation">
-               <enum>Qt::Vertical</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>20</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
             </item>
            </layout>
           </widget>
@@ -1346,6 +1393,33 @@
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_setPrecipitationInput">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <spacer name="horizontalSpacer_setPrecipitationInput">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_setPrecipitationInput">
+                <property name="text">
+                 <string>Set</string>
                 </property>
                </widget>
               </item>
@@ -1737,34 +1811,7 @@
              </layout>
             </item>
             <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_L11" stretch="0,0,0">
-              <item>
-               <widget class="QLabel" name="label_runLatLon">
-                <property name="text">
-                 <string>Run Latlon Grid Generation:</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="pushButton_createLatLon">
-                <property name="maximumSize">
-                 <size>
-                  <width>24</width>
-                  <height>24</height>
-                 </size>
-                </property>
-                <property name="toolTip">
-                 <string>Create LatLon.nc file</string>
-                </property>
-                <property name="text">
-                 <string/>
-                </property>
-                <property name="icon">
-                 <iconset>
-                  <normaloff>Resources/latlon.png</normaloff>Resources/latlon.png</iconset>
-                </property>
-               </widget>
-              </item>
+             <layout class="QHBoxLayout" name="horizontalLayout_L11" stretch="0,0">
               <item>
                <spacer name="horizontalSpacer_runLatLon">
                 <property name="orientation">
@@ -1777,6 +1824,22 @@
                  </size>
                 </property>
                </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_createLatLon">
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="toolTip">
+                 <string>Create LatLon.nc file</string>
+                </property>
+                <property name="text">
+                 <string>Set</string>
+                </property>
+               </widget>
               </item>
              </layout>
             </item>
@@ -2336,6 +2399,33 @@
                <widget class="QComboBox" name="comboBox_pourPointOutletID">
                 <property name="toolTip">
                  <string>Select the outlet unique ID column from the attribute table</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_setGauges">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <spacer name="horizontalSpacer_setGauges">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_setGauges">
+                <property name="text">
+                 <string>Set</string>
                 </property>
                </widget>
               </item>
@@ -4052,6 +4142,33 @@ date,discharge
       <enum>Qt::Horizontal</enum>
      </property>
     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_setGauges_2">
+     <property name="topMargin">
+      <number>0</number>
+     </property>
+     <item>
+      <spacer name="horizontalSpacer_setGauges_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_setGauges_2">
+       <property name="text">
+        <string>Set</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QTextBrowser" name="LogText">

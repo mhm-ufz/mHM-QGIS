@@ -128,11 +128,20 @@ def populate_domains(dialog, selected=None):
         combo.setCurrentIndex(max(0, index))
 
 
-def select_folder(dialog):
-    if switch_busy(dialog):
-        return
+def browse_folder(dialog):
+    """Only fill the folder box; Set opens it."""
     directory = open_directory(dialog, "Select Project Folder")
-    if not directory:
+    if directory:
+        dialog.lineEdit_ProjectFolder.setText(directory)
+
+
+def set_folder(dialog):
+    """Open the project folder in the box."""
+    directory = dialog.lineEdit_ProjectFolder.text().strip()
+    if not directory or not Path(directory).is_dir():
+        QMessageBox.warning(dialog, "Project folder", "Browse to an existing project folder first.")
+        return
+    if switch_busy(dialog):
         return
     dialog.save_input_state()
     main.embed(dialog, "domainDefinition", None)
@@ -141,7 +150,6 @@ def select_folder(dialog):
     dialog.comboBox_mHMversion.setEnabled(True)
     for key in workflow_state.specs(dialog):
         workflow_state.set_button_state(dialog, key, "")
-    dialog.lineEdit_ProjectFolder.setText(directory)
     dialog._loading_input_state = True
     try:
         input_state.clear(dialog)
@@ -153,3 +161,4 @@ def select_folder(dialog):
     dialog.log_message(
         "Select a domain and press Create Project Structure to open it."
     )
+    project_tree.refresh(dialog)

@@ -416,10 +416,32 @@ def _assignment_failed(dialog, error):
     QMessageBox.critical(dialog, "Domain Assignment", str(error))
 
 
+def set_gauges(dialog):
+    """Gauges' Set: build the drainage network and flow accumulation the Domain Delineator opens on."""
+    if _selected_outlets(dialog, "Gauges") is None:
+        return
+
+    def ready(_context):
+        dialog.log_message("The drainage network and flow accumulation are ready.")
+        dialog.save_input_state()
+        from .. import project_tree
+
+        project_tree.refresh(dialog)
+
+    if hydrology.start_domain_preflight(dialog, (dialog.page_gauges,), ready,
+                                        lambda message: _domain_delineator_preflight_failed(dialog, message)):
+        dialog.log_message("Creating the drainage network and flow accumulation…")
+        QMessageBox.information(dialog, "Gauges", "The drainage network and flow accumulation are being created.")
+
+
 def open_domain_delineator(dialog):
-    """Prepare the hydrology prerequisites, then open the delineation dialog; False if not started."""
+    """Open the delineation dialog on what Set Gauges prepared; False if not started."""
     outlet_ids = _selected_outlets(dialog, "Domain Delineator")
     if outlet_ids is None:
+        return False
+    if not hydrology.domain_prepared(dialog):
+        QMessageBox.information(dialog, "Domain Delineator", "Press Set on the Gauges page first: "
+                                "it creates the drainage network and flow accumulation.")
         return False
     layer = dialog.input_combo("pour_points").currentLayer()
     field = selected_outlet_id_field(dialog)
@@ -456,8 +478,8 @@ def _show_domain_delineator(dialog, context, pour_points_layer, outlet_id_field,
 
 
 def _domain_delineator_preflight_failed(dialog, message):
-    dialog.log_message(f"ERROR: Domain Delineator preparation failed: {message}")
-    QMessageBox.critical(dialog, "Domain Delineator", error_detail(message))
+    dialog.log_message(f"ERROR: Drainage network preparation failed: {message}")
+    QMessageBox.critical(dialog, "Gauges", error_detail(message))
 
 
 # --- DEM derivatives ------------------------------------------------------

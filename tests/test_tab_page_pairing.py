@@ -74,6 +74,8 @@ def test_a_new_crs_resets_l1_l11_and_l2():
     dialog.spinBox_L2ResolutionMultiplier.setValue(4)
     dialog._grid_l2_header = {"cellsize": 4000}
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:3035"))
+    assert dialog.lineEdit_L1Resolution.text() == "1000"  # nothing applies before Set
+    dialog.pushButton_setCRS.click()
     assert (dialog.lineEdit_L1Resolution.text(), dialog.lineEdit_L11Resolution.text()) == ("", "")
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 1
     assert dialog._grid_l2_header is None

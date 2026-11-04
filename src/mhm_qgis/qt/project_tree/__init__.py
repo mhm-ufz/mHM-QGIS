@@ -65,8 +65,11 @@ def _intro(dialog, _node):
 
 
 def _project_setup(dialog, _node):
+    """Processed once Set opened the folder in the box; added while it is only browsed."""
     folder = dialog.lineEdit_ProjectFolder.text().strip()
-    return "processed" if folder and Path(folder).is_dir() else "empty"
+    if not folder or not Path(folder).is_dir():
+        return "empty"
+    return "processed" if dialog.project_directory == folder else "added"
 
 
 def _domain_setup(dialog, _node):
@@ -74,7 +77,12 @@ def _domain_setup(dialog, _node):
 
 
 def _gauges(dialog, _node):
-    return "added" if dialog.comboBox_pourPointInput.currentIndex() >= 0 and dialog.comboBox_pourPointOutletID.currentText().strip() else "empty"
+    """Added with pour points and their ID field; processed once Set built the drainage network."""
+    from ..workflows.hydrology import domain_prepared
+
+    if dialog.comboBox_pourPointInput.currentIndex() < 0 or not dialog.comboBox_pourPointOutletID.currentText().strip():
+        return "empty"
+    return "processed" if domain_prepared(dialog) else "added"
 
 
 def _categorical(dialog, node):
@@ -138,18 +146,34 @@ STATUS = {"intro": _intro, "project_setup": _project_setup, "domain_setup": _dom
           "resolution": _resolution, "namelists": _namelists, "dem": _dem}
 
 
-def _state(dialog, node):
+RUNS = {"morphology": "execute_all_morphology", "meteorology": "execute_all_meteo"}
+
+
+def _pending(dialog, row) -> bool:
+    """Under A or B before that group's run has completed, so its files do not count yet."""
+    parent = row.parent()
+    workflow = RUNS.get(parent.data(0, Qt.ItemDataRole.UserRole)) if parent is not None else None
+    if not workflow or not dialog.project_folder:
+        return False
+    from ...core.handlers.state import processing
+
+    return processing.workflow(dialog.project_folder, workflow).get("status") != "completed"
+
+
+def _state(dialog, row):
     """processed, added or empty; None for a row without a status."""
+    node = _node(row)
     if not ({"status", "display", "input"} & node.keys()):
         return None
-    findings = dialog._input_findings
-    if any(findings[name].ok for name in _inputs(node) if name in findings):
-        return "processed"
-    if "display" in node and dialog.project_folder:
-        from ...core.handlers.store.morphology import resolve_display_output
-
-        if resolve_display_output(dialog.project_folder, node["display"]) is not None:
+    if not _pending(dialog, row):
+        findings = dialog._input_findings
+        if any(findings[name].ok for name in _inputs(node) if name in findings):
             return "processed"
+        if "display" in node and dialog.project_folder:
+            from ...core.handlers.store.morphology import resolve_display_output
+
+            if resolve_display_output(dialog.project_folder, node["display"]) is not None:
+                return "processed"
     rule = STATUS.get(node.get("status"))
     return rule(dialog, node) if rule else "empty"
 
@@ -357,7 +381,7 @@ def _summary(dialog, table, top) -> None:
         node = _node(row)
         findings = [dialog._input_findings[name] for name in _inputs(node) if name in dialog._input_findings]
         needed = ", ".join(dict.fromkeys(reason for finding in findings for reason in finding.reasons))
-        for column, text in enumerate((row.text(0), " ".join(SYMBOLS[_state(dialog, node)]), needed, _file(dialog, node))):
+        for column, text in enumerate((row.text(0), " ".join(SYMBOLS[_state(dialog, row)]), needed, _file(dialog, node))):
             table.setItem(index, column, QTableWidgetItem(text))
     for column in range(table.columnCount() - 1):  # the last one stretches
         table.resizeColumnToContents(column)
@@ -397,7 +421,7 @@ def refresh(dialog) -> None:
     tree, runs = dialog.treeWidget_projectStructure, []
     for row in _rows(dialog):
         node = _node(row)
-        state = _state(dialog, node)
+        state = _state(dialog, row)
         if state is not None:
             symbol, meaning = SYMBOLS[state]
             row.setText(STATUS_COLUMN, symbol)
@@ -420,7 +444,9 @@ def refresh(dialog) -> None:
         key = _node(row)["key"]
         _action(dialog, row, "▶", "Run", lambda key=key: _run(dialog, key)).setEnabled(
             ready and workflow_state.running_key(dialog) is None)
-    pointed = next((row for row in _rows(dialog) if _shown(row) and _waits(dialog, row)), item(dialog, "execution"))
+    failed = item(dialog, dialog._failed_step) if dialog._failed_step else None
+    pointed = failed if failed is not None and _shown(failed) else next(
+        (row for row in _rows(dialog) if _shown(row) and _waits(dialog, row)), item(dialog, "execution"))
     for row in _rows(dialog):
         row.setText(NEXT, "➤" if row is pointed else "")
     current = tree.currentItem()

@@ -38,6 +38,7 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     dialog.project_folder = str(tmp_path)
     dialog._loading_input_state = True
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
+    dialog.pushButton_setCRS.click()  # only a Set CRS is kept
     dialog.input_combo("dem").setLayer(QgsRasterLayer(str(dem), "DEM"))
     grid.refresh_precipitation_folder(dialog)
     grid.select_precipitation_folder(dialog, str(folder))
@@ -68,6 +69,7 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     assert not list(tmp_path.rglob("dem_derivatives.nc"))
     assert nml_settings.load_settings(tmp_path)["time"]["sim_end"] == "2001-01-03T00:00"
     dialog.spinBox_L2ResolutionMultiplier.setValue(3)
+    dialog.pushButton_setPrecipitationInput.click()
     assert grid.require_common_grid(dialog)["l2_ratio_to_l0"] == 3
     grid.precipitation_scanned(dialog, dialog._meteo_inspections["pre"])
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 3

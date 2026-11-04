@@ -75,6 +75,12 @@ class MorphologyTaskBridge:
         }
 
         gauges = self.dialog.checkBox_gaugeOption.isChecked()
+        self.dialog._failed_step = None
+
+        def stage_failed(stage, message):
+            self.dialog._failed_step = stage.args[0] if stage.command == "categorical" else {
+                "dem_derivatives": "dem", "gauge_position": "gauges", "lai": "lai"}.get(stage.command, "morphology")
+            finished(False, message)
 
         def start(stage, advance):
             if (stage.condition == "gauged_outlets" and not (
@@ -85,7 +91,7 @@ class MorphologyTaskBridge:
             return starters[stage.command](
                 *stage.args,
                 done=lambda _result: QtCore.QTimer.singleShot(0, advance),
-                failed=lambda message: finished(False, message),
+                failed=lambda message: stage_failed(stage, message),
                 **stage.options,
             )
 

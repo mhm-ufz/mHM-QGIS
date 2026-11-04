@@ -119,6 +119,9 @@ def test_the_land_use_eye_shows_the_prepared_periods(tmp_path, monkeypatch):
         morphology, "show_raster",
         lambda owner, path, name, **options: rendered.append((path, options)),
     )
+    from mhm_qgis.core.handlers.state import processing
+
+    processing.mark_workflow(tmp_path, "execute_all_morphology", "completed")  # A's files count once A has run
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
     project_tree.refresh(dialog)
