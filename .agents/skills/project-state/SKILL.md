@@ -33,6 +33,8 @@ The setup is shared between computers, so paths stay portable at one boundary.
   - `nml-settings.json` is excluded: its values are namelist content, already
     relative to the run folder through `relative_workspace_path`. That includes gauge paths,
     which `sync_domain_settings` relativizes.
+    - `save_settings` also writes any absolute path left in it (input sources such as lookup tables and soil layers) relative to the domain.
+    - Nothing resolves those back except `lai.source_path`.
 - `state/cache.fingerprint` hashes file name, size and whole-second mtime and strips
   folders from its config. A copy that keeps mtimes (Nextcloud, `rsync -a`, `cp -p`) reuses its
   caches. A test that edits a file must move its mtime by a second.

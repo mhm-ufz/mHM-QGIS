@@ -46,7 +46,17 @@ def save_settings(
     project_folder: str | Path,
     state: dict[str, Any],
 ) -> Path:
-    return jsonio.write(settings_path(project_folder), {**state, "version": 1}, newline=True)
+    """Write the handoff with every absolute path (an input source) relative to the domain."""
+    def relative(text):
+        if not os.path.isabs(text):
+            return text
+        try:
+            return relative_workspace_path(project_folder, text)
+        except ValueError:  # another Windows drive
+            return text
+
+    payload = jsonio.map_strings({**state, "version": 1}, relative)
+    return jsonio.write(settings_path(project_folder), payload, newline=True)
 
 
 def relative_workspace_path(project_folder: str | Path, value: str | Path) -> str:

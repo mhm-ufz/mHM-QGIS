@@ -5,6 +5,7 @@
 from mhm_qgis.core.handlers.state.domain_state import save_state
 from mhm_qgis.core.handlers.state.nml_settings import (
     load_settings,
+    save_settings,
     sync_domain_settings,
     update_section,
 )
@@ -224,3 +225,17 @@ def test_lai_settings_project_to_both_namelist_versions(tmp_path):
     assert v6["config_mpr"]["lai_time_step"] == [-2]
     assert v6["config_mpr"]["lai_path"] == ["data/lai/lai.nc"]
     assert v6["config_mpr"]["lai_var"] == ["lai"]
+
+
+def test_absolute_input_paths_are_saved_relative_to_the_domain(tmp_path):
+    import json
+
+    domain = tmp_path / "project" / "mhm-qgis" / "basin"
+    lookup = tmp_path / "project" / "input-data" / "glim_lookup.csv"
+    save_settings(domain, {"geology": {"lookup_table": str(lookup),
+                                       "output_path": "data/static/morph/geology_class.asc"},
+                           "soil": {"horizons": [{"clay_layer": str(domain / "data" / "clay.tif")}]}})
+    saved = json.loads((domain / ".temp" / "nml-settings.json").read_text(encoding="utf-8"))
+    assert saved["geology"]["lookup_table"] == "../../input-data/glim_lookup.csv"
+    assert saved["geology"]["output_path"] == "data/static/morph/geology_class.asc"  # namelist value as is
+    assert saved["soil"]["horizons"][0]["clay_layer"] == "data/clay.tif"

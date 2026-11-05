@@ -59,7 +59,7 @@ def test_clone_domain_copies_state_and_links_inputs(tmp_path):
 
     clone_domain_inputs(source, target)
 
-    assert nml_settings.load_settings(target)["source"] == str(target / "data/morph/input.nc")
+    assert nml_settings.load_settings(target)["source"] == "data/morph/input.nc"  # relative: inside the clone
     assert not nml_settings.settings_path(target).is_symlink()
     for relative in ("data/morph/input.nc", ".temp/Morphology/work.nc"):
         linked = target / relative
