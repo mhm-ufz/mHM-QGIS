@@ -368,15 +368,15 @@ def show_layers(dialog, layers, canvas=None) -> None:
 
 
 def _overlay_layers(dialog) -> list:
-    """Fresh basin outlines and the river network (cut to the domain) of the open run."""
+    """The domain's outline (not the gauge catchments') and the river network cut to it."""
     from qgis.core import QgsVectorLayer
 
     from ...core.handlers.store.paths import temp_morphology_folder
 
     state = dialog._post
-    masks = {name: np.load(state.root / "weights" / f"{name}.npy")
-             for name in next(iter(state.index["variables"].values()), {}).get("basins", [])}
-    layers = [post_canvas.outline_layer(masks, state.axes, dialog.get_crs())] if masks else []
+    basins = next(iter(state.index["variables"].values()), {}).get("basins", [])
+    masks = {"domain": np.load(state.root / "weights" / "domain.npy")} if "domain" in basins else {}
+    layers = [post_canvas.outline_layer(masks, state.axes, dialog.get_crs(), name="Domain")] if masks else []
     morphology = Path(temp_morphology_folder(state.run.ref.domain))
     merged = morphology / "Watersheds" / "4_watershed_merged_vector.shp"
     clip = QgsVectorLayer(str(merged), "domain", "ogr") if merged.is_file() else next(iter(layers), None)

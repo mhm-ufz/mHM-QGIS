@@ -149,3 +149,22 @@ def test_canvases_follow_each_other(tmp_path):
     assert band.asGeometry().boundingBox().xMinimum() == 504000
     for canvas in canvases:
         canvas.deleteLater()
+
+
+def test_the_map_outlines_the_domain_not_the_gauge_catchments(tmp_path):
+    from types import SimpleNamespace
+
+    from mhm_qgis.qt.controllers import post_map
+
+    truth = make_run(tmp_path, days=5)
+    root = tmp_path / "post"
+    (root / "weights").mkdir(parents=True)
+    for name in ("domain", "1", "2"):
+        np.save(root / "weights" / f"{name}.npy", truth.mask.astype(float))
+    post = SimpleNamespace(root=root, axes=grid.axes(truth.files["mhm"]),
+                           index={"variables": {"aET": {"basins": ["domain", "1", "2"]}}},
+                           run=SimpleNamespace(ref=SimpleNamespace(domain=tmp_path)))
+
+    layers = post_map._overlay_layers(SimpleNamespace(_post=post, get_crs=lambda: UTM))
+
+    assert [feature["basin"] for feature in layers[0].getFeatures()] == ["domain"]
