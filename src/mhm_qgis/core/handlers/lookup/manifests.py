@@ -234,10 +234,11 @@ def _require_file(path: Path, label: str) -> None:
 
 
 def _manifest_path(path: Path, manifest: Path) -> str:
+    """`path` relative to the manifest's folder, which is how mHM-tools reads it."""
     source = Path(path).expanduser().resolve()
     try:
-        return source.relative_to(manifest.parent.resolve()).as_posix()
-    except ValueError:
+        return Path(os.path.relpath(source, manifest.parent.resolve())).as_posix()
+    except ValueError:  # another Windows drive
         return str(source)
 
 

@@ -135,3 +135,14 @@ def test_soil_grouping_steps_must_be_positive_and_finite(field, step):
 
     with pytest.raises(ValueError, match="step must be a positive finite number"):
         validate_soil_input(SoilInput((), "g/cm3", **{field: step}))
+
+
+def test_soil_manifest_paths_outside_its_folder_are_relative_and_read_back(tmp_path):
+    files = [_touch(tmp_path / "inputs" / f"layer_{index}.tif") for index in range(4)]
+    manifest = write_soil_manifest(SoilInput((SoilHorizon(1, 0, 50, *files),), "kg/m3"),
+                                   tmp_path / "format-data" / "format-data.csv")
+
+    entry = manifest.read_text(encoding="utf-8").splitlines()[1].split(",")[3]
+    assert entry == "../inputs/layer_0.tif"
+    format_soil = pytest.importorskip("mhm_tools.pre.format_soil")
+    assert format_soil._soil_manifest_path(manifest, entry, "Clay Layer", 1) == files[0].resolve()
