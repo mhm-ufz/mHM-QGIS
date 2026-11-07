@@ -113,22 +113,22 @@ pages:
       text: Attribute holding each outlet's unique ID; gauges keep it in the model.
 
   page_landUse:
-    - widget: label_landUseType
+    - widget: groupBox_landUseInputType
       title: Land cover
-      text: Land cover as an mHM-ready raster or as a dataset with a lookup table. The chosen type's form opens below; Set keeps it.
+      text: Land cover as an mHM-ready raster or as a dataset with a lookup table. The chosen type's inputs show below; Set keeps them.
 
   page_soil:
-    - widget: label_soilType
+    - widget: groupBox_soilInputType
       title: Soil
       text: Soil classes as an mHM-ready raster or through a lookup table, with one or several horizons.
 
   page_geology:
-    - widget: label_geologyType
+    - widget: groupBox_geologyInputType
       title: Geology
       text: Geology classes as an mHM-ready raster or through a lookup table.
 
   page_lai:
-    - widget: label_laiType
+    - widget: groupBox_laiInputType
       title: LAI
       text: Leaf-area index, e.g. a long-term monthly NetCDF. Needed by interception and by PET cases -1, 2 and 3.
 

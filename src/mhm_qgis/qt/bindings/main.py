@@ -22,6 +22,7 @@ from ..controllers import (
     project,
     version,
 )
+from ..dialogs.input_selection import _browse_raster_into_combo
 from ..workflows import observations
 
 
@@ -39,8 +40,13 @@ def _bind_input_sources(dialog):
             )
         )
 
-    # Land use, soil, geology and LAI radios → categorical.show; domain radios → main.handle_domain_definition_type
+    # Land use, soil, geology and LAI: radios → their stacked page, Set → categorical.set_input
     categorical.bind(dialog)
+    # Gauge Point/Raster radios → their page; the raster browse → its combo
+    main.radios(dialog, "gauges", lambda _text: main.show_gauge_type(dialog))
+    dialog.pushButton_browsegaugeRasterInput.clicked.connect(lambda: _browse_raster_into_combo(
+        dialog, dialog.comboBox_gaugeRaterInput, "Select gauge-ID raster",
+        "Raster files (*.asc *.nc *.tif *.tiff);;All files (*)"))
     main.radios(dialog, "domainDefinition", lambda text: main.handle_domain_definition_type(dialog, text))
     # toolButton_*Info → its plain-text toolTip in a message box, as in nml-tools
     for info in dialog.findChildren(QToolButton):

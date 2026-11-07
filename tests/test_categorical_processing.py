@@ -276,3 +276,96 @@ def test_ready_periods_and_horizons_are_warped_onto_l0(tmp_path, version):
     else:
         assert {"soil_class_horizon_01.asc", "soil_class_horizon_03.asc"} <= published
         assert sum(name.startswith("lc_") and name.endswith(".asc") for name in published) == 3
+
+
+def _tif(path, value, origin=(0.0, 300.0), cellsize=100.0, size=2):
+    """A small EPSG:32632 class raster filled with `value`."""
+    import numpy as np
+    from osgeo import gdal, osr
+
+    raster = gdal.GetDriverByName("GTiff").Create(str(path), size, size, 1, gdal.GDT_Int32)
+    raster.SetGeoTransform((origin[0], cellsize, 0.0, origin[1], 0.0, -cellsize))
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(32632)
+    raster.SetProjection(srs.ExportToWkt())
+    raster.GetRasterBand(1).WriteArray(np.full((size, size), value))
+    raster = None
+    return str(path)
+
+
+def test_ready_files_and_categorical_soil_horizons_become_stacks_on_l0(tmp_path):
+    """Files with periods or depths (land use, soil), on different grids, are stacked on L0 like a
+    ready NetCDF; categorical soil horizons map through one lookup and write the iFlag_soilDB 1 definition."""
+    pytest.importorskip("osgeo")
+    from netCDF4 import Dataset
+
+    from mhm_qgis.core.executions.morphology import commands
+    from mhm_qgis.core.handlers.file.json import write as write_json
+    from mhm_qgis.core.handlers.store.layout import input_state_path
+
+    ensure_project_structure(tmp_path, "5.13")
+    write_json(input_state_path(tmp_path), {"mhm_version": "5.13"})
+    job = {"project_folder": str(tmp_path), "input_path": "", "target_crs": "EPSG:32632",
+           "target_header": L0, "source_crs": "EPSG:32632"}
+    land = [[_tif(tmp_path / "lc_1990.tif", 3), "1990-01-01T00:00:00", "1999-12-31T00:00:00"],
+            [_tif(tmp_path / "lc_2000.tif", 5, origin=(0.0, 200.0), cellsize=50.0, size=4),
+             "2000-01-01T00:00:00", "2010-12-31T00:00:00"]]
+    staged = commands.ready(None, {**job, "kind": "lc", "layers": land})["outputs"]
+    with Dataset(staged[0]) as handle:
+        assert handle["land_cover"].shape == (2, 6, 6)
+        assert handle["land_cover"][0, 2, 1] == 3
+        assert handle["land_cover"][1, 3, 1] == 5  # the second file, though on another grid
+    scenes = load_settings(tmp_path)["land_cover"]["scenes"]
+    assert [(scene["start_year"], scene["end_year"]) for scene in scenes] == [(1990, 1999), (2000, 2010)]
+
+    table = tmp_path / "soil_lookup.csv"
+    table.write_text("value,class,CLAY[%],SAND[%],BD[gcm-3]\n7,1,20,40,1.4\n8,2,30,30,1.3\n", encoding="utf-8")
+    soil = [[_tif(tmp_path / "top.tif", 7), 0, 300], [_tif(tmp_path / "sub.tif", 8), 300, 1000]]
+    lookup = {"lookup_table": str(table), "mapping_field": "value", "class_field": "class"}
+    staged = commands.ready(None, {**job, "kind": "soil", "layers": soil, "lookup": lookup})["outputs"]
+    with Dataset(staged[0]) as handle:
+        assert sorted({int(value) for value in handle["soil_class"][:].compressed()}) == [1, 2]
+    definition = Path(staged[1]).read_text(encoding="utf-8")
+    assert definition.startswith("nSoil_Types 2\nID\tCLAY[%]\tSAND[%]\tBD[gcm-3]\n1\t20\t40\t1.4\n")
+    settings = load_settings(tmp_path)["soil"]
+    assert settings["soil_db_mode"] == 1
+    assert [horizon["lower_depth"] for horizon in settings["horizons"]] == [300, 1000]
+
+
+def test_vector_soil_horizons_burn_through_the_lookup_onto_the_dem_grid(tmp_path):
+    """A GeoPackage layer horizon is rasterized on the filled DEM's grid by its mapping field, as a
+    single categorical layer is, beside a raster horizon."""
+    pytest.importorskip("osgeo")
+    from netCDF4 import Dataset
+    from osgeo import ogr, osr
+
+    from mhm_qgis.core.executions.morphology import commands
+    from mhm_qgis.core.handlers.file.json import write as write_json
+    from mhm_qgis.core.handlers.store.layout import input_state_path
+
+    ensure_project_structure(tmp_path, "5.13")
+    write_json(input_state_path(tmp_path), {"mhm_version": "5.13"})
+    dem = _tif(tmp_path / "dem.tif", 1, origin=(-100.0, 500.0), size=6)
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(32632)
+    source = ogr.GetDriverByName("GPKG").CreateDataSource(str(tmp_path / "soil.gpkg"))
+    for name in ("other", "horizon2"):
+        layer = source.CreateLayer(name, srs, ogr.wkbPolygon)
+        layer.CreateField(ogr.FieldDefn("value", ogr.OFTInteger))
+        feature = ogr.Feature(layer.GetLayerDefn())
+        feature.SetField("value", 8)
+        feature.SetGeometry(ogr.CreateGeometryFromWkt("POLYGON((0 100,200 100,200 300,0 300,0 100))"))
+        layer.CreateFeature(feature)
+    source = None
+    table = tmp_path / "soil_lookup.csv"
+    table.write_text("value,class,CLAY[%],SAND[%],BD[gcm-3]\n7,1,20,40,1.4\n8,2,30,30,1.3\n", encoding="utf-8")
+    soil = [[_tif(tmp_path / "top.tif", 7), 0, 300], [f"{tmp_path / 'soil.gpkg'}|layername=horizon2", 300, 1000]]
+    lookup = {"lookup_table": str(table), "mapping_field": "value", "class_field": "class"}
+    job = {"project_folder": str(tmp_path), "input_path": "", "target_crs": "EPSG:32632", "target_header": L0,
+           "source_crs": "EPSG:32632", "kind": "soil", "layers": soil, "lookup": lookup, "filled_dem": dem}
+
+    staged = commands.ready(None, job)["outputs"]
+
+    with Dataset(staged[0]) as handle:
+        assert handle["soil_class"][1, 2, 1] == 2  # the polygon's value 8, class 2
+        assert sorted({int(value) for value in handle["soil_class"][1].compressed()}) == [2]

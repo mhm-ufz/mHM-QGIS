@@ -243,17 +243,14 @@ def select(dialog, row) -> None:
     if "page" not in node:
         dialog.treeWidget_projectStructure.setCurrentItem(row.child(0))
         return
-    from ..controllers import categorical, forcing, grid, intro, main, process_cases
+    from ..controllers import forcing, grid, intro, main, process_cases
 
-    for name in {*categorical.PAGES.values(), "meteoVar"}:  # unsaved form input survives the switch
-        main.stash(dialog, name)
+    main.stash(dialog, "meteoVar")  # the meteo form's unsaved input survives the switch
     dialog.save_input_state()
     key = node["key"]
     if "summary" in node:
         _summary(dialog, getattr(dialog, node["summary"]), row)
-    if key in categorical.KINDS:
-        categorical.show(dialog, key)
-    elif key.startswith("meteo_"):
+    if key.startswith("meteo_"):
         forcing.show_meteo_input(dialog, key.removeprefix("meteo_"))
     elif node["page"] == "page_demDerivatives":
         main.show_dem_derivatives(dialog)

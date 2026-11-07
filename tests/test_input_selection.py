@@ -30,9 +30,6 @@ from mhm_qgis.qt.dialogs.input_selection import (
     _ensure_raster_details,
     loaded_qgis_items,
 )
-from mhm_qgis.qt.dialogs.lai_netcdf_input import LaiNetcdfInputDialog
-from mhm_qgis.qt.dialogs.mhm_ready_morph_input import MhmReadyInputDialog
-from mhm_qgis.qt.dialogs.single_layer_input import SingleLayerInputDialog
 from mhm_qgis.qt.dialogs import file_picker
 # isort: on
 
@@ -143,69 +140,6 @@ def test_loaded_qgis_items_filter_type_and_include_crs(tmp_path):
     assert items[0].data["layer"] is raster
 
 
-def test_new_input_dialogs_set_titles_and_return_complete_paths(tmp_path):
-    _app()
-    raster = _touch(tmp_path / "soil.tif")
-    definition = _touch(tmp_path / "soil_classdefinition.txt")
-    lookup = tmp_path / "soil.csv"
-    lookup.write_text("code,class_id\nA,1\n", encoding="utf-8")
-
-    ready = MhmReadyInputDialog(
-        tmp_path,
-        "soil",
-        initial={
-            "input_path": str(raster),
-            "classdefinition_path": str(definition),
-        },
-    )
-    assert ready.groupBox_morphFileInput.title() == "Soil"
-    assert ready.groupBox_classDefinitionInput.isChecked()
-    assert ready.selected_config().classdefinition_path == str(definition.resolve())
-
-    single = SingleLayerInputDialog(
-        tmp_path,
-        "soil",
-        initial={
-            "input_path": str(raster),
-            "lookup_table": str(lookup),
-            "mapping_field": "code",
-            "class_field": "class_id",
-        },
-    )
-    assert single.groupBox_inputLayerType.title() == "Soil"
-    assert single.selected_config().input_path == str(raster.resolve())
-
-
-def test_single_layer_dialog_uses_loaded_qgis_layer(tmp_path):
-    _app()
-    source = _raster(tmp_path / "loaded.tif")
-    lookup = tmp_path / "soil.csv"
-    lookup.write_text("code,class_id\nA,1\n", encoding="utf-8")
-    layer = QgsRasterLayer(str(source), "Loaded soil")
-    project = QgsProject.instance()
-    project.addMapLayer(layer)
-    try:
-        dialog = SingleLayerInputDialog(tmp_path, "soil")
-        dialog.comboBox_inputLayer.setCurrentIndex(
-            dialog.comboBox_inputLayer.findText("Loaded soil [unknown CRS]")
-        )
-        dialog.lookup_table_combo.addItem(lookup.name, str(lookup.resolve()))  # as the browse button adds it
-        dialog.lookup_table_combo.setCurrentIndex(dialog.lookup_table_combo.count() - 1)
-        dialog.mapping_field_combo.setCurrentText("code")
-        dialog.class_field_combo.setCurrentText("class_id")
-
-        config = dialog.selected_config()
-        assert config is not None
-        assert config.input_path == str(source)
-
-        # The config's path is all the scheduler needs to recover the layer.
-        from mhm_qgis.qgis_bridge import layers
-
-        assert layers.find_by_source(config.input_path) is layer
-    finally:
-        project.removeMapLayer(layer.id())
-
-
 def test_raster_details_preserve_loaded_layer_identity(monkeypatch):
     from mhm_qgis.qt.dialogs import input_selection
 
@@ -231,16 +165,6 @@ def test_raster_details_preserve_loaded_layer_identity(monkeypatch):
         "variable": "Band1",
         "source_crs": "EPSG:3035",
     }
-
-
-def test_lookup_browse_accepts_qt_clicked_boolean(tmp_path, monkeypatch):
-    from mhm_qgis.qt.controllers import single_layer_input
-
-    _app()
-    dialog = SingleLayerInputDialog(tmp_path, "soil")
-    monkeypatch.setattr(single_layer_input, "_browse_into_combo", lambda *_args: None)
-
-    single_layer_input._browse_lookup(dialog, False)
 
 
 def test_file_picker_remembers_directory_per_dialog(tmp_path, monkeypatch):
@@ -288,20 +212,6 @@ def test_file_picker_remembers_directory_per_dialog(tmp_path, monkeypatch):
     assert starts == [str(outer), str(chosen), str(outer)]
 
 
-def test_lai_netcdf_dialog_returns_temporal_choices(tmp_path):
-    _app()
-    source = _touch(tmp_path / "lai.nc")
-    dialog = LaiNetcdfInputDialog(
-        tmp_path,
-        initial={
-            "input_path": str(source),
-            "target_timestep": "Monthly Gridded Data",
-        },
-    )
-
-    assert dialog.selected_config().target_timestep == "Monthly Gridded Data"
-
-
 def _raster(path):
     from osgeo import gdal
     dataset = gdal.GetDriverByName("GTiff").Create(str(path), 2, 2, 1)
@@ -341,3 +251,7 @@ def test_vector_files_browse_with_their_crs_and_geopackage_layer(tmp_path, monke
     assert not is_point_layer(layers.open_layer(rivers, "rivers", is_raster=False))  # refused as gauges
     gauges = rivers.replace("rivers", "gauges")
     assert is_point_layer(layers.open_layer(gauges, "gauges", is_raster=False))
+
+    adapter = InputComboAdapter(QtWidgets.QComboBox(), "pour_points")
+    adapter.combo_box.addItem("gauges", {"origin": "file", "path": gauges})
+    assert adapter.currentLayer().fields().names() == ["fid"]  # a GeoPackage layer opens: its fields fill the ID box

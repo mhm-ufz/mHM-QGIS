@@ -14,6 +14,7 @@ from ...core.handlers.file import json as jsonio
 from ...core.handlers.store.layout import input_state_path
 from ...core.handlers.store.paths import version_key
 from ...qgis_bridge import layers as qgis_layers
+from ..dialogs.input_selection import _combo_path, _populate_file_combo
 from . import categorical, forcing, grid, main, model, process_cases, time, version
 
 
@@ -113,6 +114,8 @@ def save(dialog):
         "pour_point_outlet_id_field": main.selected_outlet_id_field(dialog),
         "domain_definition_type": dialog._domain_definition_mode,
         "gauges": dialog.checkBox_gaugeOption.isChecked(),
+        "gauge_input": "raster" if dialog.radioButton_gaugesRasterInput.isChecked() else "point",
+        "gauge_raster": _combo_path(dialog.comboBox_gaugeRaterInput),
         "crs_authid": dialog._set_crs,  # a CRS not yet Set is not kept
         "intro": dialog._intro_answers,
         "process_cases": process_cases.current(dialog),
@@ -194,7 +197,7 @@ def clear(dialog):
         dialog.comboBox_precipitationFile.setCurrentIndex(-1)
     for name in (*categorical.PAGES.values(), "domainDefinition"):
         main.check(dialog, name, "")
-        main.embed(dialog, name, None)
+    main.embed(dialog, "domainDefinition", None)
     with QSignalBlocker(dialog.comboBox_pourPointOutletID):
         dialog.comboBox_pourPointOutletID.clear()
         dialog.comboBox_pourPointOutletID.addItem("")
@@ -222,8 +225,12 @@ def clear(dialog):
     dialog._failed_step = None
     dialog._set_crs = dialog.get_crs().authid()
     dialog._land_cover_ready_source = ""
+    categorical.fill(dialog)
     dialog._domain_definition_mode = ""
     dialog.checkBox_gaugeOption.setChecked(False)
+    main.check(dialog, "gauges", "Point Input")
+    main.show_gauge_type(dialog)
+    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.project_folder, "gauges", "")
     dialog._preferred_l1_resolution = None
     dialog._preferred_l11_resolution = None
     dialog.task_coordinator.set_max_threads(2)
@@ -264,14 +271,12 @@ def _restore_categorical_inputs(dialog, state):
     dialog.task_coordinator.set_max_threads(state.get("thread_count", 2))
 
     for kind, text in {"lai": state.get("lai_input_type", ""), **state.get("categorical_types", {})}.items():
-        if kind in categorical.KINDS:  # saved texts may differ in case or use `_` for spaces
-            normalized = str(text).lower().replace("_", " ")
-            mode = next((mode for mode in categorical.MODES[kind] if mode.lower() == normalized), "")
-            dialog._categorical_modes[kind] = mode
-            main.check(dialog, categorical.PAGES[kind], mode)
+        if kind in categorical.KINDS:
+            dialog._categorical_modes[kind] = categorical.saved_mode(kind, text)
 
     inputs = state.get("advanced_inputs", {})
     dialog._advanced_inputs = dict(inputs) if isinstance(inputs, dict) else {}
+    categorical.fill(dialog)
     dialog._land_cover_ready_source = state.get("land_cover_ready_source", "")
     drafts = state.get("drafts")
     dialog._drafts = dict(drafts) if isinstance(drafts, dict) else {}
@@ -343,6 +348,9 @@ def _restore_domain_inputs(dialog, state):
     main.check(dialog, "domainDefinition", text)
     dialog._domain_definition_mode = text
     dialog.checkBox_gaugeOption.setChecked(bool(state.get("gauges", text)))  # older setups: gauges if a domain was defined
+    main.check(dialog, "gauges", "Raster Input" if state.get("gauge_input") == "raster" else "Point Input")
+    main.show_gauge_type(dialog)
+    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.project_folder, "gauges", state.get("gauge_raster", ""))
 
 
 def _restore_meteo_inputs(dialog, state):

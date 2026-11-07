@@ -325,7 +325,8 @@ def test_info_buttons_explain_the_lookup_and_discharge_tables(dialog, monkeypatc
 
     shown = []
     monkeypatch.setattr(QMessageBox, "information", lambda _parent, title, text: shown.append((title, text)))
-    buttons = [getattr(dialog, f"toolButton_{page}LookupInfo") for page in ("landUse", "soil", "geology", "lai")]
+    buttons = [dialog.toolButton_landUseCategoricalInfo,
+               *(getattr(dialog, f"toolButton_{page}LookupInfo") for page in ("soil", "geology", "lai"))]
     buttons.append(dialog.toolButton_domainDefinitionInfo)
     for button in buttons:
         assert button.text() == "i"
@@ -373,26 +374,11 @@ def test_columns_the_run_buttons_and_the_next_step(dialog, tmp_path, monkeypatch
     assert pointed() == ["l2_reference"]  # scan the precipitation again
 
 
-def test_a_type_radio_shows_its_form_and_ok_commits_it(dialog, tmp_path):
-    from mhm_qgis.qt.dialogs.single_layer_input import SingleLayerInputDialog
-
-    dialog.project_folder = str(tmp_path)
-    dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "lc"))
-    radios = dialog.buttonGroup_landUse.buttons()
-    assert [radio.text() for radio in radios][1] == "Single Categorical Layer (with Lookup Table)"
-    radios[1].click()
-    form = dialog.verticalLayout_landUseForm.itemAt(0).widget()
-    assert isinstance(form, SingleLayerInputDialog)
-    assert form.pushButton_set.text() == "Set"
-    assert dialog._categorical_modes.get("lc", "") == ""  # not before Set
-
-
 def test_type_radios_are_designer_widgets_with_the_saved_mode_texts(dialog):
     from mhm_qgis.qt.controllers import categorical, main
 
     for kind, page in categorical.PAGES.items():
         assert [radio.text() for radio in getattr(dialog, f"buttonGroup_{page}").buttons()] == list(categorical.MODES[kind])
-        assert getattr(dialog, f"verticalLayout_{page}Types").spacing() == 0
     assert [radio.text() for radio in dialog.buttonGroup_domainDefinition.buttons()] == list(main.DOMAIN_TYPES)
     assert dialog.radioButton_domainDefinitionDelineator.text() == main.DOMAIN_TYPES[1]
 

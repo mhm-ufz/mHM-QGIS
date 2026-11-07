@@ -171,18 +171,23 @@ A module belongs to exactly one layer.
   and Domain Definition unless `checkBox_gaugeOption` is checked. Without gauges Execute All
   skips the gauge stage and runs `whole_dem_domain` (`delineation.domain_mask` on every valid
   DEM cell, with the saved outlets dropped). A row with
-  `summary` fills that table on its page from the rows below it. An input page embeds its
-  child dialog in its Designer host `widget_<name>Form`, under its Designer type radios
-  (`main.radios` groups `radioButton_<name>*` by name, wherever they are laid out; their texts are the saved modes, `categorical.MODES` /
-  `main.DOMAIN_TYPES`). Embedded forms have a Designer `pushButton_set` wired to `accept()`
-  (Set commits, as in `categorical.show`); `main.embed` closes the form it replaces with its signals
-  blocked, so no `rejected` slot shows a form again; the delineator's `closeEvent` cleanup
-  still runs.
-  - **Unsaved form input is kept as drafts.**
-    - Each embedded form has `draft()`, which returns its values in its `initial` shape without validation. `main.draftable` keys it, as `"<kind>:<mode>"` or `"meteo:<variable>"`.
-    - `project_tree.select` calls `main.stash` for every form page and then saves the input state, where drafts live under `"drafts"`.
-    - A form is built from `{**committed, **draft}`.
-    - A draft is dropped only by a successful Set (`categorical._commit`, the forcing `scanned`). A form built clean records a draft only once its values change.
+  `summary` fills that table on its page from the rows below it.
+  - **Land use, soil, geology and LAI inputs live on the main form** (`qt/controllers/categorical.py`).
+    - A radio of `groupBox_<page>InputType` shows the matching page of `stackedWidget_<page>`: pages follow `categorical.MODES`, the radio texts.
+    - The page's Set (`pushButton_set<Page>`) reads its widgets into the typed config and calls `_configure_*`.
+    - `fill` writes the saved configs back on restore. `saved_mode` maps types saved by older versions.
+    - The multi-horizon soil tabs are `soil_horizons.SoilHorizonInputs`.
+    - The `_SWITCHES` multi-layer checkboxes enable their `_TABLES` (Add a row of a file and two values: dates, or depths in mm; ✖ removes it).
+    - Set stores the rows as `layers`. `commands.ready` turns them into the ready stack `_stage_ready_stack` reads (`stack_ready_layers`, each file warped onto L0); categorical soil horizons map through one lookup first (`lookup_soil_layers`: raster values are mapped, vector layers are burnt onto the filled DEM's grid with mHM-tools `rasterize_map_data` as a single layer is; it writes the iFlag_soilDB 1 class definition).
+  - **Embedded forms remain for Domain Definition and the meteo variables.**
+    - `main.radios` groups `radioButton_<name>*` by name, wherever they are laid out; texts are `main.DOMAIN_TYPES`.
+    - Their Designer `pushButton_set` is wired to `accept()`. `main.embed` closes the form it replaces with its signals blocked, so no `rejected` slot shows a form again; the delineator's `closeEvent` cleanup still runs.
+  - **The meteo form's unsaved input is kept as a draft.**
+    - `draft()` returns its values without validation; `main.draftable` keys it as `"meteo:<variable>"`.
+    - `project_tree.select` calls `main.stash("meteoVar")` and saves the input state, where drafts live under `"drafts"`.
+    - A successful scan drops the draft.
+  - **Gauges: Point or Raster input** (`stackedWidget_gaugeInput`). Set Gauges turns a gauge-ID raster into `.temp/Morphology/gauges_from_raster.gpkg`, one point per ID with field `id`, via `outlets.points_from_gauge_raster`, and uses it as the pour points.
+  - **mHM-ready gauge `.txt` files** are read by `records_from_layer` as discharge tables.
   - **Domain Setup is ✅ once a domain folder is active.** Resolution stays 🟢 while `grid.resolution_error` reports levels that do not nest by whole factors. LatLon shows that error.
   - **Page Set buttons apply a page; nothing applies on edit.**
     - `pushButton_setProject` opens the browsed folder (`project.set_folder`).

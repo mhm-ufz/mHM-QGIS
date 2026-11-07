@@ -88,3 +88,25 @@ def test_gauge_raster_ids_reject_fractional_values():
     assert station_id_int("7.0") == 7
     with pytest.raises(StationIdError, match="integer"):
         station_id_int("7.5")
+
+
+def test_a_gauge_raster_becomes_one_point_per_id_at_the_cell_centre(tmp_path):
+    pytest.importorskip("osgeo")
+    import numpy as np
+    from osgeo import gdal, ogr
+
+    from mhm_qgis.core.morphology.hydrology.outlets import points_from_gauge_raster
+
+    raster = gdal.GetDriverByName("GTiff").Create(str(tmp_path / "idgauges.tif"), 3, 2, 1, gdal.GDT_Int32)
+    raster.SetGeoTransform((100.0, 10.0, 0.0, 200.0, 0.0, -10.0))
+    raster.GetRasterBand(1).SetNoDataValue(-9999)
+    raster.GetRasterBand(1).WriteArray(np.array([[-9999, 280, 0], [240, 280, -9999]]))
+    raster = None
+
+    output = points_from_gauge_raster(tmp_path / "idgauges.tif", tmp_path / "gauges.gpkg")
+
+    dataset = ogr.Open(str(output))
+    layer = dataset.GetLayer("gauges")
+    points = sorted((feature["id"], feature.GetGeometryRef().GetX(), feature.GetGeometryRef().GetY())
+                    for feature in layer)
+    assert points == [(240, 105.0, 185.0), (280, 115.0, 195.0)]  # 280's first cell only

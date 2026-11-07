@@ -42,6 +42,7 @@ class ReadyInputConfig:
     classdefinition_path: str = ""
     variable: str = ""
     source_crs: str = ""
+    layers: tuple = ()  # several (path, a, b): periods or horizon depths
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class SingleLayerLookupConfig:
     class_field: str
     variable: str = ""
     source_crs: str = ""
+    layers: tuple = ()  # several soil horizon layers (path, upper, lower) through the one lookup
 
 
 @dataclass(frozen=True)
@@ -239,7 +241,7 @@ class InputComboAdapter(QtCore.QObject):
         from qgis.PyQt import sip
 
         try:
-            stat = os.stat(path)
+            stat = os.stat(str(path).split("|", 1)[0])  # a GeoPackage layer: `x.gpkg|layername=…`
         except (OSError, TypeError, ValueError):
             return None
         key = (path, variable, crs, stat.st_mtime_ns, stat.st_size)

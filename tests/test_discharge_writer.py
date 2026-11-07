@@ -71,3 +71,18 @@ def test_quality_is_not_mistaken_for_a_q_discharge_column(tmp_path):
     records = records_from_layer(_FileLayer(source))
 
     assert [record.value for record in records] == [1.25]
+
+
+def test_an_mhm_ready_gauge_file_reads_as_a_discharge_table(tmp_path):
+    from types import SimpleNamespace
+
+    from mhm_qgis.core.handlers.file.discharge import records_from_layer
+
+    path = tmp_path / "280.txt"
+    path.write_text("280 Gauge\nnodata -9999\nn 1\nstart 2001 01 01 00 00\nend 2001 01 02 00 00\n"
+                    "2001 01 01 00 00 1.5\n2001 01 02 00 00 -9999\n", encoding="utf-8")
+
+    records = records_from_layer(SimpleNamespace(source=lambda: str(path)))
+
+    assert [record.timestamp.day for record in records] == [1, 2]
+    assert records[0].value == 1.5

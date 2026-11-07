@@ -72,6 +72,8 @@ def ready_layers(source, variable="") -> int:
 def normalized_mode(value: object) -> str:
     """Return the stable internal name of a categorical input mode."""
     text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if text.startswith("mhm_ready"):  # also "mHM ready (Class Layer)"
+        return "mhm_ready"
     return "lookup_table" if "lookup_table" in text else text
 
 
@@ -364,3 +366,120 @@ __all__ = [
     "record_namelist",
     "saved_outputs",
 ]
+
+
+def stack_ready_layers(project_folder, kind, layers, *, source_crs="", target_crs, target_header,
+                       task=None) -> Path:
+    """Single-layer rasters as the ready stack `_stage_ready_stack` reads: rows (path, a, b) with
+    a period (land cover: start, end dates, the end inclusive) or depths (soil: upper, lower in mm),
+    each warped onto L0 on its own, so the files need not share a grid."""
+    from datetime import datetime
+
+    from netCDF4 import date2num
+    from osgeo import gdal
+
+    from ...handlers.file.netcdf.raster import _writer
+    from ...handlers.raster.tasks import warp_raster_to_header
+
+    stem, name = STACKS[kind]
+    staging = Path(morph_staging_folder(project_folder))
+    staging.mkdir(parents=True, exist_ok=True)
+    output = staging / f"_{stem}_layers.nc"
+    arrays, projection = [], ""
+    with TemporaryDirectory(prefix=f"mhm_qgis_{kind}_layers_", dir=staging) as folder:
+        for index, (path, *_bounds) in enumerate(layers):
+            warped = gdal.Open(warp_raster_to_header(path, Path(folder) / f"{index}.tif", target_header, target_crs,
+                                                     source_crs=source_crs, pad_value=-9999, task=task))
+            arrays.append(warped.GetRasterBand(1).ReadAsArray())
+            projection = warped.GetProjection()
+            warped = None
+    dim = "time" if kind == "lc" else "horizon"
+    with _writer(output, target_header, projection) as out:
+        out.createDimension(dim, len(layers))
+        out.createDimension("bnds", 2)
+        axis = out.createVariable(dim, "f8", (dim,))
+        bounds = out.createVariable(f"{dim}_bnds", "f8", (dim, "bnds"))
+        axis.bounds = f"{dim}_bnds"
+        if kind == "lc":
+            axis.units, axis.calendar = "days since 1900-01-01", "standard"
+            edges = [[date2num(datetime.fromisoformat(str(value)), axis.units, axis.calendar) for value in (a, b)]
+                     for _path, a, b in layers]
+        else:
+            axis.units = "mm"
+            edges = [[float(a), float(b)] for _path, a, b in layers]
+        bounds[:] = edges
+        axis[:] = [sum(edge) / 2 for edge in edges]
+        values = out.createVariable(name, "i4", (dim, "y", "x"), fill_value=-9999, zlib=True)
+        values.grid_mapping = "crs"
+        for index, array in enumerate(arrays):
+            values[index] = array
+    return output
+
+
+def lookup_soil_layers(layers, lookup_table, mapping_field, class_field, folder, *, dem_file=None, dem_crs=None):
+    """Categorical soil horizons through one lookup for all horizons, and the iFlag_soilDB 1 class
+    definition from the classes' clay, sand and bulk density columns (names starting `clay`, `sand`,
+    `bd` or `bulk`). Returns the mapped rows and the definition.
+
+    A raster horizon's values (`mapping_field`) become classes (`class_field`, -9999 when unmapped).
+    A vector horizon (Shapefile, GeoPackage layer) is burnt onto the filled DEM's grid through the
+    lookup, as a single categorical layer is (mHM-tools `rasterize_map_data`).
+    """
+    import numpy as np
+    from osgeo import gdal
+
+    from ...handlers import lookup
+
+    table = lookup.read(lookup_table)
+
+    def column(*prefixes):
+        found = next((name for name in table.columns if str(name).strip().lower().startswith(prefixes)), None)
+        if found is None:
+            raise ValueError(f"The soil lookup needs a column starting with {' or '.join(prefixes)}.")
+        return found
+
+    clay, sand, density = column("clay"), column("sand"), column("bd", "bulk")
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    mapped, mapping = [], None
+    with lookup.as_csv(lookup_table, dir=folder) as lookup_csv:
+        for index, (path, upper, lower) in enumerate(layers, 1):
+            output = folder / f"soil_horizon_{index}.tif"
+            source, _, layer = str(path).partition("|layername=")
+            if Path(source).suffix.lower() in {".shp", ".gpkg", ".geojson"}:
+                from mhm_tools import pre
+
+                if dem_file is None:
+                    raise ValueError("Vector soil horizons need the filled DEM.")
+                if layer:  # rasterize_map_data reads a whole file: this layer alone
+                    single = folder / f"soil_horizon_{index}.gpkg"
+                    gdal.VectorTranslate(str(single), source, layers=[layer])
+                    source = str(single)
+                pre.rasterize_map_data(source, dem_file, output, class_field, lookup_table=lookup_csv,
+                                       mapping_field=mapping_field, dem_crs=dem_crs or None)
+                mapped.append((str(output), upper, lower))
+                continue
+            mapping = mapping or dict(zip(table[mapping_field].astype(int), table[class_field].astype(int),
+                                          strict=True))
+            dataset = gdal.Open(source)
+            if dataset is None:
+                raise ValueError(f"Could not read the soil horizon layer: {path}")
+            values = dataset.GetRasterBand(1).ReadAsArray()
+            classes = np.full(values.shape, -9999, dtype="i4")
+            for value, soil_class in mapping.items():
+                classes[values == value] = soil_class
+            target = gdal.GetDriverByName("GTiff").Create(str(output), dataset.RasterXSize, dataset.RasterYSize, 1,
+                                                           gdal.GDT_Int32)
+            target.SetGeoTransform(dataset.GetGeoTransform())
+            target.SetProjection(dataset.GetProjection())
+            target.GetRasterBand(1).SetNoDataValue(-9999)
+            target.GetRasterBand(1).WriteArray(classes)
+            target = dataset = None
+            mapped.append((str(output), upper, lower))
+    classes = table.drop_duplicates(class_field).sort_values(class_field)
+    definition = folder / "soil_classdefinition_iFlag_soilDB_1.txt"
+    definition.write_text(
+        f"nSoil_Types {len(classes)}\nID\tCLAY[%]\tSAND[%]\tBD[gcm-3]\n" + "".join(
+            f"{int(row[class_field])}\t{row[clay]:g}\t{row[sand]:g}\t{row[density]:g}\n"
+            for _, row in classes.iterrows()), encoding="utf-8")
+    return mapped, definition

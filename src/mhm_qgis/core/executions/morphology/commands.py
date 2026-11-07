@@ -22,7 +22,7 @@ from ...handlers.state.cache import (
     outputs_present,
     store_payload,
 )
-from ...handlers.store.paths import temp_morphology_folder
+from ...handlers.store.paths import morph_staging_folder, temp_morphology_folder
 from ...morphology.layers.advanced_l0 import publish_model_inputs
 from ...morphology.layers.categorical import copy_ready, saved_outputs
 
@@ -96,14 +96,32 @@ def advanced(task, job):
 
 
 def ready(task, job):
-    """Place and publish one mHM-ready categorical raster."""
+    """Place and publish one mHM-ready categorical raster, or a stack of its `layers` (periods or
+    horizons; categorical soil horizons map through `lookup` first)."""
+    source, variable, source_crs = job["input_path"], job.get("variable", ""), job.get("source_crs", "")
+    definition = job.get("classdefinition_path", "")
+    layers = job.get("layers")
+    if layers:
+        if job.get("lookup"):
+            from ...morphology.layers.categorical import lookup_soil_layers
+
+            lookup = job["lookup"]
+            layers, definition = lookup_soil_layers(
+                layers, lookup["lookup_table"], lookup["mapping_field"], lookup["class_field"],
+                Path(morph_staging_folder(job["project_folder"])) / "_soil_horizons",
+                dem_file=job.get("filled_dem"), dem_crs=job["target_crs"])
+        from ...morphology.layers.categorical import STACKS, stack_ready_layers
+
+        source = stack_ready_layers(job["project_folder"], job["kind"], layers, source_crs=source_crs,
+                                    target_crs=job["target_crs"], target_header=job["target_header"], task=task)
+        variable, source_crs = STACKS[job["kind"]][1], ""  # already on L0
     staged = copy_ready(
         job["project_folder"],
         job["kind"],
-        job["input_path"],
-        definition_source=job.get("classdefinition_path", ""),
-        variable=job.get("variable", ""),
-        source_crs=job.get("source_crs", ""),
+        source,
+        definition_source=definition,
+        variable=variable,
+        source_crs=source_crs,
         target_crs=job["target_crs"],
         target_header=job["target_header"],
         task=task,

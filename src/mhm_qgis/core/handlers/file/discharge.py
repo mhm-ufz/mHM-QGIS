@@ -115,6 +115,12 @@ def records_from_layer(layer) -> list[DischargeRecord]:
         records = records_from_grdc_file(source_path)
         if records:
             return records
+        try:  # an mHM-ready gauge file (`nodata`, `n`, `start`, `end` header)
+            records = records_from_mhm_file(source_path)
+        except (ValueError, UnicodeDecodeError):
+            records = []
+        if records:
+            return records
         records = records_from_delimited_file(source_path)
         if records:
             return records

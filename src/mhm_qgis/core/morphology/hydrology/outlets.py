@@ -207,3 +207,45 @@ def feature_count_text(layer) -> str:
         return str(int(layer.featureCount()))
     except Exception:
         return "0"
+
+
+def points_from_gauge_raster(source, output):
+    """A point GeoPackage (layer `gauges`, field `id`) from a gauge-ID raster such as mHM's
+    idgauges: one point per ID at the centre of its first cell; cells of nodata or ≤ 0 hold none."""
+    from pathlib import Path
+
+    import numpy as np
+    from osgeo import gdal, ogr, osr
+
+    dataset = gdal.Open(str(source))
+    if dataset is None:
+        raise ValueError(f"Could not read the gauge raster: {source}")
+    band = dataset.GetRasterBand(1)
+    values, nodata = band.ReadAsArray(), band.GetNoDataValue()
+    gauges = (values > 0) if nodata is None else (values > 0) & (values != nodata)
+    if not gauges.any():
+        raise ValueError(f"The gauge raster holds no gauge IDs (values > 0): {source}")
+    x0, dx, _, y0, _, dy = dataset.GetGeoTransform()
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    driver = ogr.GetDriverByName("GPKG")
+    if output.exists():
+        driver.DeleteDataSource(str(output))
+    target = driver.CreateDataSource(str(output))
+    srs = osr.SpatialReference(wkt=dataset.GetProjection()) if dataset.GetProjection() else None
+    layer = target.CreateLayer("gauges", srs, ogr.wkbPoint)
+    layer.CreateField(ogr.FieldDefn("id", ogr.OFTInteger64))
+    seen = set()
+    for row, column in zip(*np.nonzero(gauges), strict=True):
+        gauge = int(values[row, column])
+        if gauge in seen:
+            continue
+        seen.add(gauge)
+        feature = ogr.Feature(layer.GetLayerDefn())
+        feature.SetField("id", gauge)
+        point = ogr.Geometry(ogr.wkbPoint)
+        point.AddPoint_2D(x0 + (column + 0.5) * dx, y0 + (row + 0.5) * dy)
+        feature.SetGeometry(point)
+        layer.CreateFeature(feature)
+    target = None
+    return output

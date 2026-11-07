@@ -195,7 +195,7 @@ class MorphologyTaskBridge:
     def start_lai(self, *, key="execute-all-lai", done=None, failed=None):
         """Resample the selected LAI NetCDF onto the filled DEM grid."""
         mode = self.dialog.categorical_input_mode("lai").lower()
-        if mode == "mhm ready" or "lookup" in mode:
+        if mode.startswith("mhm ready") or "lookup" in mode:
             return self.start_categorical(
                 "lai", key=key, reuse_existing=True,
                 done=done, failed=failed,
@@ -304,7 +304,8 @@ class MorphologyTaskBridge:
             mode = categorical.normalized_mode(
                 self.dialog.categorical_input_mode(kind)
             )
-            if mode == "mhm_ready":
+            layered = mode == "lookup_table" and (self.dialog.categorical_source_config(kind) or {}).get("layers")
+            if mode == "mhm_ready" or layered:  # categorical soil horizons map, then stack like ready ones
                 started = self._ready_task(kind, reuse_existing, publish, done)
             elif self.dialog.uses_advanced_categorical_input(kind):
                 started = self._advanced_task(kind, reuse_existing, done)
@@ -332,6 +333,9 @@ class MorphologyTaskBridge:
         source = config.get("input_path")
         if not source:
             raise ValueError(f"Select an mHM-ready {SPECS[kind]['label']} input.")
+        rows = config.get("layers") or []
+        lookup = {name: config[name] for name in ("lookup_table", "mapping_field", "class_field")} \
+            if rows and config.get("lookup_table") else None
         job = {
             "project_folder": self.dialog.project_folder,
             "kind": kind,
@@ -342,11 +346,16 @@ class MorphologyTaskBridge:
             "target_crs": layers.crs_string(self.dialog.get_crs()),
             "target_header": grid.grid_level_headers(self.dialog)["L0"],
             "publish": bool(publish),
+            "layers": rows,
+            "lookup": lookup,
+            "filled_dem": self.filled_dem_path,  # the grid vector soil horizons are burnt onto
         }
         inputs = tuple(
             path for path in (
-                source,
+                source.split("|", 1)[0],
+                *(row[0].split("|", 1)[0] for row in rows),
                 config.get("classdefinition_path", ""),
+                (lookup or {}).get("lookup_table", ""),
                 self.filled_dem_path,
             ) if path
         )
@@ -356,6 +365,8 @@ class MorphologyTaskBridge:
             "source_crs": job["source_crs"],
             "target_crs": job["target_crs"],
             "target_header": job["target_header"],
+            "layers": rows,
+            "lookup": lookup,
             "format": "common-l0-nc-1",
         })
         reusable = self._reusable_stage(

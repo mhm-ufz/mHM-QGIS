@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import traceback
+from pathlib import Path
 
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
@@ -416,8 +417,46 @@ def _assignment_failed(dialog, error):
     QMessageBox.critical(dialog, "Domain Assignment", str(error))
 
 
+def show_gauge_type(dialog):
+    """The Point or Raster page of the gauge input."""
+    dialog.stackedWidget_gaugeInput.setCurrentIndex(int(dialog.radioButton_gaugesRasterInput.isChecked()))
+
+
+def _gauges_from_raster(dialog):
+    """The gauge-ID raster as the pour-point input: one point per ID, field `id`."""
+    from ...core.handlers.file.netcdf.raster import source
+    from ...core.handlers.store.paths import temp_morphology_folder
+    from ...core.morphology.hydrology.outlets import points_from_gauge_raster
+    from ..dialogs.input_selection import (
+        _combo_path,
+        _combo_raster_details,
+        _ensure_raster_details,
+    )
+
+    combo = dialog.comboBox_gaugeRaterInput
+    path = _combo_path(combo)
+    if not path or not os.path.isfile(path):
+        QMessageBox.warning(dialog, "Gauges", "Browse to a gauge-ID raster first.")
+        return False
+    if not _ensure_raster_details(dialog, combo):
+        return False
+    try:
+        output = points_from_gauge_raster(
+            source(path, _combo_raster_details(combo).get("variable", "")),
+            Path(temp_morphology_folder(dialog.project_folder)) / "gauges_from_raster.gpkg")
+    except (OSError, ValueError, RuntimeError) as error:
+        QMessageBox.warning(dialog, "Gauges", str(error))
+        return False
+    add_file_input(dialog, "pour_points", f"{output}|layername=gauges", manual=True)
+    dialog.comboBox_pourPointOutletID.setCurrentText("id")
+    return True
+
+
 def set_gauges(dialog):
     """Gauges' Set: build the drainage network and flow accumulation the Domain Delineator opens on."""
+    if dialog.radioButton_gaugesRasterInput.isChecked() and (
+            not dialog.project_folder or not _gauges_from_raster(dialog)):
+        return
     if _selected_outlets(dialog, "Gauges") is None:
         return
 
