@@ -412,11 +412,6 @@ class DomainWorkflow:
                 raise ValueError(
                     f"Select a discharge table for outlet {assignment.outlet_id}."
                 )
-            is_valid = getattr(layer, "isValid", None)
-            if callable(is_valid) and not is_valid():
-                raise ValueError(
-                    f"The discharge table for outlet {assignment.outlet_id} is invalid."
-                )
             input_path = local_source_path(layer)
             if input_path is None or input_path.suffix.lower() not in {".csv", ".txt"}:
                 raise ValueError(

@@ -22,11 +22,12 @@ CARRIED_SUFFIXES = {".txt", ".prj", ".xml", ".cpg", ".csv"}
 PATH_KEYS = ("output_path", "classdefinition_path")
 SECTIONS = ("land_cover", "soil", "geology")
 def staged_files(project_folder) -> list[Path]:
-    """Return the files Execute All staged for publication, rasters first."""
+    """Return the files Execute All staged for publication, rasters first; a leading `_` marks a
+    staging-private intermediate (a ready stack's single layers), never published."""
     staging = Path(morph_staging_folder(project_folder))
     if not staging.is_dir():
         return []
-    files = [path for path in sorted(staging.iterdir()) if path.is_file()]
+    files = [path for path in sorted(staging.iterdir()) if path.is_file() and not path.name.startswith("_")]
     return (
         [path for path in files if path.suffix.lower() in RASTER_SUFFIXES]
         + [path for path in files if path.suffix.lower() not in RASTER_SUFFIXES]

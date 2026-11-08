@@ -5,6 +5,7 @@ import hashlib
 import tempfile
 from pathlib import Path
 
+from ...core.handlers.file.netcdf.raster import source as netcdf_source
 from .. import layers
 
 
@@ -45,7 +46,7 @@ def show_raster(dialog, path, name, *, variable=None, band=None, is_raster=True,
     uniquify names, so reloading would both stack duplicates in the layer tree
     and re-open the file each tick.
     """
-    source = layers.source_uri(path, variable)
+    source = netcdf_source(path, variable)
     try:
         stat = Path(path).stat()
         stamp = f"{stat.st_mtime_ns}:{stat.st_size}"

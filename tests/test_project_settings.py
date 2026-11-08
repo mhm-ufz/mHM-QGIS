@@ -12,7 +12,7 @@ def test_settings_are_copied_once_and_reloaded_per_project(tmp_path):
     assert settings.read(tmp_path)["max_snap_buffer_distance"] == 1000
     path.write_text("max_snap_buffer_distance: 250 # metres\ngrid_alignment_gap_limit: 0.02\n")
     ensure_project_structure(tmp_path)
-    assert settings.read(tmp_path) == {"max_snap_buffer_distance": 250, "grid_alignment_gap_limit": 0.02}
+    assert settings.read(tmp_path) == {"max_snap_buffer_distance": 250}  # an unknown key is ignored
     assert settings.read(tmp_path / "another")["max_snap_buffer_distance"] == 1000
     for invalid in ("-1", "nan", "inf", "wrong", ""):
         path.write_text(f"max_snap_buffer_distance: {invalid}\n")

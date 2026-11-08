@@ -16,6 +16,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 from mhm_qgis.core.handlers.raster.tasks import (
+    _target_mask,
     crop_aligned_l0_raster,
     delineate_domains_file,
     delineate_outlet_file,
@@ -152,6 +153,21 @@ def test_aligned_l0_mask_keeps_values_inside_and_nodata_outside(tmp_path):
     kept = np.zeros(values.shape, dtype=bool)
     kept[2:4, 2:4] = True
     assert np.all(values[~kept] == -9999)
+
+
+def test_a_catchment_cut_by_a_smaller_l0_extent_is_refused(tmp_path):
+    mask = tmp_path / "watershed.tif"
+    _dem(mask)
+    dataset = gdal.Open(str(mask), gdal.GA_Update)
+    values = np.zeros((10, 10))
+    values[2:4, 2:4] = values[8, 8] = 1
+    dataset.GetRasterBand(1).WriteArray(values)
+    dataset = None
+    upper_left = {"ncols": 5, "nrows": 5, "xllcorner": 0.0, "yllcorner": 500.0, "cellsize": 100.0}
+
+    assert _target_mask(mask, upper_left, "", mask).sum() == 4  # the valid-DEM domain is just cut
+    with pytest.raises(ValueError, match="beyond the custom L0 extent"):
+        _target_mask(mask, upper_left, "", mask, whole=True)
 
 
 def test_aligned_l0_mask_pads_an_expanded_extent_with_nodata(tmp_path):

@@ -74,9 +74,14 @@ def _forcing_blocks(job, cells, bounds, steps):
     x1, y1 = (np.load(Path(job["cache"]) / f"{name}.npy") for name in ("x", "y"))
     with netCDF4.Dataset(path) as handle:
         var = handle[variable]
-        x_name, y_name = var.dimensions[-1], var.dimensions[-2]
-        ix = _axis_index(x1[cells[1]], np.asarray(handle[x_name][:], "f8"))
-        iy = _axis_index(y1[cells[0]], np.asarray(handle[y_name][:], "f8"))
+        x, y = (np.asarray(handle[name][:], "f8") for name in (var.dimensions[-1], var.dimensions[-2]))
+        if not job["geographic"] and "lon2d" in handle.variables:  # the plugin's degree axes over a projected grid
+            from pyproj import Transformer
+
+            xs, ys = Transformer.from_crs("EPSG:4326", handle[var.grid_mapping].crs_wkt, always_xy=True).transform(
+                np.asarray(handle["lon2d"][:], "f8"), np.asarray(handle["lat2d"][:], "f8"))
+            x, y = xs[len(y) // 2], ys[:, len(x) // 2]
+        ix, iy = _axis_index(x1[cells[1]], x), _axis_index(y1[cells[0]], y)
         pending, rows = None, []
         for start in range(0, var.shape[0], steps):
             keep = inside[start:start + steps]

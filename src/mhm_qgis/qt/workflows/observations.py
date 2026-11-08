@@ -8,17 +8,17 @@ from . import lifecycle
 
 
 def start(dialog):
-    """Prepare every configured gridded observation on the common L2 grid."""
+    """Prepare every configured gridded observation on L1, the grid mHM reads them on."""
 
     def build():
         specs = forcing.observation_specs(dialog)
         if not specs:
             raise ValueError("Configure at least one additional observation.")
-        metadata = grid.require_common_grid(dialog)
+        grid.require_common_grid(dialog)
         return ObservationRun(
             Path(dialog.project_folder),
             specs,
-            target_grid_from_header(metadata["l2_header"], dialog.selected_meteo_crs()),
+            target_grid_from_header(grid.grid_level_headers(dialog)["L1"], dialog.selected_meteo_crs()),
             inspections=forcing.observation_inspections(dialog) or None,
         )
 

@@ -259,6 +259,38 @@ def test_meteo_requires_pre_but_not_unconfigured_variables(tmp_path):
     dialog.close()
 
 
+def test_meteo_runs_only_the_variables_the_process_cases_read(tmp_path):
+    from dataclasses import asdict
+
+    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+    from mhm_qgis.qt.controllers import forcing
+    dialog = MhmQgisDialog()
+    dialog.project_folder = str(tmp_path)
+    dialog.comboBox_mHMversion.setCurrentText("5.13")
+    dialog._process_cases = {"pet": 0}  # pet is read, not estimated from tmin/tmax
+    dialog._meteo_inputs = {v: asdict(MeteoFolderSpec(v, str(tmp_path), unit="mm"))
+                            for v in ("pre", "tavg", "tmin", "pet")}
+    assert tuple(s.kind for s in forcing.selected_meteo_specs(dialog)) == ("pre", "tavg", "pet")
+    dialog.close()
+
+
+def test_a_geopackage_pour_point_layer_is_restored(tmp_path):
+    from mhm_qgis.qt.controllers import main
+    gpkg = tmp_path / ".temp" / "Morphology" / "gauges_from_raster.gpkg"
+    gpkg.parent.mkdir(parents=True)
+    gpkg.touch()
+    dialog = MhmQgisDialog()
+    dialog.project_folder = str(tmp_path)
+    main.add_file_input(dialog, "pour_points", f"{gpkg}|layername=gauges", manual=True)
+    dialog.save_input_state()
+    dialog.close()
+    restored = MhmQgisDialog()
+    restored.project_folder = str(tmp_path)
+    restored.load_input_state()
+    assert restored.comboBox_pourPointInput.currentData()["path"] == f"{gpkg}|layername=gauges"
+    restored.close()
+
+
 def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     _app()
     latlon = Path(data_folder(tmp_path)) / "latlon.nc"

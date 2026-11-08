@@ -340,7 +340,7 @@ def _rasterize_target_mask(vector_path, target_header, projection):
     return values
 
 
-def _raster_target_mask(mask_path, target_header, reference_path=None):
+def _raster_target_mask(mask_path, target_header, reference_path=None, whole=False):
     """Return a boolean target-grid mask from an aligned delineation raster.
 
     The mask rasters written by :func:`_delineate` sit on the filled-DEM grid
@@ -371,17 +371,20 @@ def _raster_target_mask(mask_path, target_header, reference_path=None):
                 window["target_y"]: window["target_y"] + window["copy_rows"],
                 window["target_x"]: window["target_x"] + window["copy_cols"],
             ] = values != 0
+        if whole and np.count_nonzero(source.GetRasterBand(1).ReadAsArray()) != np.count_nonzero(keep):
+            raise ValueError("The saved domain extends beyond the custom L0 extent; enlarge the extent "
+                             "or save catchments inside it.")
     finally:
         source = None
     return keep
 
 
-def _target_mask(mask_path, target_header, projection, reference_path=None):
+def _target_mask(mask_path, target_header, projection, reference_path=None, whole=False):
     """Return the target-grid mask for a delineation raster or a polygon layer.
 
     Domains are delineated as pyflwdir masks, so no polygon is written for them.
     The legacy watershed flow still produces a merged shapefile, which is why a
-    vector mask stays supported.
+    vector mask stays supported. `whole` requires every masked cell on the target grid.
     """
     _np, _pfd, _affine, gdal, _ogr, _osr = _dependencies()
     gdal.PushErrorHandler("CPLQuietErrorHandler")
@@ -392,7 +395,7 @@ def _target_mask(mask_path, target_header, projection, reference_path=None):
     if dataset is None:
         return _rasterize_target_mask(mask_path, target_header, projection)
     dataset = None
-    return _raster_target_mask(mask_path, target_header, reference_path)
+    return _raster_target_mask(mask_path, target_header, reference_path, whole)
 
 
 def mask_aligned_l0_raster(

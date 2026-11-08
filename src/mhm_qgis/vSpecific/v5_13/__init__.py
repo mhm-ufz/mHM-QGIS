@@ -25,13 +25,16 @@ def build_dimensions(dialog: Any) -> dict[str, int]:
         return multi[1]
     domains = domain_count(dialog)
     settings = namelist_settings(dialog)
-    return {
+    dimensions = {
         "nDomains": domains,
         "nGeoUnits": geology_count(dialog),
-        "nSoilHorizons": _soil_horizons(settings),
         "nLcoverScene": _land_cover_scenes(settings),
         "nGaugesTotal": _gauges_per_domain(settings, domains),
     }
+    # Without plugin depths, the saved namelist keeps its own horizon count.
+    if horizons := len(_soil_values(settings).get("soil_Depth", ())):
+        dimensions["nSoilHorizons"] = horizons
+    return dimensions
 
 
 def build_initial_values(dialog: Any) -> dict[str, Any]:
@@ -195,10 +198,6 @@ def _soil_values(settings: dict[str, Any]) -> dict[str, Any]:
         "nSoilHorizons_mHM": len(depths),
         "soil_Depth": depths,
     }
-
-
-def _soil_horizons(settings: dict[str, Any]) -> int:
-    return len(_soil_values(settings).get("soil_Depth", ())) or 10
 
 
 def _gauge_values(settings: dict[str, Any], count: int) -> dict[str, Any]:

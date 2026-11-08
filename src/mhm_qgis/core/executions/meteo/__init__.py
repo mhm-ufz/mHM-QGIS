@@ -25,6 +25,7 @@ from ...meteorology.forcing import (
     inspect_meteo_inputs_cached,
     preparation_fingerprint,
     process_meteo_inputs,
+    validate_coverage,
 )
 from ...meteorology.mask import write_meteo_mask
 from ...meteorology.reuse import stale_meteo_variables
@@ -115,6 +116,9 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None,
         inspected = inspect_meteo_inputs_cached(
             run.project_folder, run.inputs, log=log, cancelled=cancelled)
         run = replace(run, inspections=inspected)
+        study = (run.grid_metadata or {}).get("study_bounds")
+        for metadata in inspected.values() if study else ():
+            validate_coverage(metadata, study, run.target_grid.crs, run.grid_metadata.get("l0_resolution", 0.0))
         if run.times:
             from ...handlers.state.nml_settings import validate_times
             times = validate_times(run.times, "v6" if is_v6(run.project_folder) else "v5.13")

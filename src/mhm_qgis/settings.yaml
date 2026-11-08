@@ -1,6 +1,2 @@
-## Maximum L0/L2 phase error treated as floating-point noise.
-## The value is a fraction of the exact L0 cell size, so it applies equally
-## to projected and geographic grids. Larger gaps resample L2; L0 is unchanged.
-grid_alignment_gap_limit: 1.0e-7
 ## Maximum preferred-channel search radius, in metres (also for geographic CRS).
 max_snap_buffer_distance: 1000.0

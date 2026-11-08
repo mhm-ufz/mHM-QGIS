@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>mHM QGIS</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_15" stretch="1,0,0,0,0,0">
+  <layout class="QVBoxLayout" name="verticalLayout_15" stretch="1,0,0,0,0">
    <item>
     <widget class="QSplitter" name="splitter">
      <property name="orientation">
@@ -524,8 +524,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>808</width>
-                 <height>559</height>
+                 <width>307</width>
+                 <height>236</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -1292,6 +1292,9 @@
                 <property name="alignment">
                  <set>Qt::AlignCenter</set>
                 </property>
+                <property name="displayFormat">
+                 <string>MM/dd/yyyy h:mm Ap</string>
+                </property>
                </widget>
               </item>
               <item row="1" column="0">
@@ -1349,6 +1352,9 @@
                 <property name="alignment">
                  <set>Qt::AlignCenter</set>
                 </property>
+                <property name="displayFormat">
+                 <string>MM/dd/yyyy h:mm Ap</string>
+                </property>
                </widget>
               </item>
               <item row="1" column="1">
@@ -1361,6 +1367,9 @@
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignCenter</set>
+                </property>
+                <property name="displayFormat">
+                 <string>MM/dd/yyyy h:mm Ap</string>
                 </property>
                </widget>
               </item>
@@ -2678,7 +2687,11 @@ CODE,NAME,MHM_CLASS
                    </widget>
                   </item>
                   <item>
-                   <widget class="QDateTimeEdit" name="dateTimeEdit_mhmReadyLandUseInputStart"/>
+                   <widget class="QDateTimeEdit" name="dateTimeEdit_mhmReadyLandUseInputStart">
+                    <property name="displayFormat">
+                     <string>MM/dd/yyyy h:mm Ap</string>
+                    </property>
+                   </widget>
                   </item>
                   <item>
                    <widget class="QLabel" name="label_mhmReadyLandUseTo">
@@ -2688,7 +2701,11 @@ CODE,NAME,MHM_CLASS
                    </widget>
                   </item>
                   <item>
-                   <widget class="QDateTimeEdit" name="dateTimeEdit_mhmReadyLandUseInputEnd"/>
+                   <widget class="QDateTimeEdit" name="dateTimeEdit_mhmReadyLandUseInputEnd">
+                    <property name="displayFormat">
+                     <string>MM/dd/yyyy h:mm Ap</string>
+                    </property>
+                   </widget>
                   </item>
                   <item>
                    <widget class="QPushButton" name="pushButton_mhmReadyLandUseInputAdd">
@@ -2782,7 +2799,11 @@ CODE,NAME,MHM_CLASS
                    </widget>
                   </item>
                   <item>
-                   <widget class="QDateTimeEdit" name="dateTimeEdit_categoricalLandUseInputStart"/>
+                   <widget class="QDateTimeEdit" name="dateTimeEdit_categoricalLandUseInputStart">
+                    <property name="displayFormat">
+                     <string>MM/dd/yyyy h:mm Ap</string>
+                    </property>
+                   </widget>
                   </item>
                   <item>
                    <widget class="QLabel" name="label_categoricalLandUseTo">
@@ -2792,7 +2813,11 @@ CODE,NAME,MHM_CLASS
                    </widget>
                   </item>
                   <item>
-                   <widget class="QDateTimeEdit" name="dateTimeEdit_categoricalLandUseInputEnd"/>
+                   <widget class="QDateTimeEdit" name="dateTimeEdit_categoricalLandUseInputEnd">
+                    <property name="displayFormat">
+                     <string>MM/dd/yyyy h:mm Ap</string>
+                    </property>
+                   </widget>
                   </item>
                   <item>
                    <widget class="QPushButton" name="pushButton_categoricalLandUseInputAdd">
@@ -5891,65 +5916,6 @@ date,discharge
       <enum>Qt::Horizontal</enum>
      </property>
     </widget>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_setGauges_2">
-     <property name="topMargin">
-      <number>0</number>
-     </property>
-     <item>
-      <widget class="QComboBox" name="comboBox_demInput_2"/>
-     </item>
-     <item>
-      <widget class="QPushButton" name="pushButton_browseDEMInput_2">
-       <property name="maximumSize">
-        <size>
-         <width>40</width>
-         <height>16777215</height>
-        </size>
-       </property>
-       <property name="toolTip">
-        <string>Select Project Folder</string>
-       </property>
-       <property name="text">
-        <string>...</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="pushButton_addMeteoInput_2">
-       <property name="maximumSize">
-        <size>
-         <width>30</width>
-         <height>16777215</height>
-        </size>
-       </property>
-       <property name="text">
-        <string>+</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <spacer name="horizontalSpacer_setGauges_2">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QPushButton" name="pushButton_setGauges_2">
-       <property name="text">
-        <string>Set</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
    </item>
    <item>
     <widget class="QTextBrowser" name="LogText">

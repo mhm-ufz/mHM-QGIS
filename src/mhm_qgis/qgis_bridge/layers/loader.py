@@ -7,15 +7,6 @@ nothing below the Qt layer needs to know a dialog exists.
 from __future__ import annotations
 
 import os
-from pathlib import Path
-
-
-def source_uri(path, variable: str | None = None) -> str:
-    """Return the layer source, addressing a NetCDF variable when named."""
-    path = Path(path)
-    if variable and path.suffix.lower() == ".nc":
-        return f'NETCDF:"{path}":{variable}'
-    return str(path)
 
 
 def raster_source(layer) -> str | None:
@@ -102,4 +93,4 @@ def refresh_source(layer, source, name, *, is_raster=True, log=None):
     return layer
 
 
-__all__ = ["load", "open_layer", "raster_source", "refresh_source", "source_uri"]
+__all__ = ["load", "open_layer", "raster_source", "refresh_source"]

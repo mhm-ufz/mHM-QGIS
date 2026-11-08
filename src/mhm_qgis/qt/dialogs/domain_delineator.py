@@ -47,6 +47,7 @@ from ..objects.viewport_raster_range import ViewportRasterRangeController
 from ..reporting import error_detail
 from ..ui import load_form
 from ..workflows import hydrology
+from .discharge_assignment import discharge_table
 from .file_picker import open_file
 
 Ui_DomainDelineatorDialog = load_form("domain_delineator_dialog.ui")
@@ -363,6 +364,9 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
             QMessageBox.warning(
                 self, "Invalid file", "Select a CSV or TXT discharge file.")
             return
+        if discharge_table(path) is None:
+            QMessageBox.warning(self, "Invalid discharge table", f"Could not read the selected table:\n{path}")
+            return
 
         normalized = self._normal_path(path)
         if normalized in self._used_discharge_paths(self.current_outlet_id):
@@ -400,7 +404,6 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
             key="domain-channel-preview",
             controls=(
                 self.pushButton_generateChannelNetwork,
-                self.pushButton_close,
             ),
             channel_path=output_path,
             threshold=threshold,
@@ -512,7 +515,6 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 self.pushButton_nextPourPoint,
                 self.pushButton_save,
                 self.listWidget_outlets,
-                self.pushButton_close,
             ),
             on_success=lambda result: self._watershed_preview_ready(
                 outlet_id, result
@@ -587,12 +589,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                     outlet_id=outlet_id,
                     is_gauge=bool(record.get("is_gauged", False)),
                     is_domain=bool(record.get("is_domain", False)),
-                    discharge_layer=(
-                        QgsVectorLayer(
-                            discharge_path,
-                            Path(discharge_path).name,
-                            "ogr",
-                        )
+                    discharge_layer=(  # an mHM-ready gauge file reads though OGR cannot open it
+                        discharge_table(discharge_path)
                         if record.get("is_gauged") and discharge_path
                         else None
                     ),
@@ -646,7 +644,6 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                     self.pushButton_pickLocation,
                     self.pushButton_generateChannelNetwork,
                     self.listWidget_outlets,
-                    self.pushButton_close,
                 ),
                 on_success=lambda result: self._domain_files_ready(
                         result,

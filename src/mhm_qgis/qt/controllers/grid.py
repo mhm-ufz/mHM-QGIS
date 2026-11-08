@@ -32,9 +32,8 @@ from ...core.grid import (
     validate_grid_headers,
 )
 from ...core.handlers.state import processing
-from ...core.handlers.state import settings as project_settings
 from ...core.handlers.store.paths import data_folder
-from ...core.meteorology.forcing import MeteoFolderSpec
+from ...core.meteorology.forcing import MeteoFolderSpec, validate_coverage
 from ...qgis_bridge import layers as qgis_layers
 from ..dialogs.file_picker import open_directory
 from . import time
@@ -180,9 +179,65 @@ def set_crs(dialog):
     if authid == dialog._set_crs:
         return
     dialog._set_crs = authid
+    if dialog._study_extent:
+        dialog._study_extent = read_study_extent(dialog)  # the same box in the new CRS
     crs_changed(dialog)
     invalidate_workflows(dialog, "execute_all_morphology")
     invalidate_meteo(dialog)
+    dialog.save_input_state()
+    from .. import project_tree
+
+    project_tree.refresh(dialog)
+
+
+def show_dem_extent(dialog, layer=None):
+    """The DEM is the Custom L0 Extent box's reference; an unset box starts from it."""
+    box = dialog.mExtentGroupBox_customExtent
+    box.setOutputCrs(dialog.get_crs())
+    if layer is not None:
+        box.setOriginalExtent(layer.extent(), layer.crs())
+        box.setCurrentExtent(layer.extent(), layer.crs())
+        if not dialog._study_extent:
+            box.setOutputExtentFromOriginal()
+
+
+def read_study_extent(dialog):
+    """The ticked Custom L0 Extent in the processing CRS, or None for the whole DEM."""
+    if not dialog.groupBox_customExtent.isChecked():
+        return None
+    box = dialog.mExtentGroupBox_customExtent
+    box.setOutputCrs(dialog.get_crs())
+    rect = box.outputExtent()
+    return [rect.xMinimum(), rect.xMaximum(), rect.yMinimum(), rect.yMaximum()]
+
+
+def study_bounds(dialog):
+    """The Set custom extent, which must lie inside the DEM, else the DEM's bounds."""
+    if not dialog._grid_l0_info:
+        raise ValueError("Select the DEM first.")
+    dem = header_bounds(dialog._grid_l0_info["header"])
+    extent = dialog._study_extent
+    if not extent:
+        return tuple(dem)
+    tolerance = float(dialog._grid_l0_info["exact_x_resolution"]) * 1e-6
+    if not (extent[0] < extent[1] and extent[2] < extent[3]
+            and dem[0] - tolerance <= extent[0] and extent[1] <= dem[1] + tolerance
+            and dem[2] - tolerance <= extent[2] and extent[3] <= dem[3] + tolerance):
+        raise ValueError("The custom L0 extent must be a non-empty box inside the DEM.")
+    return tuple(extent)
+
+
+def set_dem(dialog):
+    """The DEM page's Set: the ticked Custom L0 Extent becomes the study extent, else the whole DEM."""
+    previous, dialog._study_extent = dialog._study_extent, read_study_extent(dialog)
+    try:
+        study_bounds(dialog)
+    except ValueError as error:
+        dialog._study_extent = previous
+        QMessageBox.warning(dialog, "Custom L0 Extent", str(error))
+        return
+    if dialog._study_extent != previous:
+        invalidate_grid(dialog)
     dialog.save_input_state()
     from .. import project_tree
 
@@ -197,8 +252,8 @@ def grid_fingerprint(dialog):
     return fingerprint([file_path(layer.source())] if layer else [], {
         "crs": dialog.selected_meteo_crs(),
         "precipitation": inspection_fingerprint(precipitation_spec(dialog))[0],
-        "gap_limit": project_settings.read(dialog.project_folder)["grid_alignment_gap_limit"],
-        "multiplier": dialog.spinBox_L2ResolutionMultiplier.value(), "grid_version": 2})
+        "study_extent": dialog._study_extent,
+        "multiplier": dialog.spinBox_L2ResolutionMultiplier.value(), "grid_version": 3})
 
 
 def common_l0_header(dialog):
@@ -319,7 +374,7 @@ def prepare_meteo_l2_grid(dialog, precipitation_metadata=None):
     target_crs = dialog.get_crs()
     if target_crs is None or not target_crs.isValid():
         raise ValueError("Please set a valid processing CRS before preparing meteorology data.")
-    domain_bounds = header_bounds(dialog._grid_l0_info["header"])
+    domain_bounds = study_bounds(dialog)
     extent_source = dialog.input_combo("dem").currentLayer().source()
 
     crs_text = qgis_layers.crs_string(target_crs)
@@ -338,6 +393,7 @@ def prepare_meteo_l2_grid(dialog, precipitation_metadata=None):
         )
         raw_crs = precipitation_metadata.crs
         source_file = str(precipitation_metadata.files[0])
+        validate_coverage(precipitation_metadata, domain_bounds, crs_text, x_resolution)
     grid = Grid.for_meteorology(
         dialog._grid_l0_info["header"],
         (domain_bounds,),
@@ -347,13 +403,13 @@ def prepare_meteo_l2_grid(dialog, precipitation_metadata=None):
         raw_l2_resolution=raw_resolution,
         raw_l2_extent=raw_extent,
         raw_l2_crs=raw_crs,
-        gap_limit_fraction=project_settings.read(dialog.project_folder)["grid_alignment_gap_limit"],
     )
     target = target_grid_from_header(grid.l2_header, crs_text or None)
     metadata = grid.metadata(
         extent_source=os.path.basename(str(extent_source).split("|", 1)[0]),
         source_file=source_file,
     )
+    metadata["study_bounds"] = list(domain_bounds)
     if target.sample_lon is not None:
         metadata["wgs84_bounds"] = (
             float(target.sample_lon.min()),
@@ -373,12 +429,12 @@ def prepare_meteo_l2_grid(dialog, precipitation_metadata=None):
         f"{metadata.get('l2_unit', '')} "
         f"({metadata.get('l2_ratio_to_l0')} x L0)."
     )
-    if grid.requires_l2_resampling and grid.alignment_gap:
+    if precipitation_metadata is not None and grid.requires_l2_resampling:
+        dialog.log_message("Meteo will be resampled to L2: its spacing or CRS differs from the L2 grid.")
+    elif grid.alignment_gap and any(grid.alignment_gap):
         dialog.log_message(
-            "Meteo L2 grid requires resampling: alignment gap "
-            f"x={grid.alignment_gap[0]:g}, y={grid.alignment_gap[1]:g} "
-            f"exceeds {grid.alignment_gap_limit:g}."
-        )
+            f"Meteo is shifted by x={grid.alignment_gap[0]:g}, y={grid.alignment_gap[1]:g} "
+            "onto the L0 lattice, not resampled.")
     return grid, target, metadata
 
 

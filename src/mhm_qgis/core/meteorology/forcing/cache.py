@@ -38,7 +38,7 @@ def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
     digest = fingerprint(files, {
         **{name: values[name] for name in _INSPECTED_FIELDS},
         "folder": str(spec.folder),
-        "inspection_version": 5,
+        "inspection_version": 6,
     })
     return digest, files
 
@@ -46,7 +46,7 @@ def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
 def preparation_fingerprint(spec: MeteoFolderSpec) -> str:
     """Return a digest covering every option the prepared forcing depends on."""
     return fingerprint(_files_for_spec(spec), {
-        **asdict(spec), "folder": str(spec.folder), "preparation_version": 2})
+        **asdict(spec), "folder": str(spec.folder), "preparation_version": 3})
 
 
 def _as_payload(metadata: SpatialMetadata) -> dict:

@@ -55,7 +55,7 @@ def test_clone_domain_copies_state_and_links_inputs(tmp_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(relative)
     nml_settings.save_settings(source, {"source": str(source / "data/morph/input.nc")})
-    (source / "settings.yaml").write_text("grid_alignment_gap_limit: 0.1\n")
+    (source / "settings.yaml").write_text("max_snap_buffer_distance: 50\n")
 
     clone_domain_inputs(source, target)
 

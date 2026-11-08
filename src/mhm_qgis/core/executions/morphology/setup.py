@@ -89,7 +89,8 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
     derivatives = _derivative_sources(folder)
     if "dem" not in derivatives:
         raise FileNotFoundError("Prepare the NetCDF DEM derivatives before masking.")
-    keep = _target_mask(watershed, l0, request.crs, filled)
+    catchments = any(record.get("is_domain") for record in state.get("outlets", {}).values())
+    keep = _target_mask(watershed, l0, request.crs, filled, whole=catchments)  # never cut a catchment
     _progress(task, 30)
     masked = copy_rasters(
         folder / "dem_derivatives_masked.nc",

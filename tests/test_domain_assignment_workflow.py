@@ -216,3 +216,21 @@ def test_snapped_points_are_regenerated_after_inputs_may_have_moved(
     assert prepared == [True]
     assert result == workflow.snapped_points_path
     assert Path(result).read_text(encoding="utf-8") == "fresh"
+
+
+def test_an_mhm_ready_gauge_file_is_a_valid_discharge_table(tmp_path):
+    """OGR cannot open an mHM-ready gauge file; the delineator and the assignment table still take it."""
+    from mhm_qgis.qt.dialogs.discharge_assignment import discharge_table
+
+    path = tmp_path / "00398.txt"
+    path.write_text("00398:GAUGE 1 (Abfluss)     DAILY\nnodata  -9999\nn       1       measurements per day [1, 1440]\n"
+                    "start  1990  01  01  00  00   (YYYY MM DD HH MM)\nend    1990  01  02  00  00   (YYYY MM DD HH MM)\n"
+                    "1990  01  01  00  00    157.000\n1990  01  02  00  00    129.000\n", encoding="utf-8")
+    layer = discharge_table(path)
+    assert layer is not None
+    assert not layer.isValid()
+
+    workflow = _workflow(tmp_path, ("001",))
+    prepared = workflow.validate_gauge_assignments([OutletAssignment("001", True, False, layer)])
+    workflow.write_gauges(prepared)
+    assert prepared["001"].output_path.read_text(encoding="utf-8").splitlines()[-1].split()[-1] == "129.000"

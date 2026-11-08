@@ -8,8 +8,6 @@ from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 
 NODATA_VALUE = -9999.0
-DEFAULT_ALIGNMENT_GAP_LIMIT = 1.0e-7
-SETTINGS_PATH = Path(__file__).parents[2] / "settings.yaml"
 PROJECTED_CELLSIZE_PRECISION = 8
 GEOGRAPHIC_CELLSIZE_PRECISION = 8
 
@@ -238,7 +236,6 @@ class Grid(Resolution):
     l2_header: dict = field(default_factory=dict)
     raw_l2_factor: int | None = None
     alignment_gap: tuple[float, float] | None = None
-    alignment_gap_limit: float = 0.0
     requires_l2_resampling: bool = True
 
     @classmethod
@@ -253,7 +250,6 @@ class Grid(Resolution):
         raw_l2_resolution: Sequence[float] | None = None,
         raw_l2_extent: Extent | None = None,
         raw_l2_crs: str | None = None,
-        gap_limit_fraction: float | None = None,
     ) -> Grid:
         """Build the exact common L0/L2 target selected by the user."""
         ratio = _positive_integer(multiplier)
@@ -261,13 +257,6 @@ class Grid(Resolution):
         l0_resolution = float(normalized_l0["cellsize"])
         source_l0_extent = Extent.from_header(normalized_l0)
         requested_extent = Extent.union(domain_extents)
-        limit_fraction = (
-            alignment_gap_limit_fraction()
-            if gap_limit_fraction is None
-            else float(gap_limit_fraction)
-        )
-        if not math.isfinite(limit_fraction) or limit_fraction < 0:
-            raise ValueError("The grid alignment-gap limit must be non-negative.")
 
         raw_factor = None
         if raw_l2_resolution is not None:
@@ -284,14 +273,15 @@ class Grid(Resolution):
             and raw_factor == ratio
             and crs_equal(raw_l2_crs, crs)
         )
-        gap_limit = l0_resolution * limit_fraction
         if comparable:
             gap = alignment_gap(source_l0_extent, raw_l2_extent, l0_resolution)
             anchor = (
                 raw_l2_extent.xmin + gap[0],
                 raw_l2_extent.ymin + gap[1],
             )
-        resampling = not comparable or any(abs(value) > gap_limit for value in gap or ())
+        # A gap below half an L0 cell shifts the meteo grid onto the L0 lattice; only another
+        # spacing or CRS resamples it.
+        resampling = not comparable
         exact_l0, l2 = aligned_l0_l2_headers(
             requested_extent.bounds,
             normalized_l0,
@@ -313,7 +303,6 @@ class Grid(Resolution):
             l2_header=l2,
             raw_l2_factor=raw_factor,
             alignment_gap=gap,
-            alignment_gap_limit=gap_limit,
             requires_l2_resampling=resampling,
         )
 
@@ -340,19 +329,11 @@ class Grid(Resolution):
             "l0_header": dict(self.l0_header),
             "raw_l2_ratio_to_l0": self.raw_l2_factor,
             "alignment_gap": list(self.alignment_gap) if self.alignment_gap else None,
-            "alignment_gap_limit": self.alignment_gap_limit,
             "requires_l2_resampling": self.requires_l2_resampling,
         }
         if source_file:
             result["source_file"] = source_file
         return result
-
-
-def alignment_gap_limit_fraction(path: Path | str | None = None) -> float:
-    """Read the dimensionless limit from an explicit or packaged settings file."""
-    from ..handlers.state.settings import read
-
-    return read(path=path if path is not None else SETTINGS_PATH)["grid_alignment_gap_limit"]
 
 
 def crs_equal(left: str | None, right: str | None) -> bool:

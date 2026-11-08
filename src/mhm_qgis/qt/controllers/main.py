@@ -512,7 +512,6 @@ def _show_domain_delineator(dialog, context, pour_points_layer, outlet_id_field,
         dialog.log_message(f"Traceback: {traceback.format_exc()}")
         QMessageBox.critical(dialog, "Domain Delineator", str(error))
         return
-    delineator.pushButton_close.hide()
     embed(dialog, "domainDefinition", delineator)
 
 

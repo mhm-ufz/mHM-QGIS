@@ -40,7 +40,7 @@ class DischargeTableAssignmentDialog(QDialog, Ui_DischargeTableAssignmentDialog)
             if layer.isValid() and layer.type() == QgsMapLayer.LayerType.VectorLayer:
                 combo.addItem(layer.name(), layer)
         for station, record in (initial_records or {}).items():
-            layer = _table(str(record.get("discharge_file", "") or ""))
+            layer = discharge_table(str(record.get("discharge_file", "") or ""))
             if record.get("is_gauged", True) and layer is not None and str(station) in self._station_ids:
                 self._tables[str(station)] = layer
         # pushButton_browseDischargeTable → _browse; pushButton_addDischargeInput → add
@@ -59,7 +59,7 @@ class DischargeTableAssignmentDialog(QDialog, Ui_DischargeTableAssignmentDialog)
         path, _ = open_file(self, "Select discharge data", "Discharge data (*.csv *.txt);;All files (*)")
         if not path:
             return None
-        layer = _table(path)
+        layer = discharge_table(path)
         if layer is None:
             QMessageBox.warning(self, "Invalid discharge table", f"Could not read the selected table:\n{path}")
         return layer
@@ -77,7 +77,7 @@ class DischargeTableAssignmentDialog(QDialog, Ui_DischargeTableAssignmentDialog)
         if self.checkBox_bulkDischargeInputbyStationID.isChecked() and folder.is_dir():
             for other in self._station_ids:
                 found = next((path for path in (folder / f"{other}.csv", folder / f"{other}.txt") if path.is_file()), None)
-                if other not in self._tables and found is not None and (match := _table(found)) is not None:
+                if other not in self._tables and found is not None and (match := discharge_table(found)) is not None:
                     self._tables[other] = match
         self._show_tables()
 
@@ -113,7 +113,7 @@ class DischargeTableAssignmentDialog(QDialog, Ui_DischargeTableAssignmentDialog)
         ]
 
 
-def _table(path):
+def discharge_table(path):
     """A discharge table layer at `path` that yields records, or None. Its file is what is read,
     so a .txt table that OGR cannot open still counts."""
     if not path or not os.path.isfile(str(path)):
@@ -125,4 +125,5 @@ def _table(path):
 __all__ = [
     "DischargeTableAssignmentDialog",
     "OutletAssignment",
+    "discharge_table",
 ]

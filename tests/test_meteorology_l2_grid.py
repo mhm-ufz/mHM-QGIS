@@ -15,8 +15,9 @@ from mhm_qgis.core.grid import (
     assert_header_file_matches,
     assert_matches_header,
 )
-from mhm_qgis.core.meteorology.forcing.api import _resample_ready
+from mhm_qgis.core.meteorology.forcing.api import _resample_ready, validate_coverage
 from mhm_qgis.core.meteorology.forcing.io import write_header
+from mhm_qgis.core.meteorology.forcing.types import SpatialMetadata
 
 xr = pytest.importorskip("xarray")
 
@@ -100,6 +101,29 @@ def test_misaligned_l2_input_is_corrected_with_nearest_neighbour():
     # Nearest neighbour reproduces source values exactly; interpolation would
     # have produced intermediate values instead.
     assert set(np.unique(placed[~np.isnan(placed)])).issubset(set(values.ravel()))
+
+
+def test_a_grid_offset_by_less_than_half_a_cell_is_shifted_not_interpolated(monkeypatch):
+    values = np.arange(12, dtype="float64").reshape(3, 4)
+    da, ds = _source([1080.0, 1180.0, 1280.0, 1380.0], [2280.0, 2180.0, 2080.0], values)
+
+    def _no_interp(*_args, **_kwargs):
+        raise AssertionError("A grid with the target spacing must be shifted, not interpolated.")
+
+    monkeypatch.setattr(xr.DataArray, "interp", _no_interp)
+
+    np.testing.assert_array_equal(_resample_ready(da, ds, CRS, _target_grid(), np, xr).isel(time=0).values, values)
+
+
+def test_every_meteo_input_must_cover_the_study_extent():
+    metadata = SpatialMetadata("tavg", "", (), (3, 4), "x", "y", 100.0, 100.0, 100.0,
+                               (1050.0, 1350.0, 2050.0, 2250.0), CRS, "m")
+    validate_coverage(metadata, (1000.0, 1400.0, 2000.0, 2300.0), CRS)  # the cell edges
+    with pytest.raises(ValueError, match="do not cover the study extent"):
+        validate_coverage(metadata, (990.0, 1400.0, 2000.0, 2300.0), CRS)
+    validate_coverage(metadata, (999.9, 1400.0, 2000.0, 2300.0), CRS, 50.0)  # lat/lon rounding
+    with pytest.raises(ValueError, match="do not cover the study extent"):
+        validate_coverage(metadata, (995.0, 1400.0, 2000.0, 2300.0), CRS, 50.0)  # 0.1 L0 short
 
 
 def test_prepared_grid_and_written_header_are_validated(tmp_path):

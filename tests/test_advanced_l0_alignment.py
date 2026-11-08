@@ -379,3 +379,20 @@ def test_republishing_rewrites_nothing_unchanged_and_ignores_stale_staged_copies
 
     assert horizon.stat().st_mtime_ns == old  # Unchanged: kept, not rewritten.
     assert "Skipping soil_class_horizon_01.asc: a staged NetCDF produces it." in messages
+
+
+def test_a_ready_stacks_private_layers_are_never_published(tmp_path):
+    """`stack_ready_layers` keeps `_<stem>_layers.nc` in staging; v5 refused it as a multi-band raster."""
+    pytest.importorskip("osgeo")
+    import shutil
+
+    _staged_soil_horizons(tmp_path)
+    update_section(tmp_path, "soil", {
+        "output_path": ".temp/Morphology/morph/soil_horizon_class.nc",
+        "horizons": [{"lower_depth": 100}, {"lower_depth": 300}],
+    })
+    staging = Path(morph_staging_folder(tmp_path))
+    shutil.copy2(staging / "soil_horizon_class.nc", staging / "_soil_horizon_class_layers.nc")
+
+    assert [path.name for path in staged_files(tmp_path)] == ["soil_horizon_class.nc"]
+    assert not any(path.name.startswith("_") for path in publish_model_inputs(tmp_path, L0_TARGET))

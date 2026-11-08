@@ -13,7 +13,6 @@ from mhm_qgis.core.grid import (
     Grid,
     Resolution,
     aligned_l0_l2_headers,
-    alignment_gap_limit_fraction,
     axes_match_header,
     header_bounds,
     header_for_aligned_bounds,
@@ -73,12 +72,7 @@ def test_user_multiplier_remains_authoritative_over_exact_raw_factor():
     assert grid.requires_l2_resampling
 
 
-def test_alignment_gap_limit_comes_from_settings_and_material_gap_resamples(tmp_path):
-    assert alignment_gap_limit_fraction() == pytest.approx(1.0e-7)
-    settings = tmp_path / "settings.yaml"
-    settings.write_text("grid_alignment_gap_limit: 0.02\n", encoding="utf-8")
-    assert alignment_gap_limit_fraction(settings) == 0.02
-
+def test_a_gap_below_half_an_l0_cell_shifts_and_another_crs_resamples():
     base = {
         "l0_header": {**L0_ANCHOR, "ncols": 100, "nrows": 100},
         "domain_extents": ((115, 985, 218, 812),),
@@ -86,20 +80,31 @@ def test_alignment_gap_limit_comes_from_settings_and_material_gap_resamples(tmp_
         "crs": "EPSG:32632",
         "unit": "m",
         "raw_l2_resolution": (30, 30),
-        "raw_l2_crs": "EPSG:32632",
-        "gap_limit_fraction": 0.02,
     }
-    within = Grid.for_meteorology(
-        **base, raw_l2_extent=Extent(100.1, 1000.1, 200, 830)
-    )
-    beyond = Grid.for_meteorology(
-        **base, raw_l2_extent=Extent(100.3, 1000.3, 200, 830)
+    shifted = Grid.for_meteorology(**base, raw_l2_extent=Extent(100.3, 1000.3, 200, 830), raw_l2_crs="EPSG:32632")
+    other = Grid.for_meteorology(**base, raw_l2_extent=Extent(100.3, 1000.3, 200, 830), raw_l2_crs="EPSG:4326")
+
+    assert shifted.alignment_gap == pytest.approx((-0.3, 0))
+    assert not shifted.requires_l2_resampling
+    assert other.requires_l2_resampling
+
+
+def test_a_study_extent_inside_the_dem_takes_the_precipitation_cells_around_it():
+    grid = Grid.for_meteorology(
+        {**L0_ANCHOR, "ncols": 100, "nrows": 100},
+        ((415, 585, 418, 512),),
+        3,
+        crs="EPSG:32632",
+        unit="m",
+        raw_l2_resolution=(30, 30),
+        raw_l2_extent=Extent(100, 1000, 200, 830),
+        raw_l2_crs="EPSG:32632",
     )
 
-    assert within.alignment_gap == pytest.approx((-0.1, 0))
-    assert not within.requires_l2_resampling
-    assert beyond.alignment_gap == pytest.approx((-0.3, 0))
-    assert beyond.requires_l2_resampling
+    assert grid.common_extent == Extent(400, 610, 410, 530)  # whole 30 m precipitation cells
+    assert grid.l0_header["ncols"] == 3 * grid.l2_header["ncols"]
+    assert grid.l0_header["xllcorner"] == 400
+    assert grid.l0_header["cellsize"] == 10
 
 
 def test_aligned_extent_is_minimal_and_has_integer_l0_l2_dimensions():

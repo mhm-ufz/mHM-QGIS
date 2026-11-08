@@ -110,3 +110,21 @@ def test_a_gauge_raster_becomes_one_point_per_id_at_the_cell_centre(tmp_path):
     points = sorted((feature["id"], feature.GetGeometryRef().GetX(), feature.GetGeometryRef().GetY())
                     for feature in layer)
     assert points == [(240, 105.0, 185.0), (280, 115.0, 195.0)]  # 280's first cell only
+
+
+def test_an_ascii_gauge_raster_is_read_as_a_plain_raster(tmp_path):
+    """The NetCDF/ASCII prompt names an .asc grid's variable after its stem; `source` must not
+    wrap it in a NetCDF URI (GDAL: `NETCDF:"…/idgauges.asc":idgauges: No such file or directory`)."""
+    pytest.importorskip("osgeo")
+    from osgeo import ogr
+
+    from mhm_qgis.core.handlers.file.netcdf.raster import source
+    from mhm_qgis.core.morphology.hydrology.outlets import points_from_gauge_raster
+
+    asc = tmp_path / "idgauges.asc"
+    asc.write_text("ncols 2\nnrows 1\nxllcorner 100\nyllcorner 190\ncellsize 10\nNODATA_value -9999\n-9999 7\n")
+    output = points_from_gauge_raster(source(asc, "idgauges"), tmp_path / "gauges.gpkg")
+
+    dataset = ogr.Open(str(output))  # the layer dies with its dataset
+    assert [feature["id"] for feature in dataset.GetLayer("gauges")] == [7]
+    assert source("x.nc", "v") == 'NETCDF:"x.nc":v'

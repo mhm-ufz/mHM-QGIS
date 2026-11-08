@@ -22,6 +22,7 @@ from ..controllers import (
     project,
     version,
 )
+from ..controllers.workflow_state import invalidate
 from ..dialogs.input_selection import _browse_raster_into_combo
 from ..workflows import observations
 
@@ -205,6 +206,11 @@ def _bind_grid(dialog):
     dem = dialog.input_combo("dem")
     dem.layerChanged.connect(lambda layer=None: grid.update_l0_resolution_from_dem(dialog, layer))
     dem.layerChanged.connect(lambda layer=None: grid.invalidate_grid(dialog))
+    dem.layerChanged.connect(lambda layer=None: grid.show_dem_extent(dialog, layer))
+    if dialog.iface is not None:
+        dialog.mExtentGroupBox_customExtent.setMapCanvas(dialog.iface.mapCanvas())
+    # pushButton_setDEM → grid.set_dem
+    dialog.pushButton_setDEM.clicked.connect(lambda: grid.set_dem(dialog))
     # pushButton_setCRS → grid.set_crs; the CRS widget alone applies nothing
     dialog.pushButton_setCRS.clicked.connect(lambda: grid.set_crs(dialog))
     # pushButton_browsePrecipitationFile → grid.browse_precipitation_folder
@@ -219,6 +225,7 @@ def _bind_grid(dialog):
     )
     dialog.lineEdit_L1Resolution.textChanged.connect(
         lambda _text: (
+            dialog._observation_inputs and invalidate(dialog, "execute_all_observations", "run_mhm"),
             grid.sync_multiplier(dialog, "L1"),
             grid.update_l1_resolution_label(dialog),
             grid.update_l11_resolution_label(dialog),

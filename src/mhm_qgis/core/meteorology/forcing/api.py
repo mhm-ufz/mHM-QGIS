@@ -21,6 +21,7 @@ from ...grid import (
     mesh_resolution,
     nearest_curvilinear,
     nearest_rectilinear,
+    shift_onto_header,
     slice_and_pad,
 )
 from .io import write_header, write_netcdf
@@ -518,9 +519,11 @@ def _inspect_file(
             x_name, y_name = lon_name, lat_name
             x_values, y_values = lon, lat
 
+        crs = _dataset_crs(ds, da, x_name, y_name) or spec.crs
         x_values = np.asarray(x_values, dtype="float64")
         y_values = np.asarray(y_values, dtype="float64")
         if x_values.ndim == 1 and y_values.ndim == 1:
+            x_values, y_values = _centre_axes(ds, (y_dim, x_dim), x_name, y_name, x_values, y_values, crs)
             dx = axis_resolution(x_values, f"{path.name}: coordinate {x_name}")
             dy = axis_resolution(y_values, f"{path.name}: coordinate {y_name}")
             bounds = (
@@ -542,7 +545,6 @@ def _inspect_file(
         else:
             raise ValueError(f"{path.name}: spatial coordinates are not a 2-D grid.")
 
-        crs = _dataset_crs(ds, da, x_name, y_name) or spec.crs
         unit = _coordinate_unit(ds, x_name, crs)
         metadata = SpatialMetadata(
             kind=spec.kind,
@@ -596,6 +598,33 @@ def _axis_values(ds, dim: str, axis: str):
         if values.ndim == 1 and ds[name].dims == (dim,):
             return name, values
     return dim, None
+
+
+def _centre_axes(ds, dims, x_name: str, y_name: str, x_values, y_values, crs):
+    """Cell-centre 1-D axes. Lat/lon centres projected to `crs` place the grid, while the axes keep
+    its order (lat/lon rows may be stored reversed); without them `xc`/`yc` are the left/upper edges."""
+    import numpy as np
+
+    x, y = np.asarray(x_values, dtype="float64"), np.asarray(y_values, dtype="float64")
+    if x_name.lower() in {"lon", "longitude"} or x.size < 2 or y.size < 2:
+        return x, y
+    dx, dy = abs(float(x[1] - x[0])), abs(float(y[1] - y[0]))
+    lon, lat = (_geographic_coordinate(ds, axis, dims)[1] for axis in ("lon", "lat"))
+    if lon is not None and lat is not None and crs:
+        from pyproj import Transformer
+
+        lon, lat = np.asarray(lon, dtype="float64"), np.asarray(lat, dtype="float64")
+        rims = (np.concatenate([grid[0], grid[-1], grid[:, 0], grid[:, -1]]) for grid in (lon, lat))
+        px, py = Transformer.from_crs("EPSG:4326", crs, always_xy=True).transform(*rims)
+        west, east = np.nanmin(px) - x.min(), np.nanmax(px) - x.max()
+        south, north = np.nanmin(py) - y.min(), np.nanmax(py) - y.max()
+        if max(abs(west), abs(east)) > dx or max(abs(south), abs(north)) > dy:
+            raise ValueError(f"The lat/lon of the data do not match its {x_name}/{y_name} in {crs}; "
+                             "check the meteo CRS.")
+        return x + west, y + south
+    if (x_name.lower(), y_name.lower()) == ("xc", "yc"):
+        return x + dx / 2, y - dy / 2
+    return x, y
 
 
 def _geographic_coordinate(ds, axis: str, dims: tuple[str, str]):
@@ -726,6 +755,29 @@ def _validate_target_coverage(
             f"The target grid is outside the {metadata.kind} source extent.")
 
 
+def validate_coverage(metadata: SpatialMetadata, bounds, crs, l0_resolution=0.0) -> None:
+    """The source's cell edges must contain the study `bounds` (xmin, xmax, ymin, ymax in `crs`), less
+    1% of an L0 cell for coordinate rounding (lat/lon stored as float32)."""
+    margin = 0.01 * float(l0_resolution)
+    xmin, xmax, ymin, ymax = (float(value) + sign * margin for value, sign in zip(bounds, (1, -1, 1, -1), strict=True))
+    source_crs = metadata.crs or ("EPSG:4326" if metadata.unit in {"deg", "degree"} else None)
+    if not source_crs:
+        return
+    if crs and not _same_crs(source_crs, crs):
+        from pyproj import Transformer
+        xmin, ymin, xmax, ymax = Transformer.from_crs(crs, source_crs, always_xy=True).transform_bounds(
+            xmin, ymin, xmax, ymax, densify_pts=21)
+    west, east, south, north = metadata.bounds  # cell centres
+    half_x, half_y = metadata.x_resolution / 2, metadata.y_resolution / 2
+    tolerance = max(metadata.x_resolution, metadata.y_resolution) * 1e-6
+    edges = (west - half_x, east + half_x, south - half_y, north + half_y)
+    if (xmin < edges[0] - tolerance or xmax > edges[1] + tolerance
+            or ymin < edges[2] - tolerance or ymax > edges[3] + tolerance):
+        raise ValueError(
+            f"The {metadata.kind} data ({', '.join(f'{value:.10g}' for value in edges)}) do not cover the "
+            f"study extent ({xmin:.10g}, {xmax:.10g}, {ymin:.10g}, {ymax:.10g}).")
+
+
 def _resample_ready(da, ds, source_crs, target, np, xr):
     y_dim, x_dim = _spatial_dims(da)
     x_name, x_values = _axis_values(ds, x_dim, "x")
@@ -749,6 +801,7 @@ def _resample_ready(da, ds, source_crs, target, np, xr):
             return nearest_curvilinear(
                 da, np.asarray(lon), np.asarray(lat),
                 target_lon, target_lat, sample_lon, sample_lat)
+        x_values, y_values = _centre_axes(ds, (y_dim, x_dim), x_name, y_name, x_values, y_values, source_crs)
         x_target, y_target = target_lon, target_lat
         target_crs_matches = bool(
             source_crs and target.crs and _same_crs(source_crs, target.crs)
@@ -800,6 +853,8 @@ def _resample_ready(da, ds, source_crs, target, np, xr):
                 transform.transform(center_lon, lat)[1]
                 for lat in target_lat])
 
+        if target_crs_matches:
+            x_values, y_values = shift_onto_header(x_values, y_values, target.header)
         source = da.assign_coords(
             {x_dim: np.asarray(x_values), y_dim: np.asarray(y_values)})
         source = source.sortby(x_dim).sortby(y_dim)
@@ -809,7 +864,8 @@ def _resample_ready(da, ds, source_crs, target, np, xr):
         else:
             result = source.interp(
                 {x_dim: x_target, y_dim: y_target}, method="nearest")
-        result = result.rename({x_dim: "lon", y_dim: "lat"})
+        result = result.reset_coords(drop=True).rename(  # the source lat/lon go: the target ones follow
+            {x_dim: "lon", y_dim: "lat"})
         return result.assign_coords(lon=target_lon, lat=target_lat).transpose(
             "time", "lat", "lon")
 

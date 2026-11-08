@@ -68,11 +68,6 @@ def restore(dialog):
     )
     for key, name in TIME_WIDGETS.items():
         widget = getattr(dialog, name)
-        widget.setDisplayFormat(
-            "yyyy-MM-dd HH:00"
-            if selected_version(dialog).startswith("6")
-            else "yyyy-MM-dd"
-        )
         value = QDateTime.fromString(
             saved.get(key, "2000-01-01T00:00"), "yyyy-MM-ddTHH:mm"
         )

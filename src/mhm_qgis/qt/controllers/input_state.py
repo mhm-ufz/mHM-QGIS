@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 
-from qgis.core import QgsCoordinateReferenceSystem, QgsMapLayer
+from qgis.core import QgsCoordinateReferenceSystem, QgsMapLayer, QgsRectangle
 from qgis.PyQt.QtCore import QSignalBlocker
 
 from ...core.handlers.file import json as jsonio
@@ -117,6 +117,7 @@ def save(dialog):
         "gauge_input": "raster" if dialog.radioButton_gaugesRasterInput.isChecked() else "point",
         "gauge_raster": _combo_path(dialog.comboBox_gaugeRaterInput),
         "crs_authid": dialog._set_crs,  # a CRS not yet Set is not kept
+        "study_extent": dialog._study_extent,  # in that CRS
         "intro": dialog._intro_answers,
         "process_cases": process_cases.current(dialog),
     }
@@ -143,6 +144,10 @@ def load(dialog):
             main.refresh_input_sources(dialog)
             dialog.log_message("WARNING: Could not read input state: not a JSON object.")
             return
+        crs = QgsCoordinateReferenceSystem(state.get("crs_authid", "") or "")
+        if crs.isValid():  # first and painted now: the rest of the load holds the event loop
+            dialog.mProjectionSelectionWidget_crs.setCrs(crs)
+            dialog.mProjectionSelectionWidget_crs.repaint()
         if version_key(state.get("mhm_version")) == "v5.13":
             from ...externals.mhm_handler import recover_v5_mrm_outputs
 
@@ -164,15 +169,17 @@ def load(dialog):
             multi_domain.refresh_table(dialog)
             return
         _restore_resolution_preferences(dialog, state.get("grid_resolutions", {}))
-        crs = QgsCoordinateReferenceSystem(state.get("crs_authid", "") or "")
-        if crs.isValid():
-            dialog.mProjectionSelectionWidget_crs.setCrs(crs)
         dialog._set_crs = dialog.get_crs().authid()
         _restore_categorical_inputs(dialog, state)
         main.refresh_input_sources(dialog)
         grid.refresh_precipitation_folder(dialog)
         _restore_input_layers(dialog, state.get("layers", {}))
         _restore_domain_inputs(dialog, state)
+        if extent := state.get("study_extent"):
+            dialog._study_extent = list(extent)
+            dialog.groupBox_customExtent.setChecked(True)
+            dialog.mExtentGroupBox_customExtent.setOutputExtentFromUser(
+                QgsRectangle(extent[0], extent[2], extent[1], extent[3]), dialog.get_crs())
         _restore_meteo_inputs(dialog, state.get("meteo_inputs", {}))
         dialog._observation_inputs = dict(state.get("observation_inputs", {}))
         forcing.populate_observation_table(dialog)
@@ -224,6 +231,8 @@ def clear(dialog):
     dialog._drafts = {}
     dialog._failed_step = None
     dialog._set_crs = dialog.get_crs().authid()
+    dialog._study_extent = None
+    dialog.groupBox_customExtent.setChecked(False)
     dialog._land_cover_ready_source = ""
     categorical.fill(dialog)
     dialog._domain_definition_mode = ""
@@ -291,7 +300,7 @@ def _restore_input_layers(dialog, saved_layers):
             continue
         if layer_info.get("origin") == "file":
             source = os.path.abspath(layer_info.get("source", ""))
-            if os.path.isfile(source):
+            if os.path.isfile(source.split("|", 1)[0]):  # a GeoPackage source names its layer
                 main.add_file_input(
                     dialog, key, source, manual=bool(layer_info.get("manual")),
                     variable=str(layer_info.get("variable", "")),

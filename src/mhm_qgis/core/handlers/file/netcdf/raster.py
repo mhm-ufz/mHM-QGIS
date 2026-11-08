@@ -13,8 +13,9 @@ from ....grid import (
 
 
 def source(path, variable=None):
-    """Address a NetCDF variable without extracting another raster."""
-    return f'NETCDF:"{path}":{variable}' if variable else str(path)
+    """Address a NetCDF variable without extracting another raster; any other file (an ASCII grid
+    whose variable is its stem) is the plain path."""
+    return f'NETCDF:"{path}":{variable}' if variable and Path(path).suffix.lower() == ".nc" else str(path)
 
 
 def file_path(value):

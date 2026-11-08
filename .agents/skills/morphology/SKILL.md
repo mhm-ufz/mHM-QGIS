@@ -137,23 +137,33 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   alignment gaps, coordinate axes and array matching. Its local `Resolution` does
   no file I/O or rounding; `Grid` adds per-level extents and one common extent.
   Core accepts plain values/paths/CRS strings, never widgets or QGIS objects.
-- The common extent covers the selected DEM extent, not selected catchment bounds.
+- The common extent covers the **study extent**: the Custom L0 Extent Set on the DEM page
+  (`groupBox_customExtent`, which must lie inside the DEM; `grid.study_bounds`), else the
+  whole DEM -- never the catchment bounds. Saved catchments must lie inside it (the mask
+  stage refuses a cut catchment), and every meteo input must cover it
+  (`forcing.validate_coverage`: precipitation at Scan, the rest at Execute All Meteo; 1% of
+  an L0 cell absorbs lat/lon rounding, never a real shortfall -- the data are not moved to fit).
+  Meteo cell centres come from `forcing/api._centre_axes`, shared by Scan and Execute: 2-D
+  lat/lon centres projected to the meteo CRS place the 1-D axes (which keep the row order --
+  the mHM test domain stores lat south-to-north against north-to-south data); without them,
+  `xc`/`yc` are the left/upper cell edges (that domain's `header.txt` confirms it).
   Snap it outward to an L0-aligned L2 lattice. Derive L0 from L2 (same corners,
   `ncols*n`, `nrows*n`) so n x n cells per L2 cell holds by construction.
   `validate_l0_l2_alignment()` checks every header pair.
 - The exact raw L2/L0 integer factor is a spin-box default only. Once the user
   chooses a multiplier it wins, including after rescans or project restoration.
-- Compare cell-edge origins when measuring alignment. `settings.yaml`'s
-  `grid_alignment_gap_limit` is a fraction of exact L0 cell size; gaps larger than
-  numerical noise resample L2, never shift prepared L0. Expand boundaries outward
-  only; never shrink a misaligned boundary.
+- Compare cell-edge origins when measuring alignment. Meteo with L2's spacing and the
+  processing CRS is shifted onto the L0 lattice (under half an L0 cell,
+  `grid.shift_onto_header`) and window-copied -- meteo files are huge, so they are never
+  resampled for that. Only another spacing or CRS resamples (nearest). Prepared L0 is
+  never shifted. Expand boundaries outward only; never shrink a misaligned boundary.
 - Never round a grid-defining cell size. 1/1200 degree and 120 times that value
   must be carried verbatim: display rounding can introduce cumulative drift or
   make an exact 0.1-degree ratio fail validation. `floor_cellsize`/`ceil_cellsize`
   are display-only. Persist both exact headers and the multiplier in processing
   state's `grid` section; restore those, not rounded widget text.
 - Grid validity includes DEM file fingerprint, CRS, precipitation selection/files,
-  multiplier and gap setting. Changing any requires a new scan. Changing catchment
+  multiplier and study extent. Changing any requires a new scan. Changing catchment
   selection invalidates morphology, not the DEM-wide common extent.
 - Prepared L0 rasters use integer window copies and padding, never resampling.
   `crop_aligned_l0_raster()`/`mask_aligned_l0_raster()` remain low-level APIs and
@@ -168,9 +178,13 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
 - Publication is one `execute_all_morphology_publish` boundary. It emits v5 ASCII
   inputs or v6 NetCDF inputs and always publishes `idgauges.asc` separately when
   `idgauges.nc` exists; `idgauges` never belongs in v6 `input.nc`.
-- Aligned L2 forcing is sliced/padded by `core/grid/arrays.py`; only misaligned or
-  reprojected forcing is resampled (nearest-neighbour). Check every output against
+- Aligned or shifted L2 forcing is sliced/padded by `core/grid/arrays.py`; only forcing
+  with another spacing or CRS is resampled (nearest-neighbour). Check every output against
   the saved L2 header before publication.
+- Gridded observations (soil moisture, neutrons, ET, TWS) are prepared on **L1**: mHM v5
+  and v6 read them at exactly L1's rows and columns (`read_nc(..., nRows1, nCols1)` in
+  `mo_read_optional_data.f90`) and never regrid them. Editing L1 marks them pending.
+  Discharge is a per-gauge time series, independent of the grid.
 - Generic forcing streams one selected variable in bounded time blocks, retaining
   only one preceding cumulative plane and one output-interval accumulator across files.
 - Meteorology reuse checks both the input-file/selection fingerprint and target L2

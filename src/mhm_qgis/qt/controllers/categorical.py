@@ -10,7 +10,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from qgis.PyQt.QtWidgets import QMessageBox, QPushButton, QTableWidgetItem
+from qgis.PyQt.QtCore import QDateTime, Qt
+from qgis.PyQt.QtWidgets import (
+    QDateTimeEdit,
+    QMessageBox,
+    QPushButton,
+    QTableWidgetItem,
+)
 
 from ...core.handlers import lookup
 from ...core.handlers.state.nml_settings import relative_workspace_path, update_section
@@ -33,6 +39,7 @@ from ..dialogs.input_selection import (
 from . import main
 from .grid import require_common_grid
 from .soil_horizons import SoilHorizonInputs
+from .time import TIME_WIDGETS
 from .workflow_state import invalidate, invalidate_meteo
 
 KINDS = ("lc", "soil", "geology", "lai")
@@ -143,6 +150,9 @@ def bind(dialog):
         dialog, dialog.comboBox_laiNetCDFInput, "Select LAI NetCDF", "NetCDF (*.nc);;All files (*)"))
     dialog._soil_horizons = SoilHorizonInputs(dialog)
     dialog._layer_rows = {key: [] for key in _TABLES}
+    for name in (TIME_WIDGETS["sim_start"], TIME_WIDGETS["sim_end"]):
+        getattr(dialog, name).dateTimeChanged.connect(
+            lambda _value: [_next_period(dialog, key) for key in ("lc_lookup", "lc_ready")])
     for checkbox, (key, _labels) in _SWITCHES.items():
         getattr(dialog, _TABLES[key][4]).clicked.connect(lambda _checked=False, key=key: add_row(dialog, key))
         getattr(dialog, checkbox).toggled.connect(lambda _on, checkbox=checkbox: _switched(dialog, checkbox))
@@ -322,11 +332,17 @@ def _switched(dialog, checkbox):
     table, _combo, first, second, add = _TABLES[key]
     for name in (table, first, second, add, *labels):
         getattr(dialog, name).setEnabled(on)
-    if not on and dialog.project_folder and key.startswith("lc"):
-        from .time import TIME_WIDGETS
+    if key.startswith("lc"):
+        _next_period(dialog, key)
 
-        for name, time in ((first, "sim_start"), (second, "sim_end")):
-            getattr(dialog, name).setDateTime(getattr(dialog, TIME_WIDGETS[time]).dateTime())
+
+def _next_period(dialog, key):
+    """From: the latest period's end, else the simulation start; To: the simulation end."""
+    _table, _combo, first, second, _add = _widgets(dialog, _TABLES[key])
+    start, end = (getattr(dialog, TIME_WIDGETS[name]).dateTime() for name in ("sim_start", "sim_end"))
+    latest = max((str(row[2]) for row in dialog._layer_rows[key]), default="")  # ISO texts sort by time
+    first.setDateTime(QDateTime.fromString(latest, Qt.DateFormat.ISODate) if latest else start)
+    second.setDateTime(end)
 
 
 def _value(widget) -> str:
@@ -347,15 +363,26 @@ def add_row(dialog, key):
 
 
 def _show_rows(dialog, key):
-    table, rows = getattr(dialog, _TABLES[key][0]), dialog._layer_rows[key]
+    table, _combo, first, _second, _add = _widgets(dialog, _TABLES[key])
+    rows = dialog._layer_rows[key]
     table.setRowCount(len(rows))
     for index, row in enumerate(rows):
         for column, text in enumerate(row):
-            table.setItem(index, column, QTableWidgetItem(str(text)))
+            if column and key.startswith("lc"):  # a period: edited as a date, shown like the From above
+                edit = QDateTimeEdit(QDateTime.fromString(str(text), Qt.DateFormat.ISODate), table)
+                edit.setDisplayFormat(first.displayFormat())
+                edit.setCalendarPopup(first.calendarPopup())
+                edit.dateTimeChanged.connect(lambda _changed, row=row, column=column, edit=edit: (
+                    row.__setitem__(column, _value(edit)), _next_period(dialog, key)))
+                table.setCellWidget(index, column, edit)
+            else:
+                table.setItem(index, column, QTableWidgetItem(str(text)))
         remove = QPushButton("✖", table)
         remove.setStyleSheet("color: #c0392b;")
         remove.clicked.connect(lambda _checked=False, row=row: (rows.remove(row), _show_rows(dialog, key)))
         table.setCellWidget(index, 3, remove)
+    if key.startswith("lc"):
+        _next_period(dialog, key)
 
 
 def _rows(dialog, key) -> tuple:

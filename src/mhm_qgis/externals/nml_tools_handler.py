@@ -133,7 +133,7 @@ def _editor_folder(schemas, request, log=None):
                         # one old catchment's settings arbitrarily.
                         fields[name] = suggestion(schema, sizes)
             values = overlay_values(values, initial.get(profile.key, {}))
-            updates.append((staged.profile(profile.name), values, dimensions))
+            updates.append((staged.profile(profile.name), values, {**previous, **dimensions}))
         save_profiles(staged, updates)
         before = {p: p.stat().st_mtime_ns for p in folder.glob("*.nml")}
         if log:

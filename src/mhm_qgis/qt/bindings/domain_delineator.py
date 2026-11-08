@@ -24,8 +24,6 @@ def bind(dialog) -> None:
     dialog.pushButton_nextPourPoint.clicked.connect(dialog._next_outlet)
     # pushButton_save → dialog._save_outlet
     dialog.pushButton_save.clicked.connect(dialog._save_outlet)
-    # pushButton_close → dialog.reject
-    dialog.pushButton_close.clicked.connect(dialog.reject)
 
 
 __all__ = ["bind"]

@@ -234,7 +234,23 @@ def _forcing(folder, days, p, mask, geographic, cell, v6):
     path.parent.mkdir(parents=True, exist_ok=True)
     coarse = p[:, ::2, ::2]
     with netCDF4.Dataset(path, "w") as handle:
-        names = _axes(handle, geographic, coarse.shape[1], coarse.shape[2], cell * 2)
+        if geographic:
+            names = _axes(handle, geographic, coarse.shape[1], coarse.shape[2], cell * 2)
+        else:  # as the plugin writes it: approximate degree axes, the exact centres in lon2d/lat2d
+            from pyproj import CRS, Transformer
+
+            ny, nx = coarse.shape[1:]
+            utm = CRS("EPSG:32644")  # holds `_axes`' projected origin
+            lon2d, lat2d = Transformer.from_crs(utm, "EPSG:4326", always_xy=True).transform(*np.meshgrid(
+                500000.0 + cell * 2 * (np.arange(nx) + 0.5), 3000000.0 - cell * 2 * (np.arange(ny) + 0.5)))
+            names = ("lon", "lat")
+            for name, size in (("lon", nx), ("lat", ny), ("bnds", 2)):
+                handle.createDimension(name, size)
+            handle.createVariable("lon", "f8", ("lon",))[:] = lon2d[ny // 2]
+            handle.createVariable("lat", "f8", ("lat",))[:] = lat2d[:, nx // 2]
+            handle.createVariable("lon2d", "f8", ("lat", "lon"))[:] = lon2d
+            handle.createVariable("lat2d", "f8", ("lat", "lon"))[:] = lat2d
+            handle.createVariable("crs", "i4").crs_wkt = utm.to_wkt()
         handle.createDimension("time", None)
         start = np.datetime64("1900-01-01")
         hours = (days - start).astype(int) * 24
@@ -245,6 +261,8 @@ def _forcing(folder, days, p, mask, geographic, cell, v6):
         handle.createVariable("time_bnds", "f8", ("time", "bnds"))[:] = np.stack([hours, hours + 24], 1)
         var = handle.createVariable("pre", "f8", ("time", names[1], names[0]), fill_value=FILL)
         var.units = "mm"
+        if not geographic:
+            var.grid_mapping = "crs"
         var[:] = coarse
     return path
 

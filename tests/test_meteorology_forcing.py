@@ -55,7 +55,7 @@ def _write_projected_nc(path: Path, variable: str, value: float):
     ds = xr.Dataset(
         {
             variable: (
-                ("time", "yc", "xc"),
+                ("time", "y", "x"),
                 np.full((1, 2, 2), value, dtype="float64"),
                 {"grid_mapping": "crs"},
             ),
@@ -63,8 +63,8 @@ def _write_projected_nc(path: Path, variable: str, value: float):
         },
         coords={
             "time": np.asarray(["2001-01-01"], dtype="datetime64[ns]"),
-            "yc": [1500.0, 500.0],
-            "xc": [500.0, 1500.0],
+            "y": [1500.0, 500.0],
+            "x": [500.0, 1500.0],
         },
     )
     ds.to_netcdf(path, engine="scipy")
@@ -270,6 +270,42 @@ def test_projected_coordinates_without_a_grid_mapping_use_the_chosen_crs(tmp_pat
 
     assert (metadata.crs, metadata.unit, metadata.resolution) == ("EPSG:3035", "m", 24000.0)
     assert resolution_in_crs(metadata, "EPSG:4326").unit == "deg"
+
+
+def _write_corner_nc(path, latlon):
+    """The mHM test-domain layout: xc/yc are the left/upper cell edges in EPSG:3035, and lat/lon
+    (when written) are the cell centres with their rows stored south to north."""
+    from pyproj import Transformer
+
+    xc, yc = np.array([3973369.0, 3997369.0]), np.array([2951847.0, 2927847.0])
+    coords = {"time": np.asarray(["2001-01-01"], dtype="datetime64[ns]"), "yc": yc, "xc": xc}
+    if latlon:  # as coordinates, like the test domain's `coordinates = "lon lat"`
+        x, y = np.meshgrid(xc + 12000, yc - 12000)
+        lon, lat = Transformer.from_crs("EPSG:3035", "EPSG:4326", always_xy=True).transform(x, y)
+        coords |= {"lon": (("yc", "xc"), lon[::-1]), "lat": (("yc", "xc"), lat[::-1])}
+    xr.Dataset({"pre": (("time", "yc", "xc"), np.array([[[1.0, 2.0], [3.0, 4.0]]]))},  # row 0 north
+               coords=coords).to_netcdf(path, engine="scipy")
+
+
+@pytest.mark.parametrize("latlon", [True, False])
+def test_xc_yc_are_the_left_and_upper_cell_edges(tmp_path, latlon):
+    from mhm_qgis.core.grid import target_grid_from_header
+
+    _write_corner_nc(tmp_path / "pre.nc", latlon)
+    spec = MeteoFolderSpec("pre", tmp_path, unit="mm", crs="EPSG:3035")
+    np.testing.assert_allclose(inspect_meteo_folder(spec).bounds,
+                               (3985369.0, 4009369.0, 2915847.0, 2939847.0), atol=0.1)
+    header = {"ncols": 2, "nrows": 2, "xllcorner": 3973369.0, "yllcorner": 2903847.0,
+              "cellsize": 24000.0, "nodata_value": -9999.0}
+    result = process_meteo_inputs([spec], tmp_path / "out", target_grid_from_header(header, "EPSG:3035"))
+    with xr.open_dataset(result.outputs["pre"]) as ds:
+        np.testing.assert_allclose(ds.pre.sortby("lat", ascending=False).values[0], [[1.0, 2.0], [3.0, 4.0]])
+
+
+def test_lat_lon_that_do_not_match_xc_yc_in_the_chosen_crs_are_refused(tmp_path):
+    _write_corner_nc(tmp_path / "pre.nc", latlon=True)
+    with pytest.raises(ValueError, match="do not match"):
+        inspect_meteo_folder(MeteoFolderSpec("pre", tmp_path, unit="mm", crs="EPSG:3857"))
 
 
 def test_cf_and_slash_spellings_of_a_daily_rate_match():

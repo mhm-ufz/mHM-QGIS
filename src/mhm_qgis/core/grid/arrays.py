@@ -94,6 +94,24 @@ def axes_match_header(x_values, y_values, header: Mapping) -> bool:
     return True
 
 
+def shift_onto_header(x_values, y_values, header: Mapping):
+    """An axis with the header's spacing moved onto its lattice (by under half a cell): the
+    cells a nearest-neighbour pick would take, without interpolating. Other axes are kept."""
+    import numpy as np
+
+    cellsize = float(header["cellsize"])
+
+    def shift(axis, origin):
+        values = np.asarray(axis, dtype="float64")
+        steps = np.abs(np.diff(values))
+        if steps.size and float(np.abs(steps - cellsize).max()) <= cellsize * 1e-6:
+            return origin + np.floor((values - origin) / cellsize + 0.5) * cellsize  # one shift, ties too
+        return values
+
+    target_x, target_y = header_center_coordinates(header)
+    return shift(x_values, target_x[0]), shift(y_values, target_y[0])
+
+
 def reindex_to_header(da, x_dim: str, y_dim: str, header: Mapping, fill_value=None):
     x_values, y_values = header_center_coordinates(header)
     return da.reindex(

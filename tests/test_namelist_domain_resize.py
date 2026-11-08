@@ -57,6 +57,24 @@ def test_v5_camel_case_dimensions_still_shrink_legacy_domains(tmp_path):
         assert model.recover_dimensions(staged)["ndomains"] == 1
 
 
+def test_fewer_gauges_keep_the_saved_soil_horizons(tmp_path):
+    """A size the plugin does not send (no soil depths) keeps the saved one."""
+    schemas = SCHEMAS.parent / "v5.13"
+    project = model.load_project(schemas, tmp_path)
+    model.save_profiles(project, [(project.profile("main"), {
+        "soildata": {"nSoilHorizons_mHM": 2, "soil_Depth": [300.0, 1000.0]},
+        "evaluation_gauges": {"nGaugesTotal": 2, "NoGauges_domain": [2], "Gauge_id": [[398, 333]],
+                              "gauge_filename": [["398.txt", "333.txt"]]},
+    }, {"ndomains": 1, "nsoilhorizons": 2, "ngaugestotal": 2})])
+    values = {"main": {"evaluation_gauges": {"nGaugesTotal": 1, "NoGauges_domain": [1],
+                                             "Gauge_id": [[398]], "gauge_filename": [["398.txt"]]}}}
+    request = GuiProjectRequest("v5", tmp_path, {"main": []}, values, {"nDomains": 1, "nGaugesTotal": 1})
+    with _editor_folder(schemas, request) as folder:
+        staged = model.load_project(schemas, folder, {"main": []})
+        dimensions = model.recover_dimensions(staged)
+        assert (dimensions["ngaugestotal"], dimensions["nsoilhorizons"]) == (1, 2)
+
+
 def test_multi_domain_editor_uses_one_combined_project_request(tmp_path, monkeypatch):
     project = model.load_project(SCHEMAS, tmp_path, "combine")
     model.save_profiles(

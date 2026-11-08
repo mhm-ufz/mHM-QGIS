@@ -194,10 +194,9 @@ def _file_layer(path: str, kind: str, variable: str = ""):
     if not path:
         return None
     vector = kind in {"pour_points", "lookup"} or Path(path.split("|", 1)[0]).suffix.lower() in VECTOR_EXTENSIONS
-    if variable and Path(path).suffix.lower() == ".nc":
-        from ...core.handlers.file.netcdf.raster import source
+    from ...core.handlers.file.netcdf.raster import source
 
-        path = source(path, variable)
+    path = source(path, variable)
     physical = str(path).split('"', 2)[1] if str(path).startswith('NETCDF:"') else path
     return layers.open_layer(
         path, Path(physical).name, is_raster=not vector
@@ -268,11 +267,9 @@ class InputComboAdapter(QtCore.QObject):
         if isinstance(data, dict) and data.get("origin") == "file":
             path = str(data.get("path") or "")
             variable = str(data.get("variable") or "")
-            if path and variable and Path(path).suffix.lower() == ".nc":
-                from ...core.handlers.file.netcdf.raster import source
+            from ...core.handlers.file.netcdf.raster import source
 
-                return source(path, variable)
-            return path
+            return source(path, variable)
         return self.source_path()
 
     def setLayer(self, layer):

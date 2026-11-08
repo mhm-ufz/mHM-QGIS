@@ -5,6 +5,7 @@ from .api import (
     inspect_meteo_folder,
     inspect_meteo_inputs,
     process_meteo_inputs,
+    validate_coverage,
 )
 from .cache import (
     inspect_meteo_folder_cached,
@@ -34,4 +35,5 @@ __all__ = [
     "normalize_source",
     "preparation_fingerprint",
     "process_meteo_inputs",
+    "validate_coverage",
 ]

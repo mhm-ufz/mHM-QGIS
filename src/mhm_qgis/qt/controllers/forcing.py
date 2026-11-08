@@ -11,9 +11,11 @@ from dataclasses import asdict
 from qgis.PyQt.QtCore import QSignalBlocker, Qt
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetItem
 
+from ...core import datamodel
 from ...core.meteorology.forcing import MeteoFolderSpec, inspect_meteo_folder_cached
 from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
-from . import grid, main
+from . import grid, main, process_cases
+from .version import selected as selected_version
 from .workflow_state import (
     invalidate,
     invalidate_meteo,
@@ -204,12 +206,13 @@ def _spec(dialog, value):
 
 
 def selected_meteo_specs(dialog):
-    """Run the configured variable collection, with precipitation as the reference."""
+    """Run the configured variables the process cases read, with precipitation as the reference."""
     if "pre" not in dialog._meteo_inputs:
         raise ValueError("Configure and scan precipitation first.")
+    needed = datamodel.meteo_variables(selected_version(dialog), process_cases.current(dialog))
     return tuple(
         grid.precipitation_spec(dialog) if key == "pre" else _spec(dialog, value)
-        for key, value in dialog._meteo_inputs.items()
+        for key, value in dialog._meteo_inputs.items() if key in needed
     )
 
 
