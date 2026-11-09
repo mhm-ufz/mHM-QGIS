@@ -94,7 +94,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.canvas)
         self._outlet_marker = QgsVertexMarker(self.canvas)
-        self._outlet_marker.setIconType(QgsVertexMarker.ICON_CIRCLE)
+        self._outlet_marker.setIconType(QgsVertexMarker.IconType.ICON_CIRCLE)
         self._outlet_marker.setIconSize(22)
         self._outlet_marker.setPenWidth(4)
         self._outlet_marker.setColor(QColor(220, 30, 30))

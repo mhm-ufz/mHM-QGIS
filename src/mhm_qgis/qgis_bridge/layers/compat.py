@@ -34,9 +34,9 @@ def qgs_field(name, field_type):
     qvariant_type_by_name = {}
     if QVariant is not None and hasattr(QVariant, "Type"):
         qvariant_type_by_name = {
-            "String": QVariant.Type.String,
-            "Int": QVariant.Type.Int,
-            "Double": QVariant.Type.Double,
+            "String": QVariant.String,
+            "Int": QVariant.Int,
+            "Double": QVariant.Double,
         }
     qmeta_name = qmeta_name_by_qvariant_name.get(field_type, field_type)
     candidates = [_qmeta_type(qmeta_name)]
@@ -96,15 +96,14 @@ def linear_interpolation():
     from qgis.core import Qgis, QgsColorRampShader
 
     method = getattr(Qgis, "ShaderInterpolationMethod", None)
-    return method.Linear if method is not None else QgsColorRampShader.Interpolated
+    return method.Linear if method is not None else QgsColorRampShader.Type.Interpolated
 
 
 def polygon_geometry():
-    """`Qgis.GeometryType.Polygon` from QGIS 3.30, `QgsWkbTypes.PolygonGeometry` before."""
-    from qgis.core import Qgis, QgsWkbTypes
+    """`Qgis.GeometryType.Polygon` (QGIS 3.30+, below the 3.34 minimum)."""
+    from qgis.core import Qgis
 
-    kind = getattr(Qgis, "GeometryType", None)
-    return kind.Polygon if kind is not None else QgsWkbTypes.PolygonGeometry
+    return Qgis.GeometryType.Polygon
 
 
 def input_band(renderer) -> int:
