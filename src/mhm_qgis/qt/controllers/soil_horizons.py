@@ -22,6 +22,7 @@ from ..dialogs.input_selection import (
     INPUT_EXTENSIONS,
     VECTOR_EXTENSIONS,
     InputComboAdapter,
+    elide_left,
     group_crs,
     init_group_crs,
     loaded_qgis_items,
@@ -55,6 +56,7 @@ class SoilHorizonInputs:
         self.set_count(1)
 
     def _adapter(self, combo, browse):
+        elide_left(combo)  # rows added at run time are not in the form's `comboBox_*`
         adapter = InputComboAdapter(combo, "soil", self.dialog)
         for item in loaded_qgis_items("dem"):  # the rasters loaded in QGIS
             combo.addItem(item.label, item.data)

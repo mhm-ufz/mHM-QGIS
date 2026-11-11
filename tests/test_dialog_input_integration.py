@@ -415,3 +415,27 @@ def test_a_geotiff_without_a_crs_asks_for_one_like_an_ascii_grid(tmp_path, monke
     assert hydrology.dem_options(dialog)["source_crs"] == "EPSG:4326"
     assert len(seen) == 2
     dialog.close()
+
+
+def test_a_long_path_shows_its_file_name(monkeypatch):
+    from qgis.PyQt import QtWidgets
+    from qgis.PyQt.QtCore import Qt
+
+    shown = []
+
+    class Painter(QtWidgets.QStylePainter):  # records the label each combo paints
+        def drawControl(self, element, option):
+            shown.append(option.currentText)
+            super().drawControl(element, option)
+
+    monkeypatch.setattr(QtWidgets, "QStylePainter", Painter)
+    dialog = MhmQgisDialog()
+    combo = dialog.comboBox_gaugeRaterInput
+    combo.addItem("/data/" + "a-long-folder/" * 20 + "idgauges.asc")
+    combo.setCurrentIndex(combo.count() - 1)
+    combo.resize(220, 30)
+    combo.grab()
+    assert shown[-1].startswith("\N{HORIZONTAL ELLIPSIS}")
+    assert shown[-1].endswith("idgauges.asc")
+    assert combo.view().textElideMode() == Qt.TextElideMode.ElideLeft
+    dialog.close()
