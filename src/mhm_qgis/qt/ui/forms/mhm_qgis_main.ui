@@ -4252,7 +4252,7 @@ CODE,NAME,GEO_CLASS,KARSTIC,PARAMETER_VALUE
             <item>
              <widget class="QStackedWidget" name="stackedWidget_geology">
               <property name="currentIndex">
-               <number>1</number>
+               <number>0</number>
               </property>
               <widget class="QWidget" name="page_mhmReadyGeologyInput">
                <layout class="QVBoxLayout" name="verticalLayout_32">
@@ -5002,14 +5002,14 @@ date,discharge
               <item>
                <widget class="QRadioButton" name="radioButton_domainDefinitionDemExtent">
                 <property name="text">
-                 <string>Entire DEM extent in Domain</string>
+                 <string>Entire DEM extent as Domain</string>
                 </property>
                </widget>
               </item>
               <item>
                <widget class="QRadioButton" name="radioButton_domainDefinitionDelineator">
                 <property name="text">
-                 <string>Select Catchments in Domain [using Domain Delineator]</string>
+                 <string>Delineate Domain</string>
                 </property>
                </widget>
               </item>

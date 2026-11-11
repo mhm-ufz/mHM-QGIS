@@ -518,3 +518,16 @@ def test_set_gauges_builds_the_network_the_delineator_opens_on(dialog, tmp_path,
     dialog.pushButton_setGauges.click()
     assert started
     assert len(notes) == 1  # no popup over the running task: a failure's message must show alone
+
+
+def test_an_embedded_form_drops_its_window_minimum(dialog):
+    """The delineator's .ui minimum (800 x 560) is a window's: embedded, it would push the page past
+    the dialog's right edge, so only the form's layout minimum counts."""
+    from mhm_qgis.qt.controllers import main
+
+    form = QDialog()
+    form.setMinimumSize(800, 560)
+    main.embed(dialog, "domainDefinition", form)
+    assert (form.minimumSize().width(), form.minimumSize().height()) == (0, 0)
+    assert dialog.widget_domainDefinitionForm.minimumSizeHint().width() < 800
+    main.embed(dialog, "domainDefinition", None)

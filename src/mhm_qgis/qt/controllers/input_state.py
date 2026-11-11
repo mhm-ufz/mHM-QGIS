@@ -345,7 +345,9 @@ def _find_or_load_layer(dialog, layer_info):
     return layer
 
 
-_OLD_DOMAIN_TYPES = ("Single Domain [DEM extent]", "Select Domains [using Domain Delineator]")  # saved before the rename
+_OLD_DOMAIN_TYPES = {  # saved under earlier radio labels → the index of today's in main.DOMAIN_TYPES
+    "Single Domain [DEM extent]": 0, "Entire DEM extent in Domain": 0,
+    "Select Domains [using Domain Delineator]": 1, "Select Catchments in Domain [using Domain Delineator]": 1}
 
 
 def _restore_domain_inputs(dialog, state):
@@ -361,7 +363,7 @@ def _restore_domain_inputs(dialog, state):
     text = str(state.get("domain_definition_type", "") or "")
     if not text and state.get("dem_domain"):
         text = main.DOMAIN_TYPES[0]
-    text = dict(zip(_OLD_DOMAIN_TYPES, main.DOMAIN_TYPES, strict=True)).get(text, text)
+    text = main.DOMAIN_TYPES[_OLD_DOMAIN_TYPES[text]] if text in _OLD_DOMAIN_TYPES else text
     main.check(dialog, "domainDefinition", text)
     dialog._domain_definition_mode = text
     dialog.checkBox_gaugeOption.setChecked(bool(state.get("gauges", text)))  # older setups: gauges if a domain was defined

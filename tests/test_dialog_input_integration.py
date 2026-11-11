@@ -215,6 +215,15 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     assert restored.buttonGroup_domainDefinition.checkedButton().text() == main.DOMAIN_TYPES[0]
     restored.close()
 
+    state["domain_definition_type"] = "Select Catchments in Domain [using Domain Delineator]"  # an earlier label
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    restored = MhmQgisDialog()
+    restored.project_folder = str(tmp_path)
+    restored.load_input_state()
+    assert restored._domain_definition_mode == main.DOMAIN_TYPES[1] == "Delineate Domain"
+    assert restored.buttonGroup_domainDefinition.checkedButton() is restored.radioButton_domainDefinitionDelineator
+    restored.close()
+
 
 
 def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
