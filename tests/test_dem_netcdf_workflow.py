@@ -268,3 +268,21 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
     assert len(processing.section(tmp_path, "domains", [])) == 1
     assert set(processing.section(tmp_path, "workflows", {})).isdisjoint(
         {"execute_all_link_domains", "execute_all_crop", "execute_all_domain_dems"})
+
+
+def test_upscaled_topography_pads_whole_blocks_and_matches_the_l0_grid(tmp_path):
+    """Factor 2 on 5 x 7 DEM cells: a nodata row on top and column on the right make whole blocks,
+    the lower-left corner stays, and the bundle is the grid `dem_grid` gives L0."""
+    pytest.importorskip("mhm_tools.pre.topography_upscaling")
+    from mhm_qgis.core.grid.raster import dem_grid
+
+    original = _raster(tmp_path / "source.tif", np.arange(35, dtype="float64").reshape(5, 7) + 100)
+    result = dem_derivative_files(original, tmp_path / "geometry", upscale_factor=2)
+    assert {"dem", "dem_filled", "slope", "aspect", "facc", "fdir"} <= set(variables(result["dem_derivatives"]))
+    bundle = gdal.Open(source(result["dem_derivatives"], "dem_filled"))
+    header = dem_grid(original, "EPSG:32632", "EPSG:32632", factor=2)["header"]
+    assert (bundle.RasterXSize, bundle.RasterYSize) == (header["ncols"], header["nrows"]) == (4, 3)
+    x0, cell, _, top, _, _ = bundle.GetGeoTransform()
+    assert (x0, cell, top - 3 * cell) == pytest.approx((header["xllcorner"], header["cellsize"], header["yllcorner"]))
+    assert (x0, top - 3 * cell, cell) == pytest.approx((0, 500, 200))  # the DEM's lower-left corner, 2 x its cells
+    assert (bundle.ReadAsArray() != bundle.GetRasterBand(1).GetNoDataValue()).all()  # edge blocks keep their cells

@@ -440,10 +440,12 @@ def _gauges_from_raster(dialog):
         return False
     if not _ensure_raster_details(dialog, combo):
         return False
+    details = _combo_raster_details(combo)
     try:
         output = points_from_gauge_raster(
-            source(path, _combo_raster_details(combo).get("variable", "")),
-            Path(temp_morphology_folder(dialog.project_folder)) / "gauges_from_raster.gpkg")
+            source(path, details.get("variable", "")),
+            Path(temp_morphology_folder(dialog.project_folder)) / "gauges_from_raster.gpkg",
+            details.get("source_crs", ""))
     except (OSError, ValueError, RuntimeError) as error:
         QMessageBox.warning(dialog, "Gauges", str(error))
         return False
@@ -470,7 +472,6 @@ def set_gauges(dialog):
     if hydrology.start_domain_preflight(dialog, (dialog.page_gauges,), ready,
                                         lambda message: _domain_delineator_preflight_failed(dialog, message)):
         dialog.log_message("Creating the drainage network and flow accumulation…")
-        QMessageBox.information(dialog, "Gauges", "The drainage network and flow accumulation are being created.")
 
 
 def open_domain_delineator(dialog):

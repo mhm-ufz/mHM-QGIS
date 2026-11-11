@@ -375,3 +375,43 @@ def test_qgis_removing_layers_keeps_the_saved_grid_and_outlet_field(tmp_path):
     assert processing.grid_metadata(tmp_path)["configuration_fingerprint"] == "saved"
     assert main.selected_outlet_id_field(dialog) == "station_id"
     dialog.close()
+
+
+def test_a_geotiff_without_a_crs_asks_for_one_like_an_ascii_grid(tmp_path, monkeypatch):
+    from osgeo import gdal, osr
+    from qgis.PyQt.QtWidgets import QDialog
+
+    from mhm_qgis.qt.dialogs import input_selection
+    from mhm_qgis.qt.dialogs.netcdf_asc_additional_input import RasterDetailsDialog
+    from mhm_qgis.qt.workflows import hydrology
+
+    seen = []
+
+    def accept(prompt):
+        seen.append((prompt.comboBox_varName.currentText(), prompt.mProjectionSelectionWidget_crsFileInput.isEnabled()))
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(RasterDetailsDialog, "exec", accept)
+    plain, placed = tmp_path / "dem.tif", tmp_path / "placed.tif"
+    for path in (plain, placed):
+        raster = gdal.GetDriverByName("GTiff").Create(str(path), 3, 3, 1, gdal.GDT_Float32)
+        raster.SetGeoTransform((95.0, 0.1, 0, 18.0, 0, -0.1))
+        if path is placed:
+            crs = osr.SpatialReference()
+            crs.ImportFromEPSG(4326)
+            raster.SetProjection(crs.ExportToWkt())
+        raster = None
+    assert input_selection.raster_details(None, placed).source_crs == "EPSG:4326"
+    assert not seen
+    details = input_selection.raster_details(None, plain)
+    assert seen == [("dem", True)]  # the file stem, and a CRS to choose
+    assert (details.variable, details.source_crs) == ("dem", "EPSG:4326")
+
+    dialog = MhmQgisDialog()  # a DEM saved before it was asked: Set Gauges asks once
+    dialog.project_folder = str(tmp_path)
+    main.add_file_input(dialog, "dem", str(plain), manual=True)
+    dialog.check_prerequisites = lambda: True
+    assert hydrology.dem_options(dialog)["source_crs"] == "EPSG:4326"
+    assert hydrology.dem_options(dialog)["source_crs"] == "EPSG:4326"
+    assert len(seen) == 2
+    dialog.close()

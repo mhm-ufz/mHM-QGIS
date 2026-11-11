@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from qgis.core import QgsCoordinateReferenceSystem
 from qgis.PyQt import QtWidgets
 
 from ...core.handlers.lookup import (
@@ -21,6 +22,8 @@ from ..dialogs.input_selection import (
     INPUT_EXTENSIONS,
     VECTOR_EXTENSIONS,
     InputComboAdapter,
+    group_crs,
+    init_group_crs,
     loaded_qgis_items,
 )
 
@@ -45,6 +48,7 @@ class SoilHorizonInputs:
             for component, combo, browse, layout in COMPONENTS
         }
         dialog.spinBox_nSoilHorizons.setMaximum(MAX_SOIL_HORIZONS)
+        init_group_crs(dialog.mProjectionSelectionWidget_multiHorizonSoilCrs)
         # pushButton_addHorizonInputWidgets → set_count
         dialog.pushButton_addHorizonInputWidgets.clicked.connect(
             lambda: self.set_count(dialog.spinBox_nSoilHorizons.value()))
@@ -59,7 +63,7 @@ class SoilHorizonInputs:
         return adapter
 
     def _browse(self, adapter) -> None:
-        patterns = " ".join(f"*{extension}" for extension in sorted(INPUT_EXTENSIONS["soil"] - VECTOR_EXTENSIONS))
+        patterns = " ".join(f"*{extension}" for extension in sorted(INPUT_EXTENSIONS["soil"] - VECTOR_EXTENSIONS - {".nc"}))
         path, _ = open_file(self.dialog, "Select Raster Layer", f"Raster files ({patterns});;All files (*)")
         self.select_path(adapter, path)
 
@@ -118,6 +122,7 @@ class SoilHorizonInputs:
         dialog.comboBox_bulkDensityUnit.setCurrentText(str(data.get("bulk_density_unit", "") or ""))
         dialog.doubleSpinBox_compositionStepValue.setValue(float(data.get("composition_step", 5.0)))
         dialog.doubleSpinBox_bulkDensityStepValue.setValue(float(data.get("bulk_density_step", 0.1)))
+        dialog.mProjectionSelectionWidget_multiHorizonSoilCrs.setCrs(QgsCoordinateReferenceSystem(data.get("crs", "")))
         for index, horizon in enumerate(horizons):
             for column, key in enumerate(("upper_depth", "lower_depth")):
                 table.setItem(index, column, QtWidgets.QTableWidgetItem(str(horizon.get(key, ""))))
@@ -131,9 +136,12 @@ class SoilHorizonInputs:
                         *(_local_file(self.rows[component][index][1]) for component in ("clay", "sand", "silt", "bulk_density")))
             for index in range(table.rowCount())
         )
+        crs = group_crs(self.dialog.mProjectionSelectionWidget_multiHorizonSoilCrs,
+                        (path for horizon in horizons for path in (horizon.clay_layer, horizon.sand_layer,
+                                                                    horizon.silt_layer, horizon.bulk_density_layer)))
         value = SoilInput(horizons, self.dialog.comboBox_bulkDensityUnit.currentText().strip(),
                           composition_step=self.dialog.doubleSpinBox_compositionStepValue.value(),
-                          bulk_density_step=self.dialog.doubleSpinBox_bulkDensityStepValue.value())
+                          bulk_density_step=self.dialog.doubleSpinBox_bulkDensityStepValue.value(), crs=crs)
         validate_soil_input(value)
         return value
 
@@ -147,14 +155,10 @@ def _number(table, row: int, column: int, label: str) -> float:
 
 
 def _local_file(adapter) -> Path:
-    """The local raster file behind a row's selection (a NetCDF variable source names its file)."""
+    """The local GeoTIFF or ASCII raster behind a row's selection (NetCDF is not taken here)."""
     source = str(adapter.source_path() or "").split("|", 1)[0].split("?", 1)[0].strip()
-    if source.upper().startswith("NETCDF:"):
-        value = source[len("NETCDF:"):]
-        if value[:1] in ("\"", "'"):
-            source = value.split(value[0], 2)[1]
-        else:
-            source = value if os.path.isfile(value) else value.rsplit(":", 1)[0]
+    if source.upper().startswith("NETCDF:") or Path(source).suffix.lower() == ".nc":
+        raise ValueError("Soil horizons take GeoTIFF or ASCII rasters, not NetCDF.")
     if not source or not os.path.isfile(source):
         raise ValueError("Select a readable local raster for every input row.")
     return Path(source).resolve()

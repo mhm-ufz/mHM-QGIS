@@ -47,6 +47,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._drafts = {}  # unsaved form values by form key, see main.stash
         self._set_crs = ""  # the domain CRS last Set, see grid.set_crs
         self._study_extent = None  # the Custom L0 Extent last Set, see grid.set_dem
+        self._upscale_factor = 1  # L0 = DEM x this factor, last Set, see grid.set_dem
         self._failed_step = None  # the tree row of a failed Execute All stage, for ➤
         self._land_cover_ready_source = ""
         self._domain_definition_mode = ""

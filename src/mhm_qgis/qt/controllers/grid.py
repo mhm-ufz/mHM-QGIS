@@ -1,6 +1,6 @@
 """The common L0/L1/L11/L2 grid on the main form.
 
-The DEM fixes L0, the precipitation reference folder and the multiplier fix L2,
+The DEM, upscaled by the factor Set on its page, fixes L0, the precipitation reference folder and the multiplier fix L2,
 and L1/L11 are chosen between them. A precipitation scan establishes the grid;
 changing any input it depends on invalidates it.
 """
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import os
+from pathlib import Path
 
 from qgis.PyQt.QtCore import QDateTime, QSignalBlocker
 from qgis.PyQt.QtWidgets import QMessageBox
@@ -32,7 +33,7 @@ from ...core.grid import (
     validate_grid_headers,
 )
 from ...core.handlers.state import processing
-from ...core.handlers.store.paths import data_folder
+from ...core.handlers.store.paths import data_folder, temp_morphology_folder
 from ...core.meteorology.forcing import MeteoFolderSpec, validate_coverage
 from ...qgis_bridge import layers as qgis_layers
 from ..dialogs.file_picker import open_directory
@@ -228,16 +229,26 @@ def study_bounds(dialog):
 
 
 def set_dem(dialog):
-    """The DEM page's Set: the ticked Custom L0 Extent becomes the study extent, else the whole DEM."""
-    previous, dialog._study_extent = dialog._study_extent, read_study_extent(dialog)
+    """The DEM page's Set: the ticked upscaling factor makes L0 (DEM x factor, else the DEM), and the
+    ticked Custom L0 Extent the study extent, else the whole DEM."""
+    factor = dialog.spinBox_upscaleTopographyFactor.value() if dialog.groupBox_upscaleTopography.isChecked() else 1
+    previous = (dialog._study_extent, dialog._upscale_factor)
+    dialog._study_extent, dialog._upscale_factor = read_study_extent(dialog), factor
+    if factor != previous[1]:
+        update_l0_resolution_from_dem(dialog)
     try:
         study_bounds(dialog)
     except ValueError as error:
-        dialog._study_extent = previous
+        dialog._study_extent, dialog._upscale_factor = previous
+        if factor != previous[1]:
+            update_l0_resolution_from_dem(dialog)
         QMessageBox.warning(dialog, "Custom L0 Extent", str(error))
         return
-    if dialog._study_extent != previous:
+    if (dialog._study_extent, factor) != previous:
         invalidate_grid(dialog)
+    if factor != previous[1] and dialog.project_folder:
+        for path in Path(temp_morphology_folder(dialog.project_folder)).glob("2_channel_network.*"):
+            path.unlink()  # drawn on the old L0: Set Gauges again
     dialog.save_input_state()
     from .. import project_tree
 
@@ -252,7 +263,7 @@ def grid_fingerprint(dialog):
     return fingerprint([file_path(layer.source())] if layer else [], {
         "crs": dialog.selected_meteo_crs(),
         "precipitation": inspection_fingerprint(precipitation_spec(dialog))[0],
-        "study_extent": dialog._study_extent,
+        "study_extent": dialog._study_extent, "upscale_factor": dialog._upscale_factor,
         "multiplier": dialog.spinBox_L2ResolutionMultiplier.value(), "grid_version": 3})
 
 
@@ -349,15 +360,15 @@ def _set_default_l2_multiplier(dialog, metadata, converted, l0_resolution):
         dialog.spinBox_L2ResolutionMultiplier.setValue(x_factor)
 
 
-def filled_dem_resolution_info(dialog):
-    """Read the effective DEM header; never start terrain processing here."""
+def filled_dem_resolution_info(dialog, factor=1):
+    """Read the effective DEM header, upscaled by `factor`; never start terrain processing here."""
     from ...core.grid.raster import dem_grid
     layer = dialog.input_combo("dem").currentLayer()
     crs = dialog.get_crs()
     if not layer or not crs or not crs.isValid():
         return None
     return dem_grid(layer.source(), qgis_layers.crs_string(layer.crs()),
-                    qgis_layers.crs_string(crs), qgis_layers.crs_unit(crs))
+                    qgis_layers.crs_string(crs), qgis_layers.crs_unit(crs), factor)
 
 
 def prepare_meteo_l2_grid(dialog, precipitation_metadata=None):
@@ -505,19 +516,23 @@ def refresh_grid_resolution_controls(dialog):
 
 
 def update_l0_resolution_from_dem(dialog, layer=None, *, refresh=True):
-    """Read the source DEM header and show its resolution as L0."""
-    info = filled_dem_resolution_info(dialog)
+    """Show the DEM's resolution, and L0's: the DEM upscaled by the factor last Set."""
+    dem = filled_dem_resolution_info(dialog)
+    info = filled_dem_resolution_info(dialog, dialog._upscale_factor) if dem and dialog._upscale_factor > 1 else dem
     dialog._grid_l0_info = info
+    dialog.label_demResolutionValue.setText(format_resolution(dem["resolution"], dem["unit"]) if dem else "")
+    dialog.label_demResolutionUnit.setText(dem["unit"] if dem else "")
     if not info:
         _set_resolution_labels(dialog, "L0", "", "")
     else:
+        dialog.spinBox_upscaleTopographyFactor.setRange(1, max(1, min(dem["header"]["ncols"], dem["header"]["nrows"])))
         _set_resolution_labels(
             dialog, "L0", format_resolution(info["resolution"], info["unit"]), info["unit"]
         )
-        if abs(info["x_resolution"] - info["y_resolution"]) > max(info["resolution"], 1.0) * 1e-6:
+        if abs(dem["x_resolution"] - dem["y_resolution"]) > max(dem["resolution"], 1.0) * 1e-6:
             dialog.log_message(
                 "WARNING: DEM pixels are not square. L0 uses the average of "
-                f"x={info['x_resolution']} and y={info['y_resolution']}.")
+                f"x={dem['x_resolution']} and y={dem['y_resolution']}.")
     if refresh:
         refresh_l1_l11_resolution_options(dialog)
 

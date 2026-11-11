@@ -378,14 +378,57 @@ def _restore_raster_details(combo_box, initial):
     combo_box.setItemData(index, data)
 
 
+def _asks(path) -> bool:
+    """The details dialog's cases: a NetCDF/ASCII variable and CRS, or the CRS a readable raster lacks."""
+    suffix = Path(path).suffix.lower()
+    if suffix in {".asc", ".nc"}:
+        return True
+    if suffix in VECTOR_EXTENSIONS:
+        return False
+    from osgeo import gdal
+
+    try:
+        readable = gdal.Open(str(path)) is not None
+    except RuntimeError:  # GDAL exceptions on (QGIS): unreadable fails later, with its own message
+        readable = False
+    return readable and layers.crs_of(path) is None
+
+
+def init_group_crs(widget) -> None:
+    """A multi-layer group's CRS widget: not set until the CRS of its layers is chosen."""
+    from qgis.gui import QgsProjectionSelectionWidget
+
+    widget.setOptionVisible(QgsProjectionSelectionWidget.CrsOption.CrsNotSet, True)
+    widget.setNotSetText("Not set: choose the CRS of the layers")
+    widget.setCrs(QgsCoordinateReferenceSystem())
+
+
+def group_crs(widget, paths) -> str:
+    """The CRS of all the group's layers: required, and a layer with its own CRS must be in it."""
+    from ...core.grid.model import crs_equal
+
+    if not widget.crs().isValid():
+        raise ValueError("Choose the CRS of the layers.")
+    crs = layers.crs_string(widget.crs())
+    for path in (str(path).split("|", 1)[0] for path in paths):
+        try:
+            own = layers.crs_of(path, is_raster=Path(path).suffix.lower() not in VECTOR_EXTENSIONS)
+        except RuntimeError:  # GDAL exceptions on (QGIS): unreadable fails later, with its own message
+            own = None
+        if own is not None and own.isValid() and not crs_equal(layers.crs_string(own), crs):
+            raise ValueError(f"{Path(path).name} is in {own.authid() or own.description()}, not in the "
+                             f"layers' CRS {crs}: choose its CRS, or reproject the layer.")
+    return crs
+
+
 def raster_details(parent, path):
-    """Return file metadata, prompting only for NetCDF and ASCII rasters."""
+    """Return file metadata, prompting for NetCDF and ASCII rasters and any raster without a CRS."""
     path = str(Path(path).resolve())
     if Path(path).suffix.lower() in VECTOR_EXTENSIONS:
         path = _vector_layer(parent, path)
         crs = layers.crs_of(path, is_raster=False) if path else None
         return RasterInputConfig(path, "", layers.crs_string(crs) if crs is not None else "") if path else None
-    if Path(path).suffix.lower() not in {".asc", ".nc"}:
+    if not _asks(path):
         crs = layers.crs_of(path)
         return RasterInputConfig(
             path, "", layers.crs_string(crs) if crs is not None else ""
@@ -421,7 +464,7 @@ def _ensure_raster_details(parent, combo_box):
     if not path:
         return False
     current = _combo_raster_details(combo_box)
-    if Path(path).suffix.lower() not in {".asc", ".nc"}:
+    if not _asks(path):
         return True
     if current.get("variable") and current.get("source_crs"):
         return True
@@ -489,6 +532,8 @@ __all__ = [
     "RasterInputConfig",
     "ReadyInputConfig",
     "SingleLayerLookupConfig",
+    "group_crs",
+    "init_group_crs",
     "is_point_layer",
     "loaded_qgis_items",
     "qgis_layer_item",

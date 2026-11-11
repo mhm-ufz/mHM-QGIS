@@ -618,6 +618,21 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
     return str(reprojected_path)
 
 
+def _padded_to_blocks(source, factor, path):
+    """`source` with nodata rows on top and columns on the right up to whole factor x factor blocks,
+    the lower-left corner kept: the upscaling takes no partial block, and drops no DEM cell."""
+    gdal = _dependencies()[3]
+    dataset = gdal.Open(str(source))
+    cols, rows = dataset.RasterXSize, dataset.RasterYSize
+    if not (cols % factor or rows % factor):
+        return source
+    nodata = dataset.GetRasterBand(1).GetNoDataValue()
+    if gdal.Translate(str(path), dataset, srcWin=[0, -(-rows % factor), cols + -cols % factor, rows + -rows % factor],
+                      noData=-9999.0 if nodata is None else nodata, format="netCDF") is None:
+        raise RuntimeError("Padding the DEM to whole upscaling blocks failed.")
+    return str(path)
+
+
 DEM_DERIVATIVE_VARIABLES = {
     "slope": "slope", "aspect": "aspect",
     "flow_accumulation": "facc", "flow_direction": "fdir",
@@ -626,9 +641,10 @@ DEM_DERIVATIVE_VARIABLES = {
 
 def dem_derivative_files(
     source, output_folder, *, source_crs="", target_crs="",
-    reprojected_path="", compute=None, log=None, task=None, header=None,
+    reprojected_path="", compute=None, log=None, task=None, header=None, upscale_factor=1,
 ):
-    """Prepare one derivative dataset and a single-variable filled DEM."""
+    """Prepare one derivative dataset and a single-variable filled DEM; with `upscale_factor`, on the
+    upscaled topography grid (`core.grid.raster.dem_grid` with that factor)."""
     from netCDF4 import Dataset
 
     from ..file.netcdf.raster import copy_rasters, file_path
@@ -646,7 +662,7 @@ def dem_derivative_files(
     }
     digest = fingerprint((file_path(source),), {
         "source": str(source), "source_crs": source_crs, "target_crs": target_crs,
-        "format": "dem-netcdf-2", "header": header,
+        "format": "dem-netcdf-2", "header": header, "upscale_factor": upscale_factor,
     })
     try:
         with Dataset(bundle) as dataset:
@@ -671,8 +687,10 @@ def dem_derivative_files(
             source, source_crs, target_crs,
             reprojected_path or str(folder / "dem_reprojected.nc"),
         )
+        if upscale_factor > 1:
+            prepared = _padded_to_blocks(prepared, upscale_factor, folder / "dem_upscale_input.nc")
         with TemporaryDirectory(prefix="dem_derivatives_", dir=folder) as staging:
-            written = (compute or _compute_dem_derivatives)(prepared, staging, log)
+            written = (compute or _compute_dem_derivatives)(prepared, staging, log, upscale_factor)
             _cancelled(task)
             with Dataset(written, "r+") as dataset:
                 if not {"dem", "dem_filled", *DEM_DERIVATIVE_VARIABLES.values()} <= set(dataset.variables):
@@ -724,10 +742,10 @@ def override_derivative(folder, variable, raster):
         stored[:] = (values[::-1] if y[0] < y[-1] else values).astype(stored.dtype)  # GDAL reads north first
 
 
-def _compute_dem_derivatives(prepared, staging, log):
+def _compute_dem_derivatives(prepared, staging, log, factor=1):
     from ....externals.mhm_tools_handler import create_dem_derivative_files
 
-    return create_dem_derivative_files(prepared, staging, log=log)
+    return create_dem_derivative_files(prepared, staging, factor=factor, log=log)
 
 
 def _flow_context(filled_dem):

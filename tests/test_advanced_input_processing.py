@@ -50,6 +50,7 @@ def test_land_cover_processing_writes_period_state(tmp_path, monkeypatch):
         lookup,
         "source",
         "class",
+        "EPSG:3035",  # the CRS of period files without one
     )
     manifests = []
 
@@ -57,6 +58,7 @@ def test_land_cover_processing_writes_period_state(tmp_path, monkeypatch):
         manifests.append(Path(input_file))
         output = Path(output_path)
         assert kwargs["output_type"] == "nc"
+        assert kwargs["input_crs"] == "EPSG:3035"  # one argument beside the unchanged manifest
         return (_touch(output / "lc_periods.nc"),)
 
     monkeypatch.setattr(processing, "prepare_land_cover_periods", fake_formatter)
@@ -125,7 +127,7 @@ def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch)
     sources = [_touch(tmp_path / f"soil_{index}.tif") for index in range(4)]
     dem = _touch(tmp_path / "dem.tif")
     value = SoilInput((SoilHorizon(1, 0, 300, *sources),), "kg/m3",
-                      composition_step=2.5, bulk_density_step=0.05)
+                      composition_step=2.5, bulk_density_step=0.05, crs="EPSG:4326")
     digest = processing.input_fingerprint(value, dem, "6.0")
     for changed in (replace(value, composition_step=5.0),
                     replace(value, bulk_density_step=0.1)):
@@ -134,6 +136,7 @@ def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch)
     manifests = []
 
     def fake_formatter(input_file, dem_file, output_path, **kwargs):
+        assert kwargs["input_crs"] == "EPSG:4326"  # through the worker's dict round trip
         assert kwargs["composition_step"] == 2.5
         assert kwargs["bulk_density_step"] == 0.05
         manifests.append(Path(input_file))

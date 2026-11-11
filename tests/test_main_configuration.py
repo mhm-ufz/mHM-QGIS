@@ -123,3 +123,30 @@ def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
     assert dialog.comboBox_mHMversion.isEnabled()
     assert not (tmp_path / "settings.yaml").exists()
     dialog.close()
+
+
+def test_set_dem_makes_l0_the_dem_upscaled_by_the_ticked_factor(tmp_path):
+    dem = tmp_path / "dem.tif"
+    raster = gdal.GetDriverByName("GTiff").Create(str(dem), 7, 5, 1, gdal.GDT_Float32)
+    raster.SetGeoTransform((0, 100, 0, 500, 0, -100))
+    crs = osr.SpatialReference()
+    crs.ImportFromEPSG(32632)
+    raster.SetProjection(crs.ExportToWkt())
+    raster = None
+    dialog = MhmQgisDialog()
+    dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32632"))
+    dialog.pushButton_setCRS.click()
+    dialog.input_combo("dem").setLayer(QgsRasterLayer(str(dem), "DEM"))
+    labels = lambda: (dialog.label_demResolutionValue.text(), dialog.label_L0Resolution.text())  # noqa: E731
+    assert labels() == ("100", "100")
+    assert dialog.spinBox_upscaleTopographyFactor.maximum() == 5  # a factor fits in the DEM
+    dialog.groupBox_upscaleTopography.setChecked(True)
+    dialog.spinBox_upscaleTopographyFactor.setValue(2)
+    assert labels() == ("100", "100")  # only Set applies it
+    dialog.pushButton_setDEM.click()
+    assert labels() == ("100", "200")
+    assert dialog._grid_l0_info["header"]["ncols"] == 4  # the last column padded to a whole block
+    dialog.groupBox_upscaleTopography.setChecked(False)
+    dialog.pushButton_setDEM.click()
+    assert labels() == ("100", "100")
+    dialog.close()

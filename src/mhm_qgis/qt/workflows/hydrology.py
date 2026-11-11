@@ -53,6 +53,11 @@ def dem_options(dialog):
     if not dialog.check_prerequisites():
         raise ValueError("Select a project folder and DEM first.")
     combo = dialog.input_combo("dem")
+    from ..dialogs.input_selection import _ensure_raster_details
+
+    item = combo.currentData()
+    if isinstance(item, dict) and item.get("origin") == "file" and not _ensure_raster_details(dialog, combo.combo_box):
+        raise ValueError("The DEM needs a CRS.")  # a DEM file saved without its CRS asks once
     source = combo.source_uri()
     if not source:
         raise ValueError("The selected DEM has no readable source.")
@@ -69,6 +74,7 @@ def dem_options(dialog):
         "target_crs": layers.crs_string(dialog.get_crs()),
         "reprojected_path": str(folder / "dem_reprojected.nc"),
         "header": grid.common_l0_header(dialog),
+        "upscale_factor": dialog._upscale_factor,
     }
 
 
@@ -175,8 +181,7 @@ def start_domain_preflight(dialog, controls, done, failed=None):
             failed=failed,
         )
 
-    if _dem_ready(dialog):
-        return channels()
+    # Reused at once when fingerprinted fresh, rebuilt on a changed DEM or upscaling factor.
     return start_dem_derivatives(
         dialog, key="domain-delineator-preflight-dem", controls=controls,
         done=channels, failed=failed,

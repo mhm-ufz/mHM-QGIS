@@ -517,4 +517,4 @@ def test_set_gauges_builds_the_network_the_delineator_opens_on(dialog, tmp_path,
     assert "Set on the Gauges page" in notes[-1]
     dialog.pushButton_setGauges.click()
     assert started
-    assert "being created" in notes[-1]
+    assert len(notes) == 1  # no popup over the running task: a failure's message must show alone

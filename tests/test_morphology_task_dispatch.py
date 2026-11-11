@@ -369,7 +369,7 @@ def test_prerequisites_run_dem_first_then_their_own_stage(tmp_path):
     raster = None
     dialog = MhmQgisDialog()
     dialog.project_folder = str(tmp_path)
-    main.add_file_input(dialog, "dem", str(dem), manual=True)
+    main.add_file_input(dialog, "dem", str(dem), manual=True, variable="dem", source_crs="EPSG:32632")  # its CRS asked
     submitted = []
     dialog.task_coordinator.submit = (
         lambda key, _label, _runner, **options: submitted.append((key, options)) or True

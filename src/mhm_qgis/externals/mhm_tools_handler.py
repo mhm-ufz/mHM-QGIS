@@ -516,9 +516,11 @@ def create_dem_derivative_files(
     output_folder: str | Path,
     crs: str | None = None,
     *,
+    factor: int = 1,
     log: LogCallback | None = None,
 ) -> Path:
-    """Create the multi-variable NetCDF derivative dataset through mHM-tools.
+    """Create the multi-variable NetCDF derivative dataset through mHM-tools; with `factor`, the
+    topography upscaled to blocks of factor x factor cells (the input a whole number of blocks).
 
     The whole pass is held in memory, so callers that can afford a subprocess
     should run it through `mhm_qgis.core.native_worker` -- see
@@ -533,6 +535,8 @@ def create_dem_derivative_files(
 
     folder = Path(output_folder)
     folder.mkdir(parents=True, exist_ok=True)
+    if factor > 1:
+        return _upscaled_topography(file_path(input_file), folder, factor, crs, variable, log)
     with capture_messages(log):
         written = create_dem_derivatives(
             input_file=str(file_path(input_file)),
@@ -544,6 +548,30 @@ def create_dem_derivative_files(
     paths = tuple(Path(path) for path in written)
     _require_outputs(paths)
     return paths[0]
+
+
+def _upscaled_topography(input_file, folder, factor, crs, variable, log):
+    """The upscaled derivatives, with the filled DEM also as `dem_filled`, as the bundle holds it."""
+    try:
+        from mhm_tools.pre.topography_upscaling import upscale_topography
+    except ImportError as error:
+        raise RuntimeError("Topography upscaling needs a newer mhm-tools.") from error
+    from netCDF4 import Dataset
+
+    with capture_messages(log):
+        written = upscale_topography(
+            folder / "dem_derivatives_upscaled.nc", dem_file=str(input_file), upscale_factor=factor,
+            depression_fill_dem=True, write_facc=True, facc_unit="cell", crs=crs, dem_var=variable,
+        )
+    path = Path(written[0])
+    _require_outputs((path,))
+    with Dataset(path, "r+") as dataset:
+        dem = dataset["dem"]
+        filled = dataset.createVariable("dem_filled", dem.dtype, dem.dimensions,
+                                        fill_value=getattr(dem, "_FillValue", None))
+        filled.setncatts({name: dem.getncattr(name) for name in dem.ncattrs() if name != "_FillValue"})
+        filled[:] = dem[:]
+    return path
 
 
 def link_folder_tree(

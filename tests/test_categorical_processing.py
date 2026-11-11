@@ -278,16 +278,17 @@ def test_ready_periods_and_horizons_are_warped_onto_l0(tmp_path, version):
         assert sum(name.startswith("lc_") and name.endswith(".asc") for name in published) == 3
 
 
-def _tif(path, value, origin=(0.0, 300.0), cellsize=100.0, size=2):
-    """A small EPSG:32632 class raster filled with `value`."""
+def _tif(path, value, origin=(0.0, 300.0), cellsize=100.0, size=2, crs=True):
+    """A small EPSG:32632 class raster filled with `value` (without a CRS of its own when not `crs`)."""
     import numpy as np
     from osgeo import gdal, osr
 
     raster = gdal.GetDriverByName("GTiff").Create(str(path), size, size, 1, gdal.GDT_Int32)
     raster.SetGeoTransform((origin[0], cellsize, 0.0, origin[1], 0.0, -cellsize))
-    srs = osr.SpatialReference()
-    srs.ImportFromEPSG(32632)
-    raster.SetProjection(srs.ExportToWkt())
+    if crs:
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(32632)
+        raster.SetProjection(srs.ExportToWkt())
     raster.GetRasterBand(1).WriteArray(np.full((size, size), value))
     raster = None
     return str(path)
@@ -330,6 +331,25 @@ def test_ready_files_and_categorical_soil_horizons_become_stacks_on_l0(tmp_path)
     settings = load_settings(tmp_path)["soil"]
     assert settings["soil_db_mode"] == 1
     assert [horizon["lower_depth"] for horizon in settings["horizons"]] == [300, 1000]
+
+
+def test_a_table_crs_places_all_its_layers(tmp_path):
+    """The table's CRS (`source_crs`) is the CRS of all its layers, one without a CRS of its own too."""
+    pytest.importorskip("osgeo")
+    from netCDF4 import Dataset
+
+    from mhm_qgis.core.executions.morphology import commands
+    from mhm_qgis.core.handlers.file.json import write as write_json
+    from mhm_qgis.core.handlers.store.layout import input_state_path
+
+    ensure_project_structure(tmp_path, "5.13")
+    write_json(input_state_path(tmp_path), {"mhm_version": "5.13"})
+    land = [[_tif(tmp_path / "bare.tif", 3, crs=False), "1990-01-01T00:00:00", "1999-12-31T00:00:00"],
+            [_tif(tmp_path / "own.tif", 5), "2000-01-01T00:00:00", "2010-12-31T00:00:00"]]
+    job = {"project_folder": str(tmp_path), "input_path": "", "target_crs": "EPSG:32632", "target_header": L0,
+           "kind": "lc", "layers": land, "source_crs": "EPSG:32632"}
+    with Dataset(commands.ready(None, job)["outputs"][0]) as handle:
+        assert (handle["land_cover"][0, 2, 1], handle["land_cover"][1, 2, 1]) == (3, 5)
 
 
 def test_vector_soil_horizons_burn_through_the_lookup_onto_the_dem_grid(tmp_path):

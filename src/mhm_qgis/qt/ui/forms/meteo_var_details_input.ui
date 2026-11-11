@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>546</width>
-    <height>364</height>
+    <height>440</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -222,6 +222,84 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="groupBox_cumulative">
+     <property name="title">
+      <string>Cumulative</string>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_3">
+      <property name="spacing">
+       <number>2</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_cumulativeInterval">
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="label_cumulativeInterval">
+          <property name="text">
+           <string>Cumulative Interval:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="comboBox_cumulativeInterval"/>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_resetInterval">
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="label_resetInterval">
+          <property name="text">
+           <string>Reset Interval:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="comboBox_resetInterval"/>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_resetTimestamp">
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="label_resetTimestamp">
+          <property name="text">
+           <string>Reset Timestamp:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="comboBox_resetTimestamp"/>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QWidget" name="widget_additionalHost" native="true">
      <property name="minimumSize">
       <size>
@@ -229,7 +307,7 @@
        <height>20</height>
       </size>
      </property>
-     <layout class="QHBoxLayout" name="horizontalLayout" stretch="">
+     <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="topMargin">
        <number>1</number>
       </property>
@@ -282,7 +360,7 @@
   <customwidget>
    <class>QgsProjectionSelectionWidget</class>
    <extends>QWidget</extends>
-   <header>qgis.gui</header>
+   <header>qgsprojectionselectionwidget.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

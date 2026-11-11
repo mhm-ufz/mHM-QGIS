@@ -16,6 +16,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # isort: off
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
+from qgis.core import QgsCoordinateReferenceSystem
 from qgis.PyQt.QtWidgets import QApplication, QMessageBox
 
 from mhm_qgis.qt.controllers import categorical
@@ -118,6 +119,7 @@ def test_multi_horizon_soil_and_the_layer_tables(tmp_path, monkeypatch):
         dialog.lineEdit_upperDepth.setText(upper)
         dialog.lineEdit_lowerDepth.setText(lower)
         dialog.pushButton_mhmReadySoilInputAdd.click()
+    dialog.mProjectionSelectionWidget_mhmReadySoilCrs.setCrs(QgsCoordinateReferenceSystem("EPSG:32632"))
     dialog.tableWidget_mhmReadySoilInput.cellWidget(1, 3).click()  # ✖
     dialog.pushButton_setSoil.click()
     assert "at least two rows" in warned[-1]
@@ -134,3 +136,51 @@ def test_saved_types_of_older_versions_restore_to_the_new_radios():
     assert categorical.saved_mode("lc", "single_categorical_layer_(with_lookup_table)") == categorical._PERIODS
     assert categorical.saved_mode("lai", "mHM ready") == "mHM ready (Class Layer)"
     assert categorical.saved_mode("geology", "mhm ready") == "mHM ready"
+
+
+def test_a_layer_table_has_one_crs_for_all_its_layers(tmp_path, monkeypatch):
+    from osgeo import gdal, osr
+
+    _app()
+    dialog = _dialog(tmp_path)
+    assert not any(getattr(dialog, name).crs().isValid() for name in (
+        *categorical._CRS.values(), "mProjectionSelectionWidget_multiHorizonSoilCrs"))  # not set
+    widget = dialog.mProjectionSelectionWidget_mhmReadyLandUseCrs
+    warned, started = [], []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warned.append(args[2]))
+    monkeypatch.setattr(categorical, "require_common_grid", lambda _dialog: None)
+    monkeypatch.setattr(dialog.morphology_tasks, "start_ready_input", lambda kind, failed: started.append(kind))
+    dialog.radioButton_landUseReady.click()
+    assert not widget.isEnabled()
+    dialog.checkBox_multiPeriodmhmReadyLandUseInput.setChecked(True)
+    assert widget.isEnabled()
+    combo = dialog.comboBox_demInput_mhmReadyLandUseInput
+    netcdf = tmp_path / "lc.nc"
+    netcdf.touch()
+    _populate_file_combo(combo, str(tmp_path), "land_cover", str(netcdf))
+    dialog.pushButton_mhmReadyLandUseInputAdd.click()
+    assert "GeoTIFF or ASCII" in warned[-1]
+    assert not dialog._layer_rows["lc_ready"]
+    for name, epsg in (("bare.tif", None), ("own.tif", 32632)):  # without a CRS of its own, and with one
+        raster = gdal.GetDriverByName("GTiff").Create(str(tmp_path / name), 2, 2, 1)
+        raster.SetGeoTransform((0, 100, 0, 200, 0, -100))
+        if epsg:
+            srs = osr.SpatialReference()
+            srs.ImportFromEPSG(epsg)
+            raster.SetProjection(srs.ExportToWkt())
+        raster = None
+        _populate_file_combo(combo, str(tmp_path), "land_cover", str(tmp_path / name))
+        dialog.pushButton_mhmReadyLandUseInputAdd.click()
+    for row, period in zip(dialog._layer_rows["lc_ready"], (("1990", "2000"), ("2000", "2010")), strict=True):
+        row[1:] = [f"{year}-01-01T00:00:00" for year in period]
+    dialog.pushButton_setLandUse.click()
+    assert "Choose the CRS of the layers" in warned[-1]
+    widget.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
+    dialog.pushButton_setLandUse.click()
+    assert "own.tif is in EPSG:32632" in warned[-1]  # its own CRS is not the layers'
+    assert not started
+    widget.setCrs(QgsCoordinateReferenceSystem("EPSG:32632"))
+    dialog.pushButton_setLandUse.click()
+    assert dialog._categorical_ready_configs["lc"]["source_crs"] == "EPSG:32632"
+    assert started == ["lc"]
+    dialog.close()

@@ -30,13 +30,14 @@ from ...morphology.layers.categorical import copy_ready, saved_outputs
 def dem_derivatives(task, options):
     """Prepare the DEM derivatives in a disposable native process."""
 
-    def compute(prepared, staging, _log):
+    def compute(prepared, staging, _log, factor=1):
         result = native_worker(
             task,
             {
                 "kind": "dem-derivatives",
                 "input_file": str(prepared),
                 "output_folder": str(staging),
+                "factor": factor,
             },
             Path(staging).parent,
         )
@@ -109,7 +110,7 @@ def ready(task, job):
             layers, definition = lookup_soil_layers(
                 layers, lookup["lookup_table"], lookup["mapping_field"], lookup["class_field"],
                 Path(morph_staging_folder(job["project_folder"])) / "_soil_horizons",
-                dem_file=job.get("filled_dem"), dem_crs=job["target_crs"])
+                dem_file=job.get("filled_dem"), dem_crs=job["target_crs"], source_crs=source_crs)
         from ...morphology.layers.categorical import STACKS, stack_ready_layers
 
         source = stack_ready_layers(job["project_folder"], job["kind"], layers, source_crs=source_crs,

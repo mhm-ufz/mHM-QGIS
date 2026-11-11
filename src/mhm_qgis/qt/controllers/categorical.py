@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from qgis.core import QgsCoordinateReferenceSystem
 from qgis.PyQt.QtCore import QDateTime, Qt
 from qgis.PyQt.QtWidgets import (
     QDateTimeEdit,
@@ -27,6 +28,7 @@ from ..dialogs.input_selection import (
     LaiNetcdfConfig,
     ReadyInputConfig,
     SingleLayerLookupConfig,
+    _asks,
     _browse_into_combo,
     _browse_raster_into_combo,
     _combo_path,
@@ -35,6 +37,8 @@ from ..dialogs.input_selection import (
     _populate_file_combo,
     _populate_layer_combo,
     _restore_raster_details,
+    group_crs,
+    init_group_crs,
 )
 from . import main
 from .grid import require_common_grid
@@ -100,12 +104,20 @@ _TABLES = {
 }
 # a multi-layer switch (off by default) → its table and the labels it enables beside the table's widgets
 _SWITCHES = {
-    "checkBox_multiPeriodCategoricalLandUseInput": ("lc_lookup", ()),
-    "checkBox_multiPeriodmhmReadyLandUseInput": ("lc_ready", ("label_mhmReadyLandUseFrom", "label_mhmReadyLandUseTo")),
-    "checkBox_multiClassLayerSoil": ("soil_ready", ("label_mhmReadySoilUpperDepth", "label_mhmReadySoilLowerDepth")),
+    "checkBox_multiPeriodCategoricalLandUseInput": ("lc_lookup", ("label_categoricalLandUseCrs",)),
+    "checkBox_multiPeriodmhmReadyLandUseInput": ("lc_ready", ("label_mhmReadyLandUseFrom", "label_mhmReadyLandUseTo",
+                                                               "label_mhmReadyLandUseCrs")),
+    "checkBox_multiClassLayerSoil": ("soil_ready", ("label_mhmReadySoilUpperDepth", "label_mhmReadySoilLowerDepth",
+                                                    "label_mhmReadySoilCrs")),
     "checkBox_multiClassLayerCategoricalSoil": ("soil_lookup", ("label_categoricalSoilUpperDepth",
-                                                        "label_categoricalSoilLowerDepth")),
+                                                                "label_categoricalSoilLowerDepth",
+                                                                "label_categoricalSoilCrs")),
 }
+# the CRS of all a table's layers (mHM-tools' input_crs); a row takes no NetCDF
+_CRS = {"lc_lookup": "mProjectionSelectionWidget_categoricalLandUseCrs",
+        "lc_ready": "mProjectionSelectionWidget_mhmReadyLandUseCrs",
+        "soil_ready": "mProjectionSelectionWidget_mhmReadySoilCrs",
+        "soil_lookup": "mProjectionSelectionWidget_categoricalSoilCrs"}
 _SWITCH = {key: checkbox for checkbox, (key, _labels) in _SWITCHES.items()}
 _RASTER_FILTER = "Raster files (*.asc *.nc *.tif *.tiff);;All files (*)"
 _LAYER_FILTER = "Input layers (*.asc *.nc *.gpkg *.shp *.tif *.tiff);;All files (*)"
@@ -153,6 +165,8 @@ def bind(dialog):
     for name in (TIME_WIDGETS["sim_start"], TIME_WIDGETS["sim_end"]):
         getattr(dialog, name).dateTimeChanged.connect(
             lambda _value: [_next_period(dialog, key) for key in ("lc_lookup", "lc_ready")])
+    for name in _CRS.values():
+        init_group_crs(getattr(dialog, name))
     for checkbox, (key, _labels) in _SWITCHES.items():
         getattr(dialog, _TABLES[key][4]).clicked.connect(lambda _checked=False, key=key: add_row(dialog, key))
         getattr(dialog, checkbox).toggled.connect(lambda _on, checkbox=checkbox: _switched(dialog, checkbox))
@@ -264,7 +278,7 @@ def _ready(dialog, kind):
         if kind == "soil" and not defined:
             raise ValueError("Several soil horizon class layers need their class definition file.")
         layers = _rows(dialog, key)
-        return ReadyInputConfig(layers[0][0], defined, layers=layers)
+        return ReadyInputConfig(layers[0][0], defined, source_crs=_crs(dialog, key), layers=layers)
     if not source or not Path(source).is_file():
         raise ValueError("Select an existing mHM-ready file.")
     if defined and not Path(defined).is_file():
@@ -287,7 +301,7 @@ def _lookup(dialog, kind):
         raise ValueError("Select an existing lookup table.")
     if not mapping.currentText().strip() or not class_field.currentText().strip():
         raise ValueError("Choose the lookup table's mapping and class fields.")
-    if Path(source).suffix.lower() in {".asc", ".nc"} and not _ensure_raster_details(dialog, adapter.combo_box):
+    if _asks(source) and not _ensure_raster_details(dialog, adapter.combo_box):
         return None
     details = _combo_raster_details(adapter.combo_box)
     return SingleLayerLookupConfig(source, lookup_table, mapping.currentText().strip(),
@@ -305,7 +319,8 @@ def _soil_horizon_lookup(dialog):
         raise ValueError("Choose the lookup table's mapping and class fields.")
     layers = _rows(dialog, "soil_lookup")
     return SingleLayerLookupConfig(layers[0][0], lookup_table, mapping.currentText().strip(),
-                                   class_field.currentText().strip(), layers=layers)
+                                   class_field.currentText().strip(), source_crs=_crs(dialog, "soil_lookup"),
+                                   layers=layers)
 
 
 def _lai_netcdf(dialog):
@@ -330,7 +345,7 @@ def _switched(dialog, checkbox):
     key, labels = _SWITCHES[checkbox]
     on = getattr(dialog, checkbox).isChecked()
     table, _combo, first, second, add = _TABLES[key]
-    for name in (table, first, second, add, *labels):
+    for name in (table, first, second, add, _CRS[key], *labels):
         getattr(dialog, name).setEnabled(on)
     if key.startswith("lc"):
         _next_period(dialog, key)
@@ -358,6 +373,9 @@ def add_row(dialog, key):
     if not path or not Path(path.split("|", 1)[0]).is_file():
         QMessageBox.warning(dialog, "Input layers", "Select a local file first.")
         return
+    if Path(path).suffix.lower() == ".nc":
+        QMessageBox.warning(dialog, "Input layers", "Several periods or horizons take GeoTIFF or ASCII rasters.")
+        return
     dialog._layer_rows[key].append([path, _value(first), _value(second)])
     _show_rows(dialog, key)
 
@@ -383,6 +401,10 @@ def _show_rows(dialog, key):
         table.setCellWidget(index, 3, remove)
     if key.startswith("lc"):
         _next_period(dialog, key)
+
+
+def _crs(dialog, key) -> str:
+    return group_crs(getattr(dialog, _CRS[key]), (row[0] for row in dialog._layer_rows[key]))
 
 
 def _rows(dialog, key) -> tuple:
@@ -412,7 +434,8 @@ def _land_use_periods(dialog):
     _, _, table, _, mapping, class_field = _widgets(dialog, _LOOKUP_WIDGETS["lc"])
     value = LandUseInput(
         tuple(LandUsePeriod(start, end, Path(path)) for path, start, end in _rows(dialog, "lc_lookup")),
-        Path(_combo_path(table)), mapping.currentText().strip(), class_field.currentText().strip())
+        Path(_combo_path(table)), mapping.currentText().strip(), class_field.currentText().strip(),
+        _crs(dialog, "lc_lookup"))
     times = load_settings(dialog.project_folder).get("time", {})
     validate_land_use_input(value, simulation_start=times.get("sim_start", "1900-01-01T00:00:00"),
                             simulation_end=times.get("sim_end", "2101-01-01T00:00:00"),
@@ -457,6 +480,15 @@ def fill(dialog):
         "soil_ready": [list(row) for row in (dialog._categorical_ready_configs.get("soil") or {}).get("layers", [])],
         "soil_lookup": [list(row) for row in (dialog._categorical_lookup_configs.get("soil") or {}).get("layers", [])],
     }
+    saved_crs = {  # a layered config's source_crs is its table's CRS
+        "lc_lookup": land_use_input_value(periods).crs if periods else "",
+        **{key: config.get("source_crs", "") if config.get("layers") else "" for key, config in (
+            ("lc_ready", dialog._categorical_ready_configs.get("lc") or {}),
+            ("soil_ready", dialog._categorical_ready_configs.get("soil") or {}),
+            ("soil_lookup", dialog._categorical_lookup_configs.get("soil") or {}))},
+    }
+    for key, name in _CRS.items():
+        getattr(dialog, name).setCrs(QgsCoordinateReferenceSystem(saved_crs[key]))
     for checkbox, (key, _labels) in _SWITCHES.items():
         getattr(dialog, checkbox).setChecked(bool(dialog._layer_rows[key]))
         _switched(dialog, checkbox)
@@ -668,6 +700,7 @@ def land_use_input_value(value):
         Path(value.get("lookup_table", "")),
         str(value.get("mapping_field", "")),
         str(value.get("class_field", "")),
+        str(value.get("crs", "")),
     )
 
 
@@ -694,4 +727,5 @@ def soil_input_value(value):
         str(value.get("bulk_density_unit", "")),
         composition_step=float(value.get("composition_step", 5.0)),
         bulk_density_step=float(value.get("bulk_density_step", 0.1)),
+        crs=str(value.get("crs", "")),
     )
