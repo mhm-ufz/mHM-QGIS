@@ -30,13 +30,14 @@ from ...morphology.layers.categorical import copy_ready, saved_outputs
 def dem_derivatives(task, options):
     """Prepare the DEM derivatives in a disposable native process."""
 
-    def compute(prepared, staging, _log):
+    def compute(prepared, staging, _log, factor=1):
         result = native_worker(
             task,
             {
                 "kind": "dem-derivatives",
                 "input_file": str(prepared),
                 "output_folder": str(staging),
+                "factor": factor,
             },
             Path(staging).parent,
         )

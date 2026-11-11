@@ -1,4 +1,4 @@
-"""Populate the NetCDF/ASCII variable and CRS prompt."""
+"""Populate the variable and CRS prompt for NetCDF/ASCII rasters and rasters without a CRS."""
 from pathlib import Path
 
 from qgis.core import QgsCoordinateReferenceSystem
@@ -11,7 +11,7 @@ def initialize(dialog, path):
     dialog.path = str(Path(path).resolve())
     suffix = Path(path).suffix.lower()
     dialog.comboBox_varName.clear()
-    if suffix == ".asc":
+    if suffix != ".nc":  # an ASC, or a GeoTIFF without a CRS: one variable, named as the file
         dialog.comboBox_varName.addItem(Path(path).stem)
         dialog.comboBox_varName.setEnabled(False)
     else:

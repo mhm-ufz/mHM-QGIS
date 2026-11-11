@@ -94,7 +94,7 @@ def run(job):
         from ..externals.mhm_tools_handler import create_dem_derivative_files
 
         output = create_dem_derivative_files(
-            job["input_file"], job["output_folder"]
+            job["input_file"], job["output_folder"], factor=job.get("factor", 1)
         )
         return {
             "kind": job["kind"],

@@ -118,6 +118,7 @@ def save(dialog):
         "gauge_raster": _combo_path(dialog.comboBox_gaugeRaterInput),
         "crs_authid": dialog._set_crs,  # a CRS not yet Set is not kept
         "study_extent": dialog._study_extent,  # in that CRS
+        "upscale_factor": dialog._upscale_factor,  # L0 = DEM x this, see grid.set_dem
         "intro": dialog._intro_answers,
         "process_cases": process_cases.current(dialog),
     }
@@ -170,6 +171,11 @@ def load(dialog):
             return
         _restore_resolution_preferences(dialog, state.get("grid_resolutions", {}))
         dialog._set_crs = dialog.get_crs().authid()
+        dialog._upscale_factor = max(1, int(state.get("upscale_factor") or 1))  # before the DEM: L0 follows it
+        dialog.groupBox_upscaleTopography.setChecked(dialog._upscale_factor > 1)
+        dialog.spinBox_upscaleTopographyFactor.setMaximum(max(dialog.spinBox_upscaleTopographyFactor.maximum(),
+                                                              dialog._upscale_factor))
+        dialog.spinBox_upscaleTopographyFactor.setValue(dialog._upscale_factor)
         _restore_categorical_inputs(dialog, state)
         main.refresh_input_sources(dialog)
         grid.refresh_precipitation_folder(dialog)
@@ -233,6 +239,8 @@ def clear(dialog):
     dialog._set_crs = dialog.get_crs().authid()
     dialog._study_extent = None
     dialog.groupBox_customExtent.setChecked(False)
+    dialog._upscale_factor = 1
+    dialog.groupBox_upscaleTopography.setChecked(False)
     dialog._land_cover_ready_source = ""
     categorical.fill(dialog)
     dialog._domain_definition_mode = ""

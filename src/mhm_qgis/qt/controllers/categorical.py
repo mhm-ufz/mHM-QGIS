@@ -27,6 +27,7 @@ from ..dialogs.input_selection import (
     LaiNetcdfConfig,
     ReadyInputConfig,
     SingleLayerLookupConfig,
+    _asks,
     _browse_into_combo,
     _browse_raster_into_combo,
     _combo_path,
@@ -287,7 +288,7 @@ def _lookup(dialog, kind):
         raise ValueError("Select an existing lookup table.")
     if not mapping.currentText().strip() or not class_field.currentText().strip():
         raise ValueError("Choose the lookup table's mapping and class fields.")
-    if Path(source).suffix.lower() in {".asc", ".nc"} and not _ensure_raster_details(dialog, adapter.combo_box):
+    if _asks(source) and not _ensure_raster_details(dialog, adapter.combo_box):
         return None
     details = _combo_raster_details(adapter.combo_box)
     return SingleLayerLookupConfig(source, lookup_table, mapping.currentText().strip(),

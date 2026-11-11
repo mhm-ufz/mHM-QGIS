@@ -378,14 +378,30 @@ def _restore_raster_details(combo_box, initial):
     combo_box.setItemData(index, data)
 
 
+def _asks(path) -> bool:
+    """The details dialog's cases: a NetCDF/ASCII variable and CRS, or the CRS a readable raster lacks."""
+    suffix = Path(path).suffix.lower()
+    if suffix in {".asc", ".nc"}:
+        return True
+    if suffix in VECTOR_EXTENSIONS:
+        return False
+    from osgeo import gdal
+
+    try:
+        readable = gdal.Open(str(path)) is not None
+    except RuntimeError:  # GDAL exceptions on (QGIS): unreadable fails later, with its own message
+        readable = False
+    return readable and layers.crs_of(path) is None
+
+
 def raster_details(parent, path):
-    """Return file metadata, prompting only for NetCDF and ASCII rasters."""
+    """Return file metadata, prompting for NetCDF and ASCII rasters and any raster without a CRS."""
     path = str(Path(path).resolve())
     if Path(path).suffix.lower() in VECTOR_EXTENSIONS:
         path = _vector_layer(parent, path)
         crs = layers.crs_of(path, is_raster=False) if path else None
         return RasterInputConfig(path, "", layers.crs_string(crs) if crs is not None else "") if path else None
-    if Path(path).suffix.lower() not in {".asc", ".nc"}:
+    if not _asks(path):
         crs = layers.crs_of(path)
         return RasterInputConfig(
             path, "", layers.crs_string(crs) if crs is not None else ""
@@ -421,7 +437,7 @@ def _ensure_raster_details(parent, combo_box):
     if not path:
         return False
     current = _combo_raster_details(combo_box)
-    if Path(path).suffix.lower() not in {".asc", ".nc"}:
+    if not _asks(path):
         return True
     if current.get("variable") and current.get("source_crs"):
         return True

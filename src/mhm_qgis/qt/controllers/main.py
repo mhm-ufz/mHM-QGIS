@@ -470,7 +470,6 @@ def set_gauges(dialog):
     if hydrology.start_domain_preflight(dialog, (dialog.page_gauges,), ready,
                                         lambda message: _domain_delineator_preflight_failed(dialog, message)):
         dialog.log_message("Creating the drainage network and flow accumulation…")
-        QMessageBox.information(dialog, "Gauges", "The drainage network and flow accumulation are being created.")
 
 
 def open_domain_delineator(dialog):
