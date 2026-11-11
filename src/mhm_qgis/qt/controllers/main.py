@@ -251,7 +251,7 @@ def update_gauged_outlet_count(dialog, layer=None):
     return count
 
 
-DOMAIN_TYPES = ("Entire DEM extent in Domain", "Select Catchments in Domain [using Domain Delineator]")
+DOMAIN_TYPES = ("Entire DEM extent as Domain", "Delineate Domain")  # the radios' texts
 
 
 def radios(dialog, name, chosen):
@@ -288,6 +288,7 @@ def embed(dialog, name, child):
             old.deleteLater()
     if child is not None:
         child.setWindowFlags(Qt.WindowType.Widget)
+        child.setMinimumSize(0, 0)  # a window's minimum: embedded, its layout's own minimum decides
         layout.addWidget(child)
         child.show()
 
