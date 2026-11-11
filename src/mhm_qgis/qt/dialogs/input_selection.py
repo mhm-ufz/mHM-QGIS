@@ -394,6 +394,32 @@ def _asks(path) -> bool:
     return readable and layers.crs_of(path) is None
 
 
+def elide_left(*combos) -> None:
+    """Show a long text from its end (`…/folder/file.tif`): the box and its list elide on the left."""
+    from qgis.PyQt.QtWidgets import QStyle, QStyleOptionComboBox, QStylePainter
+
+    for combo in combos:
+        combo.view().setTextElideMode(QtCore.Qt.TextElideMode.ElideLeft)
+
+        def paint(_event, combo=combo):  # QComboBox.paintEvent, its label elided on the left
+            painter, option = QStylePainter(combo), QStyleOptionComboBox()
+            combo.initStyleOption(option)
+            painter.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, option)
+            field = combo.style().subControlRect(QStyle.ComplexControl.CC_ComboBox, option,
+                                                 QStyle.SubControl.SC_ComboBoxEditField, combo)
+            option.currentText = combo.fontMetrics().elidedText(
+                option.currentText, QtCore.Qt.TextElideMode.ElideLeft, field.width())
+            painter.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, option)
+
+        combo.paintEvent = paint
+
+
+def elide_named_left(form) -> None:
+    """`elide_left` for a form's `comboBox_*` (a CRS widget's inner combo keeps its names whole)."""
+    elide_left(*(combo for combo in form.findChildren(QtWidgets.QComboBox)
+                 if combo.objectName().startswith("comboBox_")))
+
+
 def init_group_crs(widget) -> None:
     """A multi-layer group's CRS widget: not set until the CRS of its layers is chosen."""
     from qgis.gui import QgsProjectionSelectionWidget
@@ -532,6 +558,8 @@ __all__ = [
     "RasterInputConfig",
     "ReadyInputConfig",
     "SingleLayerLookupConfig",
+    "elide_left",
+    "elide_named_left",
     "group_crs",
     "init_group_crs",
     "is_point_layer",

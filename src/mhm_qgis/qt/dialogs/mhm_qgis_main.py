@@ -22,6 +22,7 @@ from ..controllers import post_context, process_cases, workflow_state
 from ..threads.task_coordinator import TaskCoordinator
 from ..ui import load_form
 from ..workflows.morphology import MorphologyTaskBridge
+from .input_selection import elide_named_left
 from .map_canvas import MapCanvasWindow
 from .project_terminal import ProjectTerminalDialog
 from .thread_display import ThreadDisplayDialog
@@ -34,6 +35,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Constructor; `iface` is QGIS Desktop's interface, None when standalone."""
         super().__init__(parent)
         self.setupUi(self)
+        elide_named_left(self)  # long paths keep their file name in sight
         self.iface = iface
         self.project_folder = None  # Active domain root, passed to core APIs.
         self.project_directory = None  # Outer folder shown in the project selector.

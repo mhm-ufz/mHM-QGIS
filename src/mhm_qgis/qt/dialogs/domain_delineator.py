@@ -49,6 +49,7 @@ from ..ui import load_form
 from ..workflows import hydrology
 from .discharge_assignment import discharge_table
 from .file_picker import open_file
+from .input_selection import elide_named_left
 
 Ui_DomainDelineatorDialog = load_form("domain_delineator_dialog.ui")
 
@@ -69,6 +70,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
     ):
         super().__init__(main_dialog)
         self.setupUi(self)
+        elide_named_left(self)  # long paths keep their file name in sight
         self.main_dialog = main_dialog
         self.project_folder = str(main_dialog.project_folder)
         self.pour_points_layer = pour_points_layer
