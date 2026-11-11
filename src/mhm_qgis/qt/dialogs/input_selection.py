@@ -394,6 +394,33 @@ def _asks(path) -> bool:
     return readable and layers.crs_of(path) is None
 
 
+def init_group_crs(widget) -> None:
+    """A multi-layer group's CRS widget: not set until the CRS of its layers is chosen."""
+    from qgis.gui import QgsProjectionSelectionWidget
+
+    widget.setOptionVisible(QgsProjectionSelectionWidget.CrsOption.CrsNotSet, True)
+    widget.setNotSetText("Not set: choose the CRS of the layers")
+    widget.setCrs(QgsCoordinateReferenceSystem())
+
+
+def group_crs(widget, paths) -> str:
+    """The CRS of all the group's layers: required, and a layer with its own CRS must be in it."""
+    from ...core.grid.model import crs_equal
+
+    if not widget.crs().isValid():
+        raise ValueError("Choose the CRS of the layers.")
+    crs = layers.crs_string(widget.crs())
+    for path in (str(path).split("|", 1)[0] for path in paths):
+        try:
+            own = layers.crs_of(path, is_raster=Path(path).suffix.lower() not in VECTOR_EXTENSIONS)
+        except RuntimeError:  # GDAL exceptions on (QGIS): unreadable fails later, with its own message
+            own = None
+        if own is not None and own.isValid() and not crs_equal(layers.crs_string(own), crs):
+            raise ValueError(f"{Path(path).name} is in {own.authid() or own.description()}, not in the "
+                             f"layers' CRS {crs}: choose its CRS, or reproject the layer.")
+    return crs
+
+
 def raster_details(parent, path):
     """Return file metadata, prompting for NetCDF and ASCII rasters and any raster without a CRS."""
     path = str(Path(path).resolve())
@@ -505,6 +532,8 @@ __all__ = [
     "RasterInputConfig",
     "ReadyInputConfig",
     "SingleLayerLookupConfig",
+    "group_crs",
+    "init_group_crs",
     "is_point_layer",
     "loaded_qgis_items",
     "qgis_layer_item",

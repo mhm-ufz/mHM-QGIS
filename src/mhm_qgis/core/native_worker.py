@@ -36,6 +36,7 @@ def _land_use(value):
         lookup_table=Path(value["lookup_table"]),
         mapping_field=str(value["mapping_field"]),
         class_field=str(value["class_field"]),
+        crs=str(value.get("crs", "")),
     )
 
 
@@ -56,6 +57,7 @@ def _soil(value):
         bulk_density_unit=str(value["bulk_density_unit"]),
         composition_step=float(value.get("composition_step", 5.0)),
         bulk_density_step=float(value.get("bulk_density_step", 0.1)),
+        crs=str(value.get("crs", "")),
     )
 
 

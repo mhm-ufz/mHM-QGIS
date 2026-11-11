@@ -65,6 +65,7 @@ def process_land_cover_input(
             value.mapping_field,
             value.class_field,
             output_type=output_type,
+            input_crs=value.crs or None,
             log=log,
         )
         published = _publish_directory(temporary, morph_staging_folder(project_folder))
@@ -136,6 +137,7 @@ def process_soil_input(
             output_type="nc",
             composition_step=value.composition_step,
             bulk_density_step=value.bulk_density_step,
+            input_crs=value.crs or None,
             log=log,
         )
         published = _publish_directory(temporary, morph_staging_folder(project_folder))

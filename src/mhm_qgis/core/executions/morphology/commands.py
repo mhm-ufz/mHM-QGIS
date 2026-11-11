@@ -110,7 +110,7 @@ def ready(task, job):
             layers, definition = lookup_soil_layers(
                 layers, lookup["lookup_table"], lookup["mapping_field"], lookup["class_field"],
                 Path(morph_staging_folder(job["project_folder"])) / "_soil_horizons",
-                dem_file=job.get("filled_dem"), dem_crs=job["target_crs"])
+                dem_file=job.get("filled_dem"), dem_crs=job["target_crs"], source_crs=source_crs)
         from ...morphology.layers.categorical import STACKS, stack_ready_layers
 
         source = stack_ready_layers(job["project_folder"], job["kind"], layers, source_crs=source_crs,

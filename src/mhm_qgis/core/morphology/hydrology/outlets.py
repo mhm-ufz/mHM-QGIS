@@ -209,9 +209,10 @@ def feature_count_text(layer) -> str:
         return "0"
 
 
-def points_from_gauge_raster(source, output):
+def points_from_gauge_raster(source, output, crs=""):
     """A point GeoPackage (layer `gauges`, field `id`) from a gauge-ID raster such as mHM's
-    idgauges: one point per ID at the centre of its first cell; cells of nodata or ≤ 0 hold none."""
+    idgauges: one point per ID at the centre of its first cell; cells of nodata or ≤ 0 hold none.
+    `crs` is the raster's CRS when it has none of its own."""
     from pathlib import Path
 
     import numpy as np
@@ -233,6 +234,9 @@ def points_from_gauge_raster(source, output):
         driver.DeleteDataSource(str(output))
     target = driver.CreateDataSource(str(output))
     srs = osr.SpatialReference(wkt=dataset.GetProjection()) if dataset.GetProjection() else None
+    if srs is None and crs:
+        srs = osr.SpatialReference()
+        srs.SetFromUserInput(crs)
     layer = target.CreateLayer("gauges", srs, ogr.wkbPoint)
     layer.CreateField(ogr.FieldDefn("id", ogr.OFTInteger64))
     seen = set()

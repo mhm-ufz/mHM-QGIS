@@ -440,10 +440,12 @@ def _gauges_from_raster(dialog):
         return False
     if not _ensure_raster_details(dialog, combo):
         return False
+    details = _combo_raster_details(combo)
     try:
         output = points_from_gauge_raster(
-            source(path, _combo_raster_details(combo).get("variable", "")),
-            Path(temp_morphology_folder(dialog.project_folder)) / "gauges_from_raster.gpkg")
+            source(path, details.get("variable", "")),
+            Path(temp_morphology_folder(dialog.project_folder)) / "gauges_from_raster.gpkg",
+            details.get("source_crs", ""))
     except (OSError, ValueError, RuntimeError) as error:
         QMessageBox.warning(dialog, "Gauges", str(error))
         return False

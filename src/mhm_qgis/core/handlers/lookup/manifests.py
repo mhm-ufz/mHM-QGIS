@@ -81,6 +81,7 @@ class LandUseInput:
     lookup_table: Path
     mapping_field: str
     class_field: str
+    crs: str = ""  # of all the period files (mHM-tools' input_crs)
 
     def as_dict(self) -> dict:
         return {
@@ -88,6 +89,7 @@ class LandUseInput:
             "lookup_table": str(self.lookup_table),
             "mapping_field": self.mapping_field,
             "class_field": self.class_field,
+            "crs": self.crs,
         }
 
 
@@ -119,6 +121,7 @@ class SoilInput:
     bulk_density_unit: str
     composition_step: float = 5.0
     bulk_density_step: float = 0.1
+    crs: str = ""  # of all the layer files (mHM-tools' input_crs)
 
     @property
     def lower_depths(self) -> tuple[float, ...]:
@@ -131,6 +134,7 @@ class SoilInput:
             "bulk_density_step": self.bulk_density_step,
             "lower_depths": list(self.lower_depths),
             "horizons": [horizon.as_dict() for horizon in self.horizons],
+            "crs": self.crs,
         }
 
 

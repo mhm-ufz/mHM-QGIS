@@ -387,7 +387,7 @@ def stack_ready_layers(project_folder, kind, layers, *, source_crs="", target_cr
     output = staging / f"_{stem}_layers.nc"
     arrays, projection = [], ""
     with TemporaryDirectory(prefix=f"mhm_qgis_{kind}_layers_", dir=staging) as folder:
-        for index, (path, *_bounds) in enumerate(layers):
+        for index, (path, *_bounds) in enumerate(layers):  # all in the table's CRS (checked at Set)
             warped = gdal.Open(warp_raster_to_header(path, Path(folder) / f"{index}.tif", target_header, target_crs,
                                                      source_crs=source_crs, pad_value=-9999, task=task))
             arrays.append(warped.GetRasterBand(1).ReadAsArray())
@@ -416,17 +416,19 @@ def stack_ready_layers(project_folder, kind, layers, *, source_crs="", target_cr
     return output
 
 
-def lookup_soil_layers(layers, lookup_table, mapping_field, class_field, folder, *, dem_file=None, dem_crs=None):
+def lookup_soil_layers(layers, lookup_table, mapping_field, class_field, folder, *, dem_file=None, dem_crs=None,
+                       source_crs=""):
     """Categorical soil horizons through one lookup for all horizons, and the iFlag_soilDB 1 class
     definition from the classes' clay, sand and bulk density columns (names starting `clay`, `sand`,
     `bd` or `bulk`). Returns the mapped rows and the definition.
 
     A raster horizon's values (`mapping_field`) become classes (`class_field`, -9999 when unmapped).
     A vector horizon (Shapefile, GeoPackage layer) is burnt onto the filled DEM's grid through the
-    lookup, as a single categorical layer is (mHM-tools `rasterize_map_data`).
+    lookup, as a single categorical layer is (mHM-tools `rasterize_map_data`). `source_crs` is the
+    CRS of all the raster horizons.
     """
     import numpy as np
-    from osgeo import gdal
+    from osgeo import gdal, osr
 
     from ...handlers import lookup
 
@@ -471,7 +473,12 @@ def lookup_soil_layers(layers, lookup_table, mapping_field, class_field, folder,
             target = gdal.GetDriverByName("GTiff").Create(str(output), dataset.RasterXSize, dataset.RasterYSize, 1,
                                                            gdal.GDT_Int32)
             target.SetGeoTransform(dataset.GetGeoTransform())
-            target.SetProjection(dataset.GetProjection())
+            projection = dataset.GetProjection()
+            if source_crs:
+                reference = osr.SpatialReference()
+                reference.SetFromUserInput(source_crs)
+                projection = reference.ExportToWkt()
+            target.SetProjection(projection)
             target.GetRasterBand(1).SetNoDataValue(-9999)
             target.GetRasterBand(1).WriteArray(classes)
             target = dataset = None
