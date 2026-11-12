@@ -79,7 +79,10 @@ def begin(dialog, workflow_key):
 
 def capture_button_styles(dialog):
     for workflow_key, spec in specs(dialog).items():
-        dialog._workflow_button_default_styles[workflow_key] = spec["button"].styleSheet()
+        control = spec["button"]
+        dialog._workflow_button_default_styles[workflow_key] = control.styleSheet()
+        # a bordered style sheet drops the native padding: keep the native size as the minimum
+        control.setMinimumSize(control.sizeHint().boundedTo(control.maximumSize()))
 
 
 def set_setup_controls_enabled(dialog, enabled):
@@ -97,11 +100,10 @@ def set_button_state(dialog, workflow_key, status):
         return
     control.setEnabled(status != "running")
     if status in ("running", "completed", "failed"):
-        color, border = {"running": ("#f6c453", "#a66f00"), "completed": ("#2e7d32", "#1b5e20"),
+        color, border = {"running": ("#f6c453", "#a66f00"), "completed": ("#a5d6a7", "#66bb6a"),
                          "failed": ("#c62828", "#8e0000")}[status]
         control.setStyleSheet(
             "QPushButton {"
-            "text-align: left;"
             f"background-color: {color};"
             f"border: 1px solid {border};"
             "border-radius: 3px;"

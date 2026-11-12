@@ -352,6 +352,28 @@
        </property>
       </widget>
      </item>
+     <item>
+      <widget class="QLabel" name="label_setStatus">
+       <property name="minimumSize">
+        <size>
+         <width>28</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>28</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
   </layout>

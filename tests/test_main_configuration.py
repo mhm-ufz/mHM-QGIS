@@ -59,7 +59,7 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     assert not dialog.task_coordinator.is_busy("meteo-scan-pre")
     assert not warnings
     assert processing.workflow(tmp_path, "scan_precipitation")["status"] == "completed"
-    assert "#2e7d32" in dialog.pushButton_scanPrecipitationFiles.styleSheet()
+    assert "#a5d6a7" in dialog.pushButton_scanPrecipitationFiles.styleSheet()
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 2
     assert dialog.label_precipitationResolutionValue.text() == "1"
     assert dialog.label_precipitationStartTimeValue.text().startswith("2001-01-01")
@@ -84,7 +84,7 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     restored.lineEdit_precipitationGlobDefinition.setText("none*.nc")
     assert not processing.section(tmp_path, "grid")
     assert processing.workflow(tmp_path, "scan_precipitation")["status"] == "pending"
-    assert "#2e7d32" not in restored.pushButton_scanPrecipitationFiles.styleSheet()
+    assert "#a5d6a7" not in restored.pushButton_scanPrecipitationFiles.styleSheet()
     with pytest.raises(ValueError, match="Scan precipitation"):
         grid.require_common_grid(restored)
     restored.close()
@@ -115,7 +115,7 @@ def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
     assert (root / "settings.yaml").is_file()
     assert (root / ".temp" / "mhm_qgis_input_state.json").is_file()
     assert processing.workflow(root, "project_structure")["status"] == "completed"
-    assert "#2e7d32" in dialog.pushButton_createOrLoadDomainStructure.styleSheet()
+    assert "#a5d6a7" in dialog.pushButton_createOrLoadDomainStructure.styleSheet()
     assert not dialog.comboBox_mHMversion.isEnabled()
     dialog.comboBox_domainFolderSelector.setCurrentIndex(
         dialog.comboBox_domainFolderSelector.count() - 1

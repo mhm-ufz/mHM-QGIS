@@ -182,7 +182,7 @@ def build(dialog) -> None:
     """Columns, keys on the Designer rows, statuses, and Project Configuration selected."""
     from ..controllers import post_context
 
-    dialog._input_findings, dialog._viewed = {}, {}
+    dialog._input_findings, dialog._viewed, dialog._indicators = {}, {}, {}
     tree = dialog.treeWidget_projectStructure
     tree.setColumnCount(len(COLUMNS))
     tree.setHeaderLabels(COLUMNS)
@@ -196,9 +196,12 @@ def build(dialog) -> None:
     header.moveSection(NEXT, 0)
     tree.setTreePosition(0)  # the branches stay with the names
     for row in _rows(dialog):
-        row.setData(0, Qt.ItemDataRole.UserRole, _node(row)["key"])
+        node = _node(row)
+        row.setData(0, Qt.ItemDataRole.UserRole, node["key"])
         row.setForeground(NEXT, QColor("#0000FF"))
         row.setTextAlignment(NEXT, Qt.AlignmentFlag.AlignCenter)
+        if "set" in node:
+            indicate(dialog, node["key"], getattr(dialog, node["set"]))
     tree.expandAll()
     dialog.splitter.setSizes([310, 850])
     _action(dialog, item(dialog, "outputs"), "↺", "Reset the view's layout", lambda: post_context.reset_layout(dialog))
@@ -207,6 +210,18 @@ def build(dialog) -> None:
     refresh(dialog)
     tree.setCurrentItem(item(dialog, "project_configuration"))
     select(dialog, tree.currentItem())
+
+
+def indicate(dialog, key, label) -> None:
+    """The row's status again on `label`, right of its page's Set button. The meteo rows
+    share one form, so a new one drops the other variables' labels."""
+    if key.startswith("meteo_"):
+        dialog._indicators = {name: shown for name, shown in dialog._indicators.items()
+                              if not name.startswith("meteo_")}
+    dialog._indicators[key] = label
+    row = item(dialog, key)
+    label.setText(row.text(STATUS_COLUMN))
+    label.setToolTip(row.toolTip(STATUS_COLUMN))
 
 
 def _action(dialog, row, symbol, tip, slot):
@@ -424,6 +439,9 @@ def refresh(dialog) -> None:
             row.setText(STATUS_COLUMN, symbol)
             row.setToolTip(STATUS_COLUMN, meaning)
             row.setTextAlignment(STATUS_COLUMN, Qt.AlignmentFlag.AlignCenter)
+            if node["key"] in dialog._indicators:
+                dialog._indicators[node["key"]].setText(symbol)
+                dialog._indicators[node["key"]].setToolTip(meaning)
         if node.get("action") == "run":
             runs.append(row)
         if {"display", "input", "grid", "view"} & node.keys():

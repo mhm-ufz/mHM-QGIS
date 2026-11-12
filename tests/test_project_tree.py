@@ -63,6 +63,47 @@ def test_project_setup_status_follows_the_folder(dialog, tmp_path):
     assert row.text(project_tree.STATUS_COLUMN) == "✅"
 
 
+def test_each_set_button_is_followed_by_its_rows_status(dialog, tmp_path):
+    dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
+    dialog.pushButton_setProject.click()
+    nodes = [node for node in project_tree.load().values() if "set" in node]
+    assert len(nodes) == 10
+    for node in nodes:
+        row, label = project_tree.item(dialog, node["key"]), getattr(dialog, node["set"])
+        assert label is dialog._indicators[node["key"]]
+        assert label.text() == row.text(project_tree.STATUS_COLUMN)
+        assert label.toolTip() == row.toolTip(project_tree.STATUS_COLUMN)
+    assert dialog._indicators["project_configuration"].text() == "✅"
+
+
+def test_the_meteo_form_shows_its_variables_status_right_of_set(dialog):
+    from mhm_qgis.qt.controllers import forcing, main
+
+    forcing.show_meteo_input(dialog, "pre")
+    label, row = main.form_on(dialog, "meteoVar").label_setStatus, project_tree.item(dialog, "meteo_pre")
+    assert label is dialog._indicators["meteo_pre"]
+    assert (label.text(), label.toolTip()) == (row.text(project_tree.STATUS_COLUMN),
+                                               row.toolTip(project_tree.STATUS_COLUMN))
+    forcing.show_meteo_input(dialog, "tavg")
+    assert "meteo_pre" not in dialog._indicators
+    assert "meteo_tavg" in dialog._indicators
+    project_tree.refresh(dialog)
+
+
+def test_a_coloured_text_workflow_button_keeps_its_native_size(dialog):
+    from qgis.PyQt.QtWidgets import QPushButton
+
+    from mhm_qgis.qt.controllers import workflow_state
+
+    button = dialog.pushButton_scanPrecipitationFiles
+    native = QPushButton(button.text()).sizeHint()
+    workflow_state.set_button_state(dialog, "scan_precipitation", "completed")
+    button.adjustSize()
+    assert button.width() >= native.width()
+    assert button.height() >= native.height()
+    assert "#a5d6a7" in button.styleSheet()
+
+
 def test_introduction_embeds_the_wizard_and_finish_applies_it(dialog):
     dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "intro"))
     assert dialog.stackedWidget_project.currentWidget() is dialog.page_projectIntro

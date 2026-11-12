@@ -318,7 +318,7 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     restored.project_folder = str(tmp_path)
     workflow_state.refresh_all(restored)
 
-    assert "#2e7d32" in project_tree.button(restored, "meteorology").styleSheet()
+    assert "#a5d6a7" in project_tree.button(restored, "meteorology").styleSheet()
     restored.close()
 
 
@@ -336,7 +336,7 @@ def test_additional_workflow_green_state_restores(
     dialog.project_folder = str(tmp_path)
     workflow_state.refresh_all(dialog)
 
-    assert "#2e7d32" in getattr(dialog, button).styleSheet()
+    assert "#a5d6a7" in getattr(dialog, button).styleSheet()
     dialog.close()
 
 
@@ -355,7 +355,7 @@ def test_meteorology_completion_is_independent_of_latlon(tmp_path):
     restored.project_folder = str(tmp_path)
     workflow_state.refresh_all(restored)
 
-    assert "#2e7d32" in project_tree.button(restored, "meteorology").styleSheet()
+    assert "#a5d6a7" in project_tree.button(restored, "meteorology").styleSheet()
     assert processing.workflow(tmp_path, "execute_all_meteo")["status"] == "completed"
     restored.close()
 
