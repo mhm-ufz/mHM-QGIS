@@ -83,7 +83,8 @@ def write_streamflow_observation(layer, station_id: str, output_folder: Path) ->
             for record in records:
                 dt = record.timestamp
                 stream.write(
-                    f"{dt.year:04d}  {dt.month:02d}  {dt.day:02d}  00  00   {record.value:10.3f}\n")
+                    f"{dt.year:04d}  {dt.month:02d}  {dt.day:02d}  00  00   "
+                    f"{-9999.0 if math.isnan(record.value) else record.value:10.3f}\n")  # mHM's missing is nodata
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, output_file)
