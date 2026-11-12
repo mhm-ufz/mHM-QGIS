@@ -63,6 +63,8 @@ def events(q: pd.Series, level: pd.Series) -> pd.DataFrame:
 def smi(monthly, labels):
     """SMI per month and cell: the rank of each month's value among the same calendar
     month's values of the run, (rank - 0.5) / n (an empirical CDF)."""
+    from scipy.stats import rankdata
+
     values = np.asarray(monthly, float)
     calendar = np.asarray(labels, dtype="datetime64[M]").astype(int) % 12
     index = np.full_like(values, np.nan)
@@ -71,7 +73,7 @@ def smi(monthly, labels):
         if not chosen.any():
             continue
         block = values[chosen]
-        ranks = np.argsort(np.argsort(np.where(np.isnan(block), np.inf, block), axis=0), axis=0) + 1
+        ranks = rankdata(np.where(np.isnan(block), np.inf, block), axis=0)  # ties: average rank
         count = np.isfinite(block).sum(axis=0)
         with np.errstate(invalid="ignore", divide="ignore"):
             index[chosen] = np.where(np.isfinite(block), (ranks - 0.5) / count, np.nan)

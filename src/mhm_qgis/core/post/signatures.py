@@ -30,10 +30,17 @@ def fdc(q):
     return np.arange(1, len(flows) + 1) / (len(flows) + 1), flows
 
 
+def filled(q):
+    """Q with gaps linearly interpolated in time, edges at the nearest valid value."""
+    flow = np.asarray(q, float)
+    ok = np.isfinite(flow)
+    return np.interp(np.arange(len(flow)), np.flatnonzero(ok), flow[ok]) if ok.any() else flow
+
+
 def baseflow(q, alpha=ALPHA, passes=3):
-    """Lyne-Hollick digital filter, forward, backward, forward."""
-    flow = np.nan_to_num(np.asarray(q, float))
-    base = flow.copy()
+    """Lyne-Hollick digital filter, forward, backward, forward, run over the `filled`
+    series; NaN where Q is missing, so a gap adds no baseflow."""
+    base = filled(q)
     for number in range(passes):
         series = base if number % 2 == 0 else base[::-1]
         quick = np.zeros_like(series)
@@ -42,7 +49,7 @@ def baseflow(q, alpha=ALPHA, passes=3):
             quick[t] = min(max(quick[t], 0.0), series[t])
         result = series - quick
         base = result if number % 2 == 0 else result[::-1]
-    return base
+    return np.where(np.isfinite(q), base, np.nan)
 
 
 def recession_constant(q, step_days=1.0):
@@ -71,22 +78,28 @@ def signatures(q: pd.Series, p=None, area_km2=None, zero_threshold=0.001) -> dic
     step_days = float(np.median(np.diff(flow.index.values) / np.timedelta64(1, "D")))
     years = len(values) * step_days / 365.25
     q5, q33, q66, q95 = np.percentile(values, [95, 67, 34, 5])  # flow exceeded 5 %, 33 %, 66 %, 95 %
-    base = baseflow(values)
+    base = baseflow(q.to_numpy(float))
     result = {
         "Mean Q": values.mean(), "CV": values.std() / values.mean(),
         "Q5": q5, "Q95": q95, "Q5/Q95": q5 / q95 if q95 > 0 else np.nan,
         "FDC mid-slope": (np.log(q33) - np.log(q66)) / (0.66 - 0.33) if q66 > 0 else np.nan,
-        "Baseflow index": base.sum() / values.sum(),
+        "Baseflow index": np.nansum(base) / values.sum(),
         "Recession k (days)": recession_constant(values, step_days),
         "High-flow days per year": (values > 9 * np.median(values)).sum() * step_days / years,
         "Low-flow days per year": (values < 0.2 * values.mean()).sum() * step_days / years,
         "Zero-flow fraction": float((values < zero_threshold).mean()),
         "Runoff ratio": np.nan,
     }
-    if p is not None and area_km2:  # totals over the same span: P may come at any step
-        rain = p[(p.index >= flow.index[0]) & (p.index <= flow.index[-1])].dropna()
-        runoff_mm = (flow * step_days * 86400).sum() / (area_km2 * 1e6) * 1e3
-        result["Runoff ratio"] = runoff_mm / rain.sum() if rain.sum() > 0 else np.nan
+    if p is not None and area_km2:  # P and Q totals over the same steps
+        runoff = q * step_days * 86400 / (area_km2 * 1e6) * 1e3  # mm per step
+        if len(p) > 1 and np.median(np.diff(p.index.values)) == np.median(np.diff(q.index.values)):
+            rain = p.reindex(q.index)
+            both = runoff.notna() & rain.notna()
+            runoff, rain = runoff[both].sum(), rain[both].sum()
+        else:  # P at another step: each total over the Q span, its gaps at its mean
+            span = slice(flow.index[0], flow.index[-1])
+            runoff, rain = runoff.loc[span].mean() * len(runoff.loc[span]), p.loc[span].mean() * len(p.loc[span])
+        result["Runoff ratio"] = runoff / rain if rain > 0 else np.nan
     return {name: float(value) for name, value in result.items()}
 
 

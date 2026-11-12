@@ -6,11 +6,11 @@ import subprocess
 
 import numpy as np
 import pytest
-from post_fixtures import make_run
+from post_fixtures import _axes, _time, make_run
 
 from mhm_qgis.core.executions import post as post_exec
 from mhm_qgis.core.executions.morphology import commands
-from mhm_qgis.core.post import cache, runs, scan
+from mhm_qgis.core.post import cache, runs, scan, series
 
 netCDF4 = pytest.importorskip("netCDF4")
 V5 = {"directories_general": {"dir_out": ["output/"], "dirconfigout": "output/",
@@ -89,6 +89,58 @@ def test_precipitation_comes_from_the_l2_forcing(tmp_path):
     np.testing.assert_allclose(domain, (expected * area).sum((1, 2)) / area.sum())
 
 
+def test_coarser_l1_takes_the_mean_of_its_l2_cells(tmp_path):
+    truth = make_run(tmp_path, geographic=True, days=5)
+    (ny, nx), days = truth.mask.shape, len(truth.days)
+    fine = np.random.default_rng(1).gamma(0.6, 6.0, (days, 2 * ny, 2 * nx))
+    with netCDF4.Dataset(truth.files["pre"], "w") as handle:  # L1 = 2 x L2
+        lon, lat = _axes(handle, True, 2 * ny, 2 * nx, 1 / 240)
+        _time(handle, truth.days, [(i, i + 1) for i in range(days)], "end", "hours")
+        handle.createVariable("pre", "f8", ("time", lat, lon))[:] = fine
+    ref, job = _job(tmp_path, series=("pre",))
+    scan.run_scan(job)
+    expected = fine.reshape(days, ny, 2, nx, 2).mean((2, 4))
+    cells = np.load(cache.folder(ref) / "cells_mhm.npy")
+    np.testing.assert_allclose(np.load(cache.folder(ref) / "series" / "pre.npy"), expected[:, cells[0], cells[1]].T,
+                               rtol=1e-6)
+
+
+def test_one_cell_wide_forcing(tmp_path):
+    truth = make_run(tmp_path, shape=(4, 2), days=5)  # L2 = 2 x L1: one column
+    ref, job = _job(tmp_path, series=("pre",))
+    scan.run_scan(job)
+    expected = truth.p[:, [0, 0, 2, 2]][:, :, [0, 0]]
+    cells = np.load(cache.folder(ref) / "cells_mhm.npy")
+    np.testing.assert_allclose(np.load(cache.folder(ref) / "series" / "pre.npy"), expected[:, cells[0], cells[1]].T,
+                               rtol=1e-6)
+
+
+def test_unreadable_forcing_costs_precipitation_only(tmp_path):
+    truth = make_run(tmp_path)
+    with netCDF4.Dataset(truth.files["pre"], "a") as handle:
+        handle.renameVariable("time_bnds", "spare")
+    ref, job = _job(tmp_path, variables=("aET",), series=("pre",))
+    assert set(scan.run_scan(job)) == {"aET"}
+    index = cache.load_index(cache.folder(ref))
+    assert set(index["variables"]) == {"aET"}
+    assert any("time_bnds" in problem for problem in index["problems"])
+    assert not (cache.folder(ref) / "series" / "pre.npy").exists()
+
+
+def test_rerun_with_fewer_outputs_prunes_the_cache(tmp_path):
+    make_run(tmp_path)
+    ref, job = _job(tmp_path, series=("aET", "Q"))
+    scan.run_scan(job)
+    root = cache.folder(ref)
+    assert (root / "series" / "Q.npy").is_file()
+    assert (root / "monthly" / "Q.npy").is_file()
+    scan.run_scan(_job(tmp_path, variables=("aET",), series=())[1])
+    assert set(cache.load_index(root)["variables"]) == {"aET", "pre"}
+    assert not list((root / "series").glob("*.npy"))
+    assert not (root / "monthly" / "Q.npy").exists()
+    assert series.cell(root, "aET", 1, 1) is None
+
+
 def test_scan_runs_in_the_worker_and_is_fingerprinted(tmp_path):
     make_run(tmp_path)
     ref, job = _job(tmp_path, variables=("aET", "Q"), series=("Q",))
@@ -100,6 +152,9 @@ def test_scan_runs_in_the_worker_and_is_fingerprinted(tmp_path):
     assert index["variables"]["Q"]["fingerprint"] == job["fingerprints"]["Q"]
     assert index["domain_source"] == "restart"
     assert _job(tmp_path, variables=("aET", "Q"), series=("Q",))[1]["variables"] == []
+    forcing = tmp_path / "data" / "meteo" / "pre" / "pre.nc"
+    os.utime(forcing, (forcing.stat().st_mtime + 1,) * 2)  # meteo prepared again
+    assert [spec["name"] for spec in _job(tmp_path, variables=("aET", "Q"), series=("Q",))[1]["variables"]] == ["pre"]
     rerun = tmp_path / "output" / "mHM_Fluxes_States.nc"
     os.utime(rerun, (rerun.stat().st_mtime + 1,) * 2)  # a rerun is at least a second later
     assert len(_job(tmp_path, variables=("aET", "Q"), series=("Q",))[1]["variables"]) == 3

@@ -228,6 +228,7 @@ def sealed_fraction(run, grid: Axes, scene=0):
     valid = basin_weights(grid, ~np.ma.getmaskarray(cover), x, y)
     urban = basin_weights(grid, cover == 2, x, y)
     key = "lcover_mpr.fracSealed_cityArea" if run.version == "v5.13" else "config_mpr.fracSealed_cityArea"
-    city = float(value(run.values, key, run.ref.index) or FRAC_SEALED_DEFAULT)
+    city = value(run.values, key, run.ref.index)
+    city = FRAC_SEALED_DEFAULT if city is None else float(city)
     with np.errstate(invalid="ignore", divide="ignore"):
         return np.where(valid > 0, urban / valid, np.nan) * city, "land cover"
