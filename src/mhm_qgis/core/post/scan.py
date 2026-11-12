@@ -7,14 +7,16 @@ process. Blocks of whole time steps are sized to the memory budget, so each chun
 - `basins/<var>.npy`: (basins, T) weighted means (F8: pervious and sealed states
   carry 1 - fSealed and fSealed; storage amounts are per basin area, intensities
   such as SM_L per weighted area);
-- `stats/<var>.npz`: per cell n, sum, sumsq, min, max, and the values of intervals
-  0, 1, T-2 and T-1 (per-cell balance over intervals 2..T and its averaging bound);
+- `stats/<var>.npz`: per cell n, sum, weighted (sum of value x interval days), sumsq,
+  min, max, and the values of intervals 0, 1, T-2 and T-1 (per-cell balance over
+  intervals 2..T and its averaging bound);
 - `monthly/<var>.npy`: totals per calendar month (fluxes, when no interval spans two
   months), NaN for incomplete months; `annual/<var>_max.npy` and `_min.npy`;
 - the 2nd and 98th percentile of a sample, for colours that hold while animating.
 
 Precipitation (`pre`) is not an mHM output (F10): the forcing is read on L2, each L1
-cell takes its containing L2 cell, and the forcing steps are summed per output interval.
+cell takes its containing L2 cell (the mean of its k x k L2 cells when L1 = k x L2), and
+the forcing steps are summed per output interval.
 """
 from __future__ import annotations
 
@@ -44,9 +46,14 @@ def calendar_days(labels) -> np.ndarray:
 
 
 def _axis_index(values, centres):
-    """Index of the cell (of `centres`, either order) holding each value."""
+    """Index of the cell (of `centres`, either order) holding each value; one centre holds all."""
+    if len(centres) == 1:
+        return np.zeros(np.shape(values), int)
     step = centres[1] - centres[0]
-    return np.floor((values - (centres[0] - step / 2)) / step).astype(int)
+    index = np.floor((values - (centres[0] - step / 2)) / step).astype(int)
+    if ((index < 0) | (index >= len(centres))).any():
+        raise ValueError("An L1 cell lies outside the forcing grid.")
+    return index
 
 
 def _file_blocks(path, name, cells, steps):
@@ -81,13 +88,18 @@ def _forcing_blocks(job, cells, bounds, steps):
             xs, ys = Transformer.from_crs("EPSG:4326", handle[var.grid_mapping].crs_wkt, always_xy=True).transform(
                 np.asarray(handle["lon2d"][:], "f8"), np.asarray(handle["lat2d"][:], "f8"))
             x, y = xs[len(y) // 2], ys[:, len(x) // 2]
-        ix, iy = _axis_index(x1[cells[1]], x), _axis_index(y1[cells[0]], y)
+        # L1 = k x L2 (mHM averages the k x k L2 cells); k = 1 when L1 is as fine or finer
+        cell1, cell2 = (next((abs(a[1] - a[0]) for a in pair if len(a) > 1), np.nan) for pair in ((x1, y1), (x, y)))
+        k = max(1, round(cell1 / cell2)) if np.isfinite(cell1 / cell2) else 1
+        offsets = (np.arange(k) - (k - 1) / 2) * cell2
+        ix, iy = (_axis_index(centres[:, None] + offsets, axis) for centres, axis in ((x1[cells[1]], x), (y1[cells[0]], y)))
         pending, rows = None, []
         for start in range(0, var.shape[0], steps):
             keep = inside[start:start + steps]
             if not keep.any():
                 continue
-            block = np.ma.filled(np.ma.asarray(var[start:start + steps], dtype="f8"), np.nan)[keep][:, iy, ix]
+            block = np.ma.filled(np.ma.asarray(var[start:start + steps], dtype="f8"), np.nan)[keep]
+            block = np.nanmean(block[:, iy[:, :, None], ix[:, None, :]], axis=(2, 3))
             ids = interval[start:start + steps][keep]
             heads = np.flatnonzero(np.r_[True, ids[1:] != ids[:-1]])
             sums = np.add.reduceat(block, heads, axis=0)
@@ -120,12 +132,13 @@ class _Products:
     def __init__(self, job, spec, cells, bounds, series):
         n, steps = len(cells[0]), len(bounds)
         self.spec, self.cells = spec, cells
-        self.stats = {"n": np.zeros(n), "sum": np.zeros(n), "sumsq": np.zeros(n),
+        self.stats = {"n": np.zeros(n), "sum": np.zeros(n), "weighted": np.zeros(n), "sumsq": np.zeros(n),
                       "min": np.full(n, np.nan), "max": np.full(n, np.nan),
                       # intervals 0, 1, T-2 and T-1: storage change and its averaging bound per cell
                       "first": np.full(n, np.nan), "second": np.full(n, np.nan),
                       "penultimate": np.full(n, np.nan), "last": np.full(n, np.nan)}
         self.steps = steps
+        self.days = (bounds[:, 1] - bounds[:, 0]) / np.timedelta64(1, "D")
         self.series = series
         self.months, self.month_labels = _calendar(bounds, "M") if spec["kind"] == "flux" else (None, [])
         if self.months is not None:
@@ -147,6 +160,7 @@ class _Products:
         stats = self.stats
         stats["n"] += finite.sum(axis=0)
         stats["sum"] += np.nansum(block, axis=0)
+        stats["weighted"] += np.nansum(block * self.days[start:stop, None], axis=0)
         stats["sumsq"] += np.nansum(block ** 2, axis=0)
         stats["min"] = np.fmin(stats["min"], np.fmin.reduce(block, axis=0))
         stats["max"] = np.fmax(stats["max"], np.fmax.reduce(block, axis=0))
@@ -229,11 +243,18 @@ def run_scan(job, progress=None) -> dict:
         products = _Products(job, spec, cells, bounds, series)
         blocks = _forcing_blocks(job, cells, bounds, steps) if name == "pre" \
             else _file_blocks(job["path"], name, cells, steps)
-        for start, block in blocks:
-            products.add(start, block)
-            done += 1
-            if progress:
-                progress(min(99, 100 * done // total))
+        try:
+            for start, block in blocks:
+                products.add(start, block)
+                done += 1
+                if progress:
+                    progress(min(99, 100 * done // total))
+        except (ValueError, KeyError, IndexError) as error:  # an unreadable forcing costs P only
+            if name != "pre":
+                raise
+            job.setdefault("problems", []).append(f"No precipitation from the forcing: {error}")
+            series = products = None  # closes the memmap, deleted below
+            continue
         if series is not None:
             series.flush()
             del series
@@ -244,11 +265,21 @@ def run_scan(job, progress=None) -> dict:
     from . import cache
 
     index = cache.load_index(root)
+    rescanned = {spec["name"] for spec in job["variables"]}  # a failed one keeps no stale entry
+    index["variables"] = {name: info for name, info in index["variables"].items()
+                          if name in job.get("fingerprints", {}) and name not in rescanned}
     for name, info in summary.items():
         index["variables"][name] = {**info, "fingerprint": job.get("fingerprints", {}).get(name), "file": job["file"]}
     index["problems"], index["domain_source"] = job.get("problems", []), job.get("domain_source")
     index["geographic"] = job.get("geographic", False)
     cache.save_index(root, index)
+    variables = index["variables"]
+    for path in (root / "series").glob("*.npy"):  # series.cell and the monthly readers trust the files
+        if path.stem not in variables or path.stem not in job.get("series", ()):
+            path.unlink()
+    for path in (root / "monthly").glob("*.npy"):
+        if not variables.get(path.stem, {}).get("months"):
+            path.unlink()
     if progress:
         progress(100)
     return summary
@@ -298,7 +329,7 @@ def _period_statistic(job):
             result = np.nanpercentile(values, job["q"], axis=0)
         else:
             total = weighted = squares = 0.0
-            low, high = np.inf, -np.inf
+            low = high = np.nan
             count = 0
             for step in chosen:
                 values = np.ma.filled(np.ma.asarray(var[step], "f8"), np.nan)

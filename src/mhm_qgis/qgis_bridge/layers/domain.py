@@ -666,12 +666,22 @@ class DomainWorkflow:
             )
 
     def write_gauges(self, prepared: dict[str, _PreparedGauge]) -> None:
+        from ...core.handlers.state.nml_settings import load_settings
+
+        times = load_settings(self.project_folder).get("time") or {}
+        start, end = str(times.get("sim_start", ""))[:10], str(times.get("sim_end", ""))[:10]
         for gauge in prepared.values():
             output = write_streamflow_observation(
                 gauge.assignment.discharge_layer,
                 gauge.assignment.outlet_id,
                 gauge.output_path.parent,
             )
+            first, last = ("{}-{}-{}".format(*line.split()[1:4])  # the file's start/end header lines
+                           for line in output.read_text(encoding="utf-8").splitlines()[3:5])
+            if start and end and (last < start or first > end):
+                self.log(f"WARNING: The discharge table {gauge.input_path.name} for gauge "
+                         f"{gauge.assignment.outlet_id} covers {first} to {last}, outside the simulation "
+                         f"{start} to {end}: its observed hydrograph will be empty.")
             registry.register(
                 self.project_folder, output, name=output.name, loaded=False
             )

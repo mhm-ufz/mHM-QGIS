@@ -275,6 +275,24 @@ def test_a_named_run_writes_into_its_folder_and_is_listed(tmp_path):
             runs.link_outputs(tmp_path, unsafe)
 
 
+def test_a_named_run_keeps_its_restart_and_a_later_archive_strips_its_link(tmp_path):
+    make_run(tmp_path)  # a plain run in output/
+    (tmp_path / "mhm.nml").write_text('&directories_general\n  dir_Out(1) = "output/"\n'
+                                      '  mhm_file_RestartOut(1) = "restart/mHM_restart_001.nc"\n/\n')
+    runs.link_outputs(tmp_path, "case1")
+    (tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1" / "output" / "mHM_Fluxes_States.nc").write_bytes(b"x")
+    [named] = runs.finish_named(tmp_path, "case1")
+    linked = {"dir_out": ["runs/case1/output/"], "dirconfigout": "runs/case1/output/"}
+    values = {**V5, "directories_general": {**V5["directories_general"], **linked}}
+    restart = tmp_path / "runs" / "case1" / "restart" / "mHM_restart_001.nc"
+    assert restart.is_file()  # restart/ is shared: the next run overwrites it
+    assert catalog.open_run(named, values).files["restart"] == restart
+    [archived] = runs.archive(tmp_path, "baseline", values=values)  # its namelists link case1
+    run = catalog.open_run(archived, values)
+    assert run.files["mhm"] == tmp_path / "runs" / "baseline" / "output" / "mHM_Fluxes_States.nc"
+    assert run.findings() == []
+
+
 def test_a_failed_named_rerun_keeps_the_published_run(tmp_path):
     make_run(tmp_path)
     nml = tmp_path / "mhm.nml"

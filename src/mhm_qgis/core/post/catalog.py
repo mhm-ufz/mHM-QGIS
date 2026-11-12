@@ -48,16 +48,19 @@ def value(values, dotted, index=1):
     return found
 
 
-def _locate(ref, values, spec) -> Path | None:
+def _locate(ref, values, kind, spec) -> Path | None:
     from .runs import unlinked
 
     if "switch" in spec and not value(values, spec["switch"], ref.index):
         return None
+    linked = ref.name and ref.root == ref.setup  # a named run: the setup's namelists link its outputs
     root = ref.setup if spec.get("input") else ref.root
+    if linked and kind == "restart":  # restart/ is shared by every run: finish_named keeps this one's copy
+        root = ref.namelists.parent
 
-    def path_value(key):  # the current run is output/'s: a named run's link in the setup's namelists isn't its
+    def path_value(key):  # only a named run's own link is its path; the current or an archived run strips it
         found = value(values, key, ref.index)
-        return unlinked(found) if isinstance(found, str) and not ref.name and not spec.get("input") else found
+        return unlinked(found) if isinstance(found, str) and not linked and not spec.get("input") else found
 
     if "name" in spec:
         folder = root / (path_value(spec["dir"]) or "")
@@ -224,6 +227,6 @@ def open_run(ref: RunRef, values=None) -> Run:
         # A v6 run's namelists are a domain's own (`classic`); a v5.13 multi run's the combined mhm.nml.
         values = read_namelists(ref.namelists, schemas_folder(ref.version), project=namelist_project(ref.version))
     specs = output_registry(ref.version)["files"][version_key(ref.version)]
-    located = {kind: (spec, path) for kind, spec in specs.items() if (path := _locate(ref, values, spec))}
+    located = {kind: (spec, path) for kind, spec in specs.items() if (path := _locate(ref, values, kind, spec))}
     return Run(ref, values, {kind: path for kind, (spec, path) in located.items() if not spec.get("input")},
                {kind: path for kind, (spec, path) in located.items() if spec.get("input")})

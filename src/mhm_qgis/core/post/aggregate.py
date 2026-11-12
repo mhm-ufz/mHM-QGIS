@@ -5,7 +5,8 @@ mm per day from `time_bnds`. States are interval means: mean (time-weighted), mi
 and max only; anything else is refused. Calendar groups (day, month, year) that the
 run covers only in part are NaN; a request finer than the output step is refused.
 Maps come from the scan's products; what they cannot answer returns None, and the
-caller runs `derive("statistic", ...)` in the native worker.
+caller runs `derive("statistic", ...)` in the native worker. Derive reads the mHM
+file alone, so a P or anomaly map the products cannot answer is refused instead.
 """
 from __future__ import annotations
 
@@ -65,6 +66,8 @@ def temporal(root, variable, how, freq="native", *, basin="domain", cell=None, p
         raise ValueError(f"The output step ({np.median(days):g} days) is coarser than a {freq}.")
     starts = intervals[:, 0]
     labels = np.zeros(len(starts), int) if freq == "period" else starts.astype(f"datetime64[{UNITS[freq]}]")
+    if freq != "period" and (labels != (intervals[:, 1] - np.timedelta64(1, "s")).astype(labels.dtype)).any():
+        raise ValueError(f"An output interval spans two {freq}s: it belongs to neither.")
     frame = pd.DataFrame({"x": values.to_numpy(), "d": days, "xd": values.to_numpy() * days,
                           "nan": np.isnan(values.to_numpy())}, index=labels)
     grouped = frame.groupby(level=0)
@@ -84,7 +87,8 @@ def temporal(root, variable, how, freq="native", *, basin="domain", cell=None, p
 
 
 def statistic(root, variable, stat, period=None, q=None):  # noqa: PLR0911
-    """A (ny, nx) map, or None when it needs a `derive("statistic")` pass.
+    """A (ny, nx) map, or None when it needs a `derive("statistic")` pass; ValueError when
+    that pass cannot answer it either (P, anomalies).
 
     Whole-run statistics come from the scan's running sums; flux sums and means over
     whole months from the monthly totals; percentiles from the series cache (a full
@@ -100,27 +104,40 @@ def statistic(root, variable, stat, period=None, q=None):  # noqa: PLR0911
     if stat == "percentile":
         path = root / "series" / f"{variable}.npy"
         if not path.is_file():
+            if variable == "pre":  # derive reads the mHM file, which holds no P
+                raise ValueError("Precipitation percentiles need the series cache of pre.")
             return None
         cells = np.load(root / "cells_mhm.npy")
         values = np.nanpercentile(np.load(path, mmap_mode="r")[:, keep], q, axis=1)
         return _grid(root, cells, values)
     if period is None or keep.all():
         stats = np.load(root / "stats" / f"{variable}.npz")
+        gaps = stats["n"] < len(days)  # a cell missing intervals (pre beyond the forcing): no sum or mean
         with np.errstate(invalid="ignore", divide="ignore"):
             mean = stats["sum"] / stats["n"]
-            maps = {"sum": stats["sum"], "min": stats["min"], "max": stats["max"],
-                    "mean": stats["sum"] / days.sum() if flux else mean,
+            maps = {"sum": np.where(gaps, np.nan, stats["sum"]), "min": stats["min"], "max": stats["max"],
                     "std": np.sqrt(np.maximum(stats["sumsq"] / stats["n"] - mean ** 2, 0))}
+            if flux or "weighted" in stats:  # a rate, or a time-weighted state mean
+                maps["mean"] = np.where(gaps, np.nan, stats["sum" if flux else "weighted"] / days.sum())
+            elif not np.ptp(days):  # a cache without the weighted sums: equal intervals only
+                maps["mean"] = np.where(gaps, np.nan, mean)
         if stat in maps:
             return maps[stat]
+    what = "Anomaly maps" if stat == "anomaly" else "Precipitation maps of a period" if variable == "pre" else None
     monthly = root / "monthly" / f"{variable}.npy"
     if not flux or not monthly.is_file() or stat not in ("sum", "mean", "anomaly"):
+        if what and stat not in ("sum", "mean", "anomaly"):
+            raise ValueError(f"Precipitation {stat} maps cover the whole run only.")
+        if what:  # derive reads neither monthly totals nor P
+            raise ValueError(f"{what} need monthly totals: an output interval spans two months.")
         return None
     labels = np.array(info["months"], dtype="datetime64[M]")
     totals = np.load(monthly)
     first, last = (intervals[keep, 0].min(), intervals[keep, 1].max()) if keep.any() else (None, None)
     if first is None or first != first.astype("datetime64[M]") or last != last.astype("datetime64[M]"):
-        return None  # not whole months
+        if what:
+            raise ValueError(f"{what} need a period of whole months.")
+        return None
     chosen = (labels >= first.astype("datetime64[M]")) & (labels < last.astype("datetime64[M]"))
     if stat == "sum":
         return totals[chosen].sum(axis=0)
@@ -148,7 +165,10 @@ def cell_statistic(values, intervals, kind, stat, period=None, q=None, step=0): 
     if stat == "percentile":
         return np.nanpercentile(chosen, q)
     if stat == "anomaly":
-        months = pd.Series(values, index=pd.DatetimeIndex(intervals[:, 0])).resample("MS").sum(min_count=1)
+        all_days = (intervals[:, 1] - intervals[:, 0]) / np.timedelta64(1, "D")
+        frame = pd.DataFrame({"x": values, "d": all_days}, index=pd.DatetimeIndex(intervals[:, 0]))
+        frame = frame.resample("MS").sum(min_count=1)
+        months = frame["x"].where(frame["d"] >= calendar_days(frame.index.to_numpy().astype("datetime64[M]")))
         anomaly = months - months.groupby(months.index.month).transform("mean")
         first, last = intervals[keep, 0].min(), intervals[keep, 1].max()
         return anomaly[(anomaly.index >= first) & (anomaly.index < last)].mean()

@@ -8,9 +8,9 @@ A run's files therefore resolve the same way, current or archived (`catalog`).
 
 A **named run** (the Execute tab's run name) writes into a hidden staging folder:
 `link_outputs` points the namelists there before mHM starts, and `finish_named`
-publishes it as `runs/<name>/`, copies the namelists and writes `run.json` with
-`linked: true`, so its paths resolve from the setup folder (an archived run's
-resolve from its own).
+publishes it as `runs/<name>/`, copies the namelists and the restart file and writes
+`run.json` with `linked: true`, so its paths resolve from the setup folder (an
+archived run's, and a named run's restart, resolve from its own).
 
 A v5.13 multi-domain run writes every domain into one `output/` (`output/<domain>/`),
 so it lists one run per domain; v6 domains write to their own folders and are
@@ -39,6 +39,8 @@ NAME = re.compile(r"(?!\.{1,2}$)(?!\.mhm-qgis$)[\w.-]+")
 _OUTPUT_KEYS = re.compile(r"^(\s*(?:dir_out|dirconfigout|output_path|output_node_path|output_poi_path|"
                           r"diagnostics_path)\s*(?:\(\s*\d+\s*\))?\s*=)(.*)$", re.IGNORECASE | re.MULTILINE)
 _QUOTED = re.compile(r"""(["'])(.*?)\1""")
+_RESTART_KEYS = re.compile(r"^\s*(?:mhm_file_restartout|restart_output_path)\s*(?:\(\s*\d+\s*\))?\s*=(.*)$",
+                           re.IGNORECASE | re.MULTILINE)
 
 
 def _valid_run_name(name) -> bool:
@@ -190,6 +192,12 @@ def finish_named(folder, name, note="") -> list[RunRef]:
             (stage / "namelists").mkdir(parents=True, exist_ok=True)
             for path in base.glob("*.nml"):
                 shutil.copy2(path, stage / "namelists" / path.name)
+            for match in _RESTART_KEYS.finditer((base / "mhm.nml").read_text(encoding="utf-8")):
+                for _, text in _QUOTED.findall(match.group(1)):  # copied, as an archive keeps it
+                    restart = Path(os.path.normpath(base / text))
+                    if restart.is_file() and restart.is_relative_to(base):
+                        (stage / restart.relative_to(base)).parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(restart, stage / restart.relative_to(base))
             items.append({
                 "base": base,
                 "stage": stage,

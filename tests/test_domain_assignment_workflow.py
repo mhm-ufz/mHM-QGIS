@@ -234,3 +234,27 @@ def test_an_mhm_ready_gauge_file_is_a_valid_discharge_table(tmp_path):
     prepared = workflow.validate_gauge_assignments([OutletAssignment("001", True, False, layer)])
     workflow.write_gauges(prepared)
     assert prepared["001"].output_path.read_text(encoding="utf-8").splitlines()[-1].split()[-1] == "129.000"
+
+
+def test_missing_days_stay_nodata_and_a_table_outside_the_simulation_warns(tmp_path):
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+    from mhm_qgis.qt.dialogs.discharge_assignment import discharge_table
+
+    path = tmp_path / "2263100.txt"
+    path.write_text("2263100 Gauge\nnodata  -9999\nn       1       measurements per day [1, 1440]\n"
+                    "start  1996  01  01  00  00   (YYYY MM DD HH MM)\nend    1996  01  02  00  00   (YYYY MM DD HH MM)\n"
+                    "1996  01  01  00  00    157.000\n1996  01  02  00  00  -9999.000\n", encoding="utf-8")
+    logs = []
+    workflow = DomainWorkflow(tmp_path, _PourPoints(tmp_path / "outlets.gpkg"), "outlet_id", ("001",), log=logs.append)
+    prepared = workflow.validate_gauge_assignments([OutletAssignment("001", True, False, discharge_table(path))])
+    for (start, end), warned in ((("1981-01-01T00:00", "1990-06-30T00:00"), True),
+                                 (("1995-01-01T00:00", "1997-12-31T00:00"), False)):
+        update_section(tmp_path, "time", {"sim_start": start, "sim_end": end})
+        logs.clear()
+        workflow.write_gauges(prepared)
+        assert prepared["001"].output_path.read_text(encoding="utf-8").splitlines()[-1].split()[-1] == "-9999.000"
+        assert bool(logs) == warned
+    update_section(tmp_path, "time", {"sim_start": "1981-01-01T00:00", "sim_end": "1990-06-30T00:00"})
+    workflow.write_gauges(prepared)
+    assert logs[-1] == ("WARNING: The discharge table 2263100.txt for gauge 001 covers 1996-01-01 to 1996-01-02, "
+                        "outside the simulation 1981-01-01 to 1990-06-30: its observed hydrograph will be empty.")

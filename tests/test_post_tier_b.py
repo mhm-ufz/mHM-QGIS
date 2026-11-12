@@ -115,6 +115,37 @@ def test_gridded_comparison_harmonises_time_space_and_units(tmp_path):
                          "variable": "et", "out": str(tmp_path / "odd")})
 
 
+def test_south_first_observations_are_saved_north_first_and_need_time_bounds(tmp_path):
+    truth = make_run(tmp_path, days=120, shape=(4, 6))
+    write_observation(truth, tmp_path / "south.nc")
+    with netCDF4.Dataset(tmp_path / "south.nc", "a") as handle:  # south first, the north 100 mm wetter
+        et = handle["et"][:]
+        et[:, 0] += 100
+        handle["et"][:] = et[:, ::-1]
+        handle["y"][:] = handle["y"][::-1]
+    job = {"adapter": "et", "model": str(truth.files["mhm"]), "observation": str(tmp_path / "south.nc"),
+           "variable": "et", "out": str(tmp_path / "cmp"), "min_pairs": 2}
+    maps = np.load(f"{observe.compare(job)}/maps.npz")
+    assert maps["y"][0] > maps["y"][-1]
+    np.testing.assert_allclose(maps["bias"][0], -100, atol=1e-3)
+    np.testing.assert_allclose(maps["bias"][1], 0, atol=1e-3)
+    with netCDF4.Dataset(tmp_path / "south.nc", "a") as handle:
+        handle.renameVariable("time_bnds", "unused")
+    with pytest.raises(ValueError, match="needs time_bnds"):
+        observe.compare(job)
+
+
+def test_tws_is_stamped_at_float_interval_centres(tmp_path):
+    truth = make_run(tmp_path, geographic=True, days=3)
+    with netCDF4.Dataset(truth.files["mhm"], "a") as handle:  # as v6 writes it: int32 days
+        handle["time"].units = "days since 2000-01-01 00:00:00"
+        handle["time_bnds"][:] = handle["time_bnds"][:] // 24
+    path = observe.write_tws({"cache": str(tmp_path), "model": str(truth.files["mhm"]),
+                              "out": str(tmp_path / "tws"), "terms": {"snowpack": "cell"}})
+    with netCDF4.Dataset(path) as handle:
+        np.testing.assert_array_equal(handle["time"][:], [0.5, 1.5, 2.5])
+
+
 def test_soil_moisture_is_depth_weighted():
     weights = observe.soil_weights({"soildata": {"soil_depth": [300.0, 1000.0]}}, "v5.13", 1, 500.0)
     assert weights == pytest.approx({1: 1 / 500, 2: 200 / 700 / 500})

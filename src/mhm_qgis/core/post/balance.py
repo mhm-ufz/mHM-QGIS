@@ -86,6 +86,8 @@ def basin(root, name="domain", freq="period", exact=False, period=None) -> pd.Da
 
 def per_year(frame) -> pd.DataFrame:
     """Terms in mm/yr (ratios and days unchanged)."""
+    if frame.empty:  # basin() of a single output interval
+        return frame
     scale = 365.25 / frame["days"]
     columns = [c for c in frame.columns if c not in RATIOS and c != "days"]
     return frame.assign(**{column: frame[column] * scale for column in columns})
@@ -158,7 +160,7 @@ def summary(root, run, gauges=(), exact=False) -> pd.DataFrame:
             pair = series.gauge(run, int(name))
             scores = metrics.evaluate(pair["sim"], pair["obs"])
             reference = pair["obs"] if pair["obs"].notna().any() else pair["sim"]
-            row |= {"BFI": float(signatures.baseflow(reference.fillna(0).to_numpy()).sum() / reference.sum()),
+            row |= {"BFI": float(np.nansum(signatures.baseflow(reference.to_numpy())) / reference.sum()),
                     "NSE": scores["NSE"], "KGE": scores["KGE"], "PBIAS": scores["PBIAS"],
                     "observed (%)": 100 * float(pair["obs"].notna().mean())}
         rows["Domain" if name == "domain" else f"Gauge {name}"] = row
