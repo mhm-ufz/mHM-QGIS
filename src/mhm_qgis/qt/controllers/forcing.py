@@ -13,6 +13,7 @@ from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetI
 
 from ...core import datamodel
 from ...core.meteorology.forcing import MeteoFolderSpec, inspect_meteo_folder_cached
+from .. import project_tree
 from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
 from . import grid, main, process_cases
 from .version import selected as selected_version
@@ -48,6 +49,7 @@ def show_meteo_input(dialog, variable):
         dialog, variable, prompt.spec))
     prompt.finished.connect(lambda _result: show_meteo_input(dialog, variable))
     main.embed(dialog, "meteoVar", prompt)
+    project_tree.indicate(dialog, f"meteo_{variable}", prompt.label_setStatus)
 
 
 def _initial(dialog, inputs, variable):

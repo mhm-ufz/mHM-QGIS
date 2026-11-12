@@ -64,7 +64,7 @@ pages:
     - widget: lineEdit_L11Resolution
       title: L11 (routing) resolution
       text: Cell size of the river routing grid; usually equal to or coarser than L1.
-    - widget: pushButton_createLatLon
+    - widget: pushButton_setLatLon
       title: Lat/lon file
       text: Writes <code>data/latlon.nc</code> with coordinates for all model levels.
     - widget: comboBox_gridVariableToDisplay

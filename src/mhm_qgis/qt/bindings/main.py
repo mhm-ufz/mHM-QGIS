@@ -234,8 +234,8 @@ def _bind_grid(dialog):
     dialog.lineEdit_L11Resolution.textChanged.connect(
         lambda _text: (grid.sync_multiplier(dialog, "L11"), grid.update_l11_resolution_label(dialog))
     )
-    # pushButton_createLatLon → grid.process_lat_lon
-    dialog.pushButton_createLatLon.clicked.connect(lambda: grid.process_lat_lon(dialog))
+    # pushButton_setLatLon → grid.process_lat_lon
+    dialog.pushButton_setLatLon.clicked.connect(lambda: grid.process_lat_lon(dialog))
 
 
 def _bind_input_state(dialog):

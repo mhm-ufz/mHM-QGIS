@@ -6,21 +6,24 @@
 # `action: run`: ▶ in the status column prepares the children.
 # `summary`: a table on its page listing the rows below with their status and prepared file.
 # `grid`: the model grid levels its eye shows; `view`: the button its eye clicks.
+# `set`: the label right of the page's Set button; it shows the row's status.
 nodes:
   - {key: intro, title: Introduction, page: page_projectIntro, status: intro}
   - key: project_configuration
     title: 1. Project Configuration
     page: page_projectSetup
     status: project_setup
+    set: label_setProjectStatus
     children:
       - key: domain_setup
         title: Domain Setup
         page: tab
         status: domain_setup
+        set: label_setCRSStatus
         children:
-          - {key: l0_reference, title: L0 Reference (DEM), page: page_l0Reference, status: l0, grid: [L0]}
-          - {key: l2_reference, title: L2 Reference (Precipitation), page: page_l2Reference, status: l2, grid: [L2]}
-          - {key: resolution, title: Resolution, page: page_resolution, status: resolution, grid: [L1, L11]}
+          - {key: l0_reference, title: L0 Reference (DEM), page: page_l0Reference, status: l0, grid: [L0], set: label_setDEMStatus}
+          - {key: l2_reference, title: L2 Reference (Precipitation), page: page_l2Reference, status: l2, grid: [L2], set: label_setPrecipitationInputStatus}
+          - {key: resolution, title: Resolution, page: page_resolution, status: resolution, grid: [L1, L11], set: label_setLatLonStatus}
           - {key: settings, title: Settings, page: page_settings, status: namelists, view: pushButton_editNmlsFinal}
   - key: inputs
     title: 2. Inputs
@@ -34,11 +37,11 @@ nodes:
         action: run
         children:
           - {key: dem, title: DEM, page: page_demDerivatives, display: dem, status: dem}
-          - {key: lc, title: Land use, page: page_landUse, display: land_cover, status: categorical}
-          - {key: soil, title: Soil, page: page_soil, input: soil_class, display: soil, status: categorical}
-          - {key: geology, title: Geology, page: page_geology, input: geo_class, display: geology, status: categorical}
-          - {key: lai, title: LAI, page: page_lai, input: [lai_class, lai_gridded], display: lai, status: categorical}
-          - {key: gauges, title: Gauges, page: page_gauges, display: idgauges, status: gauges}
+          - {key: lc, title: Land use, page: page_landUse, display: land_cover, status: categorical, set: label_setLandUseStatus}
+          - {key: soil, title: Soil, page: page_soil, input: soil_class, display: soil, status: categorical, set: label_setSoilStatus}
+          - {key: geology, title: Geology, page: page_geology, input: geo_class, display: geology, status: categorical, set: label_setGeologyStatus}
+          - {key: lai, title: LAI, page: page_lai, input: [lai_class, lai_gridded], display: lai, status: categorical, set: label_setLaiStatus}
+          - {key: gauges, title: Gauges, page: page_gauges, display: idgauges, status: gauges, set: label_setGaugesStatus}
           - {key: domain_definition, title: Domain Definition, page: page_domainDefinition, display: domain_mask, status: domain}
       - key: meteorology
         title: B. Meteorology

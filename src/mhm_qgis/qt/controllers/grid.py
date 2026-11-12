@@ -733,7 +733,7 @@ def update_extent_labels(dialog, metadata=None):
 
 def update_latlon_button_state(dialog):
     """Enable latlon creation once all derived grid levels are available."""
-    dialog.pushButton_createLatLon.setEnabled(bool(
+    dialog.pushButton_setLatLon.setEnabled(bool(
         current_l0_resolution(dialog)
         and current_l1_resolution(dialog)
         and current_l11_resolution(dialog)
