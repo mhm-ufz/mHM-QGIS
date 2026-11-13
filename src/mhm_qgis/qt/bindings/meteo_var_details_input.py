@@ -6,6 +6,7 @@ def bind(dialog):
     """Connect the browser and resolution controls."""
     # pushButton_browseMeteoFolder → controller.browse
     dialog.pushButton_browseMeteoFolder.clicked.connect(lambda: controller.browse(dialog))
+    dialog.pushButton_scanFile.clicked.connect(lambda: controller.scan_file(dialog))
     dialog.comboBox_temporalResolutionInput.currentTextChanged.connect(
         lambda: controller.populate_output_resolutions(dialog))
     dialog.comboBox_temporalResolutionOutput.currentTextChanged.connect(

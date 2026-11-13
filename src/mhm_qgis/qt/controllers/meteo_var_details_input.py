@@ -2,8 +2,10 @@
 from pathlib import Path
 
 from qgis.core import QgsCoordinateReferenceSystem
-from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QApplication, QMessageBox
 
+from ...core.meteorology.forcing.api import file_defaults
 from ...core.meteorology.forcing.temporal import (
     CADENCES,
     VARIABLES,
@@ -63,6 +65,30 @@ def browse(dialog):
     folder = open_directory(dialog, "Meteorology folder")
     if folder:
         dialog.comboBox_inputFolder.setCurrentText(folder)
+
+
+def scan_file(dialog):
+    """Preselect what the first matching file declares; the user still checks it."""
+    values = draft(dialog)
+    QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+    try:
+        found = file_defaults(MeteoFolderSpec(
+            dialog.variable, Path(values["folder"]).expanduser(), pattern=values["pattern"]))
+    except (OSError, RuntimeError, ValueError) as error:
+        QMessageBox.warning(dialog, "Meteorology input", str(error))
+        return
+    finally:
+        QApplication.restoreOverrideCursor()
+    if "temporal_resolution" in found:  # its signal re-offers the output resolutions
+        dialog.comboBox_temporalResolutionInput.setCurrentText(found["temporal_resolution"])
+    if "unit" in found:
+        dialog.comboBox_unitInput.setCurrentText(found["unit"])
+    if "crs" in found:
+        dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem(found["crs"]))
+    missing = [label for key, label in (("temporal_resolution", "time step"), ("unit", "unit"),
+                                        ("crs", "CRS")) if key not in found]
+    dialog.pushButton_scanFile.setToolTip(
+        f"Read from {found['file']}" + (f"; not declared: {', '.join(missing)}" if missing else ""))
 
 
 def draft(dialog):

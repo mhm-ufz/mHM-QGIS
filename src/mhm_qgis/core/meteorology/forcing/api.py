@@ -26,6 +26,7 @@ from ...grid import (
 )
 from .io import write_header, write_netcdf
 from .temporal import (
+    CADENCES,
     VARIABLE_LABELS,
     VARIABLES,
     about_variable,
@@ -504,6 +505,27 @@ def _open_dataset(path: Path):
         except Exception as exc:
             first_error = first_error or exc
     raise RuntimeError(f"Could not open {path} ({first_error}): check that it is a complete NetCDF file.")
+
+
+def file_defaults(spec):
+    """The time step, unit and CRS the first matching file declares; undeclared ones are left out."""
+    path = _files_for_spec(spec)[0]
+    found = {"file": path.name}
+    if crs := _inspect_file(path, replace(spec, crs=None)).metadata.crs:
+        found["crs"] = crs
+    with _open_dataset(path) as ds:
+        variable = _find_variable(ds, spec.kind)
+        if (unit := normalize_unit(ds[variable].attrs.get("units", ""))) in VARIABLES[spec.kind][2]:
+            found["unit"] = unit
+        times = ds["time" if "time" in ds[variable].dims else "valid_time"].values
+    for cadence in CADENCES if len(times) > 1 else ():  # one timestamp passes any cadence
+        try:
+            time_index(times, cadence)
+        except ValueError:
+            continue
+        found["temporal_resolution"] = cadence
+        break
+    return found
 
 
 def _inspect_file(

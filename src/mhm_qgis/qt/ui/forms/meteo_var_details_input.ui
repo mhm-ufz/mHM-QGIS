@@ -63,7 +63,7 @@
        </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_fileNameGlob" stretch="2,3">
+       <layout class="QHBoxLayout" name="horizontalLayout_fileNameGlob" stretch="2,3,0">
         <property name="topMargin">
          <number>0</number>
         </property>
@@ -78,6 +78,13 @@
          <widget class="QLineEdit" name="lineEdit_fileNameGlobDefinition">
           <property name="toolTip">
            <string>Glob definition for Precipitation Input Files within the selected folder. Example: pre*.nc</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_scanFile">
+          <property name="text">
+           <string>Scan</string>
           </property>
          </widget>
         </item>

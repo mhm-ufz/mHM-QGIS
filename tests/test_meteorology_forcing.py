@@ -528,3 +528,14 @@ def test_negative_precipitation_is_refused_asked_or_clipped(tmp_path):
         convert_units(np.array([[-1.0, 2.0]]), bounds, clipped, "tp")
     (tmp_path / "pre.nc").write_text("data")
     assert preparation_fingerprint(spec) == preparation_fingerprint(clipped)
+
+
+def test_file_defaults_reads_what_the_first_file_declares(tmp_path):
+    from mhm_qgis.core.meteorology.forcing.api import file_defaults
+
+    _write_nc(tmp_path / "a.nc", "t2m", times=("2001-01-01", "2001-01-02"), units="K")
+    _write_nc(tmp_path / "b.nc", "t2m")
+    assert file_defaults(MeteoFolderSpec("tavg", tmp_path)) == {
+        "file": "a.nc", "crs": "EPSG:4326", "unit": "K", "temporal_resolution": "Daily"}
+    assert file_defaults(MeteoFolderSpec("tavg", tmp_path, pattern="b.nc")) == {
+        "file": "b.nc", "crs": "EPSG:4326"}

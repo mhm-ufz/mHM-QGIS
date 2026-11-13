@@ -97,6 +97,29 @@ def test_the_meteorology_form_keeps_the_files_crs(tmp_path):
     assert form.spec.crs == "EPSG:3035"
 
 
+def test_scan_preselects_what_the_first_file_declares(tmp_path, monkeypatch):
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
+    from mhm_qgis.qt.controllers import meteo_var_details_input as controller
+    from mhm_qgis.qt.dialogs.meteo_var_details_input import MeteoVarDetailsDialog
+
+    _app()
+    warnings = []
+    monkeypatch.setattr(controller.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+    form = MeteoVarDetailsDialog("tavg", str(tmp_path), {"folder": str(tmp_path), "temporal_resolution": "Hourly"})
+    form.pushButton_scanFile.click()
+    assert len(warnings) == 1
+    assert "No NetCDF files" in warnings[0]
+
+    xr.Dataset({"t2m": (("time", "lat", "lon"), np.ones((2, 2, 2)), {"units": "K"})},
+               coords={"time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"),
+                       "lat": [51.0, 50.0], "lon": [10.0, 11.0]}).to_netcdf(tmp_path / "a.nc", engine="scipy")
+    form.pushButton_scanFile.click()
+    assert form.comboBox_temporalResolutionInput.currentText() == "Daily"
+    assert form.comboBox_unitInput.currentText() == "K"
+    assert form.mProjectionSelectionWidget_crs.crs().authid() == "EPSG:4326"
+    assert form.pushButton_scanFile.toolTip() == "Read from a.nc"
+
 def test_a_file_layer_carries_the_crs_assigned_to_it(tmp_path):
     _app()
     raster = _raster(tmp_path / "dem.tif")  # no CRS of its own, like an ASC without .prj
