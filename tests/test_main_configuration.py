@@ -35,7 +35,7 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
                        "lat": [51., 50.], "lon": [10., 11.]}).to_netcdf(folder / "wanted.nc")
     (folder / "unrelated.nc").write_text("ignore me")
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog._loading_input_state = True
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
     dialog.pushButton_setCRS.click()  # only a Set CRS is kept
@@ -75,7 +75,7 @@ def test_scan_controls_grid_default_override_dates_and_restore(tmp_path, monkeyp
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 3
     dialog.save_input_state()
     restored = MhmQgisDialog()
-    restored.project_folder = str(tmp_path)
+    restored.setup_folder = str(tmp_path)
     restored.load_input_state()
     assert restored.lineEdit_precipitationGlobDefinition.text() == "wanted*.nc"
     assert restored.spinBox_L2ResolutionMultiplier.value() == 3
@@ -134,6 +134,7 @@ def test_set_dem_makes_l0_the_dem_upscaled_by_the_ticked_factor(tmp_path):
     raster.SetProjection(crs.ExportToWkt())
     raster = None
     dialog = MhmQgisDialog()
+    dialog.setup_folder = str(tmp_path)
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32632"))
     dialog.pushButton_setCRS.click()
     dialog.input_combo("dem").setLayer(QgsRasterLayer(str(dem), "DEM"))
@@ -149,4 +150,36 @@ def test_set_dem_makes_l0_the_dem_upscaled_by_the_ticked_factor(tmp_path):
     dialog.groupBox_upscaleTopography.setChecked(False)
     dialog.pushButton_setDEM.click()
     assert labels() == ("100", "100")
+    dialog.close()
+
+
+def test_a_failed_scan_from_the_popup_keeps_the_entered_values(tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import forcing
+
+    warnings, seen = [], []
+    monkeypatch.setattr(forcing.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "bad.nc").write_text("not a NetCDF file")
+
+    def enter(prompt):
+        prompt.comboBox_inputFolder.setCurrentText(str(source))
+        prompt.lineEdit_fileNameGlobDefinition.setText("bad*.nc")
+        prompt.accept()
+        return prompt.result()
+
+    dialog = MhmQgisDialog()
+    dialog.setup_folder = str(tmp_path)
+    monkeypatch.setattr(MeteoVarDetailsDialog, "exec", enter)
+    forcing.edit_meteo_input(dialog, "tavg")
+    deadline = time.monotonic() + 15
+    while dialog.task_coordinator.is_busy() and time.monotonic() < deadline:
+        QgsApplication.processEvents()
+        time.sleep(.01)
+    assert warnings  # the scan failed
+    assert "Traceback" not in warnings[0]
+    assert not warnings[0].startswith("https://")
+    monkeypatch.setattr(MeteoVarDetailsDialog, "exec", lambda prompt: seen.append(prompt.draft()) or 0)
+    forcing.edit_meteo_input(dialog, "tavg")
+    assert (seen[0]["folder"], seen[0]["pattern"]) == (str(source), "bad*.nc")
     dialog.close()

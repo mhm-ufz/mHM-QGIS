@@ -16,7 +16,7 @@ def start(dialog):
             raise ValueError("Configure at least one additional observation.")
         grid.require_common_grid(dialog)
         return ObservationRun(
-            Path(dialog.project_folder),
+            Path(dialog.setup_folder),
             specs,
             target_grid_from_header(grid.grid_level_headers(dialog)["L1"], dialog.selected_meteo_crs()),
             inspections=forcing.observation_inspections(dialog) or None,

@@ -505,3 +505,37 @@ def test_group_reduction_matches_a_plain_python_reference(method, cadence, days,
     np.testing.assert_array_equal(np.isnan(written), np.isnan(reference))
     np.testing.assert_allclose(written[~np.isnan(written)],
                                reference[~np.isnan(reference)])
+
+
+def test_negative_precipitation_is_refused_asked_or_clipped(tmp_path):
+    """ERA5 round-off (about -1e-4 mm) is the user's call; a whole millimetre is a wrong setting."""
+    from mhm_qgis.core.meteorology.forcing import preparation_fingerprint
+    from mhm_qgis.core.meteorology.forcing.temporal import (
+        NegativeAmounts,
+        about_variable,
+        convert_units,
+    )
+
+    bounds = np.array([["2001-01-01", "2001-01-02"]], dtype="datetime64[ns]")
+    spec = MeteoFolderSpec("pre", tmp_path, unit="mm")
+    with pytest.raises(NegativeAmounts, match=r"Precipitation has small negative amounts \(down to -6e-05 mm\)"):
+        convert_units(np.array([[-6e-5, 2.0]]), bounds, spec, "tp")
+    clipped = MeteoFolderSpec("pre", tmp_path, unit="mm", clip_negative=True)
+    assert convert_units(np.array([[-6e-5, 2.0]]), bounds, clipped, "tp").tolist() == [[0.0, 2.0]]
+    assert convert_units(np.array([[-1e-9, 2.0]]), bounds, spec, "tp").tolist() == [[0.0, 2.0]]
+    with pytest.raises(ValueError, match=r"^Precipitation: The input has negative amounts \(down to -1 mm\): "
+                                         "check its unit, the cumulative setting."), about_variable("pre"):
+        convert_units(np.array([[-1.0, 2.0]]), bounds, clipped, "tp")
+    (tmp_path / "pre.nc").write_text("data")
+    assert preparation_fingerprint(spec) == preparation_fingerprint(clipped)
+
+
+def test_file_defaults_reads_what_the_first_file_declares(tmp_path):
+    from mhm_qgis.core.meteorology.forcing.api import file_defaults
+
+    _write_nc(tmp_path / "a.nc", "t2m", times=("2001-01-01", "2001-01-02"), units="K")
+    _write_nc(tmp_path / "b.nc", "t2m")
+    assert file_defaults(MeteoFolderSpec("tavg", tmp_path)) == {
+        "file": "a.nc", "crs": "EPSG:4326", "unit": "K", "temporal_resolution": "Daily"}
+    assert file_defaults(MeteoFolderSpec("tavg", tmp_path, pattern="b.nc")) == {
+        "file": "b.nc", "crs": "EPSG:4326"}

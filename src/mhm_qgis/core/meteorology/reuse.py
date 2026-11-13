@@ -27,12 +27,12 @@ def required_meteo_variables(include_pet: bool) -> tuple[str, ...]:
 
 
 def stale_meteo_variables(
-        project_folder,
+        setup_folder,
         recorded_outputs: Mapping[str, Any],
         header: Mapping[str, Any],
         variables: Iterable[str]) -> dict[str, str]:
     """Return the variables that still need preparing, mapped to the reason."""
-    expected = expected_meteo_outputs(project_folder)
+    expected = expected_meteo_outputs(setup_folder)
     stale: dict[str, str] = {}
     for variable in variables:
         paths = expected.get(variable)

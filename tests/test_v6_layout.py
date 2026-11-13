@@ -140,7 +140,7 @@ def test_the_v6_namelist_points_at_the_new_locations(tmp_path):
     from mhm_qgis.vSpecific import build_initial_values
 
     class _Dialog:
-        project_folder = str(tmp_path)
+        setup_folder = str(tmp_path)
 
         def current_l1_resolution(self):
             return 1000
@@ -184,7 +184,7 @@ def test_v6_ready_lai_points_at_the_morphology_bundle(tmp_path):
     })
 
     class _Dialog:
-        project_folder = str(tmp_path)
+        setup_folder = str(tmp_path)
 
         def current_l1_resolution(self):
             return 1000

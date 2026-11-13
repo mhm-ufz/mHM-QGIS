@@ -318,7 +318,7 @@ def _combo_path(combo_box) -> str:
     return str(value or combo_box.currentText().strip())
 
 
-def _populate_file_combo(combo_box, project_folder, kind, initial=""):
+def _populate_file_combo(combo_box, setup_folder, kind, initial=""):
     combo_box.clear()
     combo_box.addItem("", "")
     selected = 0
@@ -328,7 +328,7 @@ def _populate_file_combo(combo_box, project_folder, kind, initial=""):
     combo_box.setCurrentIndex(selected)
 
 
-def _populate_layer_combo(adapter, project_folder, kind, initial=""):
+def _populate_layer_combo(adapter, setup_folder, kind, initial=""):
     """Populate a categorical input with the layers loaded in QGIS."""
     combo_box = adapter.combo_box
     combo_box.clear()

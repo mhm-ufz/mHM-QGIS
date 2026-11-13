@@ -38,7 +38,7 @@ def parse_source(source: str) -> tuple[str | None, str | None]:
 
 
 def task_options(
-    project_folder,
+    setup_folder,
     source: str,
     filled_dem: str,
     *,
@@ -54,7 +54,7 @@ def task_options(
     return {
         "source_path": source_path,
         "source_variable": source_variable,
-        "output_path": lai_dem_staging_path(project_folder),
+        "output_path": lai_dem_staging_path(setup_folder),
         "filled_dem": str(filled_dem),
         "dem_crs": str(crs or ""),
         "source_crs": str(source_crs or ""),
@@ -65,7 +65,7 @@ def task_options(
 
 
 def publish_to_l0(
-    project_folder,
+    setup_folder,
     l0_header: dict,
     crs: str = "",
     *,
@@ -75,8 +75,8 @@ def publish_to_l0(
     log=None,
 ) -> Path:
     """Publish the already final common-L0 LAI without another grid operation."""
-    folder = Path(lai_folder(project_folder))
-    staged = Path(lai_dem_staging_path(project_folder))
+    folder = Path(lai_folder(setup_folder))
+    staged = Path(lai_dem_staging_path(setup_folder))
     if not staged.is_file():
         raise FileNotFoundError("Prepare LAI on the common DEM grid first.")
     if not file_matches_header(staged, l0_header):
@@ -94,21 +94,21 @@ def publish_to_l0(
         source_path, source_variable = parse_source(source)
         settings = {
             "mode": "netcdf",
-            "source_path": relative_workspace_path(project_folder, source_path) if source_path else "",
+            "source_path": relative_workspace_path(setup_folder, source_path) if source_path else "",
             "source_variable": str(source_variable or ""),
             "target_timestep": target_timestep or DEFAULT_TIMESTEP,
             "time_step": lai_time_step(target_timestep or DEFAULT_TIMESTEP),
-            "output_path": relative_workspace_path(project_folder, output),
+            "output_path": relative_workspace_path(setup_folder, output),
             "variable": "lai",
         }
         if classdefinition_source:
             definition = folder / "LAI_classdefinition.txt"
             shutil.copy2(classdefinition_source, definition)
             settings["classdefinition_path"] = relative_workspace_path(
-                project_folder, definition
+                setup_folder, definition
             )
         update_section(
-            project_folder,
+            setup_folder,
             "lai",
             settings,
         )

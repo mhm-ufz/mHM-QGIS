@@ -37,10 +37,10 @@ def populate_run_names(dialog, selected=None) -> None:
     if selected is None:
         selected = getattr(dialog, "_selected_run_name", "")
     names = []
-    if dialog.project_folder:
+    if dialog.setup_folder:
         try:
             names = list(dict.fromkeys(
-                ref.name for ref in runs.list_runs(dialog.project_folder) if ref.name
+                ref.name for ref in runs.list_runs(dialog.setup_folder) if ref.name
             ))
         except (OSError, ValueError):
             names = []
@@ -118,8 +118,8 @@ def require_v6_executable(dialog):
 
 
 def version_changed(dialog) -> None:
-    if dialog.project_folder:
-        ensure_project_structure(dialog.project_folder, selected_version(dialog))
+    if dialog.setup_folder:
+        ensure_project_structure(dialog.setup_folder, selected_version(dialog))
         invalidate(dialog, "run_mhm")
         refresh_advanced_nml_settings(dialog)
     else:  # the version is fixed once a setup exists; cases chosen for the other one don't carry over
@@ -146,18 +146,18 @@ def edit_namelists(dialog, namelists=None, *, update_inputs=True) -> bool:
         from ...vSpecific import build_dimensions, build_initial_values
 
         version = selected_version(dialog)
-        combined = multi_domain.is_multi(dialog.project_folder)
+        combined = multi_domain.is_multi(dialog.setup_folder)
         if update_inputs and not combined:
             nml_settings.update_section(
-                dialog.project_folder, "time", simulation_times(dialog)
+                dialog.setup_folder, "time", simulation_times(dialog)
             )
-            nml_settings.sync_domain_settings(dialog.project_folder)
-        workspace = workspace_folder(dialog.project_folder)
+            nml_settings.sync_domain_settings(dialog.setup_folder)
+        workspace = workspace_folder(dialog.setup_folder)
         schemas_dir = schemas_folder(version)
         if combined:
-            ensure_multi_structure(dialog.project_folder)
+            ensure_multi_structure(dialog.setup_folder)
         else:
-            ensure_project_structure(dialog.project_folder, version)
+            ensure_project_structure(dialog.setup_folder, version)
         project = namelist_project(version, combined)
         if project == "combine" and namelists:
             # combine.nml (`meta`) holds what a domain's mhm.nml (`main`) would.
@@ -179,9 +179,9 @@ def edit_namelists(dialog, namelists=None, *, update_inputs=True) -> bool:
             log=dialog.log_message,
         )
         if _namelist_stamps(workspace) != before:
-            if update_inputs and nml_settings.load_settings(dialog.project_folder).get("intro_values"):
+            if update_inputs and nml_settings.load_settings(dialog.setup_folder).get("intro_values"):
                 # Handed over (only update_inputs passes them): now in the namelists; later edits win.
-                nml_settings.update_section(dialog.project_folder, "intro_values", {})
+                nml_settings.update_section(dialog.setup_folder, "intro_values", {})
             process_cases.reread(dialog)
         return True
     except Exception as error:
@@ -190,20 +190,20 @@ def edit_namelists(dialog, namelists=None, *, update_inputs=True) -> bool:
         return False
 
 
-def inputs_ready(dialog, project_folder) -> bool:
+def inputs_ready(dialog, setup_folder) -> bool:
     """Warn about inputs the saved processes read but nobody prepared; Yes runs anyway."""
     from ...core import datamodel
 
     try:
-        if multi_domain.is_multi(project_folder):
+        if multi_domain.is_multi(setup_folder):
             from ...core.handlers.state.nml_settings import load_settings
 
-            stored = load_settings(project_folder).get(multi_domain.SECTION, {}).get("domains", [])
+            stored = load_settings(setup_folder).get(multi_domain.SECTION, {}).get("domains", [])
             missing = [finding._replace(message=f"{domain.name}: {finding.message}")
-                       for domain in multi_domain.resolve(project_folder, stored)
+                       for domain in multi_domain.resolve(setup_folder, stored)
                        for finding in datamodel.check(domain) if not finding.ok]
         else:
-            missing = [finding for finding in datamodel.check(project_folder) if not finding.ok]
+            missing = [finding for finding in datamodel.check(setup_folder) if not finding.ok]
     except ValueError as error:
         dialog.log_message(f"WARNING: Could not check the model inputs: {error}")
         return True
@@ -221,14 +221,14 @@ def inputs_ready(dialog, project_folder) -> bool:
     return answer == QMessageBox.StandardButton.Yes
 
 
-def outputs_ready(dialog, project_folder) -> bool:
+def outputs_ready(dialog, setup_folder) -> bool:
     """Ask before a run that would write no output variable (every output switch off), or
     whose switched-on outputs mHM would drop because their process is off."""
     from ...core import datamodel
 
     try:
-        switched_on = datamodel.outputs_on(project_folder)
-        dropped = datamodel.dropped_outputs(project_folder) if switched_on else []
+        switched_on = datamodel.outputs_on(setup_folder)
+        dropped = datamodel.dropped_outputs(setup_folder) if switched_on else []
     except ValueError:
         return True
     if switched_on is None or (switched_on and not dropped):
@@ -265,12 +265,12 @@ def run(dialog) -> bool:
         return False
     from ...core.post import runs
 
-    project_folder = dialog.project_folder
+    setup_folder = dialog.setup_folder
     name = dialog.comboBox_runName.currentText().strip()
 
     def failed(message):
-        processing.mark_workflow(project_folder, "run_mhm", "failed", message)
-        if dialog.project_folder == project_folder:
+        processing.mark_workflow(setup_folder, "run_mhm", "failed", message)
+        if dialog.setup_folder == setup_folder:
             set_button_state(dialog, "run_mhm", "failed")
         dialog.log_message(f"ERROR: {message}")
 
@@ -278,10 +278,10 @@ def run(dialog) -> bool:
         if exit_code == 0:
             if name:
                 try:
-                    runs.finish_named(project_folder, name)
+                    runs.finish_named(setup_folder, name)
                 except Exception as error:
                     try:
-                        runs.fail_named(project_folder, name)
+                        runs.fail_named(setup_folder, name)
                     except OSError as cleanup_error:
                         dialog.log_message(
                             f"ERROR: Could not clean up the staged run: {cleanup_error}"
@@ -291,20 +291,20 @@ def run(dialog) -> bool:
                     QMessageBox.critical(dialog, "mHM Run Publication Error", message)
                     return
                 dialog.log_message(f"Run {name} is in runs/{name}/; the Outputs tab lists it.")
-                if dialog.project_folder == project_folder:
+                if dialog.setup_folder == setup_folder:
                     from . import post_context
 
                     post_context.populate(dialog)
                     populate_run_names(dialog, name)
-            processing.mark_workflow(project_folder, "run_mhm", "completed")
-            if dialog.project_folder == project_folder:
+            processing.mark_workflow(setup_folder, "run_mhm", "completed")
+            if dialog.setup_folder == setup_folder:
                 set_button_state(dialog, "run_mhm", "completed")
             dialog.log_message("mHM completed successfully.")
             return
         message = f"mHM exited with code {exit_code}."
         if name:
             try:
-                runs.fail_named(project_folder, name)
+                runs.fail_named(setup_folder, name)
             except OSError as error:
                 message += f" The staged run could not be cleaned up: {error}"
         failed(message)
@@ -317,12 +317,12 @@ def run(dialog) -> bool:
         v6_path = require_v6_executable(dialog) if version.startswith("6") else None
         if version.startswith("6") and not v6_path:
             return False
-        combined = multi_domain.is_multi(project_folder)
+        combined = multi_domain.is_multi(setup_folder)
         if combined:
-            ensure_multi_structure(project_folder)
+            ensure_multi_structure(setup_folder)
         else:
-            ensure_project_structure(project_folder, version)
-        if not inputs_ready(dialog, project_folder) or not outputs_ready(dialog, project_folder):
+            ensure_project_structure(setup_folder, version)
+        if not inputs_ready(dialog, setup_folder) or not outputs_ready(dialog, setup_folder):
             return False
         parameter = None
         if dialog.checkBox_enableParameterArgument.isChecked():
@@ -332,13 +332,13 @@ def run(dialog) -> bool:
             parameter = Path(text).resolve()
             if not parameter.is_file():
                 raise ValueError(f"Parameter namelist not found: {parameter}")
-        if name and any(ref.name == name for ref in runs.list_runs(project_folder)) and QMessageBox.question(
+        if name and any(ref.name == name for ref in runs.list_runs(setup_folder)) and QMessageBox.question(
                 dialog, "Run name", f"A run named {name} exists. Run again and overwrite its outputs?") \
                 != QMessageBox.StandardButton.Yes:
             return False
-        runs.link_outputs(project_folder, name)  # a named run stages its outputs until success
+        runs.link_outputs(setup_folder, name)  # a named run stages its outputs until success
         linked = True
-        workspace = workspace_folder(project_folder)
+        workspace = workspace_folder(setup_folder)
         terminal = dialog.open_project_terminal()
         if terminal is None:
             raise RuntimeError("Could not open the project terminal.")
@@ -359,7 +359,7 @@ def run(dialog) -> bool:
     except (OSError, ValueError, RuntimeError) as error:
         if linked and name:
             try:
-                runs.fail_named(project_folder, name)
+                runs.fail_named(setup_folder, name)
             except OSError as cleanup_error:
                 dialog.log_message(f"ERROR: Could not clean up the staged run: {cleanup_error}")
         set_status(dialog, "run_mhm", "failed", str(error))

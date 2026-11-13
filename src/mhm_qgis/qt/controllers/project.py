@@ -36,10 +36,10 @@ def show_work_type(dialog):
 def work_type_changed(dialog):
     show_work_type(dialog)
     single = dialog.comboBox_mhmWorkType.currentIndex() == 0
-    if dialog.project_folder and single == (dialog._multi_domains is not None):
+    if dialog.setup_folder and single == (dialog._multi_domains is not None):
         # The open setup is of the other kind: save and close it.
         dialog.save_input_state()
-        dialog.project_folder = None
+        dialog.setup_folder = None
         dialog._multi_domains = None
         dialog.comboBox_mHMversion.setEnabled(True)
         dialog.log_message(
@@ -90,7 +90,7 @@ def create_structure(dialog):
         settings.read(path)  # Creates the domain's settings.yaml on first use.
         dialog.save_input_state()
         main.embed(dialog, "domainDefinition", None)  # closes an open delineator
-        dialog.project_folder = str(path)
+        dialog.setup_folder = str(path)
         active_domain = True
         set_status(dialog, "project_structure", "running")
         dialog.load_input_state()
@@ -106,7 +106,7 @@ def create_structure(dialog):
         process_cases.inputs(dialog)  # the input rows show once Domain Setup has run
         from ..dialogs.project_folder_tree import ProjectFolderTreeDialog
 
-        ProjectFolderTreeDialog(dialog.project_folder, dialog).exec()
+        ProjectFolderTreeDialog(dialog.setup_folder, dialog).exec()
     except (OSError, ValueError) as error:
         if active_domain:
             set_status(dialog, "project_structure", "failed", str(error))
@@ -146,7 +146,7 @@ def set_folder(dialog):
     dialog.save_input_state()
     main.embed(dialog, "domainDefinition", None)
     dialog.project_directory = directory
-    dialog.project_folder = None
+    dialog.setup_folder = None
     dialog.comboBox_mHMversion.setEnabled(True)
     for key in workflow_state.specs(dialog):
         workflow_state.set_button_state(dialog, key, "")

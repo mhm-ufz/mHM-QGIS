@@ -10,7 +10,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
 ## Configuration And Morphology
 
 - Setups live at `<project>/mhm-qgis/<domain-name>`. The main dialog keeps the
-  outer folder in `project_directory`; `project_folder` is the active domain
+  outer folder in `project_directory`; `setup_folder` is the active domain
   root passed to core APIs. Never pass the outer folder to a new setup's state API.
 - Browse Project populates `comboBox_domainFolderSelector` with named setups and
   `<new>` last; it does not restore inputs or scan forcing. Create Project Structure
@@ -244,7 +244,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   A staged non-NetCDF raster whose ASCII name a staged NetCDF also produces is
   skipped with a log line; the NetCDF is the product.
 - Every ASCII export (`write_domain_dem_ascii`) is reused when its source, reference,
-  mask and options are unchanged: publication passes `project_folder`, and the
+  mask and options are unchanged: publication passes `setup_folder`, and the
   fingerprint is recorded per output path in the `exports` section. An output that is
   a symlink (a cloned domain's link into its source) is always rewritten. On
   Karnali-v5 an unchanged re-publication fell from about 57 s to 0.1 s.

@@ -113,12 +113,12 @@ def _mark_meteo_variables(dialog, version, effects):
 
 def write_pending(dialog):
     """Hand the wizard's process and output choices to the open setup, once."""
-    if not dialog._intro_pending or not dialog.project_folder:
+    if not dialog._intro_pending or not dialog.setup_folder:
         return
     version = selected_version(dialog)
     effects = intro.effects(intro.load_questions(), dialog._intro_answers, version)
     try:
-        saved = datamodel.read_namelists(dialog.project_folder)
+        saved = datamodel.read_namelists(dialog.setup_folder)
     except ValueError as error:
         dialog.log_message(f"WARNING: {error}; the wizard's choices start from the defaults.")
         saved = {}
@@ -126,7 +126,7 @@ def write_pending(dialog):
 
     project = namelist_project(version, dialog._multi_domains is not None)
     values = intro.handoff(version, effects, saved, project)
-    nml_settings.update_section(dialog.project_folder, "intro_values", values)
+    nml_settings.update_section(dialog.setup_folder, "intro_values", values)
     dialog._intro_pending = False
     if values:
         dialog.log_message("Introduction: process and output choices are ready for Edit Namelists.")

@@ -11,14 +11,14 @@ from ..ui import load_form
 
 
 class ProjectFolderTreeDialog(QDialog, load_form("project_folder_tree.ui")):
-    def __init__(self, project_folder, parent=None):
+    def __init__(self, setup_folder, parent=None):
         super().__init__(parent)
         self.setupUi(self)
         self.setWindowTitle("Project structure")
         self.model = QFileSystemModel(self)
         self.model.setReadOnly(True)
-        self.model.setRootPath(str(project_folder))
+        self.model.setRootPath(str(setup_folder))
         self.treeView_projectFolder.setModel(self.model)
-        self.treeView_projectFolder.setRootIndex(self.model.index(str(project_folder)))
-        self.treeView_projectFolder.expand(self.model.index(workspace_folder(project_folder)))
+        self.treeView_projectFolder.setRootIndex(self.model.index(str(setup_folder)))
+        self.treeView_projectFolder.expand(self.model.index(workspace_folder(setup_folder)))
         self.treeView_projectFolder.setColumnWidth(0, 360)

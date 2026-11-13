@@ -7,16 +7,16 @@ from .. import project_tree
 
 
 def set_status(dialog, key, status, message=""):
-    if dialog.project_folder:
-        processing.mark_workflow(dialog.project_folder, key, status, message)
+    if dialog.setup_folder:
+        processing.mark_workflow(dialog.setup_folder, key, status, message)
     set_button_state(dialog, key, status)
 
 
 def invalidate(dialog, *keys):
-    if dialog._loading_input_state or not dialog.project_folder:
+    if dialog._loading_input_state or not dialog.setup_folder:
         return
     for key in keys:
-        processing.mark_workflow(dialog.project_folder, key, "pending")
+        processing.mark_workflow(dialog.setup_folder, key, "pending")
         set_button_state(dialog, key, "")
 
 
@@ -112,7 +112,9 @@ def set_button_state(dialog, workflow_key, status):
     else:
         control.setStyleSheet(dialog._workflow_button_default_styles.get(workflow_key, ""))
     if status != "running" and workflow_key in ("execute_all_morphology", "execute_all_meteo"):
-        project_tree.refresh(dialog)  # its statuses, and ▶ enabled only when the inputs are added
+        from . import process_cases
+
+        process_cases.inputs(dialog)  # re-check the prepared files: the statuses and ▶ follow them
 
 
 def refresh_all(dialog):
@@ -123,7 +125,7 @@ def refresh_all(dialog):
 def refresh(dialog, workflow_key):
     if running_key(dialog) == workflow_key:
         return
-    status = processing.workflow(dialog.project_folder, workflow_key).get("status")
+    status = processing.workflow(dialog.setup_folder, workflow_key).get("status")
     set_button_state(
         dialog,
         workflow_key,
@@ -144,7 +146,7 @@ def finish(dialog, workflow_key, ok, message):
     if ok:
         try:
             completed = workflow["completed_message"]
-            processing.mark_workflow(dialog.project_folder, workflow_key, "completed", completed)
+            processing.mark_workflow(dialog.setup_folder, workflow_key, "completed", completed)
             set_button_state(dialog, workflow_key, "completed")
             dialog.log_message(completed)
             return
@@ -152,10 +154,10 @@ def finish(dialog, workflow_key, ok, message):
             message = str(error)
     message = (
         message
-        or processing.workflow(dialog.project_folder, workflow_key).get("message")
+        or processing.workflow(dialog.setup_folder, workflow_key).get("message")
         or workflow["failed_message"]
     )
-    processing.mark_workflow(dialog.project_folder, workflow_key, "failed", message)
+    processing.mark_workflow(dialog.setup_folder, workflow_key, "failed", message)
     set_button_state(dialog, workflow_key, "failed")
     dialog.log_message(message)
     if not dialog._closing:
@@ -165,12 +167,12 @@ def finish(dialog, workflow_key, ok, message):
 def invalidate_meteo(dialog):
     if (
         dialog._loading_input_state
-        or not dialog.project_folder
+        or not dialog.setup_folder
         or running_key(dialog) == "execute_all_meteo"
     ):
         return
     for key in ("execute_all_meteo", "run_mhm"):
-        processing.remove_entry(dialog.project_folder, "workflows", key)
+        processing.remove_entry(dialog.setup_folder, "workflows", key)
         set_button_state(dialog, key, "")
 
 
@@ -191,7 +193,7 @@ def switch_busy(dialog):
 
 
 def require_active(dialog) -> bool:
-    if dialog.project_folder:
+    if dialog.setup_folder:
         return True
     QMessageBox.warning(
         dialog,

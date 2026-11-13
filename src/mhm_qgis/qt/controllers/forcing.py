@@ -35,15 +35,15 @@ def scan_precipitation(dialog):
 def edit_meteo_input(dialog, variable=None):
     """Accept metadata in a pop-up, then schedule only inspection."""
     variable = variable or dialog.comboBox_meteoVar.currentText()
-    spec = _accepted_spec(dialog, variable, _meteo_initial(dialog, variable), "Meteorology input")
+    spec = _accepted_spec(dialog, variable, _meteo_initial(dialog, variable), "Meteorology input",
+                          draft=f"meteo:{variable}")
     return None if spec is None else submit_meteo_input(dialog, variable, spec)
 
 
 def show_meteo_input(dialog, variable):
     """A meteorology row's page: the variable's metadata form, filled in; OK scans it."""
     key = f"meteo:{variable}"
-    prompt = MeteoVarDetailsDialog(
-        variable, dialog.project_directory, {**_meteo_initial(dialog, variable), **dialog._drafts.get(key, {})}, dialog)
+    prompt = MeteoVarDetailsDialog(variable, dialog.project_directory, _meteo_initial(dialog, variable), dialog)
     main.draftable(dialog, prompt, key)
     prompt.accepted.connect(lambda: require_active(dialog) and not switch_busy(dialog) and submit_meteo_input(
         dialog, variable, prompt.spec))
@@ -60,18 +60,19 @@ def _initial(dialog, inputs, variable):
 
 
 def _meteo_initial(dialog, variable):
+    """The saved input, overlaid by the values of a Set that has not scanned yet."""
     initial = _initial(dialog, dialog._meteo_inputs, variable)
     if variable == "pre":
         initial.update(folder=grid.precipitation_folder(dialog),
                        pattern=dialog.lineEdit_precipitationGlobDefinition.text())
-    return initial
+    return {**initial, **dialog._drafts.get(f"meteo:{variable}", {})}
 
 
 def _outside_period(dialog, variable, metadata):
     """Why `metadata` does not span the saved simulation period (by date), or None."""
     from ...core.handlers.state.nml_settings import load_settings
 
-    period = load_settings(dialog.project_folder).get("time") or {}
+    period = load_settings(dialog.setup_folder).get("time") or {}
     start, end = period.get("sim_start", "")[:10], period.get("sim_end", "")[:10]
     if start and end and (metadata.start_time[:10] > start or metadata.end_time[:10] < end):
         return (f"{variable} data cover {metadata.start_time[:10]} to {metadata.end_time[:10]}, "
@@ -144,14 +145,17 @@ def edit_observation_input(dialog, variable=None):
     ))
 
 
-def _accepted_spec(dialog, variable, initial, title):
-    """Return the accepted variable spec, or None when nothing should run."""
+def _accepted_spec(dialog, variable, initial, title, draft=None):
+    """Return the accepted variable spec, or None when nothing should run; with `draft`, a
+    failed scan keeps the entered values (see `main.draftable`)."""
     if not require_active(dialog) or switch_busy(dialog):
         return None
     if not variable:
         QMessageBox.warning(dialog, title, "Select a variable first.")
         return None
     prompt = MeteoVarDetailsDialog(variable, dialog.project_directory, initial, dialog)
+    if draft:
+        main.draftable(dialog, prompt, draft)
     if prompt.exec() != QDialog.DialogCode.Accepted:
         return None
     return prompt.spec
@@ -167,7 +171,7 @@ def _submit_scan(dialog, key, variable, spec, scanned, failed, controls):
     return dialog.task_coordinator.submit(
         key, f"Scan {variable}",
         lambda task: inspect_meteo_folder_cached(
-            dialog.project_folder, spec, cancelled=task.isCanceled),
+            dialog.setup_folder, spec, cancelled=task.isCanceled),
         controls=controls, on_success=scanned, on_error=failed,
         resource="morphology-files")
 

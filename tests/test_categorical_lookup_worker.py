@@ -88,7 +88,7 @@ def test_native_command_launches_the_relocated_worker(tmp_path):
     task = Mock()
     task.isCanceled.return_value = False
     with pytest.raises(RuntimeError, match="Unsupported native worker kind"):
-        native_worker(task, {"kind": "nonsense", "project_folder": str(tmp_path),
+        native_worker(task, {"kind": "nonsense", "setup_folder": str(tmp_path),
                              "version": "5.13"}, tmp_path)
     task.setProgress.assert_called_once_with(5)
     assert not list(tmp_path.iterdir())
@@ -121,7 +121,7 @@ def test_the_worker_asks_the_kernel_to_kill_it_before_qgis():
 def test_an_unknown_worker_mode_is_rejected(tmp_path):
     payload = {
         "kind": "nonsense",
-        "project_folder": str(tmp_path),
+        "setup_folder": str(tmp_path),
         "version": "5.13",
     }
     process, result_file = _run_worker(tmp_path, payload)

@@ -23,24 +23,24 @@ class DisplayOutput:
     variable: str | None = None
 
 
-def land_cover_periods(project_folder: str | Path) -> list[dict]:
-    land_cover = load_settings(project_folder).get("land_cover", {})
+def land_cover_periods(setup_folder: str | Path) -> list[dict]:
+    land_cover = load_settings(setup_folder).get("land_cover", {})
     scenes = land_cover.get("scenes", []) if isinstance(land_cover, dict) else []
     return [scene for scene in scenes if isinstance(scene, dict)]
 
 
 def resolve_display_output(  # noqa: PLR0911
-    project_folder: str | Path,
+    setup_folder: str | Path,
     key: str,
     *,
     year: int | None = None,
     when: datetime | None = None,
 ) -> DisplayOutput | None:
-    project_folder = str(project_folder)
-    geometry = Path(temp_morphology_folder(project_folder))
-    morph = Path(morph_folder(project_folder))
-    workspace = Path(workspace_folder(project_folder))
-    settings = load_settings(project_folder)
+    setup_folder = str(setup_folder)
+    geometry = Path(temp_morphology_folder(setup_folder))
+    morph = Path(morph_folder(setup_folder))
+    workspace = Path(workspace_folder(setup_folder))
+    settings = load_settings(setup_folder)
 
     if key == "land_cover":
         return _land_cover_output(settings, workspace, geometry, morph, when or (datetime(year, 1, 1) if year else None))
@@ -89,7 +89,7 @@ def resolve_display_output(  # noqa: PLR0911
             *variants(geometry / "3_geology_processed.tif"),
         ],
         "lai": [
-            Path(lai_folder(project_folder)) / "lai.nc",
+            Path(lai_folder(setup_folder)) / "lai.nc",
         ],
     }.get(key, [])
     return _first(

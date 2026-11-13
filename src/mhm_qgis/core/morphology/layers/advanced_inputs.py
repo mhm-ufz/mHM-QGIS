@@ -40,7 +40,7 @@ def input_fingerprint(value, dem_file, version):
 
 
 def process_land_cover_input(
-    project_folder,
+    setup_folder,
     version,
     value: LandUseInput,
     dem_file,
@@ -48,14 +48,14 @@ def process_land_cover_input(
     log=None,
 ) -> tuple[Path, ...]:
     """Write a period manifest and stage outputs for common-L0 publication."""
-    times = load_settings(project_folder).get("time", {})
+    times = load_settings(setup_folder).get("time", {})
     validate_land_use_input(value, simulation_start=times.get("sim_start"),
                             simulation_end=times.get("sim_end"), version=version)
-    manifest = _manifest_path(project_folder, "land_cover")
+    manifest = _manifest_path(setup_folder, "land_cover")
     write_land_use_manifest(value, manifest)
     output_type = "nc"
     with TemporaryDirectory(
-        prefix="mhm_qgis_land_cover_", dir=temp_morphology_folder(project_folder)
+        prefix="mhm_qgis_land_cover_", dir=temp_morphology_folder(setup_folder)
     ) as temporary:
         prepare_land_cover_periods(
             manifest,
@@ -68,7 +68,7 @@ def process_land_cover_input(
             input_crs=value.crs or None,
             log=log,
         )
-        published = _publish_directory(temporary, morph_staging_folder(project_folder))
+        published = _publish_directory(temporary, morph_staging_folder(setup_folder))
 
     data_outputs = tuple(path for path in published if path.suffix.lower() == ".nc")
     if not data_outputs:
@@ -89,8 +89,8 @@ def process_land_cover_input(
         }
         if str(version).startswith("5"):
             scene["output_path"] = relative_workspace_path(
-                project_folder,
-                Path(morph_folder(project_folder))
+                setup_folder,
+                Path(morph_folder(setup_folder))
                 / _v5_scene_name(period.start_year, end_year),
             )
         scenes.append(scene)
@@ -98,13 +98,13 @@ def process_land_cover_input(
         (path for path in data_outputs if path.suffix.lower() == ".nc"), None
     )
     update_section(
-        project_folder,
+        setup_folder,
         "land_cover",
         {
             "mode": "historical" if len(scenes) > 1 else "single",
-            "manifest_path": relative_workspace_path(project_folder, manifest),
+            "manifest_path": relative_workspace_path(setup_folder, manifest),
             "output_path": (
-                relative_workspace_path(project_folder, shared) if shared else ""
+                relative_workspace_path(setup_folder, shared) if shared else ""
             ),
             "variable": "land_cover",
             "lookup_table": str(value.lookup_table),
@@ -117,7 +117,7 @@ def process_land_cover_input(
 
 
 def process_soil_input(
-    project_folder,
+    setup_folder,
     _version,
     value: SoilInput,
     dem_file,
@@ -125,10 +125,10 @@ def process_soil_input(
     log=None,
 ) -> tuple[Path, Path]:
     """Write a horizon manifest and stage outputs for common-L0 publication."""
-    manifest = _manifest_path(project_folder, "soil")
+    manifest = _manifest_path(setup_folder, "soil")
     write_soil_manifest(value, manifest)
     with TemporaryDirectory(
-        prefix="mhm_qgis_soil_", dir=temp_morphology_folder(project_folder)
+        prefix="mhm_qgis_soil_", dir=temp_morphology_folder(setup_folder)
     ) as temporary:
         data, definition = prepare_soil_horizons(
             manifest,
@@ -140,7 +140,7 @@ def process_soil_input(
             input_crs=value.crs or None,
             log=log,
         )
-        published = _publish_directory(temporary, morph_staging_folder(project_folder))
+        published = _publish_directory(temporary, morph_staging_folder(setup_folder))
 
     data_path = _published_match(published, data.name)
     definition_path = _published_match(published, definition.name)
@@ -157,16 +157,16 @@ def process_soil_input(
         for item in value.horizons
     ]
     update_section(
-        project_folder,
+        setup_folder,
         "soil",
         {
             "mode": "multi_horizon",
             "soil_db_mode": 1,
-            "manifest_path": relative_workspace_path(project_folder, manifest),
-            "output_path": relative_workspace_path(project_folder, data_path),
+            "manifest_path": relative_workspace_path(setup_folder, manifest),
+            "output_path": relative_workspace_path(setup_folder, data_path),
             "variable": "soil_class",
             "classdefinition_path": relative_workspace_path(
-                project_folder, definition_path
+                setup_folder, definition_path
             ),
             "source_bulk_density_unit": value.bulk_density_unit,
             "bulk_density_unit": "g/cm3",
@@ -185,7 +185,7 @@ def _v5_scene_name(start_year, end_year) -> str:
     return f"lc_{start_year}_{end_year}.asc"
 
 
-def record_products(project_folder, kind, outputs, version) -> None:
+def record_products(setup_folder, kind, outputs, version) -> None:
     """Point the soil or land-cover handoff at a finished stage's products, fresh or reused.
 
     Accepting the input dialog again replaces the section with its inputs only, and an
@@ -193,13 +193,13 @@ def record_products(project_folder, kind, outputs, version) -> None:
     (`output_path`, soil's `classdefinition_path`, `manifest_path`, v5.13 scene paths).
     Paths name the published copy when it exists; publication repoints staged ones."""
     section = "soil" if kind == "soil" else "land_cover"
-    settings = load_settings(project_folder)
+    settings = load_settings(setup_folder)
     record = dict(settings.get(section) or {})
-    master = Path(morph_folder(project_folder))
+    master = Path(morph_folder(setup_folder))
 
     def located(path):
         published = master / path.name
-        return relative_workspace_path(project_folder, published if published.is_file() else path)
+        return relative_workspace_path(setup_folder, published if published.is_file() else path)
 
     paths = [Path(path) for path in outputs]
     data = next((path for path in paths if path.suffix.lower() == ".nc"), None)
@@ -208,9 +208,9 @@ def record_products(project_folder, kind, outputs, version) -> None:
         record["output_path"] = located(data)
     if definition is not None and section == "soil":
         record["classdefinition_path"] = located(definition)
-    manifest = Path(temp_morphology_folder(project_folder)) / "format-data" / section / "format-data.csv"
+    manifest = Path(temp_morphology_folder(setup_folder)) / "format-data" / section / "format-data.csv"
     if manifest.is_file():
-        record["manifest_path"] = relative_workspace_path(project_folder, manifest)
+        record["manifest_path"] = relative_workspace_path(setup_folder, manifest)
     if section == "land_cover" and str(version).startswith("5"):
         scenes = record.get("scenes") or []
         if scenes and settings.get("time", {}).get("sim_end"):
@@ -218,16 +218,16 @@ def record_products(project_folder, kind, outputs, version) -> None:
         for scene in scenes:
             if isinstance(scene, dict) and scene.get("start_year") and scene.get("end_year"):
                 scene["output_path"] = relative_workspace_path(
-                    project_folder, master / _v5_scene_name(scene["start_year"], scene["end_year"]))
+                    setup_folder, master / _v5_scene_name(scene["start_year"], scene["end_year"]))
     elif section == "land_cover":
         scenes = record.get("scenes") or []
         if scenes and settings.get("time", {}).get("sim_end"):
             scenes[-1]["end_year"] = int(settings["time"]["sim_end"][:4])
-    update_section(project_folder, section, record)
+    update_section(setup_folder, section, record)
 
 
-def _manifest_path(project_folder, name):
-    folder = Path(temp_morphology_folder(project_folder)) / "format-data" / name
+def _manifest_path(setup_folder, name):
+    folder = Path(temp_morphology_folder(setup_folder)) / "format-data" / name
     folder.mkdir(parents=True, exist_ok=True)
     return folder / "format-data.csv"
 

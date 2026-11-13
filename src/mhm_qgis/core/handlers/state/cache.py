@@ -22,19 +22,19 @@ STATE_FILENAME = processing.STATE_FILENAME
 CACHE_VERSION = 2
 
 
-def state_path(project_folder) -> Path:
+def state_path(setup_folder) -> Path:
     """Return the project-local processing state path."""
-    return processing.state_path(project_folder)
+    return processing.state_path(setup_folder)
 
 
-def load_state(project_folder) -> dict:
+def load_state(setup_folder) -> dict:
     """Load the processing state, returning an empty mapping when unusable."""
-    return processing.load(project_folder)
+    return processing.load(setup_folder)
 
 
-def save_state(project_folder, state: dict) -> None:
+def save_state(setup_folder, state: dict) -> None:
     """Compatibility wrapper that overlays the supplied sections atomically."""
-    processing.overlay(project_folder, state)
+    processing.overlay(setup_folder, state)
 
 
 def fingerprint(paths=(), config=None) -> str:
@@ -63,18 +63,18 @@ def fingerprint(paths=(), config=None) -> str:
     return digest.hexdigest()
 
 
-def cached_payload(project_folder, section: str, key: str, digest: str):
+def cached_payload(setup_folder, section: str, key: str, digest: str):
     """Return the stored payload when its fingerprint still matches."""
-    entry = (load_state(project_folder).get(section) or {}).get(key)
+    entry = (load_state(setup_folder).get(section) or {}).get(key)
     if not isinstance(entry, dict) or entry.get("fingerprint") != digest:
         return None
     return entry.get("payload")
 
 
-def store_payload(project_folder, section: str, key: str, digest: str,
+def store_payload(setup_folder, section: str, key: str, digest: str,
                   payload) -> None:
     """Record a payload against the fingerprint of the inputs that produced it."""
-    processing.set_entry(project_folder, section, key, {
+    processing.set_entry(setup_folder, section, key, {
         "fingerprint": digest,
         "payload": payload,
         "updated_at": utc_timestamp(),

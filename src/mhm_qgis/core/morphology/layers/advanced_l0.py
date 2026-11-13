@@ -21,10 +21,10 @@ RASTER_SUFFIXES = {".asc", ".nc", ".tif", ".tiff"}
 CARRIED_SUFFIXES = {".txt", ".prj", ".xml", ".cpg", ".csv"}
 PATH_KEYS = ("output_path", "classdefinition_path")
 SECTIONS = ("land_cover", "soil", "geology")
-def staged_files(project_folder) -> list[Path]:
+def staged_files(setup_folder) -> list[Path]:
     """Return the files Execute All staged for publication, rasters first; a leading `_` marks a
     staging-private intermediate (a ready stack's single layers), never published."""
-    staging = Path(morph_staging_folder(project_folder))
+    staging = Path(morph_staging_folder(setup_folder))
     if not staging.is_dir():
         return []
     files = [path for path in sorted(staging.iterdir()) if path.is_file() and not path.name.startswith("_")]
@@ -35,7 +35,7 @@ def staged_files(project_folder) -> list[Path]:
 
 
 def publish_model_inputs(
-        project_folder,
+        setup_folder,
         l0_header: Mapping[str, Any],
         *,
         log=None,
@@ -47,13 +47,13 @@ def publish_model_inputs(
     """
     from ...handlers.raster.tasks import TaskShare
 
-    master = Path(morph_folder(project_folder))
+    master = Path(morph_folder(setup_folder))
     master.mkdir(parents=True, exist_ok=True)
     published: list[Path] = []
-    v6 = is_v6(project_folder)
-    files = staged_files(project_folder)
+    v6 = is_v6(setup_folder)
+    files = staged_files(setup_folder)
     rasters = [path for path in files if path.suffix.lower() in RASTER_SUFFIXES]
-    names = {} if v6 else {path: _v5_names(project_folder, path) for path in rasters}
+    names = {} if v6 else {path: _v5_names(setup_folder, path) for path in rasters}
     # An ASCII copy of a grid that a staged NetCDF also produces is stale: the
     # NetCDF is the product. Publishing both wrote every such grid twice.
     produced = {name for path, grids in names.items() if path.suffix.lower() == ".nc" for name in grids}
@@ -68,7 +68,7 @@ def publish_model_inputs(
         share = TaskShare(task).part(index, len(rasters))
         outputs = (
             (_publish_netcdf(path, master / path.name),) if v6
-            else _publish_v5_raster(project_folder, path, names[path], master, l0_header, share)
+            else _publish_v5_raster(setup_folder, path, names[path], master, l0_header, share)
         )
         share.setProgress(100)
         published.extend(output for output in outputs if output not in published)
@@ -92,8 +92,8 @@ def publish_model_inputs(
         if log:
             log(f"Published {target.name} to {master}.")
 
-    _repoint_settings(project_folder, published, log=log)
-    for path in _configured_rasters(project_folder):
+    _repoint_settings(setup_folder, published, log=log)
+    for path in _configured_rasters(setup_folder):
         if path.is_file() and not file_matches_header(path, l0_header):
             raise ValueError(f"Published input {path} does not match the common L0 grid.")
     return published
@@ -117,7 +117,7 @@ def _publish_netcdf(source: Path, target: Path) -> Path:
     return target
 
 
-def _v5_names(project_folder, source) -> list[str]:
+def _v5_names(setup_folder, source) -> list[str]:
     """Return the ASCII file v5.13 expects for each band of a staged raster."""
     from osgeo import gdal
 
@@ -127,13 +127,13 @@ def _v5_names(project_folder, source) -> list[str]:
     bands = dataset.RasterCount
     dataset = None
     if source.stem == "lc_periods":
-        scenes = load_settings(project_folder).get("land_cover", {}).get("scenes", [])
+        scenes = load_settings(setup_folder).get("land_cover", {}).get("scenes", [])
         names = [Path(scene.get("output_path", "")).name for scene in scenes]
         if len(names) != bands or any(not name for name in names):
             raise ValueError("Land-cover periods do not match lc_periods.nc.")
         return names
     if source.stem == "soil_horizon_class":
-        horizons = load_settings(project_folder).get("soil", {}).get("horizons", [])
+        horizons = load_settings(setup_folder).get("soil", {}).get("horizons", [])
         if bands != len(horizons):
             raise ValueError("Soil horizons do not match soil_horizon_class.nc.")
         return [f"soil_class_horizon_{index:02d}.asc" for index in range(1, bands + 1)]
@@ -142,7 +142,7 @@ def _v5_names(project_folder, source) -> list[str]:
     return [source.with_suffix(".asc").name]
 
 
-def _publish_v5_raster(project_folder, source, names, master, header, task) -> tuple[Path, ...]:
+def _publish_v5_raster(setup_folder, source, names, master, header, task) -> tuple[Path, ...]:
     """Convert one exact-grid staged raster into the ASCII files v5.13 expects."""
     from ...handlers.raster.tasks import write_domain_dem_ascii
 
@@ -151,16 +151,16 @@ def _publish_v5_raster(project_folder, source, names, master, header, task) -> t
         target = master / name
         write_domain_dem_ascii(
             source, target, header, None, band_index=band,
-            task=task.part(band - 1, len(names)), project_folder=project_folder,
+            task=task.part(band - 1, len(names)), setup_folder=setup_folder,
         )
         outputs.append(target)
     return tuple(outputs)
 
 
-def _configured_rasters(project_folder):
+def _configured_rasters(setup_folder):
     """Only model products, never the original soil horizon inputs."""
-    workspace = Path(workspace_folder(project_folder))
-    settings = load_settings(project_folder)
+    workspace = Path(workspace_folder(setup_folder))
+    settings = load_settings(setup_folder)
     paths = set()
     sections = list(SECTIONS)
     if settings.get("lai", {}).get("mode") == "mhm_ready":
@@ -174,20 +174,20 @@ def _configured_rasters(project_folder):
     return sorted(paths)
 
 
-def _repoint_settings(project_folder, published, log=None) -> None:
+def _repoint_settings(setup_folder, published, log=None) -> None:
     """Rewrite the namelist handoff so every path names the published copy.
 
     Anything already sitting in `data/` is repointed too, not just what
     this run moved, so a reused stage whose output was published earlier still
     ends up with a resolvable path.
     """
-    master = Path(morph_folder(project_folder))
+    master = Path(morph_folder(setup_folder))
     by_name = {path.name: path for path in published}
     if master.is_dir():
         for path in master.iterdir():
             if path.is_file():
                 by_name.setdefault(path.name, path)
-    settings = load_settings(project_folder)
+    settings = load_settings(setup_folder)
     changed = False
 
     sections = list(SECTIONS)
@@ -199,10 +199,10 @@ def _repoint_settings(project_folder, published, log=None) -> None:
             continue
         for key in PATH_KEYS:
             value = str(record.get(key, "") or "")
-            target = _published_path(by_name, value, is_v6(project_folder))
+            target = _published_path(by_name, value, is_v6(setup_folder))
             if target is None:
                 continue
-            updated = relative_workspace_path(project_folder, target)
+            updated = relative_workspace_path(setup_folder, target)
             if updated != value:
                 record[key] = updated
                 changed = True
@@ -212,19 +212,19 @@ def _repoint_settings(project_folder, published, log=None) -> None:
                 if not isinstance(scene, dict):
                     continue
                 value = str(scene.get("output_path", "") or "")
-                target = _published_path(by_name, value, is_v6(project_folder))
+                target = _published_path(by_name, value, is_v6(setup_folder))
                 if target is None:
                     continue
-                updated = relative_workspace_path(project_folder, target)
+                updated = relative_workspace_path(setup_folder, target)
                 if updated != value:
                     scene["output_path"] = updated
                     changed = True
-        if (not is_v6(project_folder) and section == "land_cover" and record.get("scenes")
+        if (not is_v6(setup_folder) and section == "land_cover" and record.get("scenes")
                 and record.get("output_path")):
             record["output_path"] = ""
             changed = True
     if changed:
-        save_settings(project_folder, settings)
+        save_settings(setup_folder, settings)
         if log:
             log("nml-settings.json now points at the published model inputs.")
 
@@ -240,10 +240,10 @@ def _published_path(by_name, value, v6):
     return by_name.get(path.name)
 
 
-def missing_model_inputs(project_folder) -> list[str]:
+def missing_model_inputs(setup_folder) -> list[str]:
     """Return namelist paths that do not resolve to an existing file."""
-    workspace = Path(workspace_folder(project_folder))
-    settings = load_settings(project_folder)
+    workspace = Path(workspace_folder(setup_folder))
+    settings = load_settings(setup_folder)
     missing: list[str] = []
 
     def check(value):

@@ -25,16 +25,16 @@ def values(dialog):
 
 
 def save(dialog):
-    if dialog._loading_input_state or not dialog.project_folder:
+    if dialog._loading_input_state or not dialog.setup_folder:
         return
     from ...core.handlers.state.nml_settings import update_section
 
     result = _widget_values(dialog)
-    update_section(dialog.project_folder, "time", result)
+    update_section(dialog.setup_folder, "time", result)
     from ...core.executions.meteo import covers_period
     from .workflow_state import invalidate, invalidate_meteo
 
-    if covers_period(dialog.project_folder, result):
+    if covers_period(dialog.setup_folder, result):
         invalidate(dialog, "run_mhm")
     else:
         invalidate_meteo(dialog)
@@ -62,8 +62,8 @@ def restore(dialog):
     from ...core.handlers.state.nml_settings import load_settings
 
     saved = (
-        load_settings(dialog.project_folder).get("time", {})
-        if dialog.project_folder
+        load_settings(dialog.setup_folder).get("time", {})
+        if dialog.setup_folder
         else {}
     )
     for key, name in TIME_WIDGETS.items():

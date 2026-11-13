@@ -13,6 +13,7 @@ from pathlib import Path
 from ..handlers.file.netcdf import time_axis
 from ..handlers.store.layout import METEO_VARIABLES, expected_meteo_outputs
 from ..post import step_for_when
+from .forcing.temporal import VARIABLE_LABELS
 
 #: Historical forcing files used days since this epoch.
 TIME_EPOCH = date(1900, 1, 1)
@@ -20,13 +21,6 @@ TIME_EPOCH = date(1900, 1, 1)
 #: Only variables present on disk are offered.
 DISPLAY_VARIABLES = METEO_VARIABLES
 
-VARIABLE_LABELS = {
-    "pre": "Precipitation",
-    "tavg": "Mean temperature",
-    "tmin": "Minimum temperature",
-    "tmax": "Maximum temperature",
-    "pet": "Potential evapotranspiration",
-}
 
 
 @dataclass(frozen=True)
@@ -40,16 +34,16 @@ class MeteoOutput:
     name: str
 
 
-def meteo_output_path(project_folder, variable: str) -> Path | None:
+def meteo_output_path(setup_folder, variable: str) -> Path | None:
     """Return the prepared NetCDF for one variable, when it exists on disk."""
-    paths = expected_meteo_outputs(project_folder).get(variable)
+    paths = expected_meteo_outputs(setup_folder).get(variable)
     if paths is None:
         return None
     netcdf = Path(paths["netcdf"])
     return netcdf if netcdf.is_file() else None
 
 
-def available_meteo_variables(project_folder) -> list[str]:
+def available_meteo_variables(setup_folder) -> list[str]:
     """Return the forcing variables actually prepared for this project.
 
     `expected_meteo_outputs` names every variable including `pet`, which is only
@@ -59,7 +53,7 @@ def available_meteo_variables(project_folder) -> list[str]:
         variable
         for variable in DISPLAY_VARIABLES
         if variable in METEO_VARIABLES
-        and meteo_output_path(project_folder, variable) is not None
+        and meteo_output_path(setup_folder, variable) is not None
     ]
 
 
@@ -85,18 +79,18 @@ def meteo_time_range(path):
     return (steps[0], steps[-1]) if steps else None
 
 
-def project_time_range(project_folder):
+def project_time_range(setup_folder):
     """Return the first available variable's time span."""
-    for variable in available_meteo_variables(project_folder):
-        span = meteo_time_range(meteo_output_path(project_folder, variable))
+    for variable in available_meteo_variables(setup_folder):
+        span = meteo_time_range(meteo_output_path(setup_folder, variable))
         if span:
             return span
     return None
 
 
-def resolve_meteo_output(project_folder, variable: str, when):
+def resolve_meteo_output(setup_folder, variable: str, when):
     """Resolve a band using the file's actual time coordinate."""
-    path = meteo_output_path(project_folder, variable)
+    path = meteo_output_path(setup_folder, variable)
     steps = meteo_steps(path)
     if isinstance(when, date) and not isinstance(when, datetime):
         when = datetime.combine(when, datetime.min.time())

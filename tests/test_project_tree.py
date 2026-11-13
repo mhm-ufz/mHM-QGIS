@@ -90,6 +90,31 @@ def test_the_meteo_form_shows_its_variables_status_right_of_set(dialog):
     project_tree.refresh(dialog)
 
 
+def test_set_crs_without_an_open_setup_asks_to_create_or_open_one(dialog, monkeypatch):
+    from qgis.core import QgsCoordinateReferenceSystem
+
+    from mhm_qgis.qt.controllers import grid
+
+    warnings = []
+    monkeypatch.setattr(grid.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
+    before = dialog._set_crs
+    dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:3035"))
+    dialog.pushButton_setCRS.click()
+    assert warnings == ["Create a new domain setup or open an existing one (Open) before setting the CRS."]
+    assert dialog._set_crs == before
+
+
+def test_a_finished_meteo_run_rechecks_the_inputs_without_a_click(dialog, tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import process_cases, workflow_state
+
+    checks = []
+    monkeypatch.setattr(process_cases, "inputs", checks.append)
+    dialog.setup_folder = str(tmp_path)
+    dialog._running_workflow = "execute_all_meteo"
+    workflow_state.finish(dialog, "execute_all_meteo", True, "")
+    assert checks == [dialog]
+
+
 def test_a_coloured_text_workflow_button_keeps_its_native_size(dialog):
     from qgis.PyQt.QtWidgets import QPushButton
 
@@ -182,7 +207,7 @@ def _set_up(dialog, tmp_path):
     (tmp_path / ".temp").mkdir()
     (tmp_path / ".temp" / "mhm_qgis_input_state.json").write_text(json.dumps({"mhm_version": "6.0"}))
     layout.forget_project_version()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     processing.mark_workflow(tmp_path, "project_structure", "completed")
 
 
@@ -193,7 +218,7 @@ def test_input_rows_wait_for_domain_setup(dialog, tmp_path):
     rows = [group.child(i) for group in groups for i in range(group.childCount())]
     assert not any(group.isHidden() for group in groups)
     assert all(row.isHidden() for row in rows)
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     process_cases.inputs(dialog)
     assert all(row.isHidden() for row in rows)  # a project, but no Domain Setup yet
     (tmp_path / ".temp").mkdir()
@@ -552,7 +577,7 @@ def test_set_gauges_builds_the_network_the_delineator_opens_on(dialog, tmp_path,
     monkeypatch.setattr(main, "_selected_outlets", lambda *_args: ["1"])
     monkeypatch.setattr(hydrology, "start_domain_preflight", lambda *args: started.append(args) or True)
     monkeypatch.setattr(main.QMessageBox, "information", lambda *args: notes.append(args[2]))
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     assert main.open_domain_delineator(dialog) is False  # Set the Gauges first
     assert not started
     assert "Set on the Gauges page" in notes[-1]

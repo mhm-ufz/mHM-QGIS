@@ -13,6 +13,7 @@ from pathlib import Path
 
 from ...handlers.state.cache import cached_payload, fingerprint, store_payload
 from .api import _files_for_spec, inspect_meteo_folder
+from .temporal import about_variable
 from .types import MeteoFolderSpec, SpatialMetadata
 
 SECTION = "meteo_inspection"
@@ -45,8 +46,9 @@ def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
 
 def preparation_fingerprint(spec: MeteoFolderSpec) -> str:
     """Return a digest covering every option the prepared forcing depends on."""
-    return fingerprint(_files_for_spec(spec), {
-        **asdict(spec), "folder": str(spec.folder), "preparation_version": 3})
+    values = asdict(spec)
+    values.pop("clip_negative")  # clipping only lets a run finish; it never changes a finished output
+    return fingerprint(_files_for_spec(spec), {**values, "folder": str(spec.folder), "preparation_version": 3})
 
 
 def _as_payload(metadata: SpatialMetadata) -> dict:
@@ -70,23 +72,25 @@ def _from_payload(payload) -> SpatialMetadata | None:
         return None
 
 
-def inspect_meteo_folder_cached(project_folder, spec, log=None, cancelled=None):
+def inspect_meteo_folder_cached(setup_folder, spec, log=None, cancelled=None):
     """Inspect one configured variable, reusing identical metadata options."""
     spec = spec.normalized()
-    if not project_folder:
+    if not setup_folder:
         return inspect_meteo_folder(spec, cancelled=cancelled)
     digest, _files = inspection_fingerprint(spec)
-    metadata = _from_payload(cached_payload(project_folder, SECTION, spec.kind, digest))
+    metadata = _from_payload(cached_payload(setup_folder, SECTION, spec.kind, digest))
     if metadata is not None:
         return metadata
     metadata = inspect_meteo_folder(spec, cancelled=cancelled)
-    store_payload(project_folder, SECTION, spec.kind, digest, _as_payload(metadata))
+    store_payload(setup_folder, SECTION, spec.kind, digest, _as_payload(metadata))
     return metadata
 
 
-def inspect_meteo_inputs_cached(project_folder, inputs, log=None, cancelled=None):
+def inspect_meteo_inputs_cached(setup_folder, inputs, log=None, cancelled=None):
     """Inspect selected variables without preparing forcing."""
     options = {"cancelled": cancelled} if cancelled is not None else {}
-    return {spec.normalized().kind: inspect_meteo_folder_cached(
-                project_folder, spec, log=log, **options)
-            for spec in inputs}
+    inspected = {}
+    for spec in inputs:
+        with about_variable(spec.normalized().kind):
+            inspected[spec.normalized().kind] = inspect_meteo_folder_cached(setup_folder, spec, log=log, **options)
+    return inspected

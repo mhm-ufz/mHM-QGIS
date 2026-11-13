@@ -57,7 +57,7 @@ def _ensure_elevation_prerequisites(dialog) -> tuple[str, tuple[Path, ...]] | No
         _report(dialog, WARNING, "Missing DEM", str(error))
         return None
 
-    watershed_folder = Path(temp_morphology_folder(dialog.project_folder)) / "Watersheds"
+    watershed_folder = Path(temp_morphology_folder(dialog.setup_folder)) / "Watersheds"
     rasters = elevation_bands.collect_watershed_rasters(watershed_folder)
     if not rasters:
         _report(
@@ -95,7 +95,7 @@ def process_elevation_bands(dialog) -> None:
     if prerequisites is None:
         return
     filled_dem, watershed_rasters = prerequisites
-    folder = Path(temp_morphology_folder(dialog.project_folder)) / "ElevationBands"
+    folder = Path(temp_morphology_folder(dialog.setup_folder)) / "ElevationBands"
     try:
         result = elevation_bands.create_elevation_bands(
             filled_dem,
@@ -118,9 +118,9 @@ def process_elevation_bands(dialog) -> None:
     for path in result.rasters:
         name = path.stem.replace("elevation_bands_", "Elevation_Bands_", 1)
         qgis_layers.load(path, name, log=dialog.log_message)
-        registry.register(dialog.project_folder, path, name=name, loaded=True)
+        registry.register(dialog.setup_folder, path, name=name, loaded=True)
     registry.register(
-        dialog.project_folder,
+        dialog.setup_folder,
         result.summary,
         name=result.summary.name,
         loaded=False,
@@ -137,7 +137,7 @@ def process_elevation_bands(dialog) -> None:
 def process_band_details(dialog) -> None:
     """Collect the land-cover input and write elevation-band detail areas."""
     dialog.log_message("\n--- Creating Elevation Band Land Cover Details ---")
-    if not dialog.project_folder:
+    if not dialog.setup_folder:
         _report(
             dialog,
             CRITICAL,
@@ -146,7 +146,7 @@ def process_band_details(dialog) -> None:
         )
         return
 
-    folder = Path(temp_morphology_folder(dialog.project_folder)) / "ElevationBands"
+    folder = Path(temp_morphology_folder(dialog.setup_folder)) / "ElevationBands"
     if not elevation_bands.collect_elevation_band_rasters(folder):
         dialog.log_message(
             "Elevation-band rasters are missing. Running Elevation Bands first..."
@@ -191,13 +191,13 @@ def process_band_details(dialog) -> None:
 
     if result.aligned_land_cover is not None:
         registry.register(
-            dialog.project_folder,
+            dialog.setup_folder,
             result.aligned_land_cover,
             name=result.aligned_land_cover.name,
             loaded=False,
         )
     registry.register(
-        dialog.project_folder,
+        dialog.setup_folder,
         result.report,
         name=result.report.name,
         loaded=False,

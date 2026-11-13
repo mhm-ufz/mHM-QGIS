@@ -25,18 +25,18 @@ EMPTY = {"version": 1, "outputs": {}, "workflows": {}, "grid": {}}
 
 def state_path(session):
     """Return the project-local processing state file, or None without a project."""
-    if not session.project_folder:
+    if not session.setup_folder:
         return None
-    return str(processing.state_path(session.project_folder))
+    return str(processing.state_path(session.setup_folder))
 
 
 def load(session) -> dict:
     """Load the morphology registry onto the session and return it."""
-    if not session.project_folder:
+    if not session.setup_folder:
         session.processing_state = _empty()
         return session.processing_state
 
-    state = processing.load(session.project_folder)
+    state = processing.load(session.setup_folder)
     for key, default in EMPTY.items():
         state.setdefault(key, default if not isinstance(default, dict) else {})
     session.processing_state = state
@@ -49,13 +49,13 @@ def save(session) -> None:
     Kept only for callers that still mutate the compatibility session directly.
     New operations below update exactly one section or entry atomically.
     """
-    if not session.project_folder:
+    if not session.setup_folder:
         return
     state = session.processing_state or {}
     owned = {name: state[name] for name in OWNED_SECTIONS if name in state}
     try:
         session.processing_state = processing.overlay(
-            session.project_folder, owned)
+            session.setup_folder, owned)
     except Exception as error:
         session.say(f"WARNING: Could not save processing state: {error}")
 
@@ -69,15 +69,15 @@ def _empty() -> dict:
 
 def mark_prepared(session, path, name=None, loaded=False, algorithm=None) -> None:
     """Record that an output file has been prepared."""
-    entry = register(session.project_folder, path,
+    entry = register(session.setup_folder, path,
                      name=name, loaded=loaded, algorithm=algorithm)
     if entry is not None:
-        session.processing_state = processing.load(session.project_folder)
+        session.processing_state = processing.load(session.setup_folder)
 
 
 def is_prepared(session, path) -> bool:
     """Return True when an output is recorded and present on disk."""
-    return available(session.project_folder, path)
+    return available(session.setup_folder, path)
 
 
 def record_outputs(session, algorithm, params, result) -> None:
@@ -103,7 +103,7 @@ def mark_workflow(session, workflow, status, message="", **metadata) -> None:
         return
 
     timestamp = utc_timestamp()
-    workflows = processing.section(session.project_folder, "workflows", {})
+    workflows = processing.section(session.setup_folder, "workflows", {})
     if not isinstance(workflows, dict):
         workflows = {}
     entry = workflows.get(workflow, {})
@@ -129,13 +129,13 @@ def mark_workflow(session, workflow, status, message="", **metadata) -> None:
             entry[key] = value
 
     processing.set_entry(
-        session.project_folder, "workflows", workflow, entry)
-    session.processing_state = processing.load(session.project_folder)
+        session.setup_folder, "workflows", workflow, entry)
+    session.processing_state = processing.load(session.setup_folder)
 
 
 def workflow_status(session, workflow) -> dict:
     """Return a saved workflow status entry."""
-    workflows = processing.section(session.project_folder, "workflows", {})
+    workflows = processing.section(session.setup_folder, "workflows", {})
     return workflows.get(workflow, {}) if isinstance(workflows, dict) else {}
 
 
@@ -147,15 +147,15 @@ def save_domain_plan(session, plan) -> list:
         for entry in plan
     ]
     session.processing_state = processing.overlay(
-        session.project_folder, {"domains": domains})
+        session.setup_folder, {"domains": domains})
     return domains
 
 
 def saved_domain_plan(session) -> list:
     """Return the recorded domain plan."""
     plan = session.processing_state.get("domains")
-    if not isinstance(plan, list) and session.project_folder:
-        plan = processing.section(session.project_folder, "domains")
+    if not isinstance(plan, list) and session.setup_folder:
+        plan = processing.section(session.setup_folder, "domains")
     return list(plan) if isinstance(plan, list) else []
 
 
@@ -172,7 +172,7 @@ def save_grid_contract(session, l0_header, l2_header, multiplier) -> dict:
         "updated_at": utc_timestamp(),
     }
     session.processing_state = processing.overlay(
-        session.project_folder, {"grid": grid})
+        session.setup_folder, {"grid": grid})
     return grid
 
 
@@ -181,8 +181,8 @@ def saved_grid_contract(session):
     from ...grid import validate_l0_l2_alignment
 
     grid = session.processing_state.get("grid") or {}
-    if not grid and session.project_folder:
-        grid = processing.section(session.project_folder, "grid", {}) or {}
+    if not grid and session.setup_folder:
+        grid = processing.section(session.setup_folder, "grid", {}) or {}
     l0_header, l2_header = grid.get("l0_header"), grid.get("l2_header")
     if not isinstance(l0_header, dict) or not isinstance(l2_header, dict):
         return None

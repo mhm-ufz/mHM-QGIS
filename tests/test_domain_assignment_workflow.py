@@ -25,8 +25,8 @@ from mhm_qgis.qgis_bridge.layers.domain import (
 
 
 class _MainDialog:
-    def __init__(self, project_folder: Path):
-        self.project_folder = str(project_folder)
+    def __init__(self, setup_folder: Path):
+        self.setup_folder = str(setup_folder)
         self.messages = []
 
     def log_message(self, message):

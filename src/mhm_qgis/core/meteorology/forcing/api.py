@@ -26,7 +26,10 @@ from ...grid import (
 )
 from .io import write_header, write_netcdf
 from .temporal import (
+    CADENCES,
+    VARIABLE_LABELS,
     VARIABLES,
+    about_variable,
     complete_window,
     convert_units,
     deaccumulate_values,
@@ -94,7 +97,11 @@ def inspect_meteo_inputs(inputs):
     specs = [spec.normalized() for spec in inputs]
     if len({spec.kind for spec in specs}) != len(specs):
         raise ValueError("Configure each meteorology variable only once.")
-    return {spec.kind: inspect_meteo_folder(spec) for spec in specs}
+    inspected = {}
+    for spec in specs:
+        with about_variable(spec.kind):
+            inspected[spec.kind] = inspect_meteo_folder(spec)
+    return inspected
 
 
 def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
@@ -118,7 +125,8 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
     if common:
         for kind, (start, end) in windows.items():
             if start > common[0] or end < common[1]:
-                raise ValueError(f"{kind}: complete data do not cover the precipitation period.")
+                raise ValueError(f"{VARIABLE_LABELS.get(kind, kind)}: the complete data do not cover "
+                                 "the precipitation period.")
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
     outputs, headers, files_used = {}, {}, {}
@@ -126,28 +134,29 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
     with tempfile.TemporaryDirectory(prefix=".mhm_qgis-meteo-", dir=root) as temporary:
         stage = Path(temporary)
         for spec in specs:
-            _check_cancel(cancelled)
-            validate_spec(spec)
-            metadata = inspected[spec.kind]
-            _validate_target_coverage(metadata, target_grid)
-            output = stage / (f"{spec.kind}.nc" if flat_layout else f"{spec.kind}/{spec.kind}.nc")
-            count = 0
-            handle = None
-            try:
-                for block in _prepared_blocks(
-                    spec, metadata, target_grid, window=common or windows[spec.kind],
-                    log=log, on_file=tick, cancelled=cancelled,
-                ):
-                    _check_cancel(cancelled)
-                    assert_matches_header(block, spec.kind, target_grid.header)
-                    handle = _write_time_block(block, spec.kind, output, count, handle)
-                    count += block.sizes["time"]
-                    block.close()
-            finally:
-                if handle is not None:
-                    handle.close()
-            if not count:
-                raise ValueError(f"{spec.kind}: no time steps to write.")
+            with about_variable(spec.kind):
+                _check_cancel(cancelled)
+                validate_spec(spec)
+                metadata = inspected[spec.kind]
+                _validate_target_coverage(metadata, target_grid)
+                output = stage / (f"{spec.kind}.nc" if flat_layout else f"{spec.kind}/{spec.kind}.nc")
+                count = 0
+                handle = None
+                try:
+                    for block in _prepared_blocks(
+                        spec, metadata, target_grid, window=common or windows[spec.kind],
+                        log=log, on_file=tick, cancelled=cancelled,
+                    ):
+                        _check_cancel(cancelled)
+                        assert_matches_header(block, spec.kind, target_grid.header)
+                        handle = _write_time_block(block, spec.kind, output, count, handle)
+                        count += block.sizes["time"]
+                        block.close()
+                finally:
+                    if handle is not None:
+                        handle.close()
+                if not count:
+                    raise ValueError("No time steps to write.")
             outputs[spec.kind] = output
             files_used[spec.kind] = len(metadata.files)
             if not flat_layout:
@@ -480,22 +489,43 @@ def _files_for_spec(spec: MeteoFolderSpec) -> list[Path]:
     files = sorted(path for path in folder.glob(pattern)
                    if path.is_file() and path.suffix.lower() == ".nc")
     if not files:
-        raise ValueError(f"{spec.kind}: no NetCDF files match {pattern!r} in {folder}.")
+        raise ValueError(f"No NetCDF files match {pattern!r} in {folder}.")
     return files
 
 
 def _open_dataset(path: Path):
     import xarray as xr
 
-    last_error = None
+    first_error = None  # netCDF4's names the file's problem; the auto engine's only lists backends
     for engine in ("netcdf4", "h5netcdf", "scipy", None):
         try:
             kwargs = {} if engine is None else {"engine": engine}
             return xr.open_dataset(
                 path, decode_times=True, mask_and_scale=True, **kwargs)
         except Exception as exc:
-            last_error = exc
-    raise RuntimeError(f"Could not open NetCDF file {path}: {last_error}")
+            first_error = first_error or exc
+    raise RuntimeError(f"Could not open {path} ({first_error}): check that it is a complete NetCDF file.")
+
+
+def file_defaults(spec):
+    """The time step, unit and CRS the first matching file declares; undeclared ones are left out."""
+    path = _files_for_spec(spec)[0]
+    found = {"file": path.name}
+    if crs := _inspect_file(path, replace(spec, crs=None)).metadata.crs:
+        found["crs"] = crs
+    with _open_dataset(path) as ds:
+        variable = _find_variable(ds, spec.kind)
+        if (unit := normalize_unit(ds[variable].attrs.get("units", ""))) in VARIABLES[spec.kind][2]:
+            found["unit"] = unit
+        times = ds["time" if "time" in ds[variable].dims else "valid_time"].values
+    for cadence in CADENCES if len(times) > 1 else ():  # one timestamp passes any cadence
+        try:
+            time_index(times, cadence)
+        except ValueError:
+            continue
+        found["temporal_resolution"] = cadence
+        break
+    return found
 
 
 def _inspect_file(
@@ -570,7 +600,7 @@ def _find_variable(ds, kind):
     if kind in candidates:
         return kind
     if len(candidates) != 1:
-        raise ValueError(f"{kind}: expected one source variable; found {candidates or list(ds.data_vars)}.")
+        raise ValueError(f"Expected one source variable; found {candidates or list(ds.data_vars)}.")
     return candidates[0]
 
 
@@ -751,8 +781,8 @@ def _validate_target_coverage(
             or float(target_x.min()) > east + x_tolerance
             or float(target_y.max()) < south - y_tolerance
             or float(target_y.min()) > north + y_tolerance):
-        raise ValueError(
-            f"The target grid is outside the {metadata.kind} source extent.")
+        raise ValueError(f"The model grid is outside the {VARIABLE_LABELS.get(metadata.kind, metadata.kind).lower()} "
+                         "data: check the input's extent and CRS.")
 
 
 def validate_coverage(metadata: SpatialMetadata, bounds, crs, l0_resolution=0.0) -> None:
@@ -774,8 +804,9 @@ def validate_coverage(metadata: SpatialMetadata, bounds, crs, l0_resolution=0.0)
     if (xmin < edges[0] - tolerance or xmax > edges[1] + tolerance
             or ymin < edges[2] - tolerance or ymax > edges[3] + tolerance):
         raise ValueError(
-            f"The {metadata.kind} data ({', '.join(f'{value:.10g}' for value in edges)}) do not cover the "
-            f"study extent ({xmin:.10g}, {xmax:.10g}, {ymin:.10g}, {ymax:.10g}).")
+            f"The {VARIABLE_LABELS.get(metadata.kind, metadata.kind).lower()} data "
+            f"({', '.join(f'{value:.10g}' for value in edges)}) do not cover the study extent "
+            f"({xmin:.10g}, {xmax:.10g}, {ymin:.10g}, {ymax:.10g}): use inputs that cover the whole domain.")
 
 
 def _resample_ready(da, ds, source_crs, target, np, xr):

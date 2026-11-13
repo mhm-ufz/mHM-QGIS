@@ -26,17 +26,17 @@ def plugin_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.dirname(here)))
 
 
-def settings_path(project_folder) -> str:
+def settings_path(setup_folder) -> str:
     """Return editable settings in the selected setup root."""
-    return os.path.join(str(project_folder), "settings.yaml")
+    return os.path.join(str(setup_folder), "settings.yaml")
 
 
-def workspace_folder(project_folder) -> str:
+def workspace_folder(setup_folder) -> str:
     """Return the domain folder that owns every plugin file of one setup."""
-    return str(project_folder)
+    return str(setup_folder)
 
 
-def domain_folder(project_folder, name, workspace=WORKSPACE_FOLDER_NAME) -> Path:
+def domain_folder(project_directory, name, workspace=WORKSPACE_FOLDER_NAME) -> Path:
     """Resolve a safe, non-symlink setup name without creating anything."""
     name = str(name).strip()
     reserved = {"data", "output", "restart", "<new>"}
@@ -44,7 +44,7 @@ def domain_folder(project_folder, name, workspace=WORKSPACE_FOLDER_NAME) -> Path
             or name.startswith(".") or any(c in name for c in '/\\\0<>:"|?*')
             or name.endswith((".", " "))):
         raise ValueError("Enter a domain folder name without path separators or reserved characters.")
-    path = Path(project_folder) / workspace / name
+    path = Path(project_directory) / workspace / name
     if path.is_symlink() or (path.exists() and not path.is_dir()):
         raise ValueError("The domain must be a real directory, not a file or symlink.")
     return path
@@ -69,54 +69,54 @@ def namelist_project(version_text: str | None, combined: bool = False) -> str:
     return "combine" if combined else "classic"
 
 
-def temp_folder(project_folder) -> str:
+def temp_folder(setup_folder) -> str:
     """Return the hidden folder for temporary artifacts and plugin state."""
-    return os.path.join(workspace_folder(project_folder), ".temp")
+    return os.path.join(workspace_folder(setup_folder), ".temp")
 
 
-def temp_morphology_folder(project_folder) -> str:
+def temp_morphology_folder(setup_folder) -> str:
     """Return the temporary morphology workspace, which also stages morph and LAI."""
-    return os.path.join(temp_folder(project_folder), "Morphology")
+    return os.path.join(temp_folder(setup_folder), "Morphology")
 
 
-def morph_staging_folder(project_folder) -> str:
+def morph_staging_folder(setup_folder) -> str:
     """Return the staging folder for land cover, soil, and geology outputs.
 
     Execute All stages here before its final publication to data.
     """
-    return os.path.join(temp_morphology_folder(project_folder), "morph")
+    return os.path.join(temp_morphology_folder(setup_folder), "morph")
 
 
-def lai_staging_folder(project_folder) -> str:
+def lai_staging_folder(setup_folder) -> str:
     """Return the staging folder for common-grid LAI."""
-    return os.path.join(temp_morphology_folder(project_folder), "lai")
+    return os.path.join(temp_morphology_folder(setup_folder), "lai")
 
 
-def lai_dem_staging_path(project_folder) -> str:
+def lai_dem_staging_path(setup_folder) -> str:
     """Return the staged LAI resampled onto the filled DEM grid."""
-    return os.path.join(lai_staging_folder(project_folder), "lai_dem.nc")
+    return os.path.join(lai_staging_folder(setup_folder), "lai_dem.nc")
 
 
-def data_folder(project_folder) -> str:
+def data_folder(setup_folder) -> str:
     """Return the mHM data folder."""
-    return os.path.join(workspace_folder(project_folder), "data")
+    return os.path.join(workspace_folder(setup_folder), "data")
 
 
-def static_folder(project_folder) -> str:
+def static_folder(setup_folder) -> str:
     """Return the shared static data folder."""
-    return os.path.join(data_folder(project_folder), "static")
+    return os.path.join(data_folder(setup_folder), "static")
 
 
-def meteo_folder(project_folder) -> str:
+def meteo_folder(setup_folder) -> str:
     """Return the meteorology forcing data folder."""
-    return os.path.join(data_folder(project_folder), "meteo")
+    return os.path.join(data_folder(setup_folder), "meteo")
 
 
-def output_folder(project_folder) -> str:
+def output_folder(setup_folder) -> str:
     """Return the mHM output folder."""
-    return os.path.join(workspace_folder(project_folder), "output")
+    return os.path.join(workspace_folder(setup_folder), "output")
 
 
-def restart_folder(project_folder) -> str:
+def restart_folder(setup_folder) -> str:
     """Return the mHM restart folder."""
-    return os.path.join(workspace_folder(project_folder), "restart")
+    return os.path.join(workspace_folder(setup_folder), "restart")

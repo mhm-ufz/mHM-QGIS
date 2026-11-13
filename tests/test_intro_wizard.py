@@ -26,7 +26,7 @@ def _dialog(tmp_path, version="6.0"):
     (tmp_path / ".temp").mkdir()
     (tmp_path / ".temp" / "mhm_qgis_input_state.json").write_text(json.dumps({"mhm_version": version}))
     layout.forget_project_version()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     return dialog
 
 

@@ -13,8 +13,8 @@ from mhm_qgis.vSpecific import build_initial_values
 
 
 class Dialog:
-    def __init__(self, project_folder):
-        self.project_folder = str(project_folder)
+    def __init__(self, setup_folder):
+        self.setup_folder = str(setup_folder)
 
     def current_l1_resolution(self):
         return 1000

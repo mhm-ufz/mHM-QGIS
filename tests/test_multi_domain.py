@@ -169,7 +169,7 @@ def test_multi_page_creates_lists_prepares_and_runs(tmp_path, monkeypatch):
     dialog.lineEdit_domainFolder.setText(str(b))
     page.add_domain(dialog)
     assert page.prepare(dialog)
-    root = Path(dialog.project_folder)
+    root = Path(dialog.setup_folder)
     saved = json.loads((root / ".temp" / "mhm_qgis_input_state.json").read_text())
     assert saved["setup"] == "multi"
     assert saved["domains"] == ["../../mhm-qgis/A", "../../mhm-qgis/B"]
@@ -191,7 +191,7 @@ def test_multi_page_creates_lists_prepares_and_runs(tmp_path, monkeypatch):
     assert commands == ["/opt/mhm-driver -n combine.nml"]
 
     dialog.comboBox_mhmWorkType.setCurrentIndex(0)  # back to single: the combined setup closes
-    assert dialog.project_folder is None
+    assert dialog.setup_folder is None
     assert dialog._multi_domains is None
     dialog.close()
     dialog.deleteLater()

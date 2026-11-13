@@ -14,10 +14,10 @@ from .canvas import show_dataarray
 
 def show(dialog, variable, index=0):
     """Show step `index` of the prepared `variable`: (its steps, the layer name), or ((), "")."""
-    steps = meteo_steps(meteo_output_path(dialog.project_folder, variable)) if dialog.project_folder else ()
+    steps = meteo_steps(meteo_output_path(dialog.setup_folder, variable)) if dialog.setup_folder else ()
     if not steps:
         return (), ""
-    output = resolve_meteo_output(dialog.project_folder, variable, steps[max(0, min(index, len(steps) - 1))])
+    output = resolve_meteo_output(dialog.setup_folder, variable, steps[max(0, min(index, len(steps) - 1))])
     # Same render path as the model-output display: one georeferenced slice.
     # Prepared forcing carries its own CRS, so none has to be supplied.
     grid = next((v for v in grid_variables(output.path) if v.name == output.variable), None)

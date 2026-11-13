@@ -14,10 +14,10 @@ from .version import selected as selected_version
 
 def _saved(dialog) -> dict:
     """The open setup's saved process cases ({} before its namelists exist)."""
-    if not dialog.project_folder:
+    if not dialog.setup_folder:
         return {}
     try:
-        return datamodel.current_processes(dialog.project_folder) or {}
+        return datamodel.current_processes(dialog.setup_folder) or {}
     except (OSError, ValueError):
         return {}
 
@@ -52,7 +52,7 @@ def show(dialog) -> None:
 def changed(dialog, cases) -> None:
     """Keep `cases` ({process: case}) in the input state and the namelists; show their inputs."""
     dialog._process_cases.update(cases)
-    if dialog.project_folder:
+    if dialog.setup_folder:
         _sync(dialog)
     dialog.save_input_state()
     inputs(dialog)
@@ -74,22 +74,22 @@ def _sync(dialog) -> None:
     version = selected_version(dialog)
     project = namelist_project(version, dialog._multi_domains is not None)
     try:
-        saved = datamodel.read_namelists(dialog.project_folder)
+        saved = datamodel.read_namelists(dialog.setup_folder)
     except (OSError, ValueError):
         saved = {}
     effects = {f"processes.{process}": case for process, case in current(dialog).items()}
     values = intro.handoff(version, effects, saved, project)
     if saved:
         try:
-            write_namelists(dialog.project_folder, schemas_folder(version), values, project=project)
+            write_namelists(dialog.setup_folder, schemas_folder(version), values, project=project)
         except ValueError as error:
             dialog.log_message(f"ERROR: {error}")
         return
-    merged = nml_settings.load_settings(dialog.project_folder).get("intro_values") or {}
+    merged = nml_settings.load_settings(dialog.setup_folder).get("intro_values") or {}
     for profile, namelists in values.items():
         for name, fields in namelists.items():
             merged.setdefault(profile, {}).setdefault(name, {}).update(fields)
-    nml_settings.update_section(dialog.project_folder, "intro_values", merged)
+    nml_settings.update_section(dialog.setup_folder, "intro_values", merged)
 
 
 def inputs(dialog) -> None:
@@ -97,7 +97,7 @@ def inputs(dialog) -> None:
     version = selected_version(dialog)
     rules, cases = datamodel.load_rules(version), current(dialog)
     try:
-        findings = datamodel.check(dialog.project_folder, cases) if dialog.project_folder else None
+        findings = datamodel.check(dialog.setup_folder, cases) if dialog.setup_folder else None
     except (OSError, ValueError):
         findings = None
     if findings is None:  # no setup open: what the cases need, nothing checked yet

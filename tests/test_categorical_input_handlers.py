@@ -36,7 +36,7 @@ def _app():
 
 def _dialog(tmp_path):
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     return dialog
 
 
