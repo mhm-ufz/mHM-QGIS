@@ -13,6 +13,7 @@ from pathlib import Path
 
 from ...handlers.state.cache import cached_payload, fingerprint, store_payload
 from .api import _files_for_spec, inspect_meteo_folder
+from .temporal import about_variable
 from .types import MeteoFolderSpec, SpatialMetadata
 
 SECTION = "meteo_inspection"
@@ -45,8 +46,9 @@ def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
 
 def preparation_fingerprint(spec: MeteoFolderSpec) -> str:
     """Return a digest covering every option the prepared forcing depends on."""
-    return fingerprint(_files_for_spec(spec), {
-        **asdict(spec), "folder": str(spec.folder), "preparation_version": 3})
+    values = asdict(spec)
+    values.pop("clip_negative")  # clipping only lets a run finish; it never changes a finished output
+    return fingerprint(_files_for_spec(spec), {**values, "folder": str(spec.folder), "preparation_version": 3})
 
 
 def _as_payload(metadata: SpatialMetadata) -> dict:
@@ -87,6 +89,8 @@ def inspect_meteo_folder_cached(project_folder, spec, log=None, cancelled=None):
 def inspect_meteo_inputs_cached(project_folder, inputs, log=None, cancelled=None):
     """Inspect selected variables without preparing forcing."""
     options = {"cancelled": cancelled} if cancelled is not None else {}
-    return {spec.normalized().kind: inspect_meteo_folder_cached(
-                project_folder, spec, log=log, **options)
-            for spec in inputs}
+    inspected = {}
+    for spec in inputs:
+        with about_variable(spec.normalized().kind):
+            inspected[spec.normalized().kind] = inspect_meteo_folder_cached(project_folder, spec, log=log, **options)
+    return inspected

@@ -150,3 +150,35 @@ def test_set_dem_makes_l0_the_dem_upscaled_by_the_ticked_factor(tmp_path):
     dialog.pushButton_setDEM.click()
     assert labels() == ("100", "100")
     dialog.close()
+
+
+def test_a_failed_scan_from_the_popup_keeps_the_entered_values(tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import forcing
+
+    warnings, seen = [], []
+    monkeypatch.setattr(forcing.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "bad.nc").write_text("not a NetCDF file")
+
+    def enter(prompt):
+        prompt.comboBox_inputFolder.setCurrentText(str(source))
+        prompt.lineEdit_fileNameGlobDefinition.setText("bad*.nc")
+        prompt.accept()
+        return prompt.result()
+
+    dialog = MhmQgisDialog()
+    dialog.project_folder = str(tmp_path)
+    monkeypatch.setattr(MeteoVarDetailsDialog, "exec", enter)
+    forcing.edit_meteo_input(dialog, "tavg")
+    deadline = time.monotonic() + 15
+    while dialog.task_coordinator.is_busy() and time.monotonic() < deadline:
+        QgsApplication.processEvents()
+        time.sleep(.01)
+    assert warnings  # the scan failed
+    assert "Traceback" not in warnings[0]
+    assert not warnings[0].startswith("https://")
+    monkeypatch.setattr(MeteoVarDetailsDialog, "exec", lambda prompt: seen.append(prompt.draft()) or 0)
+    forcing.edit_meteo_input(dialog, "tavg")
+    assert (seen[0]["folder"], seen[0]["pattern"]) == (str(source), "bad*.nc")
+    dialog.close()

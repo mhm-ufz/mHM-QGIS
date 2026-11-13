@@ -112,7 +112,9 @@ def set_button_state(dialog, workflow_key, status):
     else:
         control.setStyleSheet(dialog._workflow_button_default_styles.get(workflow_key, ""))
     if status != "running" and workflow_key in ("execute_all_morphology", "execute_all_meteo"):
-        project_tree.refresh(dialog)  # its statuses, and ▶ enabled only when the inputs are added
+        from . import process_cases
+
+        process_cases.inputs(dialog)  # re-check the prepared files: the statuses and ▶ follow them
 
 
 def refresh_all(dialog):

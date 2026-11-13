@@ -39,3 +39,16 @@ def test_an_exception_is_accepted_directly():
 def test_an_empty_message_stays_empty():
     assert error_detail("") == ""
     assert error_detail("\n  \n") == ""
+
+
+def test_a_long_exception_reports_its_first_line_without_the_users_error_type():
+    long = """Traceback (most recent call last):
+  File "api.py", line 498, in _open_dataset
+    raise RuntimeError(message)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Could not open NetCDF file bad.nc: did not find a match in xarray's IO backends.
+Consider explicitly selecting one of the installed engines, see:
+https://docs.xarray.dev/en/stable/user-guide/io.html
+"""
+    assert error_detail(long) == "Could not open NetCDF file bad.nc: did not find a match in xarray's IO backends."
+    assert error_detail(long.replace("RuntimeError", "ValueError")).startswith("Could not open")

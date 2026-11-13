@@ -95,7 +95,7 @@ def test_jobs_run_off_the_qgstask_thread_and_still_report_failures():
     # A raw QgsTask thread is not created by Python, so it reports as
     # `_DummyThread`; a real one means the job ran off the QgsTask thread.
     assert kinds == ["Thread"]
-    assert errors == ["ValueError: boom"]  # the message, not the traceback
+    assert errors == ["boom"]  # the message, not the traceback or its type
 
 
 class _Ambiguous:
@@ -300,4 +300,55 @@ def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_pat
     assert "preparing" in dialog.LogText.toPlainText()
     assert workflow_state.running_key(dialog) is None
     assert dialog.tabWidget_steps.isEnabled()
+    dialog.close()
+
+
+@pytest.mark.parametrize("answer", ["Yes", "No"])
+def test_small_negative_forcing_asks_then_reruns_clipped_or_fails(monkeypatch, tmp_path, answer):
+    from types import SimpleNamespace
+
+    from mhm_qgis.core.executions import meteo
+    from mhm_qgis.core.handlers.state import processing
+    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+    from mhm_qgis.core.meteorology.forcing.temporal import NegativeAmounts
+    from mhm_qgis.qt.controllers import forcing, grid, time, workflow_state
+    from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
+    from mhm_qgis.qt.workflows import meteorology
+
+    calls, questions, failures = [], [], []
+
+    def prepare(run, _state, **_options):
+        calls.append(run.inputs[0].clip_negative)
+        if not run.inputs[0].clip_negative:
+            raise NegativeAmounts("pre", -6.3e-5)
+        return True
+
+    monkeypatch.setattr(meteo, "prepare_forcing", prepare)
+    monkeypatch.setattr(grid, "require_common_grid", lambda _dialog: {"l2_header": {}})
+    monkeypatch.setattr(meteorology, "target_grid_from_header",
+                        lambda *_args: SimpleNamespace(validate=lambda: None))
+    monkeypatch.setattr(forcing, "selected_meteo_specs", lambda _dialog: (MeteoFolderSpec("pre", tmp_path),))
+    monkeypatch.setattr(time, "values", lambda _dialog: {})
+    monkeypatch.setattr(meteorology.QMessageBox, "question", lambda _parent, _title, text: questions.append(text)
+                        or getattr(QtWidgets.QMessageBox.StandardButton, answer))
+    monkeypatch.setattr(workflow_state.QMessageBox, "critical",
+                        lambda _parent, _title, message: failures.append(message))
+    dialog = MhmQgisDialog()
+    dialog.project_folder = str(tmp_path)
+    dialog.check_prerequisites = lambda: True
+    dialog._meteo_inputs = {"pre": {"kind": "pre", "folder": str(tmp_path)}}
+
+    assert meteorology.start(dialog)
+    _wait(lambda: workflow_state.running_key(dialog) is None)
+    assert questions == [("Precipitation has small negative amounts (down to -6.3e-05 mm), most likely rounding "
+                          "noise of the source data.\n\nClip the negative values to 0 and continue?")]
+    status = processing.workflow(tmp_path, "execute_all_meteo")["status"]
+    if answer == "Yes":
+        assert calls == [False, True]
+        assert status == "completed"
+        assert dialog._meteo_inputs["pre"]["clip_negative"] is True
+    else:
+        assert calls == [False]
+        assert status == "failed"
+        assert failures[0].endswith("Fix the input, or run again and accept the clipping.")
     dialog.close()

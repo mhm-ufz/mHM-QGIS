@@ -54,6 +54,7 @@ class MeteoFolderSpec:
     unit: str = ""
     cumulative: bool = False
     cumulative_resolution: str = ""
+    clip_negative: bool = False  # the user accepted clipping the input's small negative amounts
 
     def normalized(self) -> MeteoFolderSpec:
         return MeteoFolderSpec(
@@ -75,6 +76,7 @@ class MeteoFolderSpec:
             unit=self.unit,
             cumulative=self.cumulative,
             cumulative_resolution=self.cumulative_resolution if self.cumulative else "",
+            clip_negative=self.clip_negative,
         )
 
 

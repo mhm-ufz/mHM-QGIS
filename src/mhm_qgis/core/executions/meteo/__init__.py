@@ -1,8 +1,7 @@
 """Preparing mHM meteorology forcing.
 
-Qt-free: the caller passes `log=` for the running commentary and `report=` for
-anything a user has to be shown, so the same functions serve the dialog, the
-worker thread and the tests.
+Qt-free: the caller passes `log=` for the running commentary; a failure raises with the
+message the user needs, so the same functions serve the worker thread and the tests.
 """
 from __future__ import annotations
 
@@ -27,9 +26,9 @@ from ...meteorology.forcing import (
     process_meteo_inputs,
     validate_coverage,
 )
+from ...meteorology.forcing.temporal import VARIABLE_LABELS, NegativeAmounts
 from ...meteorology.mask import write_meteo_mask
 from ...meteorology.reuse import stale_meteo_variables
-from ...utils.report import CRITICAL, INFORMATION
 
 
 @dataclass(frozen=True)
@@ -107,9 +106,8 @@ def reuse_prepared(run: MeteorologyRun, state, *, log=None) -> bool:
     return True
 
 
-def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None,
-                    progress=None, cancelled=None) -> bool:
-    """Prepare every selected meteorology forcing file. Returns success."""
+def prepare_forcing(run: MeteorologyRun, state, *, log=None, progress=None, cancelled=None) -> bool:
+    """Prepare every selected meteorology forcing file; a failure raises its reason."""
     _say(log, "\n--- Preparing meteorology forcing files ---")
     _say(log, f"Meteorology output folder: {meteo_output_root(run.project_folder)}")
     try:
@@ -124,7 +122,9 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None,
             times = validate_times(run.times, "v6" if is_v6(run.project_folder) else "v5.13")
             for kind, metadata in inspected.items():
                 if times["sim_start"] < metadata.start_time[:16] or times["sim_end"] > metadata.end_time[:16]:
-                    raise ValueError(f"Simulation period is outside {kind} coverage ({metadata.start_time} to {metadata.end_time}).")
+                    raise ValueError(
+                        f"The simulation period is outside the {VARIABLE_LABELS.get(kind, kind).lower()} data "
+                        f"({metadata.start_time} to {metadata.end_time}): shorten the simulation or extend the input.")
         if reuse_prepared(run, state, log=log):
             _save_period(run)
             return True
@@ -147,12 +147,11 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None,
             mask = write_meteo_mask(meteo_mask_path(run.project_folder), run.target_grid)
             state.mark_prepared(mask, mask.name)
             _say(log, f"Meteorology mask written: {mask}")
+    except NegativeAmounts:
+        raise  # not a failure yet: the user decides (qt/workflows/meteorology.py)
     except Exception as error:
         _say(log, f"ERROR: Meteorology processing failed: {error}\n{traceback.format_exc()}")
-        if report is not None:
-            report(CRITICAL, "Meteorology Error",
-                   f"Meteorology processing failed.\n{error}")
-        return False
+        raise
 
     for variable, output_path in result.outputs.items():
         state.mark_prepared(output_path, Path(output_path).name)
@@ -166,9 +165,6 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, report=None,
     processing.save_grid_metadata(run.project_folder, run.grid_metadata)
     processing.overlay(run.project_folder, {"meteo_source_fingerprint": _input_digest(run)})
     _save_period(run)
-    if report is not None:
-        report(INFORMATION, "Success",
-               "Meteorology forcing files prepared successfully.")
     return True
 
 

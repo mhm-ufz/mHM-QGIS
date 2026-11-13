@@ -90,6 +90,17 @@ def test_the_meteo_form_shows_its_variables_status_right_of_set(dialog):
     project_tree.refresh(dialog)
 
 
+def test_a_finished_meteo_run_rechecks_the_inputs_without_a_click(dialog, tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import process_cases, workflow_state
+
+    checks = []
+    monkeypatch.setattr(process_cases, "inputs", checks.append)
+    dialog.project_folder = str(tmp_path)
+    dialog._running_workflow = "execute_all_meteo"
+    workflow_state.finish(dialog, "execute_all_meteo", True, "")
+    assert checks == [dialog]
+
+
 def test_a_coloured_text_workflow_button_keeps_its_native_size(dialog):
     from qgis.PyQt.QtWidgets import QPushButton
 

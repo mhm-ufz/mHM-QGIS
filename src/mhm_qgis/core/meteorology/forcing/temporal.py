@@ -1,6 +1,8 @@
 """Variable units and bounded-memory temporal aggregation."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 # Output name: source aliases, output unit, selectable input units.
 VARIABLES = {
     "pre": (("pre", "tp", "total_precipitation", "Total_precipitation_surface_1_Hour_Accumulation"), "mm", ("mm", "m", "kg m-2", "kg m-2 s-1", "mm/day")),
@@ -25,6 +27,12 @@ CADENCES = {"Hourly": "h", "Daily": "D", "Monthly": "MS", "Yearly": "YS"}
 # `datetime64` units are calendar units: `[M] + 1` is the next month and
 # `[Y] + 1` the next year, so numpy does the 28/29/30/31-day and leap handling
 # that pandas offsets used to -- in C, over a whole chunk at once.
+VARIABLE_LABELS = {
+    "pre": "Precipitation", "pet": "Potential evapotranspiration", "tavg": "Mean temperature",
+    "tmin": "Minimum temperature", "tmax": "Maximum temperature", "tann": "Annual mean temperature",
+    "ssrd": "Shortwave radiation", "strd": "Longwave radiation", "netrad": "Net radiation",
+    "eabs": "Vapour pressure", "windspeed": "Wind speed",
+}
 PERIOD_UNITS = {"Hourly": "h", "Daily": "D", "Monthly": "M", "Yearly": "Y"}
 AGGREGATIONS = ("Average", "Sum", "Minimum", "Maximum")
 ERA_END_VARIABLES = {"tp", "total_precipitation", "pev", "potential_evaporation",
@@ -49,10 +57,10 @@ def normalize_unit(unit):
 def validate_spec(spec):
     """Reject unsupported units, cadence and cumulative combinations."""
     if spec.temporal_resolution not in CADENCES:
-        raise ValueError(f"{spec.kind}: select the input temporal resolution.")
+        raise ValueError("Select the input temporal resolution.")
     output = spec.output_temporal_resolution or spec.temporal_resolution
     if output not in CADENCES:
-        raise ValueError(f"{spec.kind}: select the output temporal resolution.")
+        raise ValueError("Select the output temporal resolution.")
     input_index = list(CADENCES).index(spec.temporal_resolution)
     output_index = list(CADENCES).index(output)
     if output_index < input_index:
@@ -63,7 +71,7 @@ def validate_spec(spec):
         raise ValueError("Select an aggregation type for the coarser output resolution.")
     unit = normalize_unit(spec.unit)
     if unit not in VARIABLES[spec.kind][2]:
-        raise ValueError(f"{spec.kind}: select a supported unit: {', '.join(VARIABLES[spec.kind][2])}.")
+        raise ValueError(f"Select a supported unit: {', '.join(VARIABLES[spec.kind][2])}.")
     if spec.cumulative:
         if spec.cumulative_resolution not in CADENCES:
             raise ValueError("Select the accumulation reset frequency.")
@@ -183,6 +191,24 @@ def deaccumulate_values(values, bounds, spec, previous=None):
     return result, previous
 
 
+@contextmanager
+def about_variable(kind):
+    """Name the variable in a failure inside, so the user knows which input to fix."""
+    try:
+        yield
+    except ValueError as error:
+        raise ValueError(f"{VARIABLE_LABELS.get(kind, kind)}: {error}") from error
+
+
+class NegativeAmounts(Exception):
+    """Amounts slightly below zero, as de-accumulated ERA5 leaves them; clipped once the user agrees."""
+
+    def __init__(self, kind, lowest):
+        self.kind = kind
+        super().__init__(f"{VARIABLE_LABELS.get(kind, kind)} has small negative amounts (down to {lowest:.3g} mm), "
+                         "most likely rounding noise of the source data.")
+
+
 def convert_units(values, bounds, spec, source_name, *, input_seconds=None):
     """Convert already aggregated values to the model unit."""
     import numpy as np
@@ -210,9 +236,14 @@ def convert_units(values, bounds, spec, source_name, *, input_seconds=None):
         result /= 3.6
     if spec.kind == "pet" and source_name in {"pev", "potential_evaporation"}:
         result *= -1
-    if spec.kind in {"pre", "pet"} and np.any(result < -1e-7):
-        raise ValueError(f"{spec.kind}: negative interval amounts; check cumulative settings or source sign.")
-    if spec.kind in {"pre", "pet"}:
+    if spec.kind in {"pre", "pet"} and (negative := result < 0).any():
+        lowest = float(result[negative].min())
+        if lowest < -0.01:  # a wrong unit, accumulation or sign, not round-off
+            sign = " or the sign of the evaporation" if spec.kind == "pet" else ""
+            raise ValueError(f"The input has negative amounts (down to {lowest:.3g} mm): check its unit, "
+                             f"the cumulative setting{sign}.")
+        if lowest < -1e-7 and not spec.clip_negative:  # float round-off below that is clipped silently
+            raise NegativeAmounts(spec.kind, lowest)
         np.maximum(result, 0, out=result)
     return result
 

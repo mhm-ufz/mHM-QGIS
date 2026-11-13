@@ -1,9 +1,13 @@
 """Meteorology workflow started by the ▶ of B. Meteorology in the project tree."""
+from dataclasses import replace
 from pathlib import Path
+
+from qgis.PyQt.QtWidgets import QMessageBox
 
 from ...core.executions import meteo
 from ...core.grid import target_grid_from_header
 from ...core.handlers.state.meteo_outputs import MeteorologyOutputState
+from ...core.meteorology.forcing.temporal import NegativeAmounts
 from ..controllers import forcing, grid, time
 from . import lifecycle
 
@@ -36,16 +40,31 @@ def start(dialog):
         state = MeteorologyOutputState(dialog.project_folder, log=log)
 
         def prepare(task):
-            # No `report`: a worker thread must not raise a modal dialog, so
-            # failures come back through the coordinator for the GUI thread.
-            ok = meteo.prepare_forcing(
-                run, state, log=log, progress=task.setProgress, cancelled=task.isCanceled,
-            )
+            # A worker thread must not raise a modal dialog: failures come back through
+            # the coordinator, and small negative amounts as the result for `done` to ask.
+            try:
+                ok = meteo.prepare_forcing(
+                    run, state, log=log, progress=task.setProgress, cancelled=task.isCanceled,
+                )
+            except NegativeAmounts as negative:
+                return negative
             return bool(ok) and not task.isCanceled()
+
+        def done(result):
+            if not isinstance(result, NegativeAmounts):
+                return finished(result)
+            if QMessageBox.question(dialog, "Meteorology", f"{result}\n\nClip the negative values to 0 and "
+                                    "continue?") != QMessageBox.StandardButton.Yes:
+                return finished(False, f"{result} Fix the input, or run again and accept the clipping.")
+            dialog._meteo_inputs[result.kind]["clip_negative"] = True
+            dialog.save_input_state()
+            clipped = replace(run, inputs=tuple(replace(spec, clip_negative=True) if spec.kind == result.kind
+                                                else spec for spec in run.inputs))
+            return submit(clipped, finished) or finished(False, "Meteorology preparation could not be restarted.")
 
         return coordinator.submit(
             TASK_KEY, "Meteorology Preparation", prepare,
-            on_success=finished,
+            on_success=done,
             on_error=lambda message: finished(False, message),
         )
 
