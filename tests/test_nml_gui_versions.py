@@ -96,8 +96,8 @@ PARAMETER_COMPONENT_LABELS = [
 
 
 class Dialog:
-    def __init__(self, project_folder: Path):
-        self.project_folder = str(project_folder)
+    def __init__(self, setup_folder: Path):
+        self.setup_folder = str(setup_folder)
         self._input_adapters = {}
 
     def input_combo(self, kind):
@@ -147,7 +147,7 @@ class LayerWidget:
 
 def _document(version: str, dialog: Dialog):
     key = "v5.13" if version.startswith("5") else "v6"
-    project = load_project(SCHEMAS / key, dialog.project_folder, namelist_project(key))
+    project = load_project(SCHEMAS / key, dialog.setup_folder, namelist_project(key))
     dimensions = build_dimensions(version, dialog)
     document = build_initial_values(version, dialog)
     return project, dimensions, document

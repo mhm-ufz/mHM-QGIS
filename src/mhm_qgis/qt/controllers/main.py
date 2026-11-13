@@ -186,8 +186,8 @@ def handle_model_input_changed(dialog, value=None):
 
     dialog.save_input_state()
     invalidate_meteo(dialog)
-    if dialog.project_folder:
-        processing.mark_workflow(dialog.project_folder, "execute_all_morphology", "pending")
+    if dialog.setup_folder:
+        processing.mark_workflow(dialog.setup_folder, "execute_all_morphology", "pending")
 
 
 # --- Outlets and domain definition ----------------------------------------
@@ -240,7 +240,7 @@ def update_gauged_outlet_count(dialog, layer=None):
 
     if layer is None:
         layer = dialog.input_combo("pour_points").currentLayer()
-    configured_ids = configured_gauged_outlet_ids(dialog.project_folder)
+    configured_ids = configured_gauged_outlet_ids(dialog.setup_folder)
     count = (
         str(len(configured_ids))
         if configured_ids is not None
@@ -350,7 +350,7 @@ def show_domain_definition(dialog):
 
 def _selected_outlets(dialog, title):
     """Return the outlet IDs, or None after telling the user what is missing."""
-    if not dialog.project_folder:
+    if not dialog.setup_folder:
         QMessageBox.warning(dialog, title, "Select a project folder first.")
         return None
     try:
@@ -377,7 +377,7 @@ def open_domain_assignment(dialog):
         from ..dialogs.discharge_assignment import DischargeTableAssignmentDialog
 
         workflow = DomainWorkflow(
-            dialog.project_folder,
+            dialog.setup_folder,
             dialog.input_combo("pour_points").currentLayer(),
             selected_outlet_id_field(dialog),
             outlet_ids,
@@ -401,7 +401,7 @@ def _assign(dialog, workflow, assignment):
 
     try:
         workflow.apply_dem_extent(assignment.selected_assignments())
-        sync_domain_settings(dialog.project_folder)
+        sync_domain_settings(dialog.setup_folder)
     except Exception as error:
         _assignment_failed(dialog, error)
         return
@@ -445,7 +445,7 @@ def _gauges_from_raster(dialog):
     try:
         output = points_from_gauge_raster(
             source(path, details.get("variable", "")),
-            Path(temp_morphology_folder(dialog.project_folder)) / "gauges_from_raster.gpkg",
+            Path(temp_morphology_folder(dialog.setup_folder)) / "gauges_from_raster.gpkg",
             details.get("source_crs", ""))
     except (OSError, ValueError, RuntimeError) as error:
         QMessageBox.warning(dialog, "Gauges", str(error))
@@ -458,7 +458,7 @@ def _gauges_from_raster(dialog):
 def set_gauges(dialog):
     """Gauges' Set: build the drainage network and flow accumulation the Domain Delineator opens on."""
     if dialog.radioButton_gaugesRasterInput.isChecked() and (
-            not dialog.project_folder or not _gauges_from_raster(dialog)):
+            not dialog.setup_folder or not _gauges_from_raster(dialog)):
         return
     if _selected_outlets(dialog, "Gauges") is None:
         return
@@ -533,13 +533,13 @@ def show_dem_derivatives(dialog, variable=None):
     from ...core.handlers.file.netcdf.raster import describe
     from ...core.handlers.store.paths import temp_morphology_folder
 
-    path = os.path.join(temp_morphology_folder(dialog.project_folder), "dem_derivatives.nc") \
-        if dialog.project_folder else ""
+    path = os.path.join(temp_morphology_folder(dialog.setup_folder), "dem_derivatives.nc") \
+        if dialog.setup_folder else ""
     present, table = describe(path) if path else {}, dialog.tableWidget_demDerivatives
     table.setRowCount(len(DEM_BUNDLE_VARIABLES))
     for row, (key, name) in enumerate(DEM_BUNDLE_VARIABLES.items()):
         shape, units = present.get(name, ((), ""))
-        file = os.path.relpath(path, dialog.project_folder) if name in present else "—"
+        file = os.path.relpath(path, dialog.setup_folder) if name in present else "—"
         for column, text in enumerate((key, name, " \N{MULTIPLICATION SIGN} ".join(map(str, shape[-2:])) or "—", units, file)):
             table.setItem(row, column, QTableWidgetItem(text))
         table.setRowHidden(row, key != "dem" and key not in dialog._input_findings)
@@ -564,7 +564,7 @@ def override_dem_derivative(dialog):
 
     path, variable = dialog.lineEdit_demOverride.text().strip(), dialog._dem_override
     try:
-        override_derivative(temp_morphology_folder(dialog.project_folder), DEM_BUNDLE_VARIABLES[variable], path)
+        override_derivative(temp_morphology_folder(dialog.setup_folder), DEM_BUNDLE_VARIABLES[variable], path)
     except (OSError, RuntimeError, ValueError) as error:
         QMessageBox.warning(dialog, "Replace DEM Derivative", str(error))
         return
@@ -576,7 +576,7 @@ def override_dem_derivative(dialog):
 
 def display_morphology(dialog, key) -> str:
     """Show the prepared output for a `resolve_display_output` key: its layer name, "" when there is none."""
-    output = resolve_display_output(dialog.project_folder, key) if dialog.project_folder else None
+    output = resolve_display_output(dialog.setup_folder, key) if dialog.setup_folder else None
     if output is None:
         return ""
     from ...qgis_bridge.display.morphology import show_output
@@ -593,7 +593,7 @@ def refresh_observation_stations(dialog):
     blocked = combo.blockSignals(True)
     try:
         combo.clear()
-        for station in stations(dialog.project_folder):
+        for station in stations(dialog.setup_folder):
             combo.addItem(station["id"], station["path"])
         index = combo.findText(selected)
         if index >= 0:

@@ -8,18 +8,18 @@ from ...handlers.store.layout import streamflow_observation_folder
 from ...handlers.store.paths import workspace_folder
 
 
-def stations(project_folder):
+def stations(setup_folder):
     """List saved gauges, not stale files left by removed stations."""
-    if not project_folder:
+    if not setup_folder:
         return []
-    workspace = Path(workspace_folder(project_folder))
-    folder = Path(streamflow_observation_folder(project_folder))
+    workspace = Path(workspace_folder(setup_folder))
+    folder = Path(streamflow_observation_folder(setup_folder))
     return [
         {"id": record["outlet_id"], "path": str(
             workspace / record["gauge_path"] if record["gauge_path"]
             else folder / record["gauge_filename"]
         )}
-        for record in gauge_records(load_state(project_folder))
+        for record in gauge_records(load_state(setup_folder))
     ]
 
 

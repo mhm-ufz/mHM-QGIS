@@ -11,22 +11,22 @@ from ....core.handlers.store.paths import temp_folder, workspace_folder
 from ..file import json as jsonio
 
 
-def settings_path(project_folder: str | Path) -> Path:
-    return Path(temp_folder(project_folder)) / "nml-settings.json"
+def settings_path(setup_folder: str | Path) -> Path:
+    return Path(temp_folder(setup_folder)) / "nml-settings.json"
 
 
-def load_settings(project_folder: str | Path) -> dict[str, Any]:
-    return jsonio.read_mapping(settings_path(project_folder), version=1)
+def load_settings(setup_folder: str | Path) -> dict[str, Any]:
+    return jsonio.read_mapping(settings_path(setup_folder), version=1)
 
 
 def update_section(
-    project_folder: str | Path,
+    setup_folder: str | Path,
     section: str,
     value: dict[str, Any] | list[Any],
 ) -> Path:
-    state = load_settings(project_folder)
+    state = load_settings(setup_folder)
     state[section] = value
-    return save_settings(project_folder, state)
+    return save_settings(setup_folder, state)
 
 
 def validate_times(values, version="v6") -> dict[str, str]:
@@ -43,7 +43,7 @@ def validate_times(values, version="v6") -> dict[str, str]:
 
 
 def save_settings(
-    project_folder: str | Path,
+    setup_folder: str | Path,
     state: dict[str, Any],
 ) -> Path:
     """Write the handoff with every absolute path (an input source) relative to the domain."""
@@ -51,19 +51,19 @@ def save_settings(
         if not os.path.isabs(text):
             return text
         try:
-            return relative_workspace_path(project_folder, text)
+            return relative_workspace_path(setup_folder, text)
         except ValueError:  # another Windows drive
             return text
 
     payload = jsonio.map_strings({**state, "version": 1}, relative)
-    return jsonio.write(settings_path(project_folder), payload, newline=True)
+    return jsonio.write(settings_path(setup_folder), payload, newline=True)
 
 
-def relative_workspace_path(project_folder: str | Path, value: str | Path) -> str:
-    return os.path.relpath(value, workspace_folder(project_folder)).replace("\\", "/")
+def relative_workspace_path(setup_folder: str | Path, value: str | Path) -> str:
+    return os.path.relpath(value, workspace_folder(setup_folder)).replace("\\", "/")
 
 
-def sync_domain_settings(project_folder: str | Path) -> Path:
+def sync_domain_settings(setup_folder: str | Path) -> Path:
     """Project saved domain and gauge records into the namelist handoff."""
     from .domain_state import (
         assign_domain_ids,
@@ -71,9 +71,9 @@ def sync_domain_settings(project_folder: str | Path) -> Path:
     )
     from .domain_state import load_state as load_domain_state
 
-    domain_state = load_domain_state(project_folder)
+    domain_state = load_domain_state(setup_folder)
     assign_domain_ids(domain_state)
-    state = load_settings(project_folder)
+    state = load_settings(setup_folder)
     state["domain_definition"] = {
         "mode": str(domain_state.get("definition_mode", "") or ""),
         "dem_domain": bool(domain_state.get("dem_domain", False)),
@@ -84,15 +84,15 @@ def sync_domain_settings(project_folder: str | Path) -> Path:
     state["domains"] = [{
         "domain_id": 1, "name": "master", "outlet_id": "",
         "is_dem_domain": not any(record.get("is_domain") for record in domain_state.get("outlets", {}).values()),
-        "directory": relative_workspace_path(project_folder, morph_folder(project_folder)),
-        "dem_path": relative_workspace_path(project_folder, domain_dem_path(project_folder, "master")),
-        "data_path": relative_workspace_path(project_folder, data_folder(project_folder)) + "/",
+        "directory": relative_workspace_path(setup_folder, morph_folder(setup_folder)),
+        "dem_path": relative_workspace_path(setup_folder, domain_dem_path(setup_folder, "master")),
+        "data_path": relative_workspace_path(setup_folder, data_folder(setup_folder)) + "/",
         "gauge_ids": [int(gauge["gauge_id"]) for gauge in gauges
                       if gauge.get("gauge_id") is not None and gauge.get("domain_ids")],
     }]
-    state["gauges"] = [{**gauge, "gauge_path": gauge["gauge_path"] and relative_workspace_path(project_folder, gauge["gauge_path"])}
+    state["gauges"] = [{**gauge, "gauge_path": gauge["gauge_path"] and relative_workspace_path(setup_folder, gauge["gauge_path"])}
                        for gauge in gauges]
-    return save_settings(project_folder, state)
+    return save_settings(setup_folder, state)
 
 
 __all__ = [

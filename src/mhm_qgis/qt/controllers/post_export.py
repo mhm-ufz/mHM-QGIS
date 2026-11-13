@@ -109,7 +109,7 @@ def export_view(dialog, folder=None) -> list[Path]:
         dialog.label_postStatus.setText("Open a run and a view first: nothing is shown to export.")
         return []
     if folder is None:
-        folder = QFileDialog.getExistingDirectory(dialog, "Export the shown view to", str(dialog.project_folder or ""))
+        folder = QFileDialog.getExistingDirectory(dialog, "Export the shown view to", str(dialog.setup_folder or ""))
         if not folder:
             return []
     out = Path(folder)

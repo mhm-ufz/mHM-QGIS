@@ -65,10 +65,11 @@ def test_reopening_the_dem_refreshes_it(tmp_path):
     dialog.close()
 
 
-def test_a_new_crs_resets_l1_l11_and_l2():
+def test_a_new_crs_resets_l1_l11_and_l2(tmp_path):
     from qgis.core import QgsCoordinateReferenceSystem
 
     dialog = MhmQgisDialog()
+    dialog.setup_folder = str(tmp_path)
     dialog.lineEdit_L1Resolution.setText("1000")
     dialog.lineEdit_L11Resolution.setText("2000")
     dialog.spinBox_L2ResolutionMultiplier.setValue(4)
@@ -111,7 +112,7 @@ def test_set_dem_keeps_a_custom_extent_inside_the_dem_and_a_reload_restores_it(t
     from qgis.core import QgsCoordinateReferenceSystem, QgsRectangle
 
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32632"))
     dialog._set_crs = "EPSG:32632"
     header = {"ncols": 10, "nrows": 10, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 100.0}
@@ -131,7 +132,7 @@ def test_set_dem_keeps_a_custom_extent_inside_the_dem_and_a_reload_restores_it(t
     dialog.close()
 
     restored = MhmQgisDialog()
-    restored.project_folder = str(tmp_path)
+    restored.setup_folder = str(tmp_path)
     restored.load_input_state()
     assert restored._study_extent == [200, 600, 300, 700]
     assert restored.groupBox_customExtent.isChecked()

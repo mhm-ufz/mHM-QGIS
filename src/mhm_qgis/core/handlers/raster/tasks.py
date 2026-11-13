@@ -447,18 +447,18 @@ def write_domain_dem_ascii(
         fill_value=None,
         band_index=1,
         task=None,
-        project_folder=None):
+        setup_folder=None):
     """Write one domain DEM as Arc/Info ASCII on the common L0 grid.
 
     The source is the cropped L0 DEM, so every domain shares the model extent and
     matches the other inputs cell for cell; only the cells inside the domain
     mask keep their value. Rows stream to text a block at a time, so memory stays
-    flat whatever the grid size. With `project_folder`, an output whose inputs
+    flat whatever the grid size. With `setup_folder`, an output whose inputs
     and options are unchanged since it was written is kept as it is.
     """
     output = Path(output_path)
     digest = None
-    if project_folder:
+    if setup_folder:
         from ..file.netcdf.raster import file_path
         from ..state.cache import cached_payload, fingerprint, outputs_present
 
@@ -469,7 +469,7 @@ def write_domain_dem_ascii(
         )
         # A cloned domain's output is a link into its source domain: rewrite it.
         if not output.is_symlink() and outputs_present(
-                cached_payload(project_folder, "exports", str(output), digest)):
+                cached_payload(setup_folder, "exports", str(output), digest)):
             _progress(task, 100)
             return str(output)
 
@@ -548,7 +548,7 @@ def write_domain_dem_ascii(
     if digest:
         from ..state.cache import store_payload
 
-        store_payload(project_folder, "exports", str(output), digest, {"outputs": [str(output)]})
+        store_payload(setup_folder, "exports", str(output), digest, {"outputs": [str(output)]})
     return str(output)
 
 

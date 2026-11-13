@@ -38,9 +38,9 @@ def default_state() -> dict[str, Any]:
     }
 
 
-def state_path(project_folder: PathInput) -> Path:
+def state_path(setup_folder: PathInput) -> Path:
     """Return the state path inside the plugin-owned workspace."""
-    return Path(temp_folder(project_folder)) / STATE_FILENAME
+    return Path(temp_folder(setup_folder)) / STATE_FILENAME
 
 
 def _normalized_state(value: object) -> dict[str, Any]:
@@ -128,10 +128,10 @@ def assign_domain_ids(state: dict[str, Any]) -> dict[str, Any]:
     return state
 
 
-def load_state(project_folder: PathInput) -> dict[str, Any]:
+def load_state(setup_folder: PathInput) -> dict[str, Any]:
     """Load state, returning defaults for missing or malformed content."""
     try:
-        return _normalized_state(jsonio.read(state_path(project_folder)))
+        return _normalized_state(jsonio.read(state_path(setup_folder)))
     except (ValueError, TypeError):
         return default_state()
 
@@ -144,9 +144,9 @@ def _output_path(workspace: Path, value: PathInput) -> Path:
     return path.resolve() if path.is_dir() else path
 
 
-def resolve_output_path(project_folder: PathInput, value: PathInput) -> Path:
+def resolve_output_path(setup_folder: PathInput, value: PathInput) -> Path:
     """Resolve a stored output path, rejecting paths outside the workspace."""
-    workspace = Path(workspace_folder(project_folder)).resolve()
+    workspace = Path(workspace_folder(setup_folder)).resolve()
     path = _output_path(workspace, value)
     try:
         path.relative_to(workspace)
@@ -163,7 +163,7 @@ def delineation_fingerprint(filled_dem, x, y):
     return fingerprint([filled_dem], {"x": float(x), "y": float(y), "delineation": 1})
 
 
-def cached_delineation(project_folder, filled_dem, x, y, entry):
+def cached_delineation(setup_folder, filled_dem, x, y, entry):
     """Resolve a reusable mask without reading the raster on the UI thread."""
     if not isinstance(entry, dict) or not Path(filled_dem).is_file():
         return None
@@ -172,15 +172,15 @@ def cached_delineation(project_folder, filled_dem, x, y, entry):
     if not all(key in entry for key in ("raster_path", "mask_value", "catchment_area_m2", "cell_center")):
         return None
     try:
-        path = resolve_output_path(project_folder, entry["raster_path"])
+        path = resolve_output_path(setup_folder, entry["raster_path"])
     except ValueError:
         return None
     return dict(entry, raster_path=str(path)) if path.is_file() else None
 
 
-def save_preview(project_folder, source, id_field, outlet_id, result):
+def save_preview(setup_folder, source, id_field, outlet_id, result):
     """Persist only cache metadata, never the dialog's uncommitted assignments."""
-    state = load_state(project_folder)
+    state = load_state(setup_folder)
     if not state["pour_points_source"]:
         state["pour_points_source"] = source
         state["outlet_id_field"] = id_field
@@ -189,15 +189,15 @@ def save_preview(project_folder, source, id_field, outlet_id, result):
     if state["pour_points_source"] == source and state["outlet_id_field"] == id_field:
         for key in ("confidence", "snap_count", "snap_distance_m"):
             record[key] = result.get(key)
-    save_state(project_folder, state)
+    save_state(setup_folder, state)
 
 
 def save_state(
-    project_folder: PathInput,
+    setup_folder: PathInput,
     value: Mapping[str, Any],
 ) -> Path:
     """Atomically save normalized state and return its path."""
-    return jsonio.write(state_path(project_folder), _normalized_state(value), newline=True, fsync=True)
+    return jsonio.write(state_path(setup_folder), _normalized_state(value), newline=True, fsync=True)
 
 
 def gauged_outlet_ids(state: Mapping[str, Any]) -> list[str]:

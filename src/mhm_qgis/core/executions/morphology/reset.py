@@ -25,14 +25,14 @@ _DOMAIN_OUTPUT_KEYS = (
 )
 
 
-def clear_geometry(project_folder, *, log=None) -> int:
+def clear_geometry(setup_folder, *, log=None) -> int:
     """Delete files below ``.temp/Morphology`` and invalidate derived state.
 
     The folder is a plugin-owned scratch boundary. User selections and gauge
     assignments remain in domain state; only locations and files derived from
     the former geometry are removed.
     """
-    folder = Path(temp_morphology_folder(project_folder))
+    folder = Path(temp_morphology_folder(setup_folder))
     folder.mkdir(parents=True, exist_ok=True)
     deleted = 0
     for path in sorted(folder.rglob("*"), key=lambda item: len(item.parts), reverse=True):
@@ -48,9 +48,9 @@ def clear_geometry(project_folder, *, log=None) -> int:
             if log:
                 log(f"WARNING: Could not remove {path}: {error}")
 
-    _invalidate_domains(project_folder)
+    _invalidate_domains(setup_folder)
     processing.overlay(
-        project_folder,
+        setup_folder,
         {
             "version": processing.STATE_VERSION,
             "outputs": {},
@@ -62,11 +62,11 @@ def clear_geometry(project_folder, *, log=None) -> int:
     return deleted
 
 
-def _invalidate_domains(project_folder) -> None:
-    path = state_path(project_folder)
+def _invalidate_domains(setup_folder) -> None:
+    path = state_path(setup_folder)
     if not path.is_file():
         return
-    state = load_state(project_folder)
+    state = load_state(setup_folder)
     changed = False
     for key in ("dem_mask_path", "merged_mask_path"):
         if state.get(key):
@@ -78,7 +78,7 @@ def _invalidate_domains(project_folder) -> None:
                 del record[key]
                 changed = True
     if changed:
-        save_state(project_folder, state)
+        save_state(setup_folder, state)
 
 
 __all__ = ["clear_geometry"]

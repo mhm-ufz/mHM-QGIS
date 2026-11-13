@@ -52,7 +52,7 @@ def test_periods_validate_and_reach_both_namelist_versions(tmp_path):
     from mhm_qgis.vSpecific import build_initial_values
     values = {"sim_start": "2001-01-01T00:00", "eval_start": "2001-01-11T00:00", "sim_end": "2001-02-01T00:00"}
     update_section(tmp_path, "time", values)
-    dialog = SimpleNamespace(project_folder=tmp_path)
+    dialog = SimpleNamespace(setup_folder=tmp_path)
     v5 = build_initial_values("5.13", dialog)["main"]["time_periods"]
     assert v5["warming_Days"] == [10]
     assert v5["eval_Per"][0]["dStart"] == 11

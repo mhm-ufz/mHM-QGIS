@@ -20,7 +20,7 @@ from ...meteorology.forcing import (
 
 @dataclass(frozen=True)
 class ObservationRun:
-    project_folder: Path
+    setup_folder: Path
     inputs: tuple[MeteoFolderSpec, ...]
     target_grid: TargetGrid
     inspections: Mapping[str, SpatialMetadata] | None = None
@@ -28,16 +28,16 @@ class ObservationRun:
 
 def prepare(run: ObservationRun, *, log=None, cancelled=None) -> bool:
     inspections = run.inspections or inspect_meteo_inputs_cached(
-        run.project_folder, run.inputs, log=log, cancelled=cancelled)
-    output_root = Path(data_folder(run.project_folder)) / "observation"
+        run.setup_folder, run.inputs, log=log, cancelled=cancelled)
+    output_root = Path(data_folder(run.setup_folder)) / "observation"
     result = process_meteo_inputs(
         run.inputs, output_root, run.target_grid,
         flat_layout=True, inspections=inspections, log=log, cancelled=cancelled)
     for path in result.outputs.values():
         registry.register(
-            run.project_folder, path, name=Path(path).name,
+            run.setup_folder, path, name=Path(path).name,
             category="observation")
-    register_observations(run.project_folder, result.outputs, run.inputs, v6=is_v6(run.project_folder))
+    register_observations(run.setup_folder, result.outputs, run.inputs, v6=is_v6(run.setup_folder))
     return True
 
 

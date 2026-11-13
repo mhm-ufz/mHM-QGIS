@@ -73,7 +73,7 @@ def _project_setup(dialog, _node):
 
 
 def _domain_setup(dialog, _node):
-    return "processed" if dialog.project_folder and Path(dialog.project_folder).is_dir() else "empty"
+    return "processed" if dialog.setup_folder and Path(dialog.setup_folder).is_dir() else "empty"
 
 
 def _gauges(dialog, _node):
@@ -132,7 +132,7 @@ def _resolution(dialog, _node):
 def _namelists(dialog, _node):
     from ...core.handlers.store.paths import workspace_folder
 
-    folder = dialog.project_folder
+    folder = dialog.setup_folder
     return "processed" if folder and any(Path(workspace_folder(folder)).glob("*.nml")) else "empty"
 
 
@@ -153,11 +153,11 @@ def _pending(dialog, row) -> bool:
     """Under A or B before that group's run has completed, so its files do not count yet."""
     parent = row.parent()
     workflow = RUNS.get(parent.data(0, Qt.ItemDataRole.UserRole)) if parent is not None else None
-    if not workflow or not dialog.project_folder:
+    if not workflow or not dialog.setup_folder:
         return False
     from ...core.handlers.state import processing
 
-    return processing.workflow(dialog.project_folder, workflow).get("status") != "completed"
+    return processing.workflow(dialog.setup_folder, workflow).get("status") != "completed"
 
 
 def _state(dialog, row):
@@ -169,10 +169,10 @@ def _state(dialog, row):
         findings = dialog._input_findings
         if any(findings[name].ok for name in _inputs(node) if name in findings):
             return "processed"
-        if "display" in node and dialog.project_folder:
+        if "display" in node and dialog.setup_folder:
             from ...core.handlers.store.morphology import resolve_display_output
 
-            if resolve_display_output(dialog.project_folder, node["display"]) is not None:
+            if resolve_display_output(dialog.setup_folder, node["display"]) is not None:
                 return "processed"
     rule = STATUS.get(node.get("status"))
     return rule(dialog, node) if rule else "empty"
@@ -351,8 +351,8 @@ def show_inputs(dialog, findings) -> None:
     from ...core.handlers.state import processing
 
     dialog._input_findings = {name: finding for finding in findings for name in finding.input.split("|")}
-    set_up = bool(dialog.project_folder) and \
-        processing.workflow(dialog.project_folder, "project_structure").get("status") == "completed"
+    set_up = bool(dialog.setup_folder) and \
+        processing.workflow(dialog.setup_folder, "project_structure").get("status") == "completed"
     gauges = dialog.checkBox_gaugeOption.isChecked()
     for row in _rows(dialog):
         node = _node(row)
@@ -375,7 +375,7 @@ def _file(dialog, node) -> str:
     from ...core.handlers.store.morphology import resolve_display_output
     from ...core.meteorology.display import meteo_output_path
 
-    folder, key, path = dialog.project_folder, node["key"], None
+    folder, key, path = dialog.setup_folder, node["key"], None
     if folder and "display" in node:
         output = resolve_display_output(folder, node["display"])
         path = output.path if output else None

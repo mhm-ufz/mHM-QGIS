@@ -12,8 +12,8 @@ from mhm_qgis.core.handlers.state.meteo_outputs import MeteorologyOutputState
 
 
 class _Dialog:
-    def __init__(self, project_folder):
-        self.project_folder = str(project_folder)
+    def __init__(self, setup_folder):
+        self.setup_folder = str(setup_folder)
         self.messages = []
 
     def log_message(self, message):
@@ -47,7 +47,7 @@ def test_a_stale_meteorology_copy_does_not_erase_a_newer_cache_write(project):
 
 def test_the_cache_keeps_the_meteorology_outputs(project):
     dialog = _Dialog(project)
-    state = MeteorologyOutputState(dialog.project_folder)
+    state = MeteorologyOutputState(dialog.setup_folder)
     state.mark_prepared(project / "pre.nc", "pre.nc")
     before = jsonio.read_mapping(cache.state_path(project)).get("outputs")
     assert before

@@ -25,7 +25,7 @@ HEADERS = {
 
 def _request(tmp_path, workflow="execute_all_morphology"):
     return setup.SetupRequest(
-        project_folder=str(tmp_path), headers=HEADERS, workflow=workflow
+        setup_folder=str(tmp_path), headers=HEADERS, workflow=workflow
     )
 
 

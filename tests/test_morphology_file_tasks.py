@@ -311,7 +311,7 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
     second = dict(first, outlet_id="2", x=950, y=50, basin_id=8,
                   picked={"x": 950, "y": 50, "crs": "EPSG:32632", "source": "snapped"},
                   raster_path=str(folder / "second.tif"), domain_id=None)
-    preview = delineation.show(None, project_folder=tmp_path, filled_dem=source, outlet=first)
+    preview = delineation.show(None, setup_folder=tmp_path, filled_dem=source, outlet=first)
     domain_state.save_preview(tmp_path, "points.shp", "id", "1", preview)
     state = domain_state.load_state(tmp_path)
     assert not any(r.get("is_domain") for r in state["outlets"].values())  # Show does not commit choices.
@@ -320,7 +320,7 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
     assert domain_state.cached_delineation(tmp_path, source, 850, 150, entry)
     assert domain_state.cached_delineation(tmp_path, source, 851, 150, entry) is None
     first["cached"] = entry
-    result = delineation.save(None, project_folder=tmp_path, filled_dem=source,
+    result = delineation.save(None, setup_folder=tmp_path, filled_dem=source,
                               outlets=[first, second], merged_path=folder / "merged.tif")
     assert set(result["outlets"]) == {"1", "2"}
     assert result["outlets"]["1"]["raster_path"] == preview["raster_path"]
@@ -333,8 +333,8 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
     second["domain_id"] = 1
     second["cached"] = result["outlets"]["2"]
     monkeypatch.setattr(delineation.raster, "_flow_context", lambda *args: pytest.fail("Unexpected delineation"))
-    assert delineation.show(None, project_folder=tmp_path, filled_dem=source, outlet=first)["mask_value"] == 7
-    result = delineation.save(None, project_folder=tmp_path, filled_dem=source,
+    assert delineation.show(None, setup_folder=tmp_path, filled_dem=source, outlet=first)["mask_value"] == 7
+    result = delineation.save(None, setup_folder=tmp_path, filled_dem=source,
                               outlets=[first, second], merged_path=folder / "merged.tif",
                               dem_domain=(2, str(folder / "dem-mask.tif"), str(folder / "dem.asc")))
     assert result["outlets"]["2"]["mask_value"] == 8

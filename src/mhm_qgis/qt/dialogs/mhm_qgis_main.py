@@ -37,7 +37,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.setupUi(self)
         elide_named_left(self)  # long paths keep their file name in sight
         self.iface = iface
-        self.project_folder = None  # Active domain root, passed to core APIs.
+        self.setup_folder = None  # Active domain root, passed to core APIs.
         self.project_directory = None  # Outer folder shown in the project selector.
 
         # Per-domain form state; `controllers/input_state.clear` resets it.
@@ -118,7 +118,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
     def check_prerequisites(self, needs_pour_points=False):
         """Check if the project folder and necessary layers are selected."""
-        if not self.project_folder:
+        if not self.setup_folder:
             QMessageBox.critical(
                 self, "Missing Input", "Please select a project folder before proceeding.")
             return False
@@ -136,7 +136,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Print selected layer/file inputs for easier debugging from QGIS."""
         log = self.log_message
         log(f"\n--- Input selections before {action_name} ---")
-        log(f"Project folder: {self.project_folder or '<not selected>'}")
+        log(f"Project folder: {self.setup_folder or '<not selected>'}")
         for label, kind in (("DEM", "dem"), ("Pour points", "pour_points")):
             layer = self.input_combo(kind).currentLayer()
             log(f"{label}: {layer.name()} | {layer.source()}" if layer else f"{label}: <not selected>")
@@ -327,7 +327,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
     def open_project_terminal(self, checked=False):
         """Open the persistent terminal in the plugin-owned workspace."""
-        if not self.project_folder:
+        if not self.setup_folder:
             QMessageBox.warning(
                 self,
                 "Project Folder Required",
@@ -336,5 +336,5 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             return None
         if self._terminal_dialog is None:
             self._terminal_dialog = ProjectTerminalDialog(self)
-        self._terminal_dialog.show_for_directory(workspace_folder(self.project_folder))
+        self._terminal_dialog.show_for_directory(workspace_folder(self.setup_folder))
         return self._terminal_dialog

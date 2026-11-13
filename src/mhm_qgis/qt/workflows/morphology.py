@@ -84,7 +84,7 @@ class MorphologyTaskBridge:
 
         def start(stage, advance):
             if (stage.condition == "gauged_outlets" and not (
-                    gauges and configured_gauged_outlet_ids(self.dialog.project_folder))) or (
+                    gauges and configured_gauged_outlet_ids(self.dialog.setup_folder))) or (
                     stage.condition == "no_gauges" and gauges):
                 QtCore.QTimer.singleShot(0, advance)
                 return True
@@ -121,12 +121,12 @@ class MorphologyTaskBridge:
         from ...core.executions.morphology import delineation
         from ...core.handlers.state import domain_state
 
-        folder = self.dialog.project_folder
+        folder = self.dialog.setup_folder
         domain_state.save_state(folder, {**domain_state.load_state(folder), "outlets": {}, "outlet_order": []})
         return self.coordinator.submit(
             "execute-all-whole-dem-domain",
             "Prepare the DEM-extent domain",
-            partial(delineation.domain_mask, project_folder=folder, filled_dem=self.filled_dem_path,
+            partial(delineation.domain_mask, setup_folder=folder, filled_dem=self.filled_dem_path,
                     crs=self.dialog.selected_meteo_crs()),
             resource="morphology-files",
             on_success=done,
@@ -136,7 +136,7 @@ class MorphologyTaskBridge:
     def start_gauge_position(self, *, key="gauge-position", done=None, failed=None):
         """Burn the locations already saved by Domain Delineator."""
         try:
-            gauges = configured_gauge_points(self.dialog.project_folder)
+            gauges = configured_gauge_points(self.dialog.setup_folder)
         except Exception as error:
             lifecycle.fail(self.dialog, "Gauge Position", error, failed)
             return False
@@ -162,7 +162,7 @@ class MorphologyTaskBridge:
 
     def _setup_request(self):
         return morphology.setup.SetupRequest(
-            project_folder=self.dialog.project_folder,
+            setup_folder=self.dialog.setup_folder,
             headers=grid.grid_level_headers(self.dialog),
             crs=self.dialog.selected_meteo_crs(),
         )
@@ -207,7 +207,7 @@ class MorphologyTaskBridge:
 
             source = netcdf_source(source, config["variable"])
         options = lai.task_options(
-            self.dialog.project_folder,
+            self.dialog.setup_folder,
             source,
             self.filled_dem_path,
             crs=layers.crs_string(self.dialog.get_crs()),
@@ -220,7 +220,7 @@ class MorphologyTaskBridge:
             if done is not None:
                 done(None)
             return True
-        save_lai_nml_input(self.dialog.project_folder, config)  # the time step chosen in the LAI dialog
+        save_lai_nml_input(self.dialog.setup_folder, config)  # the time step chosen in the LAI dialog
         os.makedirs(os.path.dirname(options["output_path"]), exist_ok=True)
         digest = commands.stage_digest(
             (options["source_path"], options["filled_dem"]),
@@ -264,7 +264,7 @@ class MorphologyTaskBridge:
         if result:
             lifecycle.register(self.dialog, result)
             if digest:
-                commands.record_stage(self.dialog.project_folder, "lai", digest, (result,))
+                commands.record_stage(self.dialog.setup_folder, "lai", digest, (result,))
             self.dialog.log_message(
                 f"LAI resampled to the filled DEM grid: {result}")
         if done is not None:
@@ -279,7 +279,7 @@ class MorphologyTaskBridge:
         pointless rebuild.
         """
         payload = commands.reusable_stage(
-            self.dialog.project_folder,
+            self.dialog.setup_folder,
             stage,
             digest,
             inputs=inputs,
@@ -337,7 +337,7 @@ class MorphologyTaskBridge:
         lookup = {name: config[name] for name in ("lookup_table", "mapping_field", "class_field")} \
             if rows and config.get("lookup_table") else None
         job = {
-            "project_folder": self.dialog.project_folder,
+            "setup_folder": self.dialog.setup_folder,
             "kind": kind,
             "input_path": source,
             "classdefinition_path": config.get("classdefinition_path", ""),
@@ -373,7 +373,7 @@ class MorphologyTaskBridge:
             kind,
             digest,
             inputs=inputs,
-            outputs=categorical.saved_outputs(self.dialog.project_folder, kind),
+            outputs=categorical.saved_outputs(self.dialog.setup_folder, kind),
         ) if reuse_existing else None
         if reusable:
             result = {"kind": kind, "outputs": reusable["outputs"]}
@@ -390,7 +390,7 @@ class MorphologyTaskBridge:
         value = advanced_input(self.dialog, kind)
         job = {
             "kind": kind,
-            "project_folder": str(self.dialog.project_folder),
+            "setup_folder": str(self.dialog.setup_folder),
             "version": selected_version(self.dialog),
             "value": value,
             "filled_dem": self.filled_dem_path,
@@ -398,7 +398,7 @@ class MorphologyTaskBridge:
         if kind == "lc":
             from ...core.handlers.lookup import validate_land_use_input
             from ...core.handlers.state.nml_settings import load_settings
-            times = load_settings(self.dialog.project_folder).get("time", {})
+            times = load_settings(self.dialog.setup_folder).get("time", {})
             validate_land_use_input(value, simulation_start=times.get("sim_start"),
                                     simulation_end=times.get("sim_end"), version=job["version"])
         from ...core.morphology.layers.advanced_inputs import input_fingerprint
@@ -467,7 +467,7 @@ class MorphologyTaskBridge:
             lifecycle.register(self.dialog, output)
         self._categorical_complete(result["kind"], published or outputs)
         if digest and not reused:
-            commands.record_stage(self.dialog.project_folder, result["kind"], digest, outputs)
+            commands.record_stage(self.dialog.setup_folder, result["kind"], digest, outputs)
         if done is not None:
             done(result)
 
@@ -502,18 +502,18 @@ class MorphologyTaskBridge:
                         log=self.dialog.log_message,
                     )
                 )
-                permanent = Path(temp_morphology_folder(self.dialog.project_folder)) / f"_{kind}_input{Path(materialized).suffix}"
+                permanent = Path(temp_morphology_folder(self.dialog.setup_folder)) / f"_{kind}_input{Path(materialized).suffix}"
                 shutil.copy2(materialized, permanent)
                 local = str(permanent)
-        geometry = Path(temp_morphology_folder(self.dialog.project_folder))
-        staging = Path(morph_staging_folder(self.dialog.project_folder))
+        geometry = Path(temp_morphology_folder(self.dialog.setup_folder))
+        staging = Path(morph_staging_folder(self.dialog.setup_folder))
         staging.mkdir(parents=True, exist_ok=True)
         output = staging / f"{spec['ready_name']}{categorical_output_suffix(kind)}"
         definition = staging / spec["definition"] if spec.get("definition") else None
         metadata = geometry / "geology_class_metadata.json" if kind == "geology" else None
         removals = [
-            *categorical.ready_paths(self.dialog.project_folder, kind),
-            *categorical.intermediate_paths(self.dialog.project_folder, kind)[1:],
+            *categorical.ready_paths(self.dialog.setup_folder, kind),
+            *categorical.intermediate_paths(self.dialog.setup_folder, kind)[1:],
             # An older run staged this raster under a different extension;
             # publication would otherwise place both.
             *(staging / f"{spec['ready_name']}{suffix}"
@@ -555,7 +555,7 @@ class MorphologyTaskBridge:
         if kind == "soil":
             record_standard_soil_output(self.dialog, None, str(definition) if definition else None)
         categorical.record_namelist(
-            self.dialog.project_folder,
+            self.dialog.setup_folder,
             kind,
             output,
             mode=self.dialog.categorical_input_mode(kind),
@@ -569,7 +569,7 @@ class MorphologyTaskBridge:
             outputs.append(Path(result["metadata"]))
         self._categorical_complete(kind, outputs, reused=reused)
         if digest and not reused:
-            commands.record_stage(self.dialog.project_folder, kind, digest, outputs)
+            commands.record_stage(self.dialog.setup_folder, kind, digest, outputs)
         if not reused:
             self.dialog.log_message(
                 f'{SPECS[kind]["label"]} data prepared successfully.')
@@ -580,9 +580,9 @@ class MorphologyTaskBridge:
         from ...core.morphology.layers.advanced_inputs import record_products
 
         if digest:
-            commands.record_stage(self.dialog.project_folder, result["kind"], digest, result["outputs"])
+            commands.record_stage(self.dialog.setup_folder, result["kind"], digest, result["outputs"])
         # fresh or reused: the handoff names the products (as _lookup_ready's record_namelist)
-        record_products(self.dialog.project_folder, result["kind"], result["outputs"],
+        record_products(self.dialog.setup_folder, result["kind"], result["outputs"],
                         selected_version(self.dialog))
         for output in result["outputs"]:
             lifecycle.register(self.dialog, output)
@@ -598,7 +598,7 @@ class MorphologyTaskBridge:
         for path in paths:
             lifecycle.register(self.dialog, path)
         processing.mark_workflow(
-            self.dialog.project_folder,
+            self.dialog.setup_folder,
             f"{'land_cover' if kind == 'lc' else kind}_processing",
             "completed",
             outputs=[os.path.abspath(path) for path in paths],

@@ -52,7 +52,7 @@ def opened(tmp_path, monkeypatch):
     monkeypatch.setattr(host, "settings", lambda: QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat))
     dialog = MhmQgisDialog()
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32644"))
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     yield dialog, truth
     _wait(lambda: not dialog.task_coordinator.is_busy())
     post_context.end_workspace(dialog)
@@ -177,7 +177,7 @@ def opened_long(tmp_path, monkeypatch):
     monkeypatch.setattr(host, "settings", lambda: QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat))
     dialog = MhmQgisDialog()
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32644"))
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     yield dialog, truth, tmp_path
     _wait(lambda: not dialog.task_coordinator.is_busy())
     post_context.end_workspace(dialog)

@@ -146,8 +146,8 @@ def invalidate_grid(dialog):
         return
     dialog._grid_l2_metadata = None
     dialog._grid_l2_header = None
-    if dialog.project_folder:
-        processing.overlay(dialog.project_folder, {"grid": {}})
+    if dialog.setup_folder:
+        processing.overlay(dialog.setup_folder, {"grid": {}})
         invalidate_workflows(
             dialog,
             "scan_precipitation",
@@ -176,6 +176,10 @@ def crs_changed(dialog):
 
 def set_crs(dialog):
     """Apply a changed domain CRS: L0 again, and the morphology and meteorology runs are due."""
+    if not dialog.setup_folder:
+        QMessageBox.warning(dialog, "Domain setup", "Create a new domain setup or open an existing "
+                            "one (Open) before setting the CRS.")
+        return
     authid = dialog.get_crs().authid()
     if authid == dialog._set_crs:
         return
@@ -246,8 +250,8 @@ def set_dem(dialog):
         return
     if (dialog._study_extent, factor) != previous:
         invalidate_grid(dialog)
-    if factor != previous[1] and dialog.project_folder:
-        for path in Path(temp_morphology_folder(dialog.project_folder)).glob("2_channel_network.*"):
+    if factor != previous[1] and dialog.setup_folder:
+        for path in Path(temp_morphology_folder(dialog.setup_folder)).glob("2_channel_network.*"):
             path.unlink()  # drawn on the old L0: Set Gauges again
     dialog.save_input_state()
     from .. import project_tree
@@ -291,9 +295,9 @@ def precipitation_scanned(dialog, metadata):
         grid["configuration_fingerprint"] = grid_fingerprint(dialog)
         previous = dialog._grid_l2_metadata or {}
         if previous.get("configuration_fingerprint") != grid["configuration_fingerprint"]:
-            processing.mark_workflow(dialog.project_folder, "execute_all_morphology", "pending")
-            processing.mark_workflow(dialog.project_folder, "execute_all_meteo", "pending")
-        processing.save_grid_metadata(dialog.project_folder, grid)
+            processing.mark_workflow(dialog.setup_folder, "execute_all_morphology", "pending")
+            processing.mark_workflow(dialog.setup_folder, "execute_all_meteo", "pending")
+        processing.save_grid_metadata(dialog.setup_folder, grid)
         update_l2_resolution_from_metadata(dialog, grid)
         dialog.save_input_state()
         dialog.label_precipitationResolutionValue.setText(format_resolution(converted.resolution, converted.unit))
@@ -301,7 +305,7 @@ def precipitation_scanned(dialog, metadata):
         dialog.label_precipitationResolutionMultiplier.setText(str(converted.resolution / current_l0_resolution(dialog)))
         dialog.label_precipitationStartTimeValue.setText(metadata.start_time[:16])
         dialog.label_precipitationEndTimeValue.setText(metadata.end_time[:16])
-        if not load_settings(dialog.project_folder).get("time"):
+        if not load_settings(dialog.setup_folder).get("time"):
             for key, name in time.TIME_WIDGETS.items():
                 text = metadata.end_time if key == "sim_end" else metadata.start_time
                 value = QDateTime.fromString(text[:16] if selected_version(dialog).startswith("6") else text[:10] + "T00:00", "yyyy-MM-ddTHH:mm")
@@ -494,7 +498,7 @@ def process_lat_lon(dialog):
         QMessageBox.warning(dialog, "Create LatLon", error)
         return False
     request = morphology_setup.SetupRequest(
-        project_folder=dialog.project_folder,
+        setup_folder=dialog.setup_folder,
         headers=grid_level_headers(dialog),
         crs=dialog.selected_meteo_crs(),
     )
@@ -539,8 +543,8 @@ def update_l0_resolution_from_dem(dialog, layer=None, *, refresh=True):
 
 def update_l2_resolution_from_metadata(dialog, metadata=None):
     """Show L2 resolution from saved meteo grid metadata or existing headers."""
-    if metadata is None and dialog.project_folder:
-        metadata = processing.grid_metadata(dialog.project_folder)
+    if metadata is None and dialog.setup_folder:
+        metadata = processing.grid_metadata(dialog.setup_folder)
 
     header = None
     unit = ""
@@ -558,10 +562,10 @@ def update_l2_resolution_from_metadata(dialog, metadata=None):
             metadata["l2_header"] = header
             metadata["l2_resolution"] = header["cellsize"]
             metadata["l2_unit"] = unit
-    elif dialog.project_folder:
+    elif dialog.setup_folder:
         unit = dialog._grid_l0_info.get("unit", "") if dialog._grid_l0_info else ""
         header = read_header_file(
-            os.path.join(data_folder(dialog.project_folder), "meteo", "pre", "header.txt"),
+            os.path.join(data_folder(dialog.setup_folder), "meteo", "pre", "header.txt"),
             unit=unit,
         )
         if header:

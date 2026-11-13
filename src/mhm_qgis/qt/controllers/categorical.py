@@ -223,7 +223,7 @@ def uses_advanced_categorical_input(dialog, kind):
 def set_input(dialog, kind):
     """The page's Set: read the checked type's widgets, apply them, commit the type."""
     text, title = _checked(dialog, kind), f"{_LABELS[kind][0].upper()}{_LABELS[kind][1:]} input"
-    if not dialog.project_folder:
+    if not dialog.setup_folder:
         QMessageBox.warning(dialog, "Project Folder Required",
                             f"Select a project folder before configuring {_LABELS[kind]} inputs.")
         return
@@ -436,10 +436,10 @@ def _land_use_periods(dialog):
         tuple(LandUsePeriod(start, end, Path(path)) for path, start, end in _rows(dialog, "lc_lookup")),
         Path(_combo_path(table)), mapping.currentText().strip(), class_field.currentText().strip(),
         _crs(dialog, "lc_lookup"))
-    times = load_settings(dialog.project_folder).get("time", {})
+    times = load_settings(dialog.setup_folder).get("time", {})
     validate_land_use_input(value, simulation_start=times.get("sim_start", "1900-01-01T00:00:00"),
                             simulation_end=times.get("sim_end", "2101-01-01T00:00:00"),
-                            version=project_version(dialog.project_folder))
+                            version=project_version(dialog.setup_folder))
     return value
 
 
@@ -447,7 +447,7 @@ def _land_use_periods(dialog):
 
 def fill(dialog):
     """The saved inputs into the pages' widgets, and each committed type's radio and page."""
-    folder = dialog.project_folder
+    folder = dialog.setup_folder
     for kind in KINDS:
         ready = dialog._categorical_ready_configs.get(kind) or {}
         combo, _, definition, _ = _widgets(dialog, _READY_WIDGETS[kind])
@@ -507,7 +507,7 @@ def _configure_ready(dialog, kind, config):
         # A LAI series, not the class grid: the NetCDF File input takes it (with its time step).
         dialog._lai_input_config = {"input_path": config.input_path, "variable": config.variable,
                                     "source_crs": getattr(config, "source_crs", "")}
-        _populate_file_combo(dialog.comboBox_laiNetCDFInput, dialog.project_folder, "lai", config.input_path)
+        _populate_file_combo(dialog.comboBox_laiNetCDFInput, dialog.setup_folder, "lai", config.input_path)
         _restore_raster_details(dialog.comboBox_laiNetCDFInput, dialog._lai_input_config)
         main.check(dialog, "lai", "NetCDF File")
         show_type(dialog, "lai", "NetCDF File")
@@ -546,7 +546,7 @@ def _configure_lookup(dialog, kind, config):
     dialog._categorical_ready_configs.pop(kind, None)
     if kind == "lai":
         dialog._lai_input_config = {}
-        update_section(dialog.project_folder, "lai", {
+        update_section(dialog.setup_folder, "lai", {
             "mode": "single_categorical",
             **dialog._categorical_lookup_configs["lai"],
             "processing_status": "not_implemented",
@@ -568,25 +568,25 @@ def _configure_lai_netcdf(dialog, _kind, config):
         "source_crs": getattr(config, "source_crs", ""),
     }
     dialog._categorical_lookup_configs.pop("lai", None)
-    save_lai_nml_input(dialog.project_folder, dialog._lai_input_config)
+    save_lai_nml_input(dialog.setup_folder, dialog._lai_input_config)
     return True
 
 
-def save_lai_nml_input(project_folder, config):
+def save_lai_nml_input(setup_folder, config):
     """The LAI NetCDF handoff from the dialog's choice: comboBox_timestepLAIInput's
     text becomes `time_step` (mHM `lai_time_step`). Execute All writes it again from
     the saved choice, so a lost section comes back."""
     from ...externals.mhm_tools_handler import lai_time_step
 
     target = config.get("target_timestep") or "Long Term Mean Monthly Gridded Data"
-    update_section(project_folder, "lai", {
+    update_section(setup_folder, "lai", {
         "mode": "netcdf",
         "source_path": config.get("input_path", ""),
         "source_variable": config.get("variable", ""),
         "target_timestep": target,
         "time_step": lai_time_step(target),
         "output_path": relative_workspace_path(
-            project_folder, os.path.join(lai_folder(project_folder), "lai.nc")
+            setup_folder, os.path.join(lai_folder(setup_folder), "lai.nc")
         ),
         "variable": "lai",
     })
@@ -608,7 +608,7 @@ def _configure_multi_horizon_soil(dialog, _kind, value):
 # --- Namelist handoff -----------------------------------------------------
 
 def save_land_cover_nml_input(dialog, value):
-    update_section(dialog.project_folder, "land_cover", {
+    update_section(dialog.setup_folder, "land_cover", {
         "mode": "historical" if len(value.periods) > 1 else "single",
         "variable": "land_cover",
         "lookup_table": str(value.lookup_table),
@@ -637,22 +637,22 @@ def save_soil_nml_input(dialog, value):
         "bulk_density_unit": "g/cm3",
         "composition_normalization": "component_sum_percent",
     })
-    update_section(dialog.project_folder, "soil", data)
+    update_section(dialog.setup_folder, "soil", data)
 
 
 def save_standard_soil_nml_input(dialog, mode, output_path=None, classdefinition_path=None):
-    if not dialog.project_folder:
+    if not dialog.setup_folder:
         return
-    folder = morph_folder(dialog.project_folder)
-    update_section(dialog.project_folder, "soil", {
+    folder = morph_folder(dialog.setup_folder)
+    update_section(dialog.setup_folder, "soil", {
         "mode": mode,
         "soil_db_mode": 0,
         "output_path": relative_workspace_path(
-            dialog.project_folder, output_path or os.path.join(folder, "soil_class.asc")
+            dialog.setup_folder, output_path or os.path.join(folder, "soil_class.asc")
         ),
         "variable": "soil_class",
         "classdefinition_path": relative_workspace_path(
-            dialog.project_folder,
+            dialog.setup_folder,
             classdefinition_path or os.path.join(folder, "soil_classdefinition.txt"),
         ),
         "horizons": [],

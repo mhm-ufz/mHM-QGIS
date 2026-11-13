@@ -285,7 +285,7 @@ def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_pat
     monkeypatch.setattr(forcing, "selected_meteo_specs", lambda _dialog: ())
     monkeypatch.setattr(time, "values", lambda _dialog: {})
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.check_prerequisites = lambda: True
     dialog.task_coordinator.set_progress = lambda key, value: progress.append((key, value))
 
@@ -334,7 +334,7 @@ def test_small_negative_forcing_asks_then_reruns_clipped_or_fails(monkeypatch, t
     monkeypatch.setattr(workflow_state.QMessageBox, "critical",
                         lambda _parent, _title, message: failures.append(message))
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.check_prerequisites = lambda: True
     dialog._meteo_inputs = {"pre": {"kind": "pre", "folder": str(tmp_path)}}
 

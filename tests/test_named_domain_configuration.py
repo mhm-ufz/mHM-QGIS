@@ -28,7 +28,7 @@ def test_domain_paths_states_and_namelists_are_isolated(tmp_path, version):
         processing.overlay(root, {"test": number})
         assert paths.workspace_folder(root) == str(root)
         assert paths.data_folder(root) == str(root / "data")
-        values = build_initial_values(version, SimpleNamespace(project_folder=root))["main"]
+        values = build_initial_values(version, SimpleNamespace(setup_folder=root))["main"]
         if version.startswith("5"):
             assert values["directories_general"]["file_LatLon"] == ["data/latlon.nc"]
         else:
@@ -103,7 +103,7 @@ def test_v6_prepared_outputs_are_registered_for_namelists(tmp_path):
     register_observations(root, {"sm": root / "data/observation/sm.nc"},
                           (observation,), v6=True)
 
-    values = build_initial_values("6", SimpleNamespace(project_folder=root))["main"]
+    values = build_initial_values("6", SimpleNamespace(setup_folder=root))["main"]
     inputs = values["config_input"]
     assert inputs["morph_mask_path"] == ["data/morph/morph_mask.nc"]
     assert inputs["morph_mask_var"] == ["mask"]
@@ -198,18 +198,18 @@ def test_switching_domains_restores_only_the_selected_setup(tmp_path, monkeypatc
     dialog.project_directory = str(tmp_path)
     project.populate_domains(dialog)
     project.create_structure(dialog)
-    first = Path(dialog.project_folder)
+    first = Path(dialog.setup_folder)
     dialog.spinBox_L2ResolutionMultiplier.setValue(4)
     dialog._meteo_inputs = {"tavg": asdict(MeteoFolderSpec("tavg", str(tmp_path), unit="K"))}
     dialog.save_input_state()
     dialog.comboBox_domainFolderSelector.setCurrentIndex(dialog.comboBox_domainFolderSelector.count() - 1)
     project.create_structure(dialog)
-    assert Path(dialog.project_folder).name == "Valley"
+    assert Path(dialog.setup_folder).name == "Valley"
     assert dialog._meteo_inputs == {}
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 1
     dialog.comboBox_domainFolderSelector.setCurrentIndex(dialog.comboBox_domainFolderSelector.findData("Alpine"))
     project.create_structure(dialog)
-    assert Path(dialog.project_folder) == first
+    assert Path(dialog.setup_folder) == first
     assert dialog.spinBox_L2ResolutionMultiplier.value() == 4
     assert set(dialog._meteo_inputs) == {"tavg"}
     assert dialog.tableWidget_meteoInputs.rowCount() == 1
@@ -223,8 +223,8 @@ def test_meteo_dialog_cancel_and_edit_do_not_prepare_data(tmp_path, monkeypatch)
     from mhm_qgis.qt.dialogs.meteo_var_details_input import MeteoVarDetailsDialog
     from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(paths.domain_folder(tmp_path, "Alpine"))
-    layout.ensure_project_structure(dialog.project_folder, "6")
+    dialog.setup_folder = str(paths.domain_folder(tmp_path, "Alpine"))
+    layout.ensure_project_structure(dialog.setup_folder, "6")
     spec = MeteoFolderSpec("tavg", str(tmp_path), unit="K", temporal_resolution="Hourly")
     dialog._meteo_inputs = {"tavg": asdict(spec)}
     def cancel(prompt):
@@ -237,5 +237,5 @@ def test_meteo_dialog_cancel_and_edit_do_not_prepare_data(tmp_path, monkeypatch)
     forcing.populate_meteo_table(dialog)
     dialog.tableWidget_meteoInputs.cellWidget(0, 7).click()
     assert dialog._meteo_inputs["tavg"] == asdict(spec)
-    assert not list(Path(dialog.project_folder).rglob("*.nc"))
+    assert not list(Path(dialog.setup_folder).rglob("*.nc"))
     dialog.close()

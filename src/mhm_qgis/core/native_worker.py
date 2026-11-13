@@ -102,7 +102,7 @@ def run(job):
             "kind": job["kind"],
             "output": str(output),
         }
-    common = (job["project_folder"], job["version"])
+    common = (job["setup_folder"], job["version"])
     if job["kind"] == "lc":
         outputs = process_land_cover_input(
             *common, _land_use(job["value"]), job["filled_dem"]

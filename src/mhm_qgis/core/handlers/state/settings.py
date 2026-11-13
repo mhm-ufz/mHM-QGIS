@@ -9,9 +9,9 @@ DEFAULTS = {"max_snap_buffer_distance": 1000.0}
 PACKAGED_SETTINGS = Path(__file__).parents[3] / "settings.yaml"
 
 
-def ensure(project_folder):
+def ensure(setup_folder):
     """Copy defaults once, never overwriting a project's choices."""
-    path = Path(settings_path(project_folder))
+    path = Path(settings_path(setup_folder))
     path.parent.mkdir(parents=True, exist_ok=True)
     content = PACKAGED_SETTINGS.read_text(encoding="utf-8")
     try:
@@ -22,10 +22,10 @@ def ensure(project_folder):
     return path
 
 
-def read(project_folder=None, *, path=None):
+def read(setup_folder=None, *, path=None):
     """Reload the supported flat numeric YAML settings and validate their units."""
     path = Path(path) if path is not None else (
-        ensure(project_folder) if project_folder else PACKAGED_SETTINGS
+        ensure(setup_folder) if setup_folder else PACKAGED_SETTINGS
     )
     values = dict(DEFAULTS)
     try:

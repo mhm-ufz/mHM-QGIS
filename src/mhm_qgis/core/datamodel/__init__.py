@@ -142,19 +142,19 @@ def feasible_cases(version, available) -> dict[str, list[int]]:
     return result
 
 
-def read_namelists(project_folder) -> dict:
+def read_namelists(setup_folder) -> dict:
     """The setup's saved namelists, read through its version's schemas and project."""
     from ...externals.nml_tools_handler import read_namelists as read
     from ..handlers.file import json as jsonio
 
-    version = layout.project_version(project_folder)
-    combined = jsonio.read_mapping(layout.input_state_path(project_folder)).get("setup") == "multi"
-    return read(project_folder, schemas_folder(version), project=namelist_project(version, combined))
+    version = layout.project_version(setup_folder)
+    combined = jsonio.read_mapping(layout.input_state_path(setup_folder)).get("setup") == "multi"
+    return read(setup_folder, schemas_folder(version), project=namelist_project(version, combined))
 
 
-def current_processes(project_folder) -> dict[str, int] | None:
+def current_processes(setup_folder) -> dict[str, int] | None:
     """Process cases from the saved main namelist, or None before it is saved."""
-    return _processes(read_namelists(project_folder))
+    return _processes(read_namelists(setup_folder))
 
 
 @cache
@@ -191,36 +191,36 @@ def _netcdf_variables(path):
         return set(dataset.variables)
 
 
-def _present(project_folder, spec) -> bool:
+def _present(setup_folder, spec) -> bool:
     locate = spec.get("locate", {})
     if "meteo" in locate:
-        paths = layout.expected_meteo_outputs(project_folder).get(locate["meteo"])
+        paths = layout.expected_meteo_outputs(setup_folder).get(locate["meteo"])
         return bool(paths) and paths["netcdf"].is_file()
     if "morph" in locate:
         names = locate["morph"] if isinstance(locate["morph"], list) else [locate["morph"]]
-        folder = Path(layout.morph_folder(project_folder))
-        if layout.is_v6(project_folder):
+        folder = Path(layout.morph_folder(setup_folder))
+        if layout.is_v6(setup_folder):
             bundled = _netcdf_variables(folder / "input.nc")
             return any(name in bundled or (folder / f"{name}.nc").is_file() for name in names)
         return any(registry.first_existing(registry.variants(folder / f"{name}.asc")) for name in names)
     if "lai" in locate:
-        return (Path(layout.lai_folder(project_folder)) / f"{locate['lai']}.nc").is_file()
+        return (Path(layout.lai_folder(setup_folder)) / f"{locate['lai']}.nc").is_file()
     if locate.get("latlon"):
-        return (Path(data_folder(project_folder)) / "latlon.nc").is_file()
+        return (Path(data_folder(setup_folder)) / "latlon.nc").is_file()
     return False
 
 
-def check(project_folder, processes=None) -> list[Finding]:
+def check(setup_folder, processes=None) -> list[Finding]:
     """One finding per needed input; `ok` is False for what is missing, and why."""
-    version = layout.project_version(project_folder)
+    version = layout.project_version(setup_folder)
     rules = load_rules(version)
     if processes is None:
-        processes = current_processes(project_folder) or {}
+        processes = current_processes(setup_folder) or {}
     findings = []
     for key, reasons in required_inputs(version, processes).items():
         names = key.split("|")
         specs = [rules["inputs"][name] for name in names]
-        ok = any(_present(project_folder, spec) for spec in specs)
+        ok = any(_present(setup_folder, spec) for spec in specs)
         label = " or ".join(spec.get("label", name) for name, spec in zip(names, specs, strict=True))
         add = next((spec["add"] for spec in specs if spec.get("add")), "")
         message = "" if ok else (
@@ -232,7 +232,7 @@ def check(project_folder, processes=None) -> list[Finding]:
         findings.append(Finding("process", "Process combination", False, [], text))
     from ..morphology.layers.advanced_l0 import missing_model_inputs
 
-    for path in missing_model_inputs(project_folder):
+    for path in missing_model_inputs(setup_folder):
         findings.append(Finding(path, "Namelist input file", False, ["nml-settings.json"],
                                 f"Missing {path}, named in the namelist handoff."))
     return findings
@@ -292,10 +292,10 @@ def _switch_on(version, values, output) -> bool | None:
     return bool(values.get(namelist or switches["namelist"], {}).get(name.lower(), False))
 
 
-def outputs_on(project_folder) -> list[str] | None:
+def outputs_on(setup_folder) -> list[str] | None:
     """The outputs switched on in the saved output namelist; None without one."""
-    version = layout.project_version(project_folder)
-    values = read_namelists(project_folder)
+    version = layout.project_version(setup_folder)
+    values = read_namelists(setup_folder)
     if output_registry(version)["switches"][version_key(version)]["namelist"] not in values:
         return None
     return [output for output in output_registry(version)["outputs"] if _switch_on(version, values, output)]
@@ -323,10 +323,10 @@ def _output_problems(version, values, processes, output) -> list[str]:
     return problems + _process_problems(processes, spec)
 
 
-def dropped_outputs(project_folder) -> list[str]:
+def dropped_outputs(setup_folder) -> list[str]:
     """Switched-on outputs whose process is off, which mHM drops: "output (why)"."""
-    version = layout.project_version(project_folder)
-    values = read_namelists(project_folder)
+    version = layout.project_version(setup_folder)
+    values = read_namelists(setup_folder)
     processes, outputs = _processes(values) or {}, output_registry(version)["outputs"]
     return [f"{output} ({'; '.join(problems)})" for output, spec in outputs.items()
             if _switch_on(version, values, output) and (problems := _process_problems(processes, spec))]
@@ -341,12 +341,12 @@ def why_not_written(version, values, output) -> str:
     return f"Not written by this run. Turn on {key} in the output namelist." if key else "Not written by this run."
 
 
-def check_outputs(project_folder, analyses=None) -> list[Finding]:
+def check_outputs(setup_folder, analyses=None) -> list[Finding]:
     """Before a run: is each needed output switched on, and is its process active?"""
-    version = layout.project_version(project_folder)
+    version = layout.project_version(setup_folder)
     analyses = analyses or list(output_registry(version)["analyses"])
-    values = read_namelists(project_folder)
-    processes = current_processes(project_folder) or {}
+    values = read_namelists(setup_folder)
+    processes = current_processes(setup_folder) or {}
     findings = []
     for output, users in required_outputs(version, analyses).items():
         problems = _output_problems(version, values, processes, output)
@@ -357,11 +357,11 @@ def check_outputs(project_folder, analyses=None) -> list[Finding]:
     return findings
 
 
-def output_step_days(project_folder) -> float | None:
+def output_step_days(setup_folder) -> float | None:
     """The output interval in days from the saved output namelist (0 = whole run)."""
-    version = layout.project_version(project_folder)
+    version = layout.project_version(setup_folder)
     switches = output_registry(version)["switches"][version_key(version)]
-    values = read_namelists(project_folder)
+    values = read_namelists(setup_folder)
     step = values.get(switches["namelist"], {}).get(switches["step"])
     if step is None:
         return None
@@ -376,12 +376,12 @@ def output_step_days(project_folder) -> float | None:
     return step / 24
 
 
-def available_analyses(project_folder, period_days=None) -> dict[str, list[str]]:
+def available_analyses(setup_folder, period_days=None) -> dict[str, list[str]]:
     """Analysis -> reasons it is unavailable ([] = available)."""
-    version = layout.project_version(project_folder)
+    version = layout.project_version(setup_folder)
     registry_ = output_registry(version)
-    by_output = {f.input: f for f in check_outputs(project_folder)}
-    step = output_step_days(project_folder)
+    by_output = {f.input: f for f in check_outputs(setup_folder)}
+    step = output_step_days(setup_folder)
     result = {}
     for name, spec in registry_["analyses"].items():
         reasons = [problem for o in spec.get("needs", []) if o in by_output for problem in by_output[o].reasons]

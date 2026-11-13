@@ -306,7 +306,7 @@ def test_ready_files_and_categorical_soil_horizons_become_stacks_on_l0(tmp_path)
 
     ensure_project_structure(tmp_path, "5.13")
     write_json(input_state_path(tmp_path), {"mhm_version": "5.13"})
-    job = {"project_folder": str(tmp_path), "input_path": "", "target_crs": "EPSG:32632",
+    job = {"setup_folder": str(tmp_path), "input_path": "", "target_crs": "EPSG:32632",
            "target_header": L0, "source_crs": "EPSG:32632"}
     land = [[_tif(tmp_path / "lc_1990.tif", 3), "1990-01-01T00:00:00", "1999-12-31T00:00:00"],
             [_tif(tmp_path / "lc_2000.tif", 5, origin=(0.0, 200.0), cellsize=50.0, size=4),
@@ -346,7 +346,7 @@ def test_a_table_crs_places_all_its_layers(tmp_path):
     write_json(input_state_path(tmp_path), {"mhm_version": "5.13"})
     land = [[_tif(tmp_path / "bare.tif", 3, crs=False), "1990-01-01T00:00:00", "1999-12-31T00:00:00"],
             [_tif(tmp_path / "own.tif", 5), "2000-01-01T00:00:00", "2010-12-31T00:00:00"]]
-    job = {"project_folder": str(tmp_path), "input_path": "", "target_crs": "EPSG:32632", "target_header": L0,
+    job = {"setup_folder": str(tmp_path), "input_path": "", "target_crs": "EPSG:32632", "target_header": L0,
            "kind": "lc", "layers": land, "source_crs": "EPSG:32632"}
     with Dataset(commands.ready(None, job)["outputs"][0]) as handle:
         assert (handle["land_cover"][0, 2, 1], handle["land_cover"][1, 2, 1]) == (3, 5)
@@ -381,7 +381,7 @@ def test_vector_soil_horizons_burn_through_the_lookup_onto_the_dem_grid(tmp_path
     table.write_text("value,class,CLAY[%],SAND[%],BD[gcm-3]\n7,1,20,40,1.4\n8,2,30,30,1.3\n", encoding="utf-8")
     soil = [[_tif(tmp_path / "top.tif", 7), 0, 300], [f"{tmp_path / 'soil.gpkg'}|layername=horizon2", 300, 1000]]
     lookup = {"lookup_table": str(table), "mapping_field": "value", "class_field": "class"}
-    job = {"project_folder": str(tmp_path), "input_path": "", "target_crs": "EPSG:32632", "target_header": L0,
+    job = {"setup_folder": str(tmp_path), "input_path": "", "target_crs": "EPSG:32632", "target_header": L0,
            "source_crs": "EPSG:32632", "kind": "soil", "layers": soil, "lookup": lookup, "filled_dem": dem}
 
     staged = commands.ready(None, job)["outputs"]

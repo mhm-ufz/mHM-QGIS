@@ -288,11 +288,11 @@ def clear(dialog) -> None:
 def populate(dialog, rescan=False) -> None:
     """List the runs of the open setup; reopen the selected one when asked or when new."""
     state = dialog._post
-    if not dialog.project_folder:
+    if not dialog.setup_folder:
         clear(dialog)
         return
     try:
-        refs = runs.list_runs(dialog.project_folder)
+        refs = runs.list_runs(dialog.setup_folder)
     except (OSError, ValueError) as error:
         dialog.log_message(f"WARNING: Could not list the runs: {error}")
         refs = []
@@ -476,7 +476,7 @@ def archive(dialog) -> None:
     if not ok or not name.strip():
         return
     note, _ = QInputDialog.getText(dialog, "Archive run", "Note (optional):")
-    folder = dialog.project_folder
+    folder = dialog.setup_folder
 
     def done(refs):
         from . import model

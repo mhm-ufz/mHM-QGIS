@@ -77,9 +77,9 @@ def normalized_mode(value: object) -> str:
     return "lookup_table" if "lookup_table" in text else text
 
 
-def intermediate_paths(project_folder, kind: str) -> tuple[Path, ...]:
+def intermediate_paths(setup_folder, kind: str) -> tuple[Path, ...]:
     """Return raw, cropped and masked geometry outputs for ``kind``."""
-    path = Path(temp_morphology_folder(project_folder)) / SPECS[kind]["geometry"]
+    path = Path(temp_morphology_folder(setup_folder)) / SPECS[kind]["geometry"]
     return (
         path,
         path.with_name(f"{path.stem}_crop{path.suffix}"),
@@ -87,20 +87,20 @@ def intermediate_paths(project_folder, kind: str) -> tuple[Path, ...]:
     )
 
 
-def ready_paths(project_folder, kind: str) -> tuple[Path, ...]:
+def ready_paths(setup_folder, kind: str) -> tuple[Path, ...]:
     """Return every supported final-file variant for ``kind``."""
     spec = SPECS[kind]
-    folder = Path(morph_folder(project_folder))
+    folder = Path(morph_folder(setup_folder))
     return tuple(
         folder / f"{spec['ready_name']}{suffix}"
         for suffix in (".asc", ".nc", ".tif", ".tiff", ".prj", ".PRJ")
     )
 
 
-def saved_outputs(project_folder, kind: str) -> tuple[Path, ...]:
+def saved_outputs(setup_folder, kind: str) -> tuple[Path, ...]:
     """Return the complete configured output set when it still exists."""
     section = "land_cover" if kind == "lc" else kind
-    configured = load_settings(project_folder).get(section, {})
+    configured = load_settings(setup_folder).get(section, {})
     if not isinstance(configured, dict):
         return ()
     values = []
@@ -113,7 +113,7 @@ def saved_outputs(project_folder, kind: str) -> tuple[Path, ...]:
     values.extend(
         configured.get(name) for name in ("output_path", "classdefinition_path")
     )
-    root = Path(workspace_folder(project_folder))
+    root = Path(workspace_folder(setup_folder))
     outputs: list[Path] = []
     for value in values:
         if not value:
@@ -126,7 +126,7 @@ def saved_outputs(project_folder, kind: str) -> tuple[Path, ...]:
 
 
 def record_namelist(
-    project_folder,
+    setup_folder,
     kind: str,
     output,
     *,
@@ -137,7 +137,7 @@ def record_namelist(
     """Record one categorical product for the namelist handoff."""
     value = {
         "mode": normalized_mode(mode),
-        "output_path": relative_workspace_path(project_folder, output),
+        "output_path": relative_workspace_path(setup_folder, output),
         "variable": {
             "lc": "land_cover",
             "soil": "soil_class",
@@ -149,16 +149,16 @@ def record_namelist(
         value["time_step"] = 0
     if definition is not None and Path(definition).is_file():
         value["classdefinition_path"] = relative_workspace_path(
-            project_folder, definition
+            setup_folder, definition
         )
     for key in ("lookup_table", "mapping_field", "class_field"):
         if lookup and lookup.get(key):
             value[key] = lookup[key]
-    update_section(project_folder, "land_cover" if kind == "lc" else kind, value)
+    update_section(setup_folder, "land_cover" if kind == "lc" else kind, value)
 
 
 def copy_ready(
-    project_folder,
+    setup_folder,
     kind: str,
     source,
     *,
@@ -177,7 +177,7 @@ def copy_ready(
         raise ValueError(
             f"mHM-ready {spec['label']} input must be a local ASC, NetCDF, or TIFF raster."
         )
-    target = Path(morph_staging_folder(project_folder)) / (
+    target = Path(morph_staging_folder(setup_folder)) / (
         spec["ready_name"] + ".nc"
     )
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -187,13 +187,13 @@ def copy_ready(
     )
     existing_definition = target.parent / definition_name if definition_name else None
     if spec.get("definition") and not definition_source and existing_definition.is_file():
-        definition_source = Path(morph_folder(project_folder)) / definition_name
+        definition_source = Path(morph_folder(setup_folder)) / definition_name
 
     if target_header and ready_layers(source, variable) > 1:
         if kind not in STACKS:
             raise ValueError(f"mHM-ready {spec['label']} input must have one layer.")
         return _stage_ready_stack(
-            project_folder, kind, source, variable, definition_source, definition_name,
+            setup_folder, kind, source, variable, definition_source, definition_name,
             source_crs=source_crs, target_crs=target_crs, target_header=target_header, task=task,
         )
     with TemporaryDirectory(prefix=f"mhm_qgis_{kind}_ready_", dir=target.parent) as name:
@@ -250,7 +250,7 @@ def copy_ready(
 
     definition = target.parent / definition_name if definition_name else None
     record_namelist(
-        project_folder,
+        setup_folder,
         kind,
         target,
         mode=mode,
@@ -259,7 +259,7 @@ def copy_ready(
     return tuple(path for _source, path in replacements)
 
 
-def _stage_ready_stack(project_folder, kind, source, variable, definition_source, definition_name, *,
+def _stage_ready_stack(setup_folder, kind, source, variable, definition_source, definition_name, *,
                        source_crs, target_crs, target_header, task=None) -> tuple[Path, ...]:
     """Warp every period (land cover) or horizon (soil) of a ready NetCDF onto L0 like a
     single layer (nearest, -9999 outside), keeping that dimension and its bounds."""
@@ -275,7 +275,7 @@ def _stage_ready_stack(project_folder, kind, source, variable, definition_source
         definition_name = "soil_classdefinition_iFlag_soilDB_1.txt"
         if not definition_source or not Path(definition_source).is_file():
             raise ValueError("mHM-ready soil horizons need their class definition file.")
-    staging = Path(morph_staging_folder(project_folder))
+    staging = Path(morph_staging_folder(setup_folder))
     target = staging / f"{stem}.nc"
     with TemporaryDirectory(prefix=f"mhm_qgis_{kind}_ready_", dir=staging) as folder:
         temporary = Path(folder)
@@ -308,9 +308,9 @@ def _stage_ready_stack(project_folder, kind, source, variable, definition_source
         _publish(replacements, [staging / f"{SPECS[kind]['ready_name']}.nc"], temporary)
 
     definition = staging / definition_name if definition_name else None
-    record_namelist(project_folder, kind, target, mode="mhm_ready", definition=definition)
+    record_namelist(setup_folder, kind, target, mode="mhm_ready", definition=definition)
     section = "land_cover" if kind == "lc" else "soil"
-    record = load_settings(project_folder)[section]
+    record = load_settings(setup_folder)[section]
     if kind == "lc":
         def year(value):  # the nearest 1 January
             when = num2date(value, units, calendar)
@@ -321,11 +321,11 @@ def _stage_ready_stack(project_folder, kind, source, variable, definition_source
         record.update(soil_db_mode=1, horizons=[
             {"horizon": index, "upper_depth": float(lo) * scale, "lower_depth": float(hi) * scale}
             for index, (lo, hi) in enumerate(edges, 1)])
-    update_section(project_folder, section, record)
+    update_section(setup_folder, section, record)
     from ...handlers.store.layout import is_v6
     from .advanced_inputs import record_products
 
-    record_products(project_folder, kind, (target,), "6" if is_v6(project_folder) else "5.13")
+    record_products(setup_folder, kind, (target,), "6" if is_v6(setup_folder) else "5.13")
     return (target, definition) if definition and definition.is_file() else (target,)
 
 
@@ -368,7 +368,7 @@ __all__ = [
 ]
 
 
-def stack_ready_layers(project_folder, kind, layers, *, source_crs="", target_crs, target_header,
+def stack_ready_layers(setup_folder, kind, layers, *, source_crs="", target_crs, target_header,
                        task=None) -> Path:
     """Single-layer rasters as the ready stack `_stage_ready_stack` reads: rows (path, a, b) with
     a period (land cover: start, end dates, the end inclusive) or depths (soil: upper, lower in mm),
@@ -382,7 +382,7 @@ def stack_ready_layers(project_folder, kind, layers, *, source_crs="", target_cr
     from ...handlers.raster.tasks import warp_raster_to_header
 
     stem, name = STACKS[kind]
-    staging = Path(morph_staging_folder(project_folder))
+    staging = Path(morph_staging_folder(setup_folder))
     staging.mkdir(parents=True, exist_ok=True)
     output = staging / f"_{stem}_layers.nc"
     arrays, projection = [], ""

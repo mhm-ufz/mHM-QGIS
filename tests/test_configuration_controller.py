@@ -45,8 +45,8 @@ class Terminal:
 
 
 class Dialog:
-    def __init__(self, project_folder: Path, version: str = "6.0") -> None:
-        self.project_folder = str(project_folder)
+    def __init__(self, setup_folder: Path, version: str = "6.0") -> None:
+        self.setup_folder = str(setup_folder)
         self.comboBox_mHMversion = ComboBox(version)
         stamp = SimpleNamespace(toString=lambda _format: "2001-01-01T00:00")
         for name in TIME_WIDGETS.values():
@@ -255,7 +255,7 @@ def test_run_name_combo_lists_runs_and_prompts_for_new_name(tmp_path, monkeypatc
 
     from mhm_qgis.core.post import runs
 
-    dialog = SimpleNamespace(project_folder=str(tmp_path), comboBox_runName=QComboBox())
+    dialog = SimpleNamespace(setup_folder=str(tmp_path), comboBox_runName=QComboBox())
     monkeypatch.setattr(
         runs,
         "list_runs",

@@ -19,13 +19,13 @@ from . import categorical, forcing, grid, main, model, process_cases, time, vers
 
 
 def _state_path(dialog):
-    return input_state_path(dialog.project_folder) if dialog.project_folder else None
+    return input_state_path(dialog.setup_folder) if dialog.setup_folder else None
 
 
 def save(dialog):
     """Save selected inputs to a JSON file in the project folder."""
     if (
-        not dialog.project_folder
+        not dialog.setup_folder
         or dialog._loading_input_state
         or dialog._suspend_input_state_saves
     ):
@@ -153,7 +153,7 @@ def load(dialog):
             from ...externals.mhm_handler import recover_v5_mrm_outputs
 
             try:
-                recover_v5_mrm_outputs(dialog.project_folder)
+                recover_v5_mrm_outputs(dialog.setup_folder)
             except (OSError, RuntimeError) as error:
                 dialog.log_message(f"WARNING: Could not recover mrm_outputs.nml: {error}")
         _restore_combo_text(dialog.comboBox_mHMversion, state.get("mhm_version", ""))
@@ -247,7 +247,7 @@ def clear(dialog):
     dialog.checkBox_gaugeOption.setChecked(False)
     main.check(dialog, "gauges", "Point Input")
     main.show_gauge_type(dialog)
-    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.project_folder, "gauges", "")
+    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.setup_folder, "gauges", "")
     dialog._preferred_l1_resolution = None
     dialog._preferred_l11_resolution = None
     dialog.task_coordinator.set_max_threads(2)
@@ -356,7 +356,7 @@ def _restore_domain_inputs(dialog, state):
     if not preferred:
         from ...core.handlers.state.domain_state import load_state
 
-        preferred = str(load_state(dialog.project_folder).get("outlet_id_field", ""))
+        preferred = str(load_state(dialog.setup_folder).get("outlet_id_field", ""))
     main.populate_pour_point_outlet_fields(
         dialog, preferred=preferred
     )
@@ -369,7 +369,7 @@ def _restore_domain_inputs(dialog, state):
     dialog.checkBox_gaugeOption.setChecked(bool(state.get("gauges", text)))  # older setups: gauges if a domain was defined
     main.check(dialog, "gauges", "Raster Input" if state.get("gauge_input") == "raster" else "Point Input")
     main.show_gauge_type(dialog)
-    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.project_folder, "gauges", state.get("gauge_raster", ""))
+    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.setup_folder, "gauges", state.get("gauge_raster", ""))
 
 
 def _restore_meteo_inputs(dialog, state):

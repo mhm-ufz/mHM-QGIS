@@ -72,7 +72,7 @@ def _outside_period(dialog, variable, metadata):
     """Why `metadata` does not span the saved simulation period (by date), or None."""
     from ...core.handlers.state.nml_settings import load_settings
 
-    period = load_settings(dialog.project_folder).get("time") or {}
+    period = load_settings(dialog.setup_folder).get("time") or {}
     start, end = period.get("sim_start", "")[:10], period.get("sim_end", "")[:10]
     if start and end and (metadata.start_time[:10] > start or metadata.end_time[:10] < end):
         return (f"{variable} data cover {metadata.start_time[:10]} to {metadata.end_time[:10]}, "
@@ -171,7 +171,7 @@ def _submit_scan(dialog, key, variable, spec, scanned, failed, controls):
     return dialog.task_coordinator.submit(
         key, f"Scan {variable}",
         lambda task: inspect_meteo_folder_cached(
-            dialog.project_folder, spec, cancelled=task.isCanceled),
+            dialog.setup_folder, spec, cancelled=task.isCanceled),
         controls=controls, on_success=scanned, on_error=failed,
         resource="morphology-files")
 

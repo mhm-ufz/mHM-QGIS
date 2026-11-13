@@ -26,7 +26,7 @@ def start(dialog):
         target_grid = target_grid_from_header(metadata["l2_header"], dialog.selected_meteo_crs())
         target_grid.validate()
         return meteo.MeteorologyRun(
-            project_folder=Path(dialog.project_folder),
+            setup_folder=Path(dialog.setup_folder),
             inputs=forcing.selected_meteo_specs(dialog),
             target_grid=target_grid,
             grid_metadata=dict(metadata),
@@ -37,7 +37,7 @@ def start(dialog):
         def log(message):  # Runs on the worker thread.
             coordinator.log.emit(TASK_KEY, message)
 
-        state = MeteorologyOutputState(dialog.project_folder, log=log)
+        state = MeteorologyOutputState(dialog.setup_folder, log=log)
 
         def prepare(task):
             # A worker thread must not raise a modal dialog: failures come back through

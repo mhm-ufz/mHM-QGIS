@@ -22,7 +22,7 @@ from . import lifecycle
 
 def path(dialog, name):
     """Return a fixed file in the domain's morphology workspace."""
-    return str(Path(temp_morphology_folder(dialog.project_folder)) / name)
+    return str(Path(temp_morphology_folder(dialog.setup_folder)) / name)
 
 
 def filled_dem_path(dialog):
@@ -39,7 +39,7 @@ def _dem_ready(dialog):
 
 def domain_prepared(dialog):
     """The drainage network and flow accumulation the Domain Delineator opens on exist (Set Gauges)."""
-    return bool(dialog.project_folder) and _dem_ready(dialog) and os.path.isfile(channel_network_path(dialog))
+    return bool(dialog.setup_folder) and _dem_ready(dialog) and os.path.isfile(channel_network_path(dialog))
 
 
 def _locked(dialog, controls):
@@ -64,7 +64,7 @@ def dem_options(dialog):
     data = combo.currentData()
     configured_crs = data.get("source_crs", "") if isinstance(data, dict) else ""
     layer = combo.currentLayer()
-    folder = Path(temp_morphology_folder(dialog.project_folder))
+    folder = Path(temp_morphology_folder(dialog.setup_folder))
     return {
         "source": source,
         "output_folder": str(folder),

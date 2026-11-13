@@ -111,7 +111,7 @@ def test_saved_state_controls_gauge_and_domain_counts(tmp_path: Path, monkeypatc
         "Dialog",
         (),
         {
-            "project_folder": str(tmp_path),
+            "setup_folder": str(tmp_path),
             "input_combo": lambda self, kind: selector,
             "label_numberOfGaugedOutletsValue": label,
         },
@@ -127,7 +127,7 @@ def test_configured_project_keeps_one_domain_minimum(tmp_path: Path) -> None:
         tmp_path,
         {"outlet_id_field": "outlet_id", "outlets": {"1": {"is_domain": False}}},
     )
-    dialog = type("Dialog", (), {"project_folder": str(tmp_path)})()
+    dialog = type("Dialog", (), {"setup_folder": str(tmp_path)})()
 
     assert domain_count(dialog) == 1
 

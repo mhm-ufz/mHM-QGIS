@@ -91,7 +91,7 @@ def navigation(folder):  # noqa: PLR0915
     assert raster_window_range(workflow.flow_accumulation_path, (0, 0, 1000, 1000))[1] > 1
     hydrology_files(workflow.filled_dem_path, channel_path=workflow.channel_network_path, threshold_cells=1)
     main = QDialog()
-    main.project_folder = str(folder)
+    main.setup_folder = str(folder)
     main.get_crs = lambda: QgsCoordinateReferenceSystem("EPSG:32632")
     main.log_message = Mock()
     main.selected_input_file_paths = list
