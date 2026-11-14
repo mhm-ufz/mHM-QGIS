@@ -218,9 +218,9 @@ class Grid(Resolution):
         raw_l2_extent: Extent | None = None,
         raw_l2_crs: str | None = None,
     ) -> Grid:
-        """The common L0/L2 grid: `bounds` snapped inward to whole blocks of `block` L0 cells
-        (a multiple of the L2 `multiplier`), on the L2 lattice when the raw L2 grid anchors it.
-        Inward edges stay inside every extent `bounds` came from, so nothing is padded."""
+        """The common L0/L2 grid: `bounds` snapped outward to whole blocks of `block` L0 cells
+        (a multiple of the L2 `multiplier`), on the L2 lattice when the raw L2 grid anchors it, so
+        every level nests exactly."""
         ratio = _positive_integer(multiplier)
         block = _positive_integer(block or ratio)
         if block % ratio:
@@ -254,13 +254,7 @@ class Grid(Resolution):
         # A gap below half an L0 cell shifts the meteo grid onto the L0 lattice; only another
         # spacing or CRS resamples it.
         resampling = not comparable
-        try:
-            exact_l0, blocks = aligned_l0_l2_headers(
-                requested_extent.bounds, normalized_l0, block, unit, anchor=anchor, inward=True)
-        except ValueError as error:
-            raise ValueError(f"No whole block of {block} L0 cells ({block * l0_resolution:.10g} {unit}) fits inside "
-                             "the common extent: untick an extent, or use L1/L11 factors that divide the L2 "
-                             "factor.") from error
+        exact_l0, blocks = aligned_l0_l2_headers(requested_extent.bounds, normalized_l0, block, unit, anchor=anchor)
         per_block = block // ratio
         l2 = {**blocks, "ncols": blocks["ncols"] * per_block, "nrows": blocks["nrows"] * per_block,
               "cellsize": ratio * l0_resolution}
@@ -525,8 +519,8 @@ def raster_grids_match(
     return left_projection == right_projection
 
 
-def _header(bounds, cellsize, anchor_x, anchor_y, unit, inward=False):
-    """Whole cells on the anchored lattice: covering `bounds`, or with `inward` inside them."""
+def _header(bounds, cellsize, anchor_x, anchor_y, unit):
+    """Whole cells on the anchored lattice covering `bounds`."""
     extent = Extent.from_bounds(bounds)
 
     def index(value, anchor, upper):
@@ -537,10 +531,8 @@ def _header(bounds, cellsize, anchor_x, anchor_y, unit, inward=False):
             return int(nearest)
         return math.ceil(quotient) if upper else math.floor(quotient)
 
-    x0, x1 = index(extent.xmin, anchor_x, inward), index(extent.xmax, anchor_x, not inward)
-    y0, y1 = index(extent.ymin, anchor_y, inward), index(extent.ymax, anchor_y, not inward)
-    if inward and (x1 <= x0 or y1 <= y0):
-        raise ValueError(f"No whole cell of {cellsize:.10g} fits inside the extent.")
+    x0, x1 = index(extent.xmin, anchor_x, False), index(extent.xmax, anchor_x, True)
+    y0, y1 = index(extent.ymin, anchor_y, False), index(extent.ymax, anchor_y, True)
     return {
         "ncols": max(1, x1 - x0),
         "nrows": max(1, y1 - y0),
@@ -557,8 +549,8 @@ def header_for_bounds(bounds, cellsize: float, unit: str | None = None) -> dict:
     return _header(bounds, float(cellsize), 0.0, 0.0, unit)
 
 
-def header_for_aligned_bounds(bounds, cellsize, anchor_x, anchor_y, unit=None, *, inward=False) -> dict:
-    return _header(bounds, float(cellsize), float(anchor_x), float(anchor_y), unit, inward)
+def header_for_aligned_bounds(bounds, cellsize, anchor_x, anchor_y, unit=None) -> dict:
+    return _header(bounds, float(cellsize), float(anchor_x), float(anchor_y), unit)
 
 
 def header_for_existing_bounds(reference_header: Mapping, cellsize: float, unit=None) -> dict:
@@ -629,7 +621,7 @@ def header_for_model_level(
     return result
 
 
-def aligned_l0_l2_headers(bounds, l0_header, multiplier, unit=None, *, anchor=None, inward=False):
+def aligned_l0_l2_headers(bounds, l0_header, multiplier, unit=None, *, anchor=None):
     ratio = _positive_integer(multiplier)
     source = dict(l0_header)
     l0_cellsize = float(source.get("exact_cellsize", source.get("cellsize", 0)))
@@ -641,7 +633,7 @@ def aligned_l0_l2_headers(bounds, l0_header, multiplier, unit=None, *, anchor=No
         raise ValueError("The L0 grid requires a lower-left anchor.") from error
     anchor_x, anchor_y = anchor or source_anchor
     resolved_unit = unit or str(source.get("unit", "") or "")
-    l2 = header_for_aligned_bounds(bounds, ratio * l0_cellsize, anchor_x, anchor_y, resolved_unit, inward=inward)
+    l2 = header_for_aligned_bounds(bounds, ratio * l0_cellsize, anchor_x, anchor_y, resolved_unit)
     exact_l0 = {
         **l2,
         "ncols": int(l2["ncols"]) * ratio,
@@ -769,8 +761,9 @@ def inner_bounds(bounds: Sequence[float], source_crs: str, target_crs: str) -> t
     return box
 
 
-def aligned_window(source_header: Mapping, target_header: Mapping, *, label="raster") -> dict:
-    """Return integer copy offsets for two aligned grids without opening files."""
+def aligned_window(source_header: Mapping, target_header: Mapping, *, label="raster", shift=False) -> dict:
+    """Return integer copy offsets for two aligned grids without opening files; with `shift`, a source
+    off the target lattice is moved onto it (by at most half a cell) instead of refused."""
     source, target = standardize_header(source_header), standardize_header(target_header)
     cellsize = target["cellsize"]
     tolerance = max(abs(cellsize) * 1e-8, 1e-12)
@@ -779,7 +772,7 @@ def aligned_window(source_header: Mapping, target_header: Mapping, *, label="ras
 
     def offset(value, name):
         nearest = round(value)
-        if not math.isclose(value, nearest, rel_tol=0, abs_tol=1e-7):
+        if not shift and not math.isclose(value, nearest, rel_tol=0, abs_tol=1e-7):
             raise ValueError(f"{label} {name} is not aligned to the target cell grid.")
         return int(nearest)
 

@@ -78,7 +78,11 @@ def test_reference_files_set_the_common_grid_the_dem_and_precipitation_cover(tmp
 
     _browse(dialog, monkeypatch, "L0", dem)
     assert dialog.lineEdit_L0Resolution.text() == repr(0.5)
-    assert (dialog.label_descriptionL0File.text(), dialog.label_nColsL0File.text()) == ("dem.tif", "4")
+    assert dialog.pushButton_browseL0File.toolTip() == str(dem)
+    assert dialog.label_nColsL0File.text() == "4"
+    assert not dialog.toolButton_descriptionL0File.isEnabled()  # nothing to describe before Set
+    assert "eye-off.svg" in dialog.label_displayL0File.text()  # a loaded file can be shown
+    assert dialog.label_displayL1File.text() == ""
     _browse(dialog, monkeypatch, "L2", folder / "wanted.nc", "pre")
     assert (dialog.spinBox_L2ResolutionMultiplier.value(), dialog.lineEdit_L2Resolution.text()) == (2, repr(1.0))
     assert dialog.label_fileL2ResolutionMultiplier.text() == "2"
@@ -88,13 +92,18 @@ def test_reference_files_set_the_common_grid_the_dem_and_precipitation_cover(tmp
     dialog.pushButton_setLatLon.click()
     assert not warnings
     assert (dialog.label_nColsL0Common.text(), dialog.label_nColsL2Common.text()) == ("4", "2")
-    assert dialog.label_descriptionL2File.text() == "used as is"
+    assert dialog.toolButton_descriptionL2File.isEnabled()
+    assert dialog.toolButton_descriptionL2File.toolTip() == "Used as is."
     from mhm_qgis.qgis_bridge.display import grid as grid_display
 
     drawn = []
-    monkeypatch.setattr(grid_display, "display_grids", lambda _dialog, levels: drawn.append(levels))
-    dialog.label_displayL2GridCommon.linkActivated.emit("L2")  # its 👁
-    assert drawn == [["L2"]]
+    monkeypatch.setattr(grid_display, "display_grids", lambda _dialog, levels: drawn.append(levels) or ["mHM L2 grid"])
+    assert "eye-off.svg" in dialog.label_displayL2GridCommon.text()
+    dialog.label_displayL2GridCommon.linkActivated.emit("grid:L2")  # its eye
+    assert (drawn, dialog._displayed) == ([["L2"]], {"grid:L2": "mHM L2 grid"})
+    assert "eye.svg" in dialog.label_displayL2GridCommon.text()
+    dialog.label_displayL2GridCommon.linkActivated.emit("grid:L2")
+    assert "eye-off.svg" in dialog.label_displayL2GridCommon.text()  # hidden again
     assert (tmp_path / "data" / "latlon.nc").is_file() or list(tmp_path.rglob("latlon.nc"))
     common = grid.require_common_grid(dialog)
     assert (common["l2_ratio_to_l0"], common["study_bounds"]) == (2, [9.5, 11.5, 49.5, 51.5])
@@ -103,7 +112,7 @@ def test_reference_files_set_the_common_grid_the_dem_and_precipitation_cover(tmp
     dialog.input_combo("dem").setLayer(QgsRasterLayer(str(dem), "DEM"))
     dialog.pushButton_setDEM.click()
     assert dialog._dem_error is None
-    assert dialog.label_demDescription.text().startswith("covers the common extent")
+    assert dialog.label_demDescription.text() == "Used as is."
 
     dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "meteo_pre"))
     forcing.submit_meteo_input(dialog, "pre", MeteoFolderSpec("pre", folder, unit="mm", pattern="wanted*.nc"))
@@ -136,6 +145,20 @@ def test_reference_files_set_the_common_grid_the_dem_and_precipitation_cover(tmp
     dialog.close()
 
 
+def test_the_reference_dialogs_browse_button_reads_the_picked_raster(tmp_path, monkeypatch):
+    from mhm_qgis.qt.dialogs import browse_resolution_L2_L1_L11_file as module
+    from mhm_qgis.qt.dialogs.browse_resolution_L0_file import L0FileDialog
+
+    dem = tmp_path / "dem.tif"
+    _geotiff(dem, 4, 4, (9.5, .5, 0, 51.5, 0, -.5), 4326)
+    monkeypatch.setattr(module, "open_file", lambda *_args: (str(dem), "Rasters (*.tif *.tiff *.asc *.nc)"))
+    prompt = L0FileDialog("L0", QgsCoordinateReferenceSystem("EPSG:4326"))
+    prompt.pushButton_browseRasterInput.click()
+    assert prompt.comboBox_rasterInput.currentText() == str(dem)
+    assert (prompt.label_rasterResolutionValue.text(), prompt.error) == ("0.5", "")
+    prompt.close()
+
+
 def test_a_value_changed_from_its_file_is_blue_with_the_reason(tmp_path, monkeypatch):
     dem = tmp_path / "dem.tif"
     _geotiff(dem, 4, 4, (9.5, .5, 0, 51.5, 0, -.5), 4326)
@@ -148,15 +171,23 @@ def test_a_value_changed_from_its_file_is_blue_with_the_reason(tmp_path, monkeyp
         getattr(dialog, f"spinBox_{level}ResolutionMultiplier").setValue(2)
     dialog.pushButton_setLatLon.click()  # only L0's extent ticked
     common = grid.require_common_grid(dialog)
-    assert common["study_bounds"] == [10.0, 11.0, 50.0, 51.0]  # whole L2 cells inside the DEM
-    assert dialog.label_nColsL2Common.text().startswith('<span style="color:#1565c0">1</span>')
-    assert "intersection of the ticked extents (L0)" in dialog._header_notes["L2:ncols"]
-    assert "edge cells cropped" in dialog.label_descriptionL2File.text()
+    assert common["study_bounds"] == [9.0, 12.0, 49.0, 52.0]  # whole L2 cells around the DEM
+    assert dialog.label_nColsL0Common.text().startswith('<span style="color:#1565c0">6</span>')
+    assert dialog.label_nColsL2Common.text() == "3"  # as the file
+    note = dialog._header_notes["L0:ncols"]
+    assert "intersection of the ticked extents (L0), snapped outward" in note
+    assert note.endswith("6 columns of 0.5 instead of the L0 file's 4 of 0.5.\n"
+                         "Padded with no data: 1 column west, 1 column east.")
+    description = dialog.toolButton_descriptionL0File.toolTip()
+    assert description == "Padded with no data: 1 column west, 1 column east, 1 row south, 1 row north."
+    assert dialog.toolButton_descriptionL2File.toolTip() == "Used as is."
     shown = []
-    monkeypatch.setattr(grid.QToolTip, "showText", lambda _pos, text, _widget: shown.append(text))
-    dialog.label_nColsL2Common.linkActivated.emit("L2:ncols")
-    assert shown == [dialog._header_notes["L2:ncols"]]
+    monkeypatch.setattr(grid.QMessageBox, "information", lambda _parent, _title, text: shown.append(text))
+    dialog.label_nColsL0Common.linkActivated.emit("L0:ncols")  # the ⓘ
+    dialog.toolButton_descriptionL0File.click()
+    assert shown == [note, description]
     dialog.checkBox_extentL0enforce.setChecked(False)
+    assert not dialog.toolButton_descriptionL0File.isEnabled()  # an input changed: Set again
     warnings = []
     monkeypatch.setattr(grid.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
     dialog.pushButton_setLatLon.click()
@@ -178,7 +209,7 @@ def test_a_dem_off_the_l0_grid_is_refused_with_the_reason(tmp_path, monkeypatch)
         getattr(dialog, f"lineEdit_{level}Resolution").setText("200")
     dialog.pushButton_setLatLon.click()
     assert not warnings
-    assert grid.require_common_grid(dialog)["l0_header"]["ncols"] == 3  # 7 cells / 2, inward
+    assert grid.require_common_grid(dialog)["l0_header"]["ncols"] == 4  # 7 cells / 2, outward
     dialog.input_combo("dem").setLayer(QgsRasterLayer(str(dem), "DEM"))
     dialog.pushButton_setDEM.click()
     assert len(warnings) == 1
@@ -187,7 +218,8 @@ def test_a_dem_off_the_l0_grid_is_refused_with_the_reason(tmp_path, monkeypatch)
     dialog.spinBox_upscaleTopographyFactor.setValue(2)
     dialog.pushButton_setDEM.click()
     assert dialog._dem_error is None
-    assert "topography upscaled x 2" in dialog.label_demDescription.text()
+    assert dialog.label_demDescription.text() == (  # in the DEM's own 100 m cells
+        "Topography upscaled x 2 (mhm-tools).\nPadded with no data: 1 column east, 1 row north.")
     dialog.close()
 
 
@@ -254,4 +286,32 @@ def test_a_failed_scan_from_the_popup_keeps_the_entered_values(tmp_path, monkeyp
     monkeypatch.setattr(MeteoVarDetailsDialog, "exec", lambda prompt: seen.append(prompt.draft()) or 0)
     forcing.edit_meteo_input(dialog, "tavg")
     assert (seen[0]["folder"], seen[0]["pattern"]) == (str(source), "bad*.nc")
+    dialog.close()
+
+
+def test_the_steps_say_what_is_cropped_and_what_is_added():
+    from mhm_qgis.core.grid import Extent
+
+    assert grid._edges(Extent(0, 10, 0, 10), Extent(2, 12, 0, 9.5), 1, 0.01) == [
+        "Cropped: 2 columns west, 0.5 rows north.", "Padded with no data: 2 columns east."]
+
+
+def test_the_snapped_extent_must_stay_inside_the_meteo_grid(tmp_path, monkeypatch):
+    warnings = []
+    monkeypatch.setattr(grid.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
+    dem = tmp_path / "dem.tif"
+    _geotiff(dem, 4, 4, (9.5, .5, 0, 51.5, 0, -.5), 4326)
+    folder = tmp_path / "precipitation"
+    _precipitation(folder, [50.75, 50.25], [10.25, 10.75])  # 0.5-degree cells: 10..11 x 50..51, inside the DEM
+    dialog = _open(tmp_path)
+    _browse(dialog, monkeypatch, "L0", dem)
+    _browse(dialog, monkeypatch, "L2", folder / "wanted.nc", "pre")
+    for level in ("L1", "L11"):
+        getattr(dialog, f"spinBox_{level}ResolutionMultiplier").setValue(2)
+    dialog.pushButton_setLatLon.click()  # L0 ticked: 1-degree blocks on the meteo lattice, 9..12 x 49..52
+    assert len(warnings) == 1
+    assert "reaches beyond the L2 (meteo) grid: 2 cells west, 2 cells east, 2 cells south, 2 cells north" in warnings[0]
+    dialog.checkBox_extentL2enforce.setChecked(True)  # the meteo extent bounds it now
+    dialog.pushButton_setLatLon.click()
+    assert grid.require_common_grid(dialog)["study_bounds"] == [10.0, 11.0, 50.0, 51.0]
     dialog.close()

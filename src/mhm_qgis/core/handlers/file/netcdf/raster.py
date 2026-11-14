@@ -121,8 +121,9 @@ def write_array(path, name, array, reference, nodata):
     return str(path)
 
 
-def copy_rasters(path, sources, header=None, *, reference_path=None, mask=None, task=None):
-    """Copy named GDAL sources onto one exact grid; never interpolate L0."""
+def copy_rasters(path, sources, header=None, *, reference_path=None, mask=None, task=None, shift=False):
+    """Copy named GDAL sources onto one exact grid; never interpolate L0. With `shift`, sources off its
+    lattice are moved onto it by at most half a cell (see `aligned_window`)."""
     import numpy as np
     from osgeo import gdal, gdal_array
 
@@ -135,7 +136,7 @@ def copy_rasters(path, sources, header=None, *, reference_path=None, mask=None, 
     reference = None
     if not projection:
         raise ValueError("The NetCDF reference grid has no CRS.")
-    aligned_window(reference_header, header)
+    aligned_window(reference_header, header, shift=shift)
     with _writer(path, header, projection) as handle:
         for name, uri in sources.items():
             dataset = gdal.Open(str(uri))
@@ -145,7 +146,7 @@ def copy_rasters(path, sources, header=None, *, reference_path=None, mask=None, 
                 if not crs_equal(dataset.GetProjection(), projection):
                     raise ValueError(f"Raster CRS differs from the reference: {uri}")
                 window = aligned_window(header_from_geotransform(
-                    dataset.GetGeoTransform(), dataset.RasterXSize, dataset.RasterYSize), header)
+                    dataset.GetGeoTransform(), dataset.RasterXSize, dataset.RasterYSize), header, shift=shift)
                 band = dataset.GetRasterBand(1)
                 nodata = band.GetNoDataValue()
                 nodata = -9999 if nodata is None else nodata

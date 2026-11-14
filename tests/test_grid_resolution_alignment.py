@@ -50,7 +50,7 @@ def test_resolution_and_grid_keep_exact_values_and_level_extents():
     assert grid.l0 == 10
     assert grid.l2 == 30
     assert grid.l0_extent == Extent(100, 1100, 200, 1200)
-    assert grid.l2_extent == grid.common_extent == Extent(130, 970, 230, 800)  # whole L2 cells inside
+    assert grid.l2_extent == grid.common_extent == Extent(100, 1000, 200, 830)  # whole L2 cells covering it
     assert not grid.requires_l2_resampling
 
 
@@ -89,7 +89,7 @@ def test_a_gap_below_half_an_l0_cell_shifts_and_another_crs_resamples():
     assert other.requires_l2_resampling
 
 
-def test_the_common_extent_keeps_only_the_precipitation_cells_inside_it():
+def test_the_common_extent_takes_the_precipitation_cells_around_it():
     grid = Grid.for_meteorology(
         {**L0_ANCHOR, "ncols": 100, "nrows": 100},
         (415, 585, 418, 512),
@@ -101,20 +101,18 @@ def test_the_common_extent_keeps_only_the_precipitation_cells_inside_it():
         raw_l2_crs="EPSG:32632",
     )
 
-    assert grid.common_extent == Extent(430, 580, 440, 500)  # whole 30 m precipitation cells, inside
+    assert grid.common_extent == Extent(400, 610, 410, 530)  # whole 30 m precipitation cells around it
     assert grid.l0_header["ncols"] == 3 * grid.l2_header["ncols"]
-    assert grid.l0_header["xllcorner"] == 430
+    assert grid.l0_header["xllcorner"] == 400
     assert grid.l0_header["cellsize"] == 10
 
 
-def test_blocks_of_the_lcm_snap_inward_so_every_level_nests():
+def test_blocks_of_the_lcm_snap_outward_so_every_level_nests():
     grid = Grid.for_meteorology({**L0_ANCHOR, "ncols": 100, "nrows": 100}, (115, 985, 218, 812), 3, block=6,
                                 crs="EPSG:32632", unit="m")
 
-    assert grid.common_extent == Extent(160, 940, 260, 800)  # 60 m blocks from the L0 corner, inside
-    assert (grid.l2_header["ncols"], grid.l0_header["ncols"]) == (26, 78)
-    with pytest.raises(ValueError, match="No whole block of 6 L0 cells"):
-        Grid.for_meteorology({**L0_ANCHOR, "ncols": 100, "nrows": 100}, (115, 150, 218, 250), 3, block=6, unit="m")
+    assert grid.common_extent == Extent(100, 1000, 200, 860)  # 60 m blocks from the L0 corner, around it
+    assert (grid.l2_header["ncols"], grid.l0_header["ncols"]) == (30, 90)
     with pytest.raises(ValueError, match="not a multiple"):
         Grid.for_meteorology({**L0_ANCHOR, "ncols": 100, "nrows": 100}, (115, 985, 218, 812), 3, block=4)
 
@@ -363,3 +361,45 @@ def test_raster_grid_upscales_from_the_corner_and_reads_mhm_netcdf_as_the_forcin
                        "xc": [100., 110., 120.]}).to_netcdf(nc)
     header = raster_grid(f'NETCDF:"{nc}":pre', "EPSG:32632", "EPSG:32632", "m")["header"]
     assert (header["ncols"], header["nrows"], header["xllcorner"], header["yllcorner"]) == (3, 2, 100, 210)
+
+
+def test_a_netcdf_grid_is_read_from_its_axes_never_through_gdal(tmp_path, monkeypatch):
+    gdal = pytest.importorskip("osgeo.gdal")
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
+    from mhm_qgis.core.grid.raster import raster_grid
+
+    nc = tmp_path / "tp.nc"
+    xr.Dataset({"tp": (("time", "latitude", "longitude"), np.ones((2, 2, 3))), "q": (("time",), [1., 2.])},
+               coords={"time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"),
+                       "latitude": [50.95, 50.85], "longitude": [9.05, 9.15, 9.25]}).to_netcdf(nc)
+    monkeypatch.setattr(gdal, "Open", lambda *_args: pytest.fail("GDAL builds a band per time step"))
+    header = raster_grid(f'NETCDF:"{nc}":tp', "EPSG:4326", "EPSG:4326", "deg")["header"]
+    assert (header["ncols"], header["nrows"]) == (3, 2)
+    assert header["xllcorner"] == pytest.approx(9.0) and header["yllcorner"] == pytest.approx(50.8)  # noqa: PT018
+    assert raster_grid(f'NETCDF:"{nc}":tp', "EPSG:4326", "EPSG:32632", "m")["header"]["cellsize"] > 1000
+    with pytest.raises(ValueError, match=r"tp.nc: no grid information .* Select another file"):
+        raster_grid(f'NETCDF:"{nc}":q', "EPSG:4326", "EPSG:4326", "deg")
+
+
+def test_a_window_copy_shifts_a_source_off_the_lattice_only_when_asked():
+    from mhm_qgis.core.grid import aligned_window
+
+    target = {"ncols": 10, "nrows": 10, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 10.0}
+    source = {**target, "xllcorner": 23.0, "yllcorner": -4.0}  # 2.3 and -0.4 cells off
+    with pytest.raises(ValueError, match="not aligned"):
+        aligned_window(source, target)
+    window = aligned_window(source, target, shift=True)  # moved by -3 and +4: under half a cell
+    assert (window["target_x"], window["source_y"], window["copy_cols"]) == (2, 0, 8)
+
+
+def test_the_first_netcdf_slice_is_north_first(tmp_path):
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
+    from mhm_qgis.core.meteorology.forcing.api import netcdf_first_slice
+
+    values = np.arange(12, dtype="float32").reshape(2, 2, 3)
+    xr.Dataset({"tp": (("time", "latitude", "longitude"), values)},
+               coords={"time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"),
+                       "latitude": [50.0, 51.0], "longitude": [9.0, 10.0, 11.0]}).to_netcdf(tmp_path / "tp.nc")
+    assert netcdf_first_slice(tmp_path / "tp.nc", "tp").tolist() == values[0][::-1].tolist()

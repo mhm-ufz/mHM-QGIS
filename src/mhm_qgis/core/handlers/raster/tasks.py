@@ -700,7 +700,8 @@ def dem_derivative_files(
                 # Derive only on real terrain, then pad all variables once.
                 # Padding cannot create sinks or flow paths outside the DEM.
                 names = ("dem", "dem_filled", *DEM_DERIVATIVE_VARIABLES.values())
-                copy_rasters(bundle, {name: raster_source(written, name) for name in names}, header, task=task)
+                copy_rasters(bundle, {name: raster_source(written, name) for name in names}, header, task=task,
+                             shift=True)  # a DEM off the L0 lattice moves onto it (under half a cell)
                 with Dataset(bundle, "r+") as dataset:
                     dataset.input_fingerprint = digest
             else:

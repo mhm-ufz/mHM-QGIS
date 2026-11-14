@@ -61,6 +61,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._grid_l0_info = None  # the L0 file's grid x its factor
         self._grid_l2_metadata = None  # the Set common grid, see grid.set_resolution
         self._header_notes = {}  # Updated Headers: why a value differs from its file
+        self._displayed = {}  # Resolution page eyes: `L2` (a file) or `grid:L2` -> its layer name
         self._dem_error = None  # why the DEM cannot fill the common L0 grid, see grid.check_dem
         self._intro_answers = {}
         self._multi_domains = None

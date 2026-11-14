@@ -140,13 +140,16 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   (`browse_resolution_*.ui`; L0 is required, optionally upscaled by a whole factor) or a typed
   resolution / multiplier of L0. The **common extent is the study extent**: the intersection
   of the ticked files' extents (`checkBox_extent{L}enforce`; a file in another CRS gives the
-  inner box of its footprint, `grid.inner_bounds`), snapped **inward** to whole blocks of
-  lcm(L1, L11, L2 factors) L0 cells on the L2 lattice (`Grid.for_meteorology(block=)`), so
-  every level nests exactly -- v5 anchors coarse grids NW, v6 LL; they agree only then -- and
-  nothing is padded. The DEM must lie on L0 (its cell x the DEM page factor, on the lattice)
-  and cover it (`grid.check_dem`); every meteo input must cover it
+  inner box of its footprint, `grid.inner_bounds`; shrunk by 1% of an L0 cell for lat/lon
+  rounding), snapped **outward** to whole blocks of lcm(L1, L11, L2 factors) L0 cells on the L2
+  lattice (`Grid.for_meteorology(block=)`), so every level nests exactly -- v5 anchors coarse
+  grids NW, v6 LL; they agree only then. Meteo cells are never padded: Set refuses an extent that
+  leaves the L2 file's cells (`grid._inside_meteo`), and every meteo input must cover it
   (`forcing.validate_coverage`: at its Set and at Execute All Meteo; 1% of an L0 cell absorbs
-  lat/lon rounding, never a real shortfall -- the data are not moved to fit). Saved
+  lat/lon rounding, never a real shortfall). The DEM's cell (x the DEM page factor) must equal L0;
+  off the lattice it is shifted onto it by under half a cell (`copy_rasters(shift=True)` in
+  `dem_derivative_files`, never resampled), then cropped or padded with no data to the extent,
+  which it must overlap (`grid.check_dem`). Saved
   catchments must lie inside it (the mask stage refuses a cut catchment).
   `grid.validate_mhm_grid` adds mHM's rules: every level a whole multiple of L0, L11 and L1
   nested, and v5.13 only takes an even L11/L1 ratio (`mo_common_mHM_mRM_read_config.f90`).
@@ -163,8 +166,8 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
 - Compare cell-edge origins when measuring alignment. Meteo with L2's spacing and the
   processing CRS is shifted onto the L0 lattice (under half an L0 cell,
   `grid.shift_onto_header`) and window-copied -- meteo files are huge, so they are never
-  resampled for that. Only another spacing or CRS resamples (nearest). Prepared L0 is
-  never shifted.
+  resampled for that. Only another spacing or CRS resamples (nearest). Only the DEM is
+  shifted onto L0 (see above); other prepared L0 rasters never are.
 - Never round a grid-defining cell size. 1/1200 degree and 120 times that value
   must be carried verbatim: display rounding can introduce cumulative drift or
   make an exact 0.1-degree ratio fail validation. `floor_cellsize`/`ceil_cellsize`

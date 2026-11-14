@@ -530,12 +530,31 @@ def file_defaults(spec):
     return found
 
 
-def netcdf_grid(path, variable, crs):
-    """A NetCDF variable's grid as the forcing reads it, for files GDAL cannot place (mHM's `xc`/`yc`
-    with 2-D lat/lon): its cell-edge bounds (xmin, xmax, ymin, ymax), columns and rows."""
-    metadata = _inspect_file(Path(path), MeteoFolderSpec("pre", Path(path).parent, crs=crs), variable).metadata
+def netcdf_grid(path, variable, crs=None):
+    """A NetCDF variable's grid as the forcing reads it, from its axes only (GDAL builds a band per
+    time step: minutes for a long series): cell-edge bounds (xmin, xmax, ymin, ymax), columns, rows
+    and the CRS the file declares (else `crs`)."""
+    try:
+        metadata = _inspect_file(Path(path), MeteoFolderSpec("pre", Path(path).parent, crs=crs), variable).metadata
+    except (KeyError, ValueError) as error:
+        raise ValueError(f"{Path(path).name}: no grid information (lower-left corner and cell size): {error}. "
+                         "Select another file.") from error
     bounds = Extent.from_centres(metadata.bounds, metadata.x_resolution, metadata.y_resolution).bounds
-    return bounds, metadata.shape[1], metadata.shape[0]
+    return bounds, metadata.shape[1], metadata.shape[0], metadata.crs
+
+
+
+def netcdf_first_slice(path, variable):
+    """A variable's first time step as a 2-D array, north row first (for display only)."""
+    import numpy as np
+
+    with _open_dataset(Path(path)) as ds:
+        da = ds[variable]
+        y_dim, x_dim = _spatial_dims(da)
+        da = da.isel({dim: 0 for dim in da.dims if dim not in (y_dim, x_dim)}).transpose(y_dim, x_dim)
+        y = _axis_values(ds, y_dim, "y")[1]
+        values = np.asarray(da.values, dtype="float32")
+    return values[::-1] if y is not None and len(y) > 1 and float(y[0]) < float(y[-1]) else values
 
 
 def _inspect_file(

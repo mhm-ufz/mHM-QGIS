@@ -8,7 +8,7 @@ from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
 from ...core.grid import format_resolution
 from ...core.grid.raster import raster_grid
-from ...core.handlers.file.netcdf.raster import source
+from ...core.handlers.file.netcdf.raster import raster_variables, source
 from ...qgis_bridge import layers
 from ..bindings.browse_resolution_L2_L1_L11_file import bind
 from ..controllers import netcdf_asc_additional_input
@@ -34,7 +34,7 @@ class _ReferenceFile:
         self.show_grid()
 
     def browse(self):
-        path = open_file(self, f"{self.level} reference raster", "Rasters (*.tif *.tiff *.asc *.nc);;All files (*)")
+        path, _ = open_file(self, f"{self.level} reference raster", "Rasters (*.tif *.tiff *.asc *.nc);;All files (*)")
         if path:
             self.comboBox_rasterInput.setCurrentText(path)
 
@@ -42,31 +42,40 @@ class _ReferenceFile:
         """A typed or browsed path: its variables and CRS (the file's, locked, when it has one)."""
         path = Path(str(text).strip()).expanduser()
         with QSignalBlocker(self.comboBox_varName):
-            if path.is_file():
-                netcdf_asc_additional_input.initialize(self, path)
-                self._ungridded()
-            else:
+            if not path.is_file():
                 self.path = ""
                 self.comboBox_varName.clear()
+            elif path.suffix.lower() == ".nc":
+                self.path = str(path.resolve())
+                self.comboBox_varName.clear()
+                self.comboBox_varName.addItems(raster_variables(path))
+                self.comboBox_varName.setEnabled(True)
+                self._netcdf_crs()
+            else:
+                netcdf_asc_additional_input.initialize(self, path)
         self.show_grid()
 
     def variable_changed(self, text):
-        if self.path:
+        if self.path.lower().endswith(".nc"):
+            self._netcdf_crs()
+        elif self.path:
             netcdf_asc_additional_input.refresh_crs(self, text)
-            self._ungridded()
         self.show_grid()
 
-    def _ungridded(self):
-        """A NetCDF grid GDAL cannot place (mHM's `xc`/`yc` with 2-D lat/lon): its x/y are read in
-        the CRS chosen here, the domain CRS to start with, not the CRS of its lat/lon."""
-        from osgeo import gdal
+    def _netcdf_crs(self):
+        """A NetCDF's own CRS (lon/lat axes or a grid mapping), locked; else the domain CRS, open to
+        change. Read from its axes: through GDAL or a QGIS layer a long series takes minutes."""
+        from ...core.meteorology.forcing.api import netcdf_grid
 
-        dataset = gdal.Open(source(self.path, self.comboBox_varName.currentText().strip()))
-        if dataset is not None and dataset.GetGeoTransform(can_return_null=True) is None:
-            widget = self.mProjectionSelectionWidget_crsFileInput
-            with QSignalBlocker(widget):
-                widget.setCrs(self.domain_crs)
-            widget.setEnabled(True)
+        try:
+            declared = netcdf_grid(self.path, self.comboBox_varName.currentText().strip())[3]
+        except (OSError, RuntimeError, ValueError):
+            declared = None
+        crs = QgsCoordinateReferenceSystem(declared) if declared else self.domain_crs
+        widget = self.mProjectionSelectionWidget_crsFileInput
+        with QSignalBlocker(widget):
+            widget.setCrs(crs if crs.isValid() else self.domain_crs)
+        widget.setEnabled(not (declared and crs.isValid()))
 
     def file_crs(self):
         crs = self.mProjectionSelectionWidget_crsFileInput.crs()

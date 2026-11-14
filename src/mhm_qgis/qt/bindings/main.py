@@ -8,7 +8,6 @@ from __future__ import annotations
 from qgis.core import QgsProject
 from qgis.PyQt.QtWidgets import QMessageBox, QToolButton
 
-from ...qgis_bridge.display import grid as grid_display
 from .. import project_tree, tooltip
 from ..controllers import (
     categorical,
@@ -198,12 +197,16 @@ def _bind_grid(dialog):
         getattr(dialog, f"pushButton_browse{level}File").clicked.connect(
             lambda _checked=False, level=level: grid.browse_file(dialog, level))
         getattr(dialog, f"checkBox_extent{level}enforce").toggled.connect(lambda _on: grid.changed(dialog))
-        # label_display{level}GridCommon 👁 → grid_display.display_grids
-        getattr(dialog, f"label_display{level}GridCommon").linkActivated.connect(
-            lambda href: grid_display.display_grids(dialog, [href]))
+        # label_display{level}File / GridCommon eyes → grid.toggle_display (the file, the Set grid)
+        for label in (f"label_display{level}File", f"label_display{level}GridCommon"):
+            getattr(dialog, label).linkActivated.connect(lambda key: grid.toggle_display(dialog, key))
         for name, _key in (*grid.CORNERS, ("cellSize", "cellsize")):
             getattr(dialog, f"label_{name}{level}Common").linkActivated.connect(
                 lambda href: grid.explain(dialog, href))
+        # toolButton_description{level}File → its toolTip (the file's steps) in a message box
+        button = getattr(dialog, f"toolButton_description{level}File")
+        button.clicked.connect(lambda _checked=False, level=level, button=button: QMessageBox.information(
+            dialog, f"{level} file", button.toolTip()))
     dialog.lineEdit_L0Resolution.editingFinished.connect(lambda: grid.snap_l0(dialog))
     for level in ("L1", "L11", "L2"):
         getattr(dialog, f"lineEdit_{level}Resolution").textChanged.connect(

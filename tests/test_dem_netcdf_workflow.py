@@ -117,6 +117,10 @@ def test_exact_copy_rejects_misalignment_and_cancel_preserves_previous_file(tmp_
         def isCanceled(self):
             return True
 
+    shifted = copy_rasters(tmp_path / "shifted.nc", {"dem": original}, {**header, "xllcorner": 30}, shift=True)
+    placed = gdal.Open(source(shifted, "dem"))  # 0.3 cells off: moved onto the target lattice, not resampled
+    assert placed.GetGeoTransform()[0] == 30
+    assert (placed.ReadAsArray() == gdal.Open(str(original)).ReadAsArray()).all()
     with pytest.raises(RuntimeError, match="cancelled"):
         copy_rasters(output, {"dem": original}, task=Cancelled())
     assert output.read_bytes() == before

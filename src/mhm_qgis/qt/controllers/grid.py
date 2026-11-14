@@ -1,10 +1,10 @@
 """The Resolution page: the L0, L1, L11/L3 and L2 grids from reference files or typed resolutions.
 
 The L0 reference file fixes the L0 lattice; every other level is a whole multiple of L0. Set
-intersects the ticked file extents, snaps that box inward to whole blocks of lcm(level factors)
+intersects the ticked file extents, snaps that box outward to whole blocks of lcm(level factors)
 L0 cells on the L2 lattice, checks the four headers against mHM's rules and saves them as the
-common grid. The DEM and every meteorology input must cover that common extent, so nothing is
-padded.
+common grid. The meteorology must cover it (its cells are never padded); the DEM is shifted onto
+the L0 lattice (under half a cell), then cropped or padded with no data to it.
 """
 from __future__ import annotations
 
@@ -12,8 +12,7 @@ import math
 from pathlib import Path
 
 from qgis.PyQt.QtCore import QSignalBlocker
-from qgis.PyQt.QtGui import QCursor
-from qgis.PyQt.QtWidgets import QMessageBox, QToolTip
+from qgis.PyQt.QtWidgets import QMessageBox
 
 from ...core.executions.morphology import setup as morphology_setup
 from ...core.grid import (
@@ -36,6 +35,7 @@ from ...core.handlers.file.netcdf.raster import source as raster_source
 from ...core.handlers.state import processing
 from ...core.handlers.store.paths import temp_morphology_folder
 from ...qgis_bridge import layers as qgis_layers
+from ..project_tree import ICONS
 from .version import selected as selected_version
 from .workflow_state import invalidate as invalidate_workflows
 from .workflow_state import invalidate_meteo
@@ -100,6 +100,7 @@ def load_file(dialog, level):
         dialog.log_message(f"WARNING: {level} reference file {selection['path']}: {error}")
         show_file_row(dialog, level)
         return False
+    dialog._displayed.pop(level, None)  # a new file: its own layer when shown
     show_file_row(dialog, level)
     return True
 
@@ -115,21 +116,13 @@ def reload_files(dialog):
     show_l0(dialog)
 
 
-def _file_name(dialog, level):
-    selection = dialog._resolution_files.get(level)
-    if not selection:
-        return ""
-    name = Path(selection["path"]).name
-    return name if level in dialog._level_file_info else f"missing: {name}"
-
-
 def show_file_row(dialog, level):
-    """The From File row: the file's name and its grid in the domain CRS, as read."""
+    """The From File row: the file's grid in the domain CRS, as read; its Browse… names the file."""
     selection = dialog._resolution_files.get(level)
     file = dialog._level_file_info.get(level)
-    description = getattr(dialog, f"label_description{level}File")
-    description.setText(_file_name(dialog, level))
-    description.setToolTip(selection["path"] if selection else "")
+    getattr(dialog, f"pushButton_browse{level}File").setToolTip(
+        "" if not selection else selection["path"] if file else f"Missing: {selection['path']}")
+    _eye(dialog, level, shown=bool(file))
     header = file["info"]["header"] if file else {}
     unit = file["info"]["unit"] if file else ""
     for name, key in CORNERS:
@@ -342,8 +335,8 @@ def build_grid(dialog):
     for level in levels:
         if level not in dialog._level_file_info:
             raise ValueError(f"The {level} extent is ticked, but {level} has no readable file.")
-        extent = dialog._level_file_info[level]["extent"]
-        extent = Extent(extent.xmin - margin, extent.xmax + margin, extent.ymin - margin, extent.ymax + margin)
+        extent = dialog._level_file_info[level]["extent"]  # shrunk: a rounded edge does not snap a block out
+        extent = Extent(extent.xmin + margin, extent.xmax - margin, extent.ymin + margin, extent.ymax - margin)
         joined = extent if box is None else box.intersect(extent)
         if joined is None:
             raise ValueError(f"The {level} file does not overlap the {' and '.join(names)} extent: "
@@ -360,6 +353,9 @@ def build_grid(dialog):
                                 **raw)
     if not grid.requires_l2_resampling:
         anchor = "the L2 file's lattice"
+    if l2_file:
+        _inside_meteo(grid, l2_file, f"snapped outward to blocks of lcm({factors['L1']}, {factors['L11']}, "
+                      f"{factors['L2']}) = {block} L0 cells", margin)
     headers = {"L0": grid.l0_header, "L2": grid.l2_header, **{
         level: header_for_model_level(grid.l2_header, factors[level] * l0, l0, level) for level in ("L1", "L11")}}
     headers = validate_grid_headers(headers)[0]
@@ -370,7 +366,7 @@ def build_grid(dialog):
     metadata.update(
         {f"{level.lower()}_header": headers[level] for level in LEVELS},
         study_bounds=list(Extent.from_header(headers["L0"]).bounds),
-        extent_note=(f"Common extent: the intersection of the ticked extents ({', '.join(names)}), snapped inward "
+        extent_note=(f"Common extent: the intersection of the ticked extents ({', '.join(names)}), snapped outward "
                      f"to whole blocks of lcm({factors['L1']}, {factors['L11']}, {factors['L2']}) = {block} L0 "
                      f"cells ({format_resolution(block * l0, unit)} {unit}) on {anchor}."),
         configuration_fingerprint=grid_fingerprint(dialog),
@@ -379,6 +375,24 @@ def build_grid(dialog):
         metadata["wgs84_bounds"] = (float(target.sample_lon.min()), float(target.sample_lon.max()),
                                     float(target.sample_lat.min()), float(target.sample_lat.max()))
     return metadata
+
+
+def _inside_meteo(grid, l2_file, how, margin):
+    """The meteo cells are never padded: the common extent must lie inside the L2 file's cells (where
+    its lattice anchors the grid, as shifted onto L0)."""
+    extent, cell = l2_file["extent"], float(l2_file["info"]["resolution"])
+    if not grid.requires_l2_resampling and grid.alignment_gap:
+        dx, dy = grid.alignment_gap
+        extent = Extent(extent.xmin + dx, extent.xmax + dx, extent.ymin + dy, extent.ymax + dy)
+    common = grid.common_extent
+    beyond = {"west": extent.xmin - common.xmin, "east": common.xmax - extent.xmax,
+              "south": extent.ymin - common.ymin, "north": common.ymax - extent.ymax}
+    short = [f"{value / cell:.4g} cell{'' if round(value / cell, 4) == 1 else 's'} {side}"
+             for side, value in beyond.items() if value > margin]
+    if short:
+        raise ValueError(f"The common extent ({how}) reaches beyond the L2 (meteo) grid: {', '.join(short)}. "
+                         "The meteo cells are never padded: tick the L2 extent, use meteo covering more, or "
+                         "L1/L11 factors that divide the L2 factor.")
 
 
 def set_resolution(dialog):
@@ -411,32 +425,41 @@ def set_resolution(dialog):
     return bool(outputs)
 
 
+def _edges(source, common, cell, noise, sides=("west", "east", "south", "north")):
+    """What the common extent crops from or adds to `source` on each side, in its `cell`s."""
+    moves = {"west": (common.xmin - source.xmin, "column"), "east": (source.xmax - common.xmax, "column"),
+             "south": (common.ymin - source.ymin, "row"), "north": (source.ymax - common.ymax, "row")}
+    cropped, added = [], []
+    for side in sides:
+        value, unit = moves[side]
+        if abs(value) > noise:
+            count = round(abs(value) / cell, 2)
+            (cropped if value > 0 else added).append(f"{count:g} {unit}{'' if count == 1 else 's'} {side}")
+    return ([f"Cropped: {', '.join(cropped)}."] if cropped else []) + (
+        [f"Padded with no data: {', '.join(added)}."] if added else [])
+
+
 def _steps(dialog, level, header, file):
-    """What happens to `level`'s file on the common grid, as the Description column lists it."""
+    """What happens to `level`'s file on the common grid, one step a line (its info button)."""
     info, steps = file["info"], []
+    cell, l0 = float(header["cellsize"]), float(dialog._grid_l2_metadata["l0_resolution"])
     if not file["same_crs"]:
-        steps.append(f"warped {dialog._resolution_files[level]['crs']} → {dialog.selected_meteo_crs()}")
+        steps.append(f"Warped {dialog._resolution_files[level]['crs']} → {dialog.selected_meteo_crs()}.")
     if level == "L0" and l0_factor(dialog) > 1:
-        steps.append(f"upscaled x {l0_factor(dialog)}")
-    cell = float(header["cellsize"])
+        steps.append(f"Upscaled x {l0_factor(dialog)} ({info['resolution']:.6g} → {cell:.6g} cells).")
     if level != "L0" and not math.isclose(info["resolution"], cell, rel_tol=1e-7):
-        steps.append(f"cell {info['resolution']:.6g} → {cell:.6g}, resampled")
-    gap = (dialog._grid_l2_metadata or {}).get("alignment_gap")
+        steps.append(f"Cell {info['resolution']:.6g} = {info['resolution'] / l0:.6g} x L0: resampled to "
+                     f"{round(cell / l0)} x L0 ({cell:.6g}).")
+    gap = dialog._grid_l2_metadata.get("alignment_gap")
     if level == "L2" and gap and any(abs(value) > 1e-9 * cell for value in gap):  # however small: it is real
-        steps.append(f"shifted by ({gap[0]:.6g}, {gap[1]:.6g}) onto L0")
-    source, common = Extent.from_header(info["header"]), Extent.from_header(header)
-    sides = {"W": common.xmin - source.xmin, "E": source.xmax - common.xmax,
-             "S": common.ymin - source.ymin, "N": source.ymax - common.ymax}
-    noise = 0.01 * float(dialog._grid_l2_metadata["l0_resolution"])  # lat/lon rounding, as coverage allows
-    cropped = [f"{side} {value / cell:.4g}" for side, value in sides.items() if abs(value) > noise]
-    if cropped:
-        steps.append("edge cells cropped (-) or added (+, beyond the file): " + ", ".join(cropped))
-    return "; ".join(steps) or "used as is"
+        steps.append(f"Shifted by ({gap[0]:.6g}, {gap[1]:.6g}) onto the L0 lattice.")
+    steps += _edges(Extent.from_header(info["header"]), Extent.from_header(header), info["resolution"], 0.01 * l0)
+    return "\n".join(steps) or "Used as is."
 
 
 def show_headers(dialog):
     """The Set grid in Updated Headers: a value that differs from the From File row is blue, with an
-    ⓘ giving the reason; the Description column lists what happens to each file."""
+    ⓘ giving the reason; each file row's info button lists what happens to its file."""
     grid = dialog._grid_l2_metadata
     unit, noise = grid.get("l0_unit", ""), 0.01 * float(grid["l0_resolution"])  # lat/lon rounding
     dialog._header_notes = {}
@@ -450,16 +473,17 @@ def show_headers(dialog):
             label = getattr(dialog, f"label_{name}{level}Common")
             reason = source and not math.isclose(float(source[key]), float(value), rel_tol=1e-9,
                                                  abs_tol=noise if key in ("xllcorner", "yllcorner") else 0) and (
-                _cell_reason(dialog, level, file, header) if key == "cellsize" else _extent_reason(level, file, header,
-                                                                                                    grid, unit))
+                _cell_reason(dialog, level, file, header) if key == "cellsize" else _extent_reason(
+                    level, key, file, header, grid))
             if reason:
                 dialog._header_notes[f"{level}:{key}"] = reason
                 label.setText(f'<span style="color:{CHANGED}">{text}</span> <a href="{level}:{key}">ⓘ</a>')
             else:
                 label.setText(text)
-        getattr(dialog, f"label_display{level}GridCommon").setText(f'<a href="{level}">👁</a>')
-        if file:
-            getattr(dialog, f"label_description{level}File").setText(_steps(dialog, level, header, file))
+        _eye(dialog, f"grid:{level}")
+        button = getattr(dialog, f"toolButton_description{level}File")
+        button.setToolTip(_steps(dialog, level, header, file) if file else "")
+        button.setEnabled(bool(file))
     for label, value in zip((dialog.label_minimumEasting, dialog.label_maximumEasting, dialog.label_minimumNorthing,
                              dialog.label_maximumNorthing), header_bounds(grid["l0_header"]), strict=True):
         label.setText(format_resolution(value, unit, precision=display_precision_for_unit(unit)))
@@ -468,31 +492,105 @@ def show_headers(dialog):
 def _cell_reason(dialog, level, file, header):
     cell, l0 = float(header["cellsize"]), float(dialog._grid_l2_metadata["l0_resolution"])
     if level == "L0":
-        return f"The L0 file's cell ({file['info']['resolution']:.10g}) x the upscale factor {l0_factor(dialog)}."
+        return (f"The L0 file's cell ({file['info']['resolution']:.10g}) x the upscale factor "
+                f"{l0_factor(dialog)} = {cell:.10g}.")
     return (f"The file's cell ({file['info']['resolution']:.10g}) is {file['info']['resolution'] / l0:.6g} x L0; "
             f"{level} is {round(cell / l0)} x L0 = {cell:.10g}, so its data are resampled.")
 
 
-def _extent_reason(level, file, header, grid, unit):
+def _extent_reason(level, key, file, header, grid):
+    """Why a corner or count of the common grid differs from the file's, side by side."""
     source, common = Extent.from_header(file["info"]["header"]), Extent.from_header(header)
-    moves = (f"west {common.xmin - source.xmin:+.6g}, east {common.xmax - source.xmax:+.6g}, "
-             f"south {common.ymin - source.ymin:+.6g}, north {common.ymax - source.ymax:+.6g} {unit}")
-    return f"{grid.get('extent_note', '')} Its edges against the {level} file: {moves}."
+    cell, unit = file["info"]["resolution"], grid.get("l0_unit", "")
+    precision = display_precision_for_unit(unit)
+    if key in ("xllcorner", "yllcorner"):
+        edge, sides = ("West", ("west",)) if key == "xllcorner" else ("South", ("south",))
+        what = (f"{edge} edge at {format_resolution(header[key], unit, precision=precision)} instead of the "
+                f"{level} file's {format_resolution(file['info']['header'][key], unit, precision=precision)}.")
+    else:
+        kind, sides = ("columns", ("west", "east")) if key == "ncols" else ("rows", ("south", "north"))
+        what = (f"{header[key]} {kind} of {float(header['cellsize']):.6g} instead of the {level} file's "
+                f"{file['info']['header'][key]} of {cell:.6g}.")
+    edges = _edges(source, common, cell, 0.01 * float(grid["l0_resolution"]), sides)
+    return "\n".join([grid.get("extent_note", ""), what, *edges])
+
+
+def _eye(dialog, key, shown=True):
+    """A Display label (`L2`: the level's file, `grid:L2`: its Set grid): the project tree's eye when
+    on the map, crossed out when hidden; empty when there is nothing to show."""
+    level = key.removeprefix("grid:")
+    label = getattr(dialog, f"label_display{level}GridCommon" if key.startswith("grid:") else f"label_display{level}File")
+    on = key in dialog._displayed
+    icon = ICONS / ("eye.svg" if on else "eye-off.svg")
+    label.setText(f'<a href="{key}"><img src="{icon}" width="16" height="16"></a>' if shown else "")
+    label.setToolTip(("Shown on the map" if on else "Hidden") if shown else "")
+
+
+def toggle_display(dialog, key):
+    """A Display eye clicked: its file or Set grid shown on the map, or hidden again."""
+    from qgis.core import QgsProject
+
+    from ...qgis_bridge.display.grid import display_grids
+    from ...qgis_bridge.layers.project import find_by_name
+
+    name, on = dialog._displayed.pop(key, None), False
+    if name is None:
+        level = key.removeprefix("grid:")
+        name = (display_grids(dialog, [level]) or [None])[0] if key.startswith("grid:") else _show_file(dialog, level)
+        on = bool(name)
+        if on:
+            dialog._displayed[key] = name
+    layer = find_by_name(name) if name else None
+    node = layer and QgsProject.instance().layerTreeRoot().findLayer(layer.id())
+    if node:
+        node.setItemVisibilityChecked(on)
+    _eye(dialog, key)
+
+
+def _show_file(dialog, level):
+    """The level's reference file on the map, its layer name (None when it cannot be shown). A NetCDF
+    shows its first time step, read from its axes: through GDAL a long series takes minutes."""
+    from qgis.core import QgsCoordinateReferenceSystem
+
+    from ...qgis_bridge.display import canvas
+
+    selection = dialog._resolution_files[level]
+    name = f"{level} reference: {Path(selection['path']).name}"
+    if Path(selection["path"]).suffix.lower() != ".nc":
+        layer = canvas.show_raster(dialog, selection["path"], name)
+        if layer is not None and not layer.crs().isValid():
+            layer.setCrs(QgsCoordinateReferenceSystem(selection["crs"]))
+        return name if layer is not None else None
+    import numpy as np
+    import rioxarray  # noqa: F401  (the .rio accessor)
+    import xarray as xr
+
+    from ...core.meteorology.forcing.api import netcdf_first_slice
+
+    header = raster_grid(raster_source(selection["path"], selection["variable"]), selection["crs"],
+                         selection["crs"])["header"]
+    cell, (xmin, _xmax, _ymin, ymax) = float(header["cellsize"]), header_bounds(header)
+    data = xr.DataArray(netcdf_first_slice(selection["path"], selection["variable"]), dims=("y", "x"), coords={
+        "y": ymax - (np.arange(header["nrows"]) + 0.5) * cell, "x": xmin + (np.arange(header["ncols"]) + 0.5) * cell})
+    return name if canvas.show_dataarray(dialog, data.rio.write_crs(selection["crs"]), name) is not None else None
 
 
 def explain(dialog, href):
-    """An ⓘ of Updated Headers: why that value differs from the file's."""
-    QToolTip.showText(QCursor.pos(), dialog._header_notes.get(href, ""), dialog)
+    """An ⓘ of Updated Headers: why that value differs from the file's, in a box like every info button."""
+    QMessageBox.information(dialog, f"Updated header {href}", dialog._header_notes.get(href, ""))
 
 
 def clear_headers(dialog):
-    """Empty Updated Headers and the common extent; the Description column names the files again."""
+    """Empty Updated Headers and the common extent; the file rows' info buttons go off."""
     dialog._header_notes = {}
     for level in LEVELS:
         for name, _key in (*CORNERS, ("cellSize", "cellsize")):
             getattr(dialog, f"label_{name}{level}Common").setText("")
-        getattr(dialog, f"label_display{level}GridCommon").setText("")
-        getattr(dialog, f"label_description{level}File").setText(_file_name(dialog, level))
+        dialog._displayed.pop(f"grid:{level}", None)
+        _eye(dialog, f"grid:{level}", shown=False)
+        button = getattr(dialog, f"toolButton_description{level}File")
+        button.setToolTip("")
+        button.setEnabled(False)
     for label in (dialog.label_minimumEasting, dialog.label_maximumEasting, dialog.label_minimumNorthing,
                   dialog.label_maximumNorthing):
         label.setText("")
@@ -529,7 +627,7 @@ def restore(dialog, state):
 
 def clear(dialog):
     """No setup open: no files, resolutions or grid; L0's extent ticked."""
-    dialog._resolution_files, dialog._level_file_info = {}, {}
+    dialog._resolution_files, dialog._level_file_info, dialog._displayed = {}, {}, {}
     dialog._grid_l0_info = dialog._grid_l2_metadata = None
     for level in LEVELS:
         box = getattr(dialog, f"checkBox_extent{level}enforce")
@@ -587,23 +685,19 @@ def _dem_note(dialog):
     if not math.isclose(float(dem["cellsize"]), cell, rel_tol=1e-9):
         raise ValueError(f"The DEM x {factor} has cells of {float(dem['cellsize']):.10g} {unit}, but L0 is "
                          f"{cell:.10g} {unit}: set the upscale factor to L0 / DEM cell, or choose another L0.")
-    offsets = [(float(dem[key]) - float(l0[key])) / cell for key in ("xllcorner", "yllcorner")]
-    if any(abs(value - round(value)) > 1e-6 for value in offsets):
-        raise ValueError(f"The DEM grid is off the L0 lattice by ({offsets[0] % 1:.4g}, {offsets[1] % 1:.4g}) "
-                         "cells: it must lie a whole number of L0 cells from the common grid.")
-    common, tolerance = Extent.from_header(l0), 0.01 * cell  # lat/lon rounding, as coverage allows
-    sides = {"W": common.xmin - extent.xmin, "E": extent.xmax - common.xmax,
-             "S": common.ymin - extent.ymin, "N": extent.ymax - common.ymax}
-    if min(sides.values()) < -tolerance:
-        raise ValueError(f"The DEM ({', '.join(f'{v:.10g}' for v in extent.bounds)}) does not cover the common "
-                         f"extent ({', '.join(f'{v:.10g}' for v in common.bounds)}): use a DEM that covers it, "
-                         "or change the ticked extents.")
-    steps = [] if crs_equal(crs, domain) else [f"warped {crs} → {domain}"]
+    common = Extent.from_header(l0)
+    if common.intersect(extent) is None:
+        raise ValueError(f"The DEM ({', '.join(f'{v:.10g}' for v in extent.bounds)}) does not overlap the common "
+                         f"extent ({', '.join(f'{v:.10g}' for v in common.bounds)}).")
+    steps = [] if crs_equal(crs, domain) else [f"Warped {crs} → {domain}."]
     if factor > 1:
-        steps.append(f"topography upscaled x {factor} (mhm-tools)")
-    cropped = [f"{side} {value / cell:.4g}" for side, value in sides.items() if value > tolerance]
-    steps.append("covers the common extent" + (f"; L0 cells cropped: {', '.join(cropped)}" if cropped else ""))
-    return "; ".join(steps)
+        steps.append(f"Topography upscaled x {factor} (mhm-tools).")
+    shift = [(round(value) - value) * cell for value in ((float(dem[key]) - float(l0[key])) / cell
+                                                          for key in ("xllcorner", "yllcorner"))]
+    if any(abs(value) > 1e-6 * cell for value in shift):  # copy_rasters(shift=True) moves it, never resamples
+        steps.append(f"Shifted by ({shift[0]:.6g}, {shift[1]:.6g}) onto the L0 lattice.")
+        extent = Extent(extent.xmin + shift[0], extent.xmax + shift[0], extent.ymin + shift[1], extent.ymax + shift[1])
+    return "\n".join(steps + _edges(extent, common, cell / factor, 0.01 * cell) or ["Used as is."])  # DEM cells
 
 
 def check_dem(dialog):
