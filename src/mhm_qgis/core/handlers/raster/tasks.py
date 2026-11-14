@@ -644,7 +644,7 @@ def dem_derivative_files(
     reprojected_path="", compute=None, log=None, task=None, header=None, upscale_factor=1,
 ):
     """Prepare one derivative dataset and a single-variable filled DEM; with `upscale_factor`, on the
-    upscaled topography grid (`core.grid.raster.dem_grid` with that factor)."""
+    upscaled topography grid (`core.grid.raster.raster_grid` with that factor)."""
     from netCDF4 import Dataset
 
     from ..file.netcdf.raster import copy_rasters, file_path

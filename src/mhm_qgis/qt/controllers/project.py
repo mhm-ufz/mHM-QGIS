@@ -10,7 +10,6 @@ from ...core.handlers.store.layout import ensure_project_structure
 from .. import project_tree
 from ..dialogs.file_picker import open_directory
 from . import (
-    grid,
     input_state,
     intro,
     main,
@@ -29,7 +28,7 @@ def show_work_type(dialog):
     dialog.stackedWidget_configuration.setCurrentWidget(
         dialog.page_singleDomain if single else dialog.page_multiDomain
     )
-    for key in ("l0_reference", "l2_reference", "resolution", "inputs"):  # single-domain rows; Settings stays
+    for key in ("resolution", "inputs"):  # single-domain rows; Settings stays
         project_tree.item(dialog, key).setHidden(not single)
 
 
@@ -95,7 +94,6 @@ def create_structure(dialog):
         set_status(dialog, "project_structure", "running")
         dialog.load_input_state()
         ensure_project_structure(path, selected_version(dialog))
-        grid.update_l2_resolution_from_metadata(dialog)
         post_context.clear(dialog)
         workflow_state.refresh_all(dialog)
         dialog.save_input_state()

@@ -101,7 +101,6 @@ def start_dem_derivatives(dialog, *, key="execute-all-dem-derivatives", controls
         lifecycle.register(dialog, result["dem_derivatives"], "DEM derivatives")
         if not result.get("reused"):
             dialog.log_message("DEM derivatives prepared successfully.")
-        grid.update_l0_resolution_from_dem(dialog)
         if done is not None:
             done(result)
 

@@ -17,7 +17,7 @@
    <item>
     <widget class="QSplitter" name="splitter">
      <property name="orientation">
-      <enum>Qt::Orientation::Horizontal</enum>
+      <enum>Qt::Horizontal</enum>
      </property>
      <widget class="QTreeWidget" name="treeWidget_projectStructure">
       <column>
@@ -38,16 +38,6 @@
         <property name="text">
          <string>Domain Setup</string>
         </property>
-        <item>
-         <property name="text">
-          <string>L0 Reference (DEM)</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>L2 Reference (Precipitation)</string>
-         </property>
-        </item>
         <item>
          <property name="text">
           <string>Resolution</string>
@@ -388,7 +378,7 @@
               <item>
                <spacer name="horizontalSpacer_mHM">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -443,7 +433,7 @@
               <item>
                <spacer name="horizontalSpacer_4">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -463,7 +453,7 @@
               <item>
                <spacer name="horizontalSpacer_setProject">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -498,7 +488,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -507,7 +497,7 @@
             <item>
              <spacer name="verticalSpacer_projectSetup">
               <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
+               <enum>Qt::Vertical</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
@@ -536,7 +526,7 @@
             <item>
              <widget class="QScrollArea" name="scrollArea_configuration">
               <property name="frameShape">
-               <enum>QFrame::Shape::NoFrame</enum>
+               <enum>QFrame::NoFrame</enum>
               </property>
               <property name="widgetResizable">
                <bool>true</bool>
@@ -627,7 +617,7 @@
                       <item>
                        <spacer name="horizontalSpacer_domainSetup">
                         <property name="orientation">
-                         <enum>Qt::Orientation::Horizontal</enum>
+                         <enum>Qt::Horizontal</enum>
                         </property>
                         <property name="sizeHint" stdset="0">
                          <size>
@@ -680,7 +670,7 @@
                       <item>
                        <spacer name="horizontalSpacer_setCRS">
                         <property name="orientation">
-                         <enum>Qt::Orientation::Horizontal</enum>
+                         <enum>Qt::Horizontal</enum>
                         </property>
                         <property name="sizeHint" stdset="0">
                          <size>
@@ -715,7 +705,7 @@
                          <string/>
                         </property>
                         <property name="alignment">
-                         <set>Qt::AlignmentFlag::AlignCenter</set>
+                         <set>Qt::AlignCenter</set>
                         </property>
                        </widget>
                       </item>
@@ -724,7 +714,7 @@
                     <item>
                      <spacer name="verticalSpacer_pageDomain">
                       <property name="orientation">
-                       <enum>Qt::Orientation::Vertical</enum>
+                       <enum>Qt::Vertical</enum>
                       </property>
                       <property name="sizeHint" stdset="0">
                        <size>
@@ -805,7 +795,7 @@
                       <item>
                        <spacer name="horizontalSpacer_multiDomainSetup">
                         <property name="orientation">
-                         <enum>Qt::Orientation::Horizontal</enum>
+                         <enum>Qt::Horizontal</enum>
                         </property>
                         <property name="sizeHint" stdset="0">
                          <size>
@@ -912,7 +902,7 @@
                          <item>
                           <spacer name="horizontalSpacer_checkAndMergeDomain">
                            <property name="orientation">
-                            <enum>Qt::Orientation::Horizontal</enum>
+                            <enum>Qt::Horizontal</enum>
                            </property>
                            <property name="sizeHint" stdset="0">
                             <size>
@@ -941,7 +931,7 @@
                 <item>
                  <widget class="Line" name="line_4">
                   <property name="orientation">
-                   <enum>Qt::Orientation::Horizontal</enum>
+                   <enum>Qt::Horizontal</enum>
                   </property>
                  </widget>
                 </item>
@@ -951,392 +941,35 @@
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="page_l0Reference">
-           <layout class="QVBoxLayout" name="verticalLayout_page_l0Reference">
+          <widget class="QWidget" name="page_resolution">
+           <layout class="QVBoxLayout" name="verticalLayout_resolutionScroll">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
             <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_demInput" stretch="0,4,1">
-              <item>
-               <widget class="QLabel" name="label_dem">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="text">
-                 <string>DEM Raster:</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QComboBox" name="comboBox_demInput"/>
-              </item>
-              <item>
-               <widget class="QPushButton" name="pushButton_browseDEMInput">
-                <property name="maximumSize">
-                 <size>
-                  <width>40</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-                <property name="toolTip">
-                 <string>Select Project Folder</string>
-                </property>
-                <property name="text">
-                 <string>...</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <widget class="QGroupBox" name="groupBox_upscaleTopography">
-              <property name="title">
-               <string>Upscale Topography</string>
+             <widget class="QScrollArea" name="scrollArea_resolution">
+              <property name="frameShape">
+               <enum>QFrame::NoFrame</enum>
               </property>
-              <property name="checkable">
+              <property name="horizontalScrollBarPolicy">
+               <enum>Qt::ScrollBarAsNeeded</enum>
+              </property>
+              <property name="verticalScrollBarPolicy">
+               <enum>Qt::ScrollBarAsNeeded</enum>
+              </property>
+              <property name="widgetResizable">
                <bool>true</bool>
               </property>
-              <property name="checked">
-               <bool>false</bool>
-              </property>
-              <layout class="QVBoxLayout" name="verticalLayout_40">
-               <property name="topMargin">
-                <number>0</number>
-               </property>
-               <property name="bottomMargin">
-                <number>0</number>
-               </property>
-               <item>
-                <layout class="QHBoxLayout" name="horizontalLayout_upscaleTopographyFactor">
-                 <property name="topMargin">
-                  <number>0</number>
-                 </property>
-                 <item>
-                  <widget class="QLabel" name="label_upscaleTopographyFactor">
-                   <property name="text">
-                    <string>Upscale factor:</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QSpinBox" name="spinBox_upscaleTopographyFactor"/>
-                 </item>
-                 <item>
-                  <widget class="QLabel" name="label_demResolutionReference">
-                   <property name="text">
-                    <string>× DEM Resolution</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <spacer name="horizontalSpacer_upscaleTopographyFactor">
-                   <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
-                   </property>
-                   <property name="sizeHint" stdset="0">
-                    <size>
-                     <width>40</width>
-                     <height>20</height>
-                    </size>
-                   </property>
-                  </spacer>
-                 </item>
-                </layout>
-               </item>
-              </layout>
-             </widget>
-            </item>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_setDEM">
-              <property name="topMargin">
-               <number>0</number>
-              </property>
-              <item>
-               <spacer name="horizontalSpacer_setDEM">
-                <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>40</width>
-                  <height>20</height>
-                 </size>
-                </property>
-               </spacer>
-              </item>
-              <item>
-               <widget class="QPushButton" name="pushButton_setDEM">
-                <property name="text">
-                 <string>Set</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="label_setDEMStatus">
-                <property name="minimumSize">
-                 <size>
-                  <width>28</width>
-                  <height>0</height>
-                 </size>
-                </property>
-                <property name="maximumSize">
-                 <size>
-                  <width>28</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string/>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <spacer name="verticalSpacer_page_l0Reference">
-              <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>20</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_l2Reference">
-           <layout class="QVBoxLayout" name="verticalLayout_page_l2Reference">
-            <item>
-             <widget class="QWidget" name="widget_hostPrecipitationMeteoVarInput" native="true">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>25</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <layout class="QGridLayout" name="gridLayout_timeInputs" columnstretch="1,0,0,0,0">
-              <property name="topMargin">
-               <number>0</number>
-              </property>
-              <item row="0" column="3">
-               <widget class="QLabel" name="label_simulationEndTime">
-                <property name="text">
-                 <string>Simulation End Time</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="2">
-               <widget class="QDateTimeEdit" name="dateTimeEdit_evaluationStartTimeInput">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-                <property name="displayFormat">
-                 <string>MM/dd/yyyy h:mm Ap</string>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="1">
-               <widget class="QLabel" name="label_simulationStartTime">
-                <property name="text">
-                 <string>Simulation Start Time</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="1">
-               <widget class="QDateTimeEdit" name="dateTimeEdit_simulationStartTimeInput">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-                <property name="displayFormat">
-                 <string>MM/dd/yyyy h:mm Ap</string>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="2">
-               <widget class="QLabel" name="label_evaluationStartTime">
-                <property name="text">
-                 <string>Evaluation Start Time</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="4">
-               <widget class="QLabel" name="label_precipitationEndTimeValue">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="minimumSize">
-                 <size>
-                  <width>25</width>
-                  <height>0</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string/>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="0">
-               <widget class="QLabel" name="label_precipitationStartTimeValue">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="minimumSize">
-                 <size>
-                  <width>25</width>
-                  <height>0</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string/>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="4">
-               <widget class="QLabel" name="label_precipitationEndTime">
-                <property name="text">
-                 <string>Precp. End Time</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="0">
-               <widget class="QLabel" name="label_precipitationStartTime">
-                <property name="text">
-                 <string>Precp. Start Time</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="3">
-               <widget class="QDateTimeEdit" name="dateTimeEdit_simulationEndTimeInput">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-                <property name="displayFormat">
-                 <string>MM/dd/yyyy h:mm Ap</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_setPrecipitationInput">
-              <property name="topMargin">
-               <number>0</number>
-              </property>
-              <item>
-               <spacer name="horizontalSpacer_setPrecipitationInput">
-                <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>40</width>
-                  <height>20</height>
-                 </size>
-                </property>
-               </spacer>
-              </item>
-              <item>
-               <widget class="QPushButton" name="pushButton_setSimulationPeriod">
-                <property name="text">
-                 <string>Set Periods</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="label_setPrecipitationInputStatus">
-                <property name="minimumSize">
-                 <size>
-                  <width>28</width>
-                  <height>0</height>
-                 </size>
-                </property>
-                <property name="maximumSize">
-                 <size>
-                  <width>28</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string/>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <spacer name="verticalSpacer_page_l2Reference">
-              <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>20</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_resolution">
+              <widget class="QWidget" name="scrollAreaWidgetContents_resolution">
            <layout class="QVBoxLayout" name="verticalLayout_page_resolution">
             <item>
              <layout class="QGridLayout" name="gridLayout_resolutionSettings">
@@ -1357,7 +990,42 @@
                  <string>L1</string>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="8" column="0">
+               <widget class="QLabel" name="label_cellSizeFile">
+                <property name="text">
+                 <string>Cell Size</string>
+                </property>
+               </widget>
+              </item>
+              <item row="9" column="1">
+               <widget class="QPushButton" name="pushButton_browseL0File">
+                <property name="text">
+                 <string>Browse...</string>
+                </property>
+               </widget>
+              </item>
+              <item row="5" column="4">
+               <widget class="QLabel" name="label_nRowsL1File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="7" column="3">
+               <widget class="QLabel" name="label_yLowerLeftL2File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="5">
+               <widget class="QLabel" name="label_nColsL11File">
+                <property name="text">
+                 <string/>
                 </property>
                </widget>
               </item>
@@ -1368,124 +1036,55 @@
                 </property>
                </widget>
               </item>
-              <item row="6" column="4">
-               <widget class="QLabel" name="label_yLowerLeftL1File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="4">
-               <layout class="QHBoxLayout" name="horizontalLayout_L1Resolution">
+              <item row="8" column="1">
+               <layout class="QHBoxLayout" name="horizontalLayout_fileL0Resolution">
                 <item>
-                 <widget class="QLineEdit" name="lineEdit_L1Resolution">
-                  <property name="maximumSize">
+                 <widget class="QLabel" name="label_fileL0ResolutionValue">
+                  <property name="minimumSize">
                    <size>
-                    <width>16777215</width>
-                    <height>16777215</height>
+                    <width>25</width>
+                    <height>0</height>
                    </size>
+                  </property>
+                  <property name="text">
+                   <string/>
                   </property>
                  </widget>
                 </item>
                 <item>
-                 <widget class="QComboBox" name="comboBox_L1ResolutionUnit">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="maximumSize">
+                 <widget class="QLabel" name="label_fileL0ResolutionUnit">
+                  <property name="minimumSize">
                    <size>
-                    <width>60</width>
-                    <height>16777215</height>
+                    <width>25</width>
+                    <height>0</height>
                    </size>
                   </property>
-                  <property name="currentIndex">
-                   <number>-1</number>
+                  <property name="text">
+                   <string/>
                   </property>
-                  <item>
-                   <property name="text">
-                    <string>°</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>m</string>
-                   </property>
-                  </item>
                  </widget>
                 </item>
                </layout>
               </item>
-              <item row="9" column="0">
+              <item row="10" column="0">
                <widget class="QLabel" name="label_descriptionFile">
                 <property name="text">
                  <string>Description</string>
                 </property>
                </widget>
               </item>
-              <item row="1" column="5">
-               <layout class="QHBoxLayout" name="horizontalLayout_L11Resolution">
-                <item>
-                 <widget class="QLineEdit" name="lineEdit_L11Resolution">
-                  <property name="maximumSize">
-                   <size>
-                    <width>16777215</width>
-                    <height>16777215</height>
-                   </size>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QComboBox" name="comboBox_L11ResolutionUnit">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="maximumSize">
-                   <size>
-                    <width>60</width>
-                    <height>16777215</height>
-                   </size>
-                  </property>
-                  <property name="currentIndex">
-                   <number>-1</number>
-                  </property>
-                  <item>
-                   <property name="text">
-                    <string>°</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>m</string>
-                   </property>
-                  </item>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-              <item row="9" column="4">
-               <widget class="QLabel" name="label_descriptionL1File">
-                <property name="text">
-                 <string/>
+              <item row="0" column="5">
+               <widget class="QLabel" name="label_L11">
+                <property name="font">
+                 <font>
+                  <bold>true</bold>
+                 </font>
                 </property>
-               </widget>
-              </item>
-              <item row="5" column="0">
-               <widget class="QLabel" name="label_xLowerLeftFile">
                 <property name="text">
-                 <string>X (Lower left)</string>
+                 <string>L11/L3</string>
                 </property>
-               </widget>
-              </item>
-              <item row="8" column="1">
-               <widget class="QPushButton" name="pushButton_browseL0File">
-                <property name="text">
-                 <string>Browse...</string>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -1532,151 +1131,137 @@
                 </item>
                </layout>
               </item>
-              <item row="7" column="1">
-               <layout class="QHBoxLayout" name="horizontalLayout_fileL0Resolution">
-                <item>
-                 <widget class="QLabel" name="label_fileL0ResolutionValue">
-                  <property name="minimumSize">
-                   <size>
-                    <width>25</width>
-                    <height>0</height>
-                   </size>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_fileL0ResolutionUnit">
-                  <property name="minimumSize">
-                   <size>
-                    <width>25</width>
-                    <height>0</height>
-                   </size>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-              <item row="0" column="1">
-               <widget class="QLabel" name="label_L0">
-                <property name="font">
-                 <font>
-                  <bold>true</bold>
-                 </font>
-                </property>
-                <property name="text">
-                 <string>L0</string>
-                </property>
-                <property name="textFormat">
-                 <enum>Qt::TextFormat::PlainText</enum>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="2" column="0">
-               <widget class="QLabel" name="label_L0Multiplier">
-                <property name="text">
-                 <string>L0 Multiplier</string>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="3">
-               <widget class="QLabel" name="label_L2">
-                <property name="font">
-                 <font>
-                  <bold>true</bold>
-                 </font>
-                </property>
-                <property name="text">
-                 <string>L2</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="8" column="3">
-               <widget class="QPushButton" name="pushButton_browseL2File">
+              <item row="9" column="5">
+               <widget class="QPushButton" name="pushButton_browseL11File">
                 <property name="text">
                  <string>Browse...</string>
                 </property>
                </widget>
               </item>
-              <item row="4" column="0">
-               <widget class="QLabel" name="label_nRowsFile">
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_resolutionSettingsHeader">
                 <property name="text">
-                 <string>Rows</string>
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="10" column="1">
+               <widget class="QLabel" name="label_descriptionL0File">
+                <property name="text">
+                 <string/>
                 </property>
                </widget>
               </item>
               <item row="7" column="5">
-               <layout class="QHBoxLayout" name="horizontalLayout_fileL11Resolution">
+               <widget class="QLabel" name="label_yLowerLeftL11File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="4">
+               <layout class="QHBoxLayout" name="horizontalLayout_L1Multiplier">
                 <item>
-                 <widget class="QLabel" name="label_fileL11ResolutionValue">
-                  <property name="minimumSize">
-                   <size>
-                    <width>25</width>
-                    <height>0</height>
-                   </size>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
+                 <widget class="QSpinBox" name="spinBox_L1ResolutionMultiplier"/>
                 </item>
                 <item>
-                 <widget class="QLabel" name="label_fileL11ResolutionUnit">
-                  <property name="minimumSize">
-                   <size>
-                    <width>25</width>
-                    <height>0</height>
-                   </size>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_ie_fileL11Resolution">
-                  <property name="text">
-                   <string>i.e.</string>
-                  </property>
-                  <property name="alignment">
-                   <set>Qt::AlignmentFlag::AlignCenter</set>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_fileL11ResolutionMultiplier">
-                  <property name="minimumSize">
-                   <size>
-                    <width>25</width>
-                    <height>0</height>
-                   </size>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_L0Reference_fileL11Resolution">
+                 <widget class="QLabel" name="label_L0Reference_3">
                   <property name="text">
                    <string>× L0</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
                   </property>
                  </widget>
                 </item>
                </layout>
               </item>
-              <item row="7" column="4">
+              <item row="5" column="1">
+               <widget class="QLabel" name="label_nRowsL0File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="9" column="4">
+               <widget class="QPushButton" name="pushButton_browseL1File">
+                <property name="text">
+                 <string>Browse...</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="5">
+               <layout class="QHBoxLayout" name="horizontalLayout_L11Resolution">
+                <item>
+                 <widget class="QLineEdit" name="lineEdit_L11Resolution">
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="comboBox_L11ResolutionUnit">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>60</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="currentIndex">
+                   <number>-1</number>
+                  </property>
+                  <item>
+                   <property name="text">
+                    <string>°</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>m</string>
+                   </property>
+                  </item>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item row="7" column="1">
+               <widget class="QLabel" name="label_yLowerLeftL0File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="3">
+               <widget class="QLabel" name="label_nColsL2File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="6" column="1">
+               <widget class="QLabel" name="label_xLowerLeftL0File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="7" column="0">
+               <widget class="QLabel" name="label_yLowerLeftFile">
+                <property name="text">
+                 <string>Y (Lower left)</string>
+                </property>
+               </widget>
+              </item>
+              <item row="8" column="4">
                <layout class="QHBoxLayout" name="horizontalLayout_fileL1Resolution">
                 <item>
                  <widget class="QLabel" name="label_fileL1ResolutionValue">
@@ -1710,7 +1295,7 @@
                    <string>i.e.</string>
                   </property>
                   <property name="alignment">
-                   <set>Qt::AlignmentFlag::AlignCenter</set>
+                   <set>Qt::AlignCenter</set>
                   </property>
                  </widget>
                 </item>
@@ -1736,14 +1321,73 @@
                 </item>
                </layout>
               </item>
-              <item row="6" column="0">
-               <widget class="QLabel" name="label_yLowerLeftFile">
+              <item row="2" column="3">
+               <layout class="QHBoxLayout" name="horizontalLayout_L2Multiplier">
+                <item>
+                 <widget class="QSpinBox" name="spinBox_L2ResolutionMultiplier"/>
+                </item>
+                <item>
+                 <widget class="QLabel" name="label_L0Reference_2">
+                  <property name="text">
+                   <string>× L0</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item row="9" column="3">
+               <widget class="QPushButton" name="pushButton_browseL2File">
                 <property name="text">
-                 <string>Y (Lower left)</string>
+                 <string>Browse...</string>
                 </property>
                </widget>
               </item>
-              <item row="7" column="3">
+              <item row="6" column="4">
+               <widget class="QLabel" name="label_xLowerLeftL1File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="5" column="5">
+               <widget class="QLabel" name="label_nRowsL11File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="7" column="4">
+               <widget class="QLabel" name="label_yLowerLeftL1File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="4">
+               <widget class="QLabel" name="label_nColsL1File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="5">
+               <layout class="QHBoxLayout" name="horizontalLayout_L11Multiplier">
+                <item>
+                 <widget class="QSpinBox" name="spinBox_L11ResolutionMultiplier"/>
+                </item>
+                <item>
+                 <widget class="QLabel" name="label_L0Reference_4">
+                  <property name="text">
+                   <string>× L0</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item row="8" column="3">
                <layout class="QHBoxLayout" name="horizontalLayout_fileL2Resolution">
                 <item>
                  <widget class="QLabel" name="label_fileL2ResolutionValue">
@@ -1777,7 +1421,7 @@
                    <string>i.e.</string>
                   </property>
                   <property name="alignment">
-                   <set>Qt::AlignmentFlag::AlignCenter</set>
+                   <set>Qt::AlignCenter</set>
                   </property>
                  </widget>
                 </item>
@@ -1803,105 +1447,233 @@
                 </item>
                </layout>
               </item>
-              <item row="3" column="0">
+              <item row="5" column="0">
+               <widget class="QLabel" name="label_nRowsFile">
+                <property name="text">
+                 <string>Rows</string>
+                </property>
+               </widget>
+              </item>
+              <item row="10" column="4">
+               <widget class="QLabel" name="label_descriptionL1File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_L0Multiplier">
+                <property name="text">
+                 <string>L0 Multiplier</string>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="0">
                <widget class="QLabel" name="label_nColsFile">
                 <property name="text">
                  <string>Columns</string>
                 </property>
                </widget>
               </item>
-              <item row="8" column="0">
-               <widget class="QLabel" name="label_resolutionFromFile">
-                <property name="text">
-                 <string>From File</string>
-                </property>
-               </widget>
+              <item row="1" column="4">
+               <layout class="QHBoxLayout" name="horizontalLayout_L1Resolution">
+                <item>
+                 <widget class="QLineEdit" name="lineEdit_L1Resolution">
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="comboBox_L1ResolutionUnit">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>60</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="currentIndex">
+                   <number>-1</number>
+                  </property>
+                  <item>
+                   <property name="text">
+                    <string>°</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>m</string>
+                   </property>
+                  </item>
+                 </widget>
+                </item>
+               </layout>
               </item>
               <item row="6" column="3">
-               <widget class="QLabel" name="label_yLowerLeftL2File">
+               <widget class="QLabel" name="label_xLowerLeftL2File">
                 <property name="text">
                  <string/>
                 </property>
                </widget>
               </item>
-              <item row="8" column="4">
-               <widget class="QPushButton" name="pushButton_browseL1File">
-                <property name="text">
-                 <string>Browse...</string>
-                </property>
-               </widget>
-              </item>
-              <item row="9" column="1">
-               <widget class="QLabel" name="label_descriptionL0File">
+              <item row="4" column="1">
+               <widget class="QLabel" name="label_nColsL0File">
                 <property name="text">
                  <string/>
                 </property>
                </widget>
               </item>
-              <item row="6" column="5">
-               <widget class="QLabel" name="label_yLowerLeftL11File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="8" column="5">
-               <widget class="QPushButton" name="pushButton_browseL11File">
-                <property name="text">
-                 <string>Browse...</string>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="5">
-               <widget class="QLabel" name="label_L11">
+              <item row="0" column="1">
+               <widget class="QLabel" name="label_L0">
                 <property name="font">
                  <font>
                   <bold>true</bold>
                  </font>
                 </property>
                 <property name="text">
-                 <string>L11/L3</string>
+                 <string>L0</string>
+                </property>
+                <property name="textFormat">
+                 <enum>Qt::PlainText</enum>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
-              <item row="0" column="0">
-               <widget class="QLabel" name="label_resolutionSettingsHeader">
+              <item row="9" column="0">
+               <widget class="QLabel" name="label_resolutionFromFile">
                 <property name="text">
-                 <string/>
+                 <string>From File</string>
                 </property>
                </widget>
               </item>
-              <item row="2" column="4">
-               <layout class="QHBoxLayout" name="horizontalLayout_L1Multiplier">
+              <item row="8" column="5">
+               <layout class="QHBoxLayout" name="horizontalLayout_fileL11Resolution">
                 <item>
-                 <widget class="QSpinBox" name="spinBox_L1ResolutionMultiplier"/>
+                 <widget class="QLabel" name="label_fileL11ResolutionValue">
+                  <property name="minimumSize">
+                   <size>
+                    <width>25</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string/>
+                  </property>
+                 </widget>
                 </item>
                 <item>
-                 <widget class="QLabel" name="label_L0Reference_3">
+                 <widget class="QLabel" name="label_fileL11ResolutionUnit">
+                  <property name="minimumSize">
+                   <size>
+                    <width>25</width>
+                    <height>0</height>
+                   </size>
+                  </property>
                   <property name="text">
-                   <string>× L0</string>
+                   <string/>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="label_ie_fileL11Resolution">
+                  <property name="text">
+                   <string>i.e.</string>
                   </property>
                   <property name="alignment">
-                   <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="label_fileL11ResolutionMultiplier">
+                  <property name="minimumSize">
+                   <size>
+                    <width>25</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string/>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="label_L0Reference_fileL11Resolution">
+                  <property name="text">
+                   <string>× L0</string>
                   </property>
                  </widget>
                 </item>
                </layout>
               </item>
-              <item row="9" column="5">
-               <widget class="QLabel" name="label_descriptionL11File">
+              <item row="2" column="1">
+               <widget class="QLabel" name="label_resL1Times">
+                <property name="text">
+                 <string>1 × L0</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="6" column="0">
+               <widget class="QLabel" name="label_xLowerLeftFile">
+                <property name="text">
+                 <string>X (Lower left)</string>
+                </property>
+               </widget>
+              </item>
+              <item row="5" column="3">
+               <widget class="QLabel" name="label_nRowsL2File">
                 <property name="text">
                  <string/>
                 </property>
                </widget>
               </item>
-              <item row="7" column="0">
-               <widget class="QLabel" name="label_cellSizeFile">
+              <item row="10" column="3">
+               <widget class="QLabel" name="label_descriptionL2File">
                 <property name="text">
-                 <string>Cell Size</string>
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="6" column="5">
+               <widget class="QLabel" name="label_xLowerLeftL11File">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="3">
+               <widget class="QLabel" name="label_L2">
+                <property name="font">
+                 <font>
+                  <bold>true</bold>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>L2</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="10" column="5">
+               <widget class="QLabel" name="label_descriptionL11File">
+                <property name="text">
+                 <string/>
                 </property>
                </widget>
               </item>
@@ -1948,140 +1720,36 @@
                 </item>
                </layout>
               </item>
-              <item row="2" column="3">
-               <layout class="QHBoxLayout" name="horizontalLayout_L2Multiplier">
-                <item>
-                 <widget class="QSpinBox" name="spinBox_L2ResolutionMultiplier"/>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_L0Reference_2">
-                  <property name="text">
-                   <string>× L0</string>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-              <item row="2" column="1">
-               <widget class="QLabel" name="label_resL1Times">
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_extentFile">
                 <property name="text">
-                 <string>1 × L0</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="2" column="5">
-               <layout class="QHBoxLayout" name="horizontalLayout_L11Multiplier">
-                <item>
-                 <widget class="QSpinBox" name="spinBox_L11ResolutionMultiplier"/>
-                </item>
-                <item>
-                 <widget class="QLabel" name="label_L0Reference_4">
-                  <property name="text">
-                   <string>× L0</string>
-                  </property>
-                  <property name="alignment">
-                   <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-              <item row="9" column="3">
-               <widget class="QLabel" name="label_descriptionL2File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="6" column="1">
-               <widget class="QLabel" name="label_yLowerLeftL0File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="5" column="1">
-               <widget class="QLabel" name="label_xLowerLeftL0File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="5" column="3">
-               <widget class="QLabel" name="label_xLowerLeftL2File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="5" column="4">
-               <widget class="QLabel" name="label_xLowerLeftL1File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="5" column="5">
-               <widget class="QLabel" name="label_xLowerLeftL11File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="4" column="1">
-               <widget class="QLabel" name="label_nRowsL0File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="4" column="3">
-               <widget class="QLabel" name="label_nRowsL2File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="4" column="4">
-               <widget class="QLabel" name="label_nRowsL1File">
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-              <item row="4" column="5">
-               <widget class="QLabel" name="label_nRowsL11File">
-                <property name="text">
-                 <string/>
+                 <string>Extent</string>
                 </property>
                </widget>
               </item>
               <item row="3" column="1">
-               <widget class="QLabel" name="label_nColsL0File">
+               <widget class="QCheckBox" name="checkBox_extentL0enforce">
                 <property name="text">
                  <string/>
                 </property>
                </widget>
               </item>
               <item row="3" column="3">
-               <widget class="QLabel" name="label_nColsL2File">
+               <widget class="QCheckBox" name="checkBox_extentL2enforce">
                 <property name="text">
                  <string/>
                 </property>
                </widget>
               </item>
               <item row="3" column="4">
-               <widget class="QLabel" name="label_nColsL1File">
+               <widget class="QCheckBox" name="checkBox_extentL1enforce">
                 <property name="text">
                  <string/>
                 </property>
                </widget>
               </item>
               <item row="3" column="5">
-               <widget class="QLabel" name="label_nColsL11File">
+               <widget class="QCheckBox" name="checkBox_extentL11enforce">
                 <property name="text">
                  <string/>
                 </property>
@@ -2094,7 +1762,7 @@
               <item>
                <spacer name="horizontalSpacer_setLatLon">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -2138,7 +1806,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2147,7 +1815,7 @@
             <item>
              <spacer name="verticalSpacer">
               <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
+               <enum>Qt::Vertical</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
@@ -2165,7 +1833,7 @@
                  <string>Maximum</string>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2175,7 +1843,7 @@
                  <string>Minimum</string>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2192,7 +1860,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2209,7 +1877,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2226,7 +1894,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2236,7 +1904,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2245,7 +1913,7 @@
             <item>
              <spacer name="verticalSpacer_page_resolution">
               <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
+               <enum>Qt::Vertical</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
@@ -2274,7 +1942,7 @@
                  <string>L2</string>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2315,7 +1983,7 @@
                  <string>L1</string>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2330,7 +1998,7 @@
                  <string>L0</string>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2352,7 +2020,7 @@
                  <string>L11/L3</string>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2383,7 +2051,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2393,7 +2061,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2403,7 +2071,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2413,7 +2081,7 @@
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -2559,81 +2227,9 @@
               </item>
              </layout>
             </item>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_displayGrid">
-              <property name="topMargin">
-               <number>0</number>
-              </property>
-              <item>
-               <widget class="QLabel" name="label_displayGrid">
-                <property name="text">
-                 <string>Display Grid:</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QComboBox" name="comboBox_gridVariableToDisplay">
-                <property name="maximumSize">
-                 <size>
-                  <width>16777215</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-                <property name="currentIndex">
-                 <number>-1</number>
-                </property>
-                <item>
-                 <property name="text">
-                  <string>L0</string>
-                 </property>
-                </item>
-                <item>
-                 <property name="text">
-                  <string>L2</string>
-                 </property>
-                </item>
-                <item>
-                 <property name="text">
-                  <string>L1</string>
-                 </property>
-                </item>
-                <item>
-                 <property name="text">
-                  <string>L11/L3</string>
-                 </property>
-                </item>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="pushButton_gridDisplay">
-                <property name="maximumSize">
-                 <size>
-                  <width>40</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-                <property name="toolTip">
-                 <string>Browse for meteorology data folder</string>
-                </property>
-                <property name="text">
-                 <string>➤</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <spacer name="horizontalSpacer_displayGrid">
-                <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>40</width>
-                  <height>20</height>
-                 </size>
-                </property>
-               </spacer>
-              </item>
-             </layout>
+           </layout>
+              </widget>
+             </widget>
             </item>
            </layout>
           </widget>
@@ -2661,7 +2257,7 @@
               <item>
                <spacer name="horizontalSpacer_gaugeOption">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -2725,7 +2321,7 @@
               <item>
                <spacer name="horizontalSpacer_nml">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -2740,7 +2336,7 @@
             <item>
              <spacer name="verticalSpacer_page_settings">
               <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
+               <enum>Qt::Vertical</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
@@ -2757,10 +2353,10 @@
             <item>
              <widget class="QTableWidget" name="tableWidget_inputsSummary">
               <property name="editTriggers">
-               <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+               <set>QAbstractItemView::NoEditTriggers</set>
               </property>
               <property name="selectionBehavior">
-               <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+               <enum>QAbstractItemView::SelectRows</enum>
               </property>
               <attribute name="horizontalHeaderStretchLastSection">
                <bool>true</bool>
@@ -2797,10 +2393,10 @@
             <item>
              <widget class="QTableWidget" name="tableWidget_morphologySummary">
               <property name="editTriggers">
-               <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+               <set>QAbstractItemView::NoEditTriggers</set>
               </property>
               <property name="selectionBehavior">
-               <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+               <enum>QAbstractItemView::SelectRows</enum>
               </property>
               <attribute name="horizontalHeaderStretchLastSection">
                <bool>true</bool>
@@ -2832,15 +2428,168 @@
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="page_demDerivatives">
-           <layout class="QVBoxLayout" name="verticalLayout_page_demDerivatives">
+          <widget class="QWidget" name="page_dem">
+           <layout class="QVBoxLayout" name="verticalLayout_page_dem">
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_demInput" stretch="0,4,1">
+              <item>
+               <widget class="QLabel" name="label_dem">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>DEM Raster:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QComboBox" name="comboBox_demInput"/>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_browseDEMInput">
+                <property name="maximumSize">
+                 <size>
+                  <width>40</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="toolTip">
+                 <string>Select Project Folder</string>
+                </property>
+                <property name="text">
+                 <string>...</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="groupBox_upscaleTopography">
+              <property name="title">
+               <string>Upscale Topography</string>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="checked">
+               <bool>false</bool>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_40">
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_upscaleTopographyFactor">
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QLabel" name="label_upscaleTopographyFactor">
+                   <property name="text">
+                    <string>Upscale factor:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QSpinBox" name="spinBox_upscaleTopographyFactor"/>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="label_demResolutionReference">
+                   <property name="text">
+                    <string>× DEM Resolution</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <spacer name="horizontalSpacer_upscaleTopographyFactor">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_setDEM">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <spacer name="horizontalSpacer_setDEM">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_setDEM">
+                <property name="text">
+                 <string>Set</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_setDEMStatus">
+                <property name="minimumSize">
+                 <size>
+                  <width>28</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>28</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_demDescription">
+              <property name="text">
+               <string/>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
             <item>
              <widget class="QTableWidget" name="tableWidget_demDerivatives">
               <property name="editTriggers">
-               <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+               <set>QAbstractItemView::NoEditTriggers</set>
               </property>
               <property name="selectionBehavior">
-               <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+               <enum>QAbstractItemView::SelectRows</enum>
               </property>
               <attribute name="horizontalHeaderStretchLastSection">
                <bool>true</bool>
@@ -2893,7 +2642,7 @@
                  </size>
                 </property>
                 <property name="toolTip">
-                 <string>Open source: L0 Reference (DEM)</string>
+                 <string>Open source: Resolution (L0)</string>
                 </property>
                 <property name="styleSheet">
                  <string notr="true">QPushButton { color: red; font-weight: bold; }</string>
@@ -2906,7 +2655,7 @@
               <item>
                <spacer name="horizontalSpacer_demGrid">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -2970,199 +2719,18 @@
               </layout>
              </widget>
             </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="page_gauges">
-           <layout class="QVBoxLayout" name="verticalLayout_page_gauges">
             <item>
-             <widget class="QGroupBox" name="groupBox_gaugesInputType">
-              <property name="title">
-               <string>Gauges:</string>
+             <spacer name="verticalSpacer_page_dem">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
               </property>
-              <layout class="QVBoxLayout" name="verticalLayout_8">
-               <property name="spacing">
-                <number>0</number>
-               </property>
-               <property name="topMargin">
-                <number>0</number>
-               </property>
-               <property name="bottomMargin">
-                <number>0</number>
-               </property>
-               <item>
-                <widget class="QRadioButton" name="radioButton_gaugesPointInput">
-                 <property name="text">
-                  <string>Point Input</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QRadioButton" name="radioButton_gaugesRasterInput">
-                 <property name="text">
-                  <string>Raster Input</string>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </widget>
-            </item>
-            <item>
-             <widget class="QStackedWidget" name="stackedWidget_gaugeInput">
-              <property name="currentIndex">
-               <number>0</number>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
               </property>
-              <widget class="QWidget" name="page_gaugePointInput">
-               <layout class="QVBoxLayout" name="verticalLayout_9">
-                <item>
-                 <layout class="QFormLayout" name="formLayout_gauges">
-                  <item row="0" column="0">
-                   <widget class="QLabel" name="label_pour_points">
-                    <property name="text">
-                     <string>Gauges:</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="1">
-                   <layout class="QHBoxLayout" name="horizontalLayout_pourPointInput">
-                    <item>
-                     <widget class="QComboBox" name="comboBox_pourPointInput"/>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="pushButton_browsePourPointInput">
-                      <property name="maximumSize">
-                       <size>
-                        <width>40</width>
-                        <height>16777215</height>
-                       </size>
-                      </property>
-                      <property name="toolTip">
-                       <string>Select Project Folder</string>
-                      </property>
-                      <property name="text">
-                       <string>...</string>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </item>
-                  <item row="1" column="0">
-                   <widget class="QLabel" name="label_pourPointOutletID">
-                    <property name="text">
-                     <string>Outlet ID field:</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="1">
-                   <widget class="QComboBox" name="comboBox_pourPointOutletID">
-                    <property name="toolTip">
-                     <string>Select the outlet unique ID column from the attribute table</string>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </item>
-               </layout>
-              </widget>
-              <widget class="QWidget" name="page_gaugeRasterInput">
-               <layout class="QVBoxLayout" name="verticalLayout_17">
-                <item>
-                 <layout class="QHBoxLayout" name="horizontalLayout_gaugeRasterInput" stretch="1,2,1">
-                  <property name="topMargin">
-                   <number>0</number>
-                  </property>
-                  <item>
-                   <widget class="QLabel" name="label_gaugeRasterInput">
-                    <property name="text">
-                     <string>IdGauges Raster:</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QComboBox" name="comboBox_gaugeRaterInput"/>
-                  </item>
-                  <item>
-                   <widget class="QPushButton" name="pushButton_browsegaugeRasterInput">
-                    <property name="maximumSize">
-                     <size>
-                      <width>40</width>
-                      <height>16777215</height>
-                     </size>
-                    </property>
-                    <property name="toolTip">
-                     <string>Select Project Folder</string>
-                    </property>
-                    <property name="text">
-                     <string>...</string>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </item>
-                <item>
-                 <spacer name="verticalSpacer_gaugeRasterInputPage">
-                  <property name="orientation">
-                   <enum>Qt::Orientation::Vertical</enum>
-                  </property>
-                  <property name="sizeHint" stdset="0">
-                   <size>
-                    <width>20</width>
-                    <height>40</height>
-                   </size>
-                  </property>
-                 </spacer>
-                </item>
-               </layout>
-              </widget>
-             </widget>
-            </item>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_setGauges">
-              <property name="topMargin">
-               <number>0</number>
-              </property>
-              <item>
-               <spacer name="horizontalSpacer_setGauges">
-                <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>40</width>
-                  <height>20</height>
-                 </size>
-                </property>
-               </spacer>
-              </item>
-              <item>
-               <widget class="QPushButton" name="pushButton_setGauges">
-                <property name="text">
-                 <string>Set</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="label_setGaugesStatus">
-                <property name="minimumSize">
-                 <size>
-                  <width>28</width>
-                  <height>0</height>
-                 </size>
-                </property>
-                <property name="maximumSize">
-                 <size>
-                  <width>28</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string/>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
-             </layout>
+             </spacer>
             </item>
            </layout>
           </widget>
@@ -3232,7 +2800,7 @@ CODE,NAME,MHM_CLASS
                  <item>
                   <spacer name="horizontalSpacer_landUseLookup">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -3616,7 +3184,7 @@ CODE,NAME,MHM_CLASS
               <item>
                <spacer name="horizontalSpacer_setLandUse">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -3651,7 +3219,7 @@ CODE,NAME,MHM_CLASS
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -3729,7 +3297,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                  <item>
                   <spacer name="horizontalSpacer_soilLookup">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -4164,7 +3732,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                       <item>
                        <spacer name="horizontalSpacer_nSoilHorizons">
                         <property name="orientation">
-                         <enum>Qt::Orientation::Horizontal</enum>
+                         <enum>Qt::Horizontal</enum>
                         </property>
                         <property name="sizeHint" stdset="0">
                          <size>
@@ -4288,7 +3856,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                          <item>
                           <spacer name="horizontalSpacer_compositionStep">
                            <property name="orientation">
-                            <enum>Qt::Orientation::Horizontal</enum>
+                            <enum>Qt::Horizontal</enum>
                            </property>
                            <property name="sizeHint" stdset="0">
                             <size>
@@ -4335,7 +3903,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                          <item>
                           <spacer name="horizontalSpacer_bulkDensityStep">
                            <property name="orientation">
-                            <enum>Qt::Orientation::Horizontal</enum>
+                            <enum>Qt::Horizontal</enum>
                            </property>
                            <property name="sizeHint" stdset="0">
                             <size>
@@ -4397,7 +3965,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                     <item>
                      <spacer name="verticalSpacer_clayTab">
                       <property name="orientation">
-                       <enum>Qt::Orientation::Vertical</enum>
+                       <enum>Qt::Vertical</enum>
                       </property>
                       <property name="sizeHint" stdset="0">
                        <size>
@@ -4454,7 +4022,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                     <item>
                      <spacer name="verticalSpacer_sandTab">
                       <property name="orientation">
-                       <enum>Qt::Orientation::Vertical</enum>
+                       <enum>Qt::Vertical</enum>
                       </property>
                       <property name="sizeHint" stdset="0">
                        <size>
@@ -4511,7 +4079,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                     <item>
                      <spacer name="verticalSpacer_siltTab">
                       <property name="orientation">
-                       <enum>Qt::Orientation::Vertical</enum>
+                       <enum>Qt::Vertical</enum>
                       </property>
                       <property name="sizeHint" stdset="0">
                        <size>
@@ -4604,7 +4172,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                     <item>
                      <spacer name="verticalSpacer_bulkDensityTab">
                       <property name="orientation">
-                       <enum>Qt::Orientation::Vertical</enum>
+                       <enum>Qt::Vertical</enum>
                       </property>
                       <property name="sizeHint" stdset="0">
                        <size>
@@ -4651,7 +4219,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
               <item>
                <spacer name="horizontalSpacer_setSoil">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -4686,7 +4254,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -4762,7 +4330,7 @@ CODE,NAME,GEO_CLASS,KARSTIC,PARAMETER_VALUE
                  <item>
                   <spacer name="horizontalSpacer_geologyLookup">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -4853,7 +4421,7 @@ CODE,NAME,GEO_CLASS,KARSTIC,PARAMETER_VALUE
                 <item>
                  <spacer name="verticalSpacer_mhmReadyGeologyPage">
                   <property name="orientation">
-                   <enum>Qt::Orientation::Vertical</enum>
+                   <enum>Qt::Vertical</enum>
                   </property>
                   <property name="sizeHint" stdset="0">
                    <size>
@@ -4988,7 +4556,7 @@ CODE,NAME,GEO_CLASS,KARSTIC,PARAMETER_VALUE
                 <item>
                  <spacer name="verticalSpacer_categoricalGeologyPage">
                   <property name="orientation">
-                   <enum>Qt::Orientation::Vertical</enum>
+                   <enum>Qt::Vertical</enum>
                   </property>
                   <property name="sizeHint" stdset="0">
                    <size>
@@ -5007,7 +4575,7 @@ CODE,NAME,GEO_CLASS,KARSTIC,PARAMETER_VALUE
               <item>
                <spacer name="horizontalSpacer_setGeology">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -5042,7 +4610,7 @@ CODE,NAME,GEO_CLASS,KARSTIC,PARAMETER_VALUE
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -5124,7 +4692,7 @@ ID,LAND-USE,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,LAI_CLASS
                  <item>
                   <spacer name="horizontalSpacer_laiLookup">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -5215,7 +4783,7 @@ ID,LAND-USE,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,LAI_CLASS
                 <item>
                  <spacer name="verticalSpacer_mhmReadyLAiInputPage">
                   <property name="orientation">
-                   <enum>Qt::Orientation::Vertical</enum>
+                   <enum>Qt::Vertical</enum>
                   </property>
                   <property name="sizeHint" stdset="0">
                    <size>
@@ -5312,7 +4880,7 @@ ID,LAND-USE,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,LAI_CLASS
                 <item>
                  <spacer name="verticalSpacer_laiNetcdfInputPage">
                   <property name="orientation">
-                   <enum>Qt::Orientation::Vertical</enum>
+                   <enum>Qt::Vertical</enum>
                   </property>
                   <property name="sizeHint" stdset="0">
                    <size>
@@ -5447,7 +5015,7 @@ ID,LAND-USE,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,LAI_CLASS
                 <item>
                  <spacer name="verticalSpacer_categoricalLaiInputPage">
                   <property name="orientation">
-                   <enum>Qt::Orientation::Vertical</enum>
+                   <enum>Qt::Vertical</enum>
                   </property>
                   <property name="sizeHint" stdset="0">
                    <size>
@@ -5466,7 +5034,7 @@ ID,LAND-USE,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,LAI_CLASS
               <item>
                <spacer name="horizontalSpacer_setLai">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -5501,7 +5069,201 @@ ID,LAND-USE,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,LAI_CLASS
                  <string/>
                 </property>
                 <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="page_gauges">
+           <layout class="QVBoxLayout" name="verticalLayout_page_gauges">
+            <item>
+             <widget class="QGroupBox" name="groupBox_gaugesInputType">
+              <property name="title">
+               <string>Gauges:</string>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_8">
+               <property name="spacing">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QRadioButton" name="radioButton_gaugesPointInput">
+                 <property name="text">
+                  <string>Point Input</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QRadioButton" name="radioButton_gaugesRasterInput">
+                 <property name="text">
+                  <string>Raster Input</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QStackedWidget" name="stackedWidget_gaugeInput">
+              <property name="currentIndex">
+               <number>0</number>
+              </property>
+              <widget class="QWidget" name="page_gaugePointInput">
+               <layout class="QVBoxLayout" name="verticalLayout_9">
+                <item>
+                 <layout class="QFormLayout" name="formLayout_gauges">
+                  <item row="0" column="0">
+                   <widget class="QLabel" name="label_pour_points">
+                    <property name="text">
+                     <string>Gauges:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="1">
+                   <layout class="QHBoxLayout" name="horizontalLayout_pourPointInput">
+                    <item>
+                     <widget class="QComboBox" name="comboBox_pourPointInput"/>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="pushButton_browsePourPointInput">
+                      <property name="maximumSize">
+                       <size>
+                        <width>40</width>
+                        <height>16777215</height>
+                       </size>
+                      </property>
+                      <property name="toolTip">
+                       <string>Select Project Folder</string>
+                      </property>
+                      <property name="text">
+                       <string>...</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item row="1" column="0">
+                   <widget class="QLabel" name="label_pourPointOutletID">
+                    <property name="text">
+                     <string>Outlet ID field:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="1">
+                   <widget class="QComboBox" name="comboBox_pourPointOutletID">
+                    <property name="toolTip">
+                     <string>Select the outlet unique ID column from the attribute table</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+               </layout>
+              </widget>
+              <widget class="QWidget" name="page_gaugeRasterInput">
+               <layout class="QVBoxLayout" name="verticalLayout_17">
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout_gaugeRasterInput" stretch="1,2,1">
+                  <property name="topMargin">
+                   <number>0</number>
+                  </property>
+                  <item>
+                   <widget class="QLabel" name="label_gaugeRasterInput">
+                    <property name="text">
+                     <string>IdGauges Raster:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QComboBox" name="comboBox_gaugeRaterInput"/>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="pushButton_browsegaugeRasterInput">
+                    <property name="maximumSize">
+                     <size>
+                      <width>40</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
+                    <property name="toolTip">
+                     <string>Select Project Folder</string>
+                    </property>
+                    <property name="text">
+                     <string>...</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item>
+                 <spacer name="verticalSpacer_gaugeRasterInputPage">
+                  <property name="orientation">
+                   <enum>Qt::Vertical</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>40</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_setGauges">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <spacer name="horizontalSpacer_setGauges">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_setGauges">
+                <property name="text">
+                 <string>Set</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_setGaugesStatus">
+                <property name="minimumSize">
+                 <size>
+                  <width>28</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>28</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
@@ -5554,7 +5316,7 @@ date,discharge
               <item>
                <spacer name="horizontalSpacer_domainDefinitionType">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -5717,7 +5479,7 @@ date,discharge
                  <item>
                   <spacer name="horizontalSpacer_meteoVarAdd">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -5735,7 +5497,7 @@ date,discharge
                   <number>-4</number>
                  </property>
                  <property name="sizeAdjustPolicy">
-                  <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents</enum>
+                  <enum>QAbstractScrollArea::AdjustToContents</enum>
                  </property>
                  <attribute name="horizontalHeaderDefaultSectionSize">
                   <number>200</number>
@@ -5788,12 +5550,251 @@ date,discharge
             <item>
              <spacer name="verticalSpacer_meteoInputs">
               <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
+               <enum>Qt::Vertical</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
                 <width>20</width>
                 <height>40</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="page_precipitation">
+           <layout class="QVBoxLayout" name="verticalLayout_page_precipitation">
+            <item>
+             <widget class="QWidget" name="widget_hostPrecipitationMeteoVarInput" native="true">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>25</height>
+               </size>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_precipitationForm">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <layout class="QGridLayout" name="gridLayout_timeInputs" columnstretch="1,0,0,0,0">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item row="0" column="3">
+               <widget class="QLabel" name="label_simulationEndTime">
+                <property name="text">
+                 <string>Simulation End Time</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="2">
+               <widget class="QDateTimeEdit" name="dateTimeEdit_evaluationStartTimeInput">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="displayFormat">
+                 <string>MM/dd/yyyy h:mm Ap</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLabel" name="label_simulationStartTime">
+                <property name="text">
+                 <string>Simulation Start Time</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QDateTimeEdit" name="dateTimeEdit_simulationStartTimeInput">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="displayFormat">
+                 <string>MM/dd/yyyy h:mm Ap</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QLabel" name="label_evaluationStartTime">
+                <property name="text">
+                 <string>Evaluation Start Time</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="4">
+               <widget class="QLabel" name="label_precipitationEndTimeValue">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>25</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_precipitationStartTimeValue">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>25</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="4">
+               <widget class="QLabel" name="label_precipitationEndTime">
+                <property name="text">
+                 <string>Precp. End Time</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_precipitationStartTime">
+                <property name="text">
+                 <string>Precp. Start Time</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="3">
+               <widget class="QDateTimeEdit" name="dateTimeEdit_simulationEndTimeInput">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="displayFormat">
+                 <string>MM/dd/yyyy h:mm Ap</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_setPrecipitationInput">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <spacer name="horizontalSpacer_setPrecipitationInput">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_setSimulationPeriod">
+                <property name="text">
+                 <string>Set Periods</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_setPrecipitationInputStatus">
+                <property name="minimumSize">
+                 <size>
+                  <width>28</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>28</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="verticalSpacer_page_precipitation">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>20</height>
                </size>
               </property>
              </spacer>
@@ -5823,7 +5824,7 @@ date,discharge
             <item>
              <spacer name="verticalSpacer_meteoVar">
               <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
+               <enum>Qt::Vertical</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
@@ -5858,7 +5859,7 @@ date,discharge
                <number>3</number>
               </property>
               <property name="sizeConstraint">
-               <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
+               <enum>QLayout::SetDefaultConstraint</enum>
               </property>
               <item>
                <widget class="QLabel" name="label_numberOfGaugedOutlets">
@@ -5965,7 +5966,7 @@ date,discharge
                  <item>
                   <spacer name="horizontalSpacer_addObservationVar">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -5983,7 +5984,7 @@ date,discharge
                   <number>-4</number>
                  </property>
                  <property name="sizeAdjustPolicy">
-                  <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents</enum>
+                  <enum>QAbstractScrollArea::AdjustToContents</enum>
                  </property>
                  <attribute name="horizontalHeaderDefaultSectionSize">
                   <number>200</number>
@@ -6045,7 +6046,7 @@ date,discharge
                  <item>
                   <spacer name="horizontalSpacer_runObservation">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -6089,7 +6090,7 @@ date,discharge
             <item>
              <spacer name="verticalSpacer_2">
               <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
+               <enum>Qt::Vertical</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
@@ -6125,7 +6126,7 @@ date,discharge
                  <item>
                   <spacer name="horizontalSpacer_displayDischarge">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -6202,7 +6203,7 @@ date,discharge
               <item>
                <spacer name="horizontalSpacer">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -6245,7 +6246,7 @@ date,discharge
               <item>
                <spacer name="horizontalSpacer_nmlFinal">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -6304,7 +6305,7 @@ date,discharge
                  <item>
                   <spacer name="horizontalSpacer_optimizationOptions">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -6351,7 +6352,7 @@ date,discharge
                  <item>
                   <spacer name="horizontalSpacer_parameterOptions">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -6492,7 +6493,7 @@ date,discharge
                  <item>
                   <spacer name="horizontalSpacer_run_mHM">
                    <property name="orientation">
-                    <enum>Qt::Orientation::Horizontal</enum>
+                    <enum>Qt::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
@@ -6510,7 +6511,7 @@ date,discharge
             <item>
              <spacer name="verticalSpacer_execution">
               <property name="orientation">
-               <enum>Qt::Orientation::Vertical</enum>
+               <enum>Qt::Vertical</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
@@ -6551,13 +6552,13 @@ date,discharge
               <item>
                <widget class="QComboBox" name="comboBox_postRun">
                 <property name="contextMenuPolicy">
-                 <enum>Qt::ContextMenuPolicy::CustomContextMenu</enum>
+                 <enum>Qt::CustomContextMenu</enum>
                 </property>
                 <property name="toolTip">
                  <string>The run to analyse: the current output/ or an archived run. Right-click to archive the current run.</string>
                 </property>
                 <property name="sizeAdjustPolicy">
-                 <enum>QComboBox::SizeAdjustPolicy::AdjustToContents</enum>
+                 <enum>QComboBox::AdjustToContents</enum>
                 </property>
                </widget>
               </item>
@@ -6639,7 +6640,7 @@ date,discharge
               <item>
                <spacer name="horizontalSpacer_postContext">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -6683,14 +6684,14 @@ date,discharge
                  <string>Export</string>
                 </property>
                 <property name="popupMode">
-                 <enum>QToolButton::ToolButtonPopupMode::InstantPopup</enum>
+                 <enum>QToolButton::InstantPopup</enum>
                 </property>
                </widget>
               </item>
               <item>
                <spacer name="horizontalSpacer_3">
                 <property name="orientation">
-                 <enum>Qt::Orientation::Horizontal</enum>
+                 <enum>Qt::Horizontal</enum>
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
@@ -6730,7 +6731,7 @@ date,discharge
    <item>
     <widget class="Line" name="line_Log">
      <property name="orientation">
-      <enum>Qt::Orientation::Horizontal</enum>
+      <enum>Qt::Horizontal</enum>
      </property>
     </widget>
    </item>
@@ -6777,7 +6778,7 @@ date,discharge
       <item>
        <spacer name="horizontalSpacer_2">
         <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
+         <enum>Qt::Horizontal</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -6807,10 +6808,10 @@ date,discharge
    <item>
     <widget class="QDialogButtonBox" name="Closure">
      <property name="orientation">
-      <enum>Qt::Orientation::Horizontal</enum>
+      <enum>Qt::Horizontal</enum>
      </property>
      <property name="standardButtons">
-      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Help|QDialogButtonBox::StandardButton::Ok|QDialogButtonBox::StandardButton::Reset</set>
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Help|QDialogButtonBox::Ok|QDialogButtonBox::Reset</set>
      </property>
     </widget>
    </item>

@@ -114,6 +114,12 @@ class Extent:
             max(item.ymax for item in values),
         )
 
+    def intersect(self, other: Extent) -> Extent | None:
+        """The overlap of both, or None when they share no area."""
+        xmin, xmax = max(self.xmin, other.xmin), min(self.xmax, other.xmax)
+        ymin, ymax = max(self.ymin, other.ymin), min(self.ymax, other.ymax)
+        return Extent(xmin, xmax, ymin, ymax) if xmin < xmax and ymin < ymax else None
+
 
 @dataclass(frozen=True)
 class TargetGrid:
@@ -141,17 +147,6 @@ class TargetGrid:
             shape = (int(self.header["nrows"]), int(self.header["ncols"]))
             if np.shape(self.sample_lon) != shape or np.shape(self.sample_lat) != shape:
                 raise ValueError("Target sample coordinates do not match the header shape.")
-
-
-@dataclass(frozen=True)
-class SpatialResolution:
-    """A measured x/y grid resolution expressed in one CRS."""
-
-    resolution: float
-    x_resolution: float
-    y_resolution: float
-    unit: str
-    crs: str | None
 
 
 def raster_resolution_info(
@@ -191,35 +186,6 @@ def raster_resolution_info(
     }
 
 
-def resolution_in_crs(metadata, target_crs: str | None) -> SpatialResolution:
-    """Express an inspected rectilinear grid resolution in ``target_crs``."""
-    source_crs = metadata.crs
-    if not target_crs or not source_crs or crs_equal(source_crs, target_crs):
-        return SpatialResolution(
-            metadata.resolution,
-            metadata.x_resolution,
-            metadata.y_resolution,
-            metadata.unit,
-            target_crs or source_crs,
-        )
-    try:
-        from pyproj import CRS, Transformer
-    except Exception as error:
-        raise RuntimeError("pyproj is required to transform a grid resolution.") from error
-    west, east, south, north = metadata.bounds
-    x0, y0 = (west + east) / 2, (south + north) / 2
-    transform = Transformer.from_crs(source_crs, target_crs, always_xy=True)
-    p0 = transform.transform(x0, y0)
-    px = transform.transform(x0 + metadata.x_resolution, y0)
-    py = transform.transform(x0, y0 + metadata.y_resolution)
-    dx = math.hypot(px[0] - p0[0], px[1] - p0[1])
-    dy = math.hypot(py[0] - p0[0], py[1] - p0[1])
-    crs = CRS.from_user_input(target_crs)
-    unit_name = crs.axis_info[0].unit_name.lower() if crs.axis_info else ""
-    unit = "deg" if crs.is_geographic else "m" if unit_name in {"metre", "meter"} else unit_name
-    return SpatialResolution((dx + dy) / 2, dx, dy, unit, target_crs)
-
-
 @dataclass
 class Grid(Resolution):
     """mHM resolutions plus source-level extents and their common target extent."""
@@ -242,21 +208,27 @@ class Grid(Resolution):
     def for_meteorology(
         cls,
         l0_header: Mapping,
-        domain_extents: Iterable[Extent | Sequence[float]],
+        bounds: Sequence[float],
         multiplier: int,
         *,
+        block: int | None = None,
         crs: str = "",
         unit: str = "",
         raw_l2_resolution: Sequence[float] | None = None,
         raw_l2_extent: Extent | None = None,
         raw_l2_crs: str | None = None,
     ) -> Grid:
-        """Build the exact common L0/L2 target selected by the user."""
+        """The common L0/L2 grid: `bounds` snapped inward to whole blocks of `block` L0 cells
+        (a multiple of the L2 `multiplier`), on the L2 lattice when the raw L2 grid anchors it.
+        Inward edges stay inside every extent `bounds` came from, so nothing is padded."""
         ratio = _positive_integer(multiplier)
+        block = _positive_integer(block or ratio)
+        if block % ratio:
+            raise ValueError(f"The block of {block} L0 cells is not a multiple of the L2 factor {ratio}.")
         normalized_l0 = standardize_header(l0_header, unit=unit)
         l0_resolution = float(normalized_l0["cellsize"])
         source_l0_extent = Extent.from_header(normalized_l0)
-        requested_extent = Extent.union(domain_extents)
+        requested_extent = Extent.from_bounds(bounds)
 
         raw_factor = None
         if raw_l2_resolution is not None:
@@ -282,13 +254,17 @@ class Grid(Resolution):
         # A gap below half an L0 cell shifts the meteo grid onto the L0 lattice; only another
         # spacing or CRS resamples it.
         resampling = not comparable
-        exact_l0, l2 = aligned_l0_l2_headers(
-            requested_extent.bounds,
-            normalized_l0,
-            ratio,
-            unit,
-            anchor=anchor,
-        )
+        try:
+            exact_l0, blocks = aligned_l0_l2_headers(
+                requested_extent.bounds, normalized_l0, block, unit, anchor=anchor, inward=True)
+        except ValueError as error:
+            raise ValueError(f"No whole block of {block} L0 cells ({block * l0_resolution:.10g} {unit}) fits inside "
+                             "the common extent: untick an extent, or use L1/L11 factors that divide the L2 "
+                             "factor.") from error
+        per_block = block // ratio
+        l2 = {**blocks, "ncols": blocks["ncols"] * per_block, "nrows": blocks["nrows"] * per_block,
+              "cellsize": ratio * l0_resolution}
+        validate_l0_l2_alignment(exact_l0, l2, ratio)
         common = Extent.from_header(l2)
         return cls(
             l0=l0_resolution,
@@ -424,17 +400,6 @@ def resolution_is_multiple(coarse_resolution, fine_resolution, tolerance=None, u
     return integer_resolution_factor(coarse_resolution, fine_resolution, unit, tolerance) is not None
 
 
-def possible_resolutions(fine_resolution: float, coarse_resolution: float, unit=None):
-    factor = integer_resolution_factor(coarse_resolution, fine_resolution, unit)
-    if factor is None:
-        return []
-    return [
-        float(coarse_resolution) / (factor // divisor)
-        for divisor in range(1, factor + 1)
-        if factor % divisor == 0
-    ]
-
-
 def standardize_header(header: Mapping, *, unit: str | None = None) -> dict:
     result = {str(key).lower(): value for key, value in dict(header).items()}
     cellsize = float(result.get("exact_cellsize", result.get("cellsize", 0)))
@@ -560,7 +525,8 @@ def raster_grids_match(
     return left_projection == right_projection
 
 
-def _header(bounds, cellsize, anchor_x, anchor_y, unit):
+def _header(bounds, cellsize, anchor_x, anchor_y, unit, inward=False):
+    """Whole cells on the anchored lattice: covering `bounds`, or with `inward` inside them."""
     extent = Extent.from_bounds(bounds)
 
     def index(value, anchor, upper):
@@ -571,8 +537,10 @@ def _header(bounds, cellsize, anchor_x, anchor_y, unit):
             return int(nearest)
         return math.ceil(quotient) if upper else math.floor(quotient)
 
-    x0, x1 = index(extent.xmin, anchor_x, False), index(extent.xmax, anchor_x, True)
-    y0, y1 = index(extent.ymin, anchor_y, False), index(extent.ymax, anchor_y, True)
+    x0, x1 = index(extent.xmin, anchor_x, inward), index(extent.xmax, anchor_x, not inward)
+    y0, y1 = index(extent.ymin, anchor_y, inward), index(extent.ymax, anchor_y, not inward)
+    if inward and (x1 <= x0 or y1 <= y0):
+        raise ValueError(f"No whole cell of {cellsize:.10g} fits inside the extent.")
     return {
         "ncols": max(1, x1 - x0),
         "nrows": max(1, y1 - y0),
@@ -589,8 +557,8 @@ def header_for_bounds(bounds, cellsize: float, unit: str | None = None) -> dict:
     return _header(bounds, float(cellsize), 0.0, 0.0, unit)
 
 
-def header_for_aligned_bounds(bounds, cellsize, anchor_x, anchor_y, unit=None) -> dict:
-    return _header(bounds, float(cellsize), float(anchor_x), float(anchor_y), unit)
+def header_for_aligned_bounds(bounds, cellsize, anchor_x, anchor_y, unit=None, *, inward=False) -> dict:
+    return _header(bounds, float(cellsize), float(anchor_x), float(anchor_y), unit, inward)
 
 
 def header_for_existing_bounds(reference_header: Mapping, cellsize: float, unit=None) -> dict:
@@ -661,7 +629,7 @@ def header_for_model_level(
     return result
 
 
-def aligned_l0_l2_headers(bounds, l0_header, multiplier, unit=None, *, anchor=None):
+def aligned_l0_l2_headers(bounds, l0_header, multiplier, unit=None, *, anchor=None, inward=False):
     ratio = _positive_integer(multiplier)
     source = dict(l0_header)
     l0_cellsize = float(source.get("exact_cellsize", source.get("cellsize", 0)))
@@ -673,13 +641,7 @@ def aligned_l0_l2_headers(bounds, l0_header, multiplier, unit=None, *, anchor=No
         raise ValueError("The L0 grid requires a lower-left anchor.") from error
     anchor_x, anchor_y = anchor or source_anchor
     resolved_unit = unit or str(source.get("unit", "") or "")
-    l2 = header_for_aligned_bounds(
-        bounds,
-        ratio * l0_cellsize,
-        anchor_x,
-        anchor_y,
-        resolved_unit,
-    )
+    l2 = header_for_aligned_bounds(bounds, ratio * l0_cellsize, anchor_x, anchor_y, resolved_unit, inward=inward)
     exact_l0 = {
         **l2,
         "ncols": int(l2["ncols"]) * ratio,
@@ -764,6 +726,47 @@ def validate_grid_headers(headers: Mapping[str, Mapping]):
         standardized["L1"]["cellsize"], l0_cellsize, tolerance=1e-6
     )
     return standardized, ratios
+
+
+def validate_mhm_grid(headers: Mapping[str, Mapping], version: str) -> None:
+    """mHM's own rules on top of `validate_grid_headers` (which nests L1/L11 with L2): every level
+    at least L0, L11 and L1 nested, and mHM 5.13 only takes an even L11/L1 ratio above 1
+    (mo_common_mHM_mRM_read_config.f90 checks mod(f, 2))."""
+    size = {level: float(headers[level]["cellsize"]) for level in ("L0", "L1", "L11", "L2")}
+    for level in ("L1", "L11", "L2"):
+        if integer_resolution_factor(size[level], size["L0"]) is None:
+            raise ValueError(f"{level} ({size[level]:.10g}) must be a whole multiple of L0 ({size['L0']:.10g}), "
+                             "not finer: mHM upscales L0 by whole cells.")
+    coarser = integer_resolution_factor(size["L11"], size["L1"])
+    if coarser is None and integer_resolution_factor(size["L1"], size["L11"]) is None:
+        raise ValueError(f"L11 ({size['L11']:.10g}) and L1 ({size['L1']:.10g}) must nest: "
+                         "one a whole multiple of the other.")
+    if str(version).startswith("5") and coarser and coarser > 1 and coarser % 2:
+        raise ValueError(f"L11 is {coarser} x L1, but mHM 5.13 accepts only an even L11/L1 ratio "
+                         "(2, 4, 6, ...): 'Resolution of routing is not a multiple of hydrological "
+                         "model resolution'.")
+
+
+def inner_bounds(bounds: Sequence[float], source_crs: str, target_crs: str) -> tuple[float, ...]:
+    """The largest axis-aligned box in `target_crs` inside `bounds` (`source_crs`): its edges,
+    densified, are transformed, so the curved footprint's no-data corners never count."""
+    if crs_equal(source_crs, target_crs):
+        return tuple(Extent.from_bounds(bounds).bounds)
+    import numpy as np
+    from pyproj import Transformer
+
+    xmin, xmax, ymin, ymax = Extent.from_bounds(bounds).bounds
+    transform = Transformer.from_crs(source_crs, target_crs, always_xy=True).transform
+    along = np.linspace(0.0, 1.0, 51)
+    xs, ys = xmin + (xmax - xmin) * along, ymin + (ymax - ymin) * along
+    west = transform(np.full_like(ys, xmin), ys)[0]
+    east = transform(np.full_like(ys, xmax), ys)[0]
+    south = transform(xs, np.full_like(xs, ymin))[1]
+    north = transform(xs, np.full_like(xs, ymax))[1]
+    box = (float(np.max(west)), float(np.min(east)), float(np.max(south)), float(np.min(north)))
+    if not (box[0] < box[1] and box[2] < box[3]):
+        raise ValueError("The extent has no usable area once transformed to the domain CRS.")
+    return box
 
 
 def aligned_window(source_header: Mapping, target_header: Mapping, *, label="raster") -> dict:

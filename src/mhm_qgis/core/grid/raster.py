@@ -1,24 +1,39 @@
-"""Inspect a DEM's effective grid without reading or deriving its pixels."""
+"""Inspect a reference raster's effective grid without reading or deriving its pixels."""
 from .model import crs_equal, geotransform_bounds, raster_resolution_info
 
 
-def dem_grid(source, source_crs, target_crs, unit="", factor=1):
-    """The DEM's grid in `target_crs`; with `factor`, the upscaled L0 grid: blocks of factor x factor
-    cells from the lower-left corner, the top and right padded to whole blocks (as the upscaling does)."""
+def raster_grid(source, source_crs, target_crs, unit="", factor=1):
+    """The raster's grid in `target_crs` (a GDAL source: a path, or `NETCDF:"path":var`); with
+    `factor`, the upscaled grid: blocks of factor x factor cells from the lower-left corner, the
+    top and right padded to whole blocks (as the topography upscaling does)."""
     from osgeo import gdal
 
     dataset = gdal.Open(str(source))
     if dataset is None:
-        raise ValueError(f"Cannot open DEM: {source}")
-    if not crs_equal(source_crs, target_crs):
-        dataset = gdal.AutoCreateWarpedVRT(dataset, source_crs, target_crs, gdal.GRA_NearestNeighbour)
-        if dataset is None:
-            raise ValueError("Cannot determine the reprojected DEM grid.")
-    transform = dataset.GetGeoTransform()
-    if transform[2] or transform[4]:
-        raise ValueError("The DEM must have a north-up grid.")
-    xmin, ymin, xmax, ymax = geotransform_bounds(transform, dataset.RasterXSize, dataset.RasterYSize)
-    cols, rows = -(-dataset.RasterXSize // factor), -(-dataset.RasterYSize // factor)
-    xmax = xmin + cols * factor * (xmax - xmin) / dataset.RasterXSize
-    ymax = ymin + rows * factor * (ymax - ymin) / dataset.RasterYSize
-    return raster_resolution_info((xmin, xmax, ymin, ymax), cols, rows, unit=unit, crs=target_crs)
+        raise ValueError(f"Cannot open the raster: {source}")
+    if dataset.GetGeoTransform(can_return_null=True) is None:
+        (xmin, xmax, ymin, ymax), cols, rows = _netcdf_grid(str(source), source_crs, target_crs)
+    else:
+        if not crs_equal(source_crs, target_crs):
+            dataset = gdal.AutoCreateWarpedVRT(dataset, source_crs, target_crs, gdal.GRA_NearestNeighbour)
+            if dataset is None:
+                raise ValueError("Cannot determine the reprojected raster grid.")
+        transform = dataset.GetGeoTransform()
+        if transform[2] or transform[4]:
+            raise ValueError("The raster must have a north-up grid.")
+        xmin, ymin, xmax, ymax = geotransform_bounds(transform, dataset.RasterXSize, dataset.RasterYSize)
+        cols, rows = dataset.RasterXSize, dataset.RasterYSize
+    blocks_x, blocks_y = -(-cols // factor), -(-rows // factor)
+    xmax = xmin + blocks_x * factor * (xmax - xmin) / cols
+    ymax = ymin + blocks_y * factor * (ymax - ymin) / rows
+    return raster_resolution_info((xmin, xmax, ymin, ymax), blocks_x, blocks_y, unit=unit, crs=target_crs)
+
+
+def _netcdf_grid(source, source_crs, target_crs):
+    """A NetCDF variable GDAL cannot place (mHM's `xc`/`yc` with 2-D lat/lon), read as the forcing
+    reads it, so a reference file and its forcing share one lattice."""
+    if not (source.startswith('NETCDF:"') and crs_equal(source_crs, target_crs)):
+        raise ValueError(f"{source} has no grid information (lower-left corner and cell size).")
+    from ..meteorology.forcing.api import netcdf_grid
+
+    return netcdf_grid(source.split('"')[1], source.rsplit(":", 1)[1], source_crs)

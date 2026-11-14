@@ -631,7 +631,7 @@ def on_page_changed(dialog, page):
     dialog.log_message(f"Switched to '{dialog.tabWidget_steps.tabText(0)}'.")
     # mHM reports nothing when it finishes, so the Outputs page re-reads the
     # runs each time it is shown.
-    if page is dialog.tab_outputs:
+    if page is dialog.page_outputs:
         from . import post_context
 
         post_context.populate(dialog)

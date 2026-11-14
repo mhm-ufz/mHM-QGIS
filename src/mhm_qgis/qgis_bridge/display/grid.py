@@ -96,13 +96,4 @@ def display_grids(dialog, levels) -> list[str]:
     return names
 
 
-def display_selected_grid(dialog) -> None:
-    """Create and show the grid selected by the main form."""
-    selected = dialog.comboBox_gridVariableToDisplay.currentText().strip()
-    if not selected:
-        QMessageBox.warning(dialog, "Display Grid", "Select L0, L1, L11/L3, or L2.")
-        return
-    display_grids(dialog, ["L11" if selected.startswith("L11") else selected])
-
-
-__all__ = ["display_grids", "display_selected_grid"]
+__all__ = ["display_grids"]

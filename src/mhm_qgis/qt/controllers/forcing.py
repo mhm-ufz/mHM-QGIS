@@ -1,35 +1,34 @@
 """Meteorology and gridded-observation variable inputs on the main form.
 
 Each variable is described once in `meteo_var_details_input.ui`; only OK starts
-a metadata scan, and a failed scan keeps the previous input. Precipitation is
-the reference variable whose scan establishes the common grid (`grid`).
+a metadata scan, and a failed scan keeps the previous input. Every input must cover
+the common extent Set on the Resolution page (`grid`); precipitation's page also
+holds the simulation period.
 """
 from __future__ import annotations
 
 from dataclasses import asdict
 
-from qgis.PyQt.QtCore import QSignalBlocker, Qt
+from qgis.PyQt.QtCore import QDateTime, QSignalBlocker, Qt
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetItem
 
 from ...core import datamodel
-from ...core.meteorology.forcing import MeteoFolderSpec, inspect_meteo_folder_cached
+from ...core.meteorology.forcing import (
+    MeteoFolderSpec,
+    grid_note,
+    inspect_meteo_folder_cached,
+    validate_coverage,
+)
 from .. import project_tree
 from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
-from . import grid, main, process_cases
+from . import grid, main, process_cases, time
 from .version import selected as selected_version
 from .workflow_state import (
     invalidate,
     invalidate_meteo,
     require_active,
-    set_status,
     switch_busy,
 )
-
-
-def scan_precipitation(dialog):
-    """Precipitation establishes the grid after its metadata dialog accepts."""
-    if dialog.check_prerequisites():
-        edit_meteo_input(dialog, "pre")
 
 
 def edit_meteo_input(dialog, variable=None):
@@ -40,16 +39,39 @@ def edit_meteo_input(dialog, variable=None):
     return None if spec is None else submit_meteo_input(dialog, variable, spec)
 
 
+def page(variable):
+    """The page that hosts `variable`'s form: precipitation has its own, with the period."""
+    return "precipitation" if variable == "pre" else "meteoVar"
+
+
 def show_meteo_input(dialog, variable):
-    """A meteorology row's page: the variable's metadata form, filled in; OK scans it."""
+    """A meteorology row's page: the variable's metadata form, filled in, with how its input meets
+    the common grid; OK scans it."""
     key = f"meteo:{variable}"
     prompt = MeteoVarDetailsDialog(variable, dialog.project_directory, _meteo_initial(dialog, variable), dialog)
     main.draftable(dialog, prompt, key)
     prompt.accepted.connect(lambda: require_active(dialog) and not switch_busy(dialog) and submit_meteo_input(
         dialog, variable, prompt.spec))
     prompt.finished.connect(lambda _result: show_meteo_input(dialog, variable))
-    main.embed(dialog, "meteoVar", prompt)
+    prompt.label_description.setText(note(dialog, variable))
+    main.embed(dialog, page(variable), prompt)
     project_tree.indicate(dialog, f"meteo_{variable}", prompt.label_setStatus)
+
+
+def note(dialog, variable):
+    """How the scanned input meets the common grid: coverage, then copy, shift or resampling."""
+    metadata = dialog._meteo_inspections.get(variable)
+    if metadata is None or not grid.grid_current(dialog):
+        return "Set the resolutions, then Set this input to check it against the common grid."
+    try:
+        text = grid_note(metadata, dialog._grid_l2_metadata, dialog.selected_meteo_crs())
+    except ValueError as error:
+        return str(error)
+    spec = dialog._meteo_inputs.get(variable, {})
+    output = spec.get("output_temporal_resolution") or spec.get("temporal_resolution")
+    if output and output != spec.get("temporal_resolution"):
+        text += f" {spec['temporal_resolution']} → {output} ({(spec.get('aggregation') or '').lower()})."
+    return text
 
 
 def _initial(dialog, inputs, variable):
@@ -62,9 +84,6 @@ def _initial(dialog, inputs, variable):
 def _meteo_initial(dialog, variable):
     """The saved input, overlaid by the values of a Set that has not scanned yet."""
     initial = _initial(dialog, dialog._meteo_inputs, variable)
-    if variable == "pre":
-        initial.update(folder=grid.precipitation_folder(dialog),
-                       pattern=dialog.lineEdit_precipitationGlobDefinition.text())
     return {**initial, **dialog._drafts.get(f"meteo:{variable}", {})}
 
 
@@ -81,42 +100,55 @@ def _outside_period(dialog, variable, metadata):
 
 
 def submit_meteo_input(dialog, variable, spec):
-    """Scan an accepted spec; a failed scan keeps the old input."""
-    if variable == "pre":
-        set_status(dialog, "scan_precipitation", "running")
+    """Scan an accepted spec; a failed scan keeps the old input. The input must cover the common
+    extent once it is Set; precipitation shows its span and proposes the simulation period."""
 
     def scanned(metadata):
         if variable != "pre" and (error := _outside_period(dialog, variable, metadata)):
             failed(ValueError(error))
             return
+        if grid.grid_current(dialog):
+            saved = dialog._grid_l2_metadata
+            try:
+                validate_coverage(metadata, saved["study_bounds"], dialog.selected_meteo_crs(), saved["l0_resolution"])
+            except ValueError as error:
+                failed(error)
+                return
         dialog._meteo_inputs[variable] = _spec_state(spec)
-        if dialog._drafts.pop(f"meteo:{variable}", None) is not None and getattr(
-                main.form_on(dialog, "meteoVar"), "draft_key", None) == f"meteo:{variable}":
-            show_meteo_input(dialog, variable)  # rebuilt clean from the scanned input
         dialog._meteo_inspections[variable] = metadata
+        dialog._drafts.pop(f"meteo:{variable}", None)
         if variable == "pre":
-            with QSignalBlocker(dialog.comboBox_precipitationFile):
-                grid.select_precipitation_folder(dialog, str(spec.folder))
-            with QSignalBlocker(dialog.lineEdit_precipitationGlobDefinition):
-                dialog.lineEdit_precipitationGlobDefinition.setText(spec.pattern)
-            grid.precipitation_scanned(dialog, metadata)
+            _precipitation_period(dialog, metadata)
+        if getattr(main.form_on(dialog, page(variable)), "draft_key", None) == f"meteo:{variable}":
+            show_meteo_input(dialog, variable)  # rebuilt from the scanned input, with its note
         invalidate_meteo(dialog)
         populate_meteo_table(dialog)
         dialog.save_input_state()
 
     def failed(error):
-        if variable == "pre":
-            set_status(dialog, "scan_precipitation", "failed", str(error))
         if not dialog._closing:
             QMessageBox.warning(dialog, "Meteorology scan", str(error))
 
-    started = _submit_scan(dialog, f"meteo-scan-{variable}", variable, spec, scanned, failed, (
+    return _submit_scan(dialog, f"meteo-scan-{variable}", variable, spec, scanned, failed, (
         dialog.tabWidget_steps, dialog.pushButton_BrowseProjectFolder,
         dialog.comboBox_domainFolderSelector, dialog.pushButton_createOrLoadDomainStructure,
     ))
-    if variable == "pre" and not started:
-        set_status(dialog, "scan_precipitation", "failed", "Scan is already running.")
-    return started
+
+
+def _precipitation_period(dialog, metadata):
+    """The precipitation span, and the simulation period from it while none is saved."""
+    from ...core.handlers.state.nml_settings import load_settings
+
+    dialog.label_precipitationStartTimeValue.setText(metadata.start_time[:16])
+    dialog.label_precipitationEndTimeValue.setText(metadata.end_time[:16])
+    if load_settings(dialog.setup_folder).get("time"):
+        return
+    for key, name in time.TIME_WIDGETS.items():
+        text = metadata.end_time if key == "sim_end" else metadata.start_time
+        value = QDateTime.fromString(text[:16] if selected_version(dialog).startswith("6") else text[:10] + "T00:00",
+                                     "yyyy-MM-ddTHH:mm")
+        with QSignalBlocker(getattr(dialog, name)):
+            getattr(dialog, name).setDateTime(value)
 
 
 def edit_observation_input(dialog, variable=None):
@@ -216,10 +248,7 @@ def selected_meteo_specs(dialog):
     if "pre" not in dialog._meteo_inputs:
         raise ValueError("Configure and scan precipitation first.")
     needed = datamodel.meteo_variables(selected_version(dialog), process_cases.current(dialog))
-    return tuple(
-        grid.precipitation_spec(dialog) if key == "pre" else _spec(dialog, value)
-        for key, value in dialog._meteo_inputs.items() if key in needed
-    )
+    return tuple(_spec(dialog, value) for key, value in dialog._meteo_inputs.items() if key in needed)
 
 
 def observation_specs(dialog):

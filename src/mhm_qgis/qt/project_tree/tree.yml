@@ -17,13 +17,11 @@ nodes:
     children:
       - key: domain_setup
         title: Domain Setup
-        page: tab
+        page: page_setup
         status: domain_setup
         set: label_setCRSStatus
         children:
-          - {key: l0_reference, title: L0 Reference (DEM), page: page_l0Reference, status: l0, grid: [L0], set: label_setDEMStatus}
-          - {key: l2_reference, title: L2 Reference (Precipitation), page: page_l2Reference, status: l2, grid: [L2], set: label_setPrecipitationInputStatus}
-          - {key: resolution, title: Resolution, page: page_resolution, status: resolution, grid: [L1, L11], set: label_setLatLonStatus}
+          - {key: resolution, title: Resolution, page: page_resolution, status: resolution, grid: [L0, L1, L11, L2], set: label_setLatLonStatus}
           - {key: settings, title: Settings, page: page_settings, status: namelists, view: pushButton_editNmlsFinal}
   - key: inputs
     title: 2. Inputs
@@ -36,7 +34,7 @@ nodes:
         summary: tableWidget_morphologySummary
         action: run
         children:
-          - {key: dem, title: DEM, page: page_demDerivatives, display: dem, status: dem}
+          - {key: dem, title: DEM, page: page_dem, display: dem, status: dem, set: label_setDEMStatus}
           - {key: lc, title: Land use, page: page_landUse, display: land_cover, status: categorical, set: label_setLandUseStatus}
           - {key: soil, title: Soil, page: page_soil, input: soil_class, display: soil, status: categorical, set: label_setSoilStatus}
           - {key: geology, title: Geology, page: page_geology, input: geo_class, display: geology, status: categorical, set: label_setGeologyStatus}
@@ -45,10 +43,10 @@ nodes:
           - {key: domain_definition, title: Domain Definition, page: page_domainDefinition, display: domain_mask, status: domain}
       - key: meteorology
         title: B. Meteorology
-        page: tab_meteo
+        page: page_meteo
         action: run
         children:
-          - {key: meteo_pre, title: Precipitation, page: page_meteoVar, input: pre, status: meteo}
+          - {key: meteo_pre, title: Precipitation, page: page_precipitation, input: pre, status: precipitation, set: label_setPrecipitationInputStatus}
           - {key: meteo_pet, title: Potential evapotranspiration, page: page_meteoVar, input: pet, status: meteo}
           - {key: meteo_tavg, title: Mean air temperature, page: page_meteoVar, input: tavg, status: meteo}
           - {key: meteo_tmin, title: Minimum air temperature, page: page_meteoVar, input: tmin, status: meteo}
@@ -59,32 +57,32 @@ nodes:
           - {key: meteo_ssrd, title: Shortwave radiation, page: page_meteoVar, input: ssrd, status: meteo}
           - {key: meteo_strd, title: Longwave radiation, page: page_meteoVar, input: strd, status: meteo}
           - {key: meteo_tann, title: Annual mean air temperature, page: page_meteoVar, input: tann, status: meteo}
-      - {key: observations, title: C. Observations, page: tab_hydro}
-  - {key: execution, title: 3. Execution, page: tab_execution}
+      - {key: observations, title: C. Observations, page: page_hydro}
+  - {key: execution, title: 3. Execution, page: page_execution}
   - key: outputs
     title: 4. Outputs
-    page: tab_outputs
+    page: page_outputs
     # `analysis`: the view key in qt/docks/layouts.yml; enabled once a run is open
     children:
       - key: basics
         title: A. Basics
         children:
-          - {key: map_explorer, title: Map Explorer, page: tab_outputs, analysis: map_explorer}
-          - {key: hydrograph, title: Hydrograph, page: tab_outputs, analysis: hydrograph}
-          - {key: water_balance, title: Water balance, page: tab_outputs, analysis: water_balance}
-          - {key: processes, title: Processes, page: tab_outputs, analysis: processes}
+          - {key: map_explorer, title: Map Explorer, page: page_outputs, analysis: map_explorer}
+          - {key: hydrograph, title: Hydrograph, page: page_outputs, analysis: hydrograph}
+          - {key: water_balance, title: Water balance, page: page_outputs, analysis: water_balance}
+          - {key: processes, title: Processes, page: page_outputs, analysis: processes}
       - key: diagnostics
         title: B. Diagnostics
         children:
-          - {key: signatures, title: Signatures, page: tab_outputs, analysis: signatures}
-          - {key: events, title: Events, page: tab_outputs, analysis: events}
-          - {key: validation, title: Validation, page: tab_outputs, analysis: validation}
-          - {key: climatology, title: Climatology, page: tab_outputs, analysis: climatology}
+          - {key: signatures, title: Signatures, page: page_outputs, analysis: signatures}
+          - {key: events, title: Events, page: page_outputs, analysis: events}
+          - {key: validation, title: Validation, page: page_outputs, analysis: validation}
+          - {key: climatology, title: Climatology, page: page_outputs, analysis: climatology}
       - key: advanced
         title: C. Advanced
         children:
-          - {key: compare, title: Compare, page: tab_outputs, analysis: compare}
-          - {key: extremes, title: Extremes, page: tab_outputs, analysis: extremes}
-          - {key: drought, title: Drought, page: tab_outputs, analysis: drought}
-          - {key: anomalies, title: Anomalies, page: tab_outputs, analysis: anomalies}
-          - {key: summary, title: Summary, page: tab_outputs, analysis: summary}
+          - {key: compare, title: Compare, page: page_outputs, analysis: compare}
+          - {key: extremes, title: Extremes, page: page_outputs, analysis: extremes}
+          - {key: drought, title: Drought, page: page_outputs, analysis: drought}
+          - {key: anomalies, title: Anomalies, page: page_outputs, analysis: anomalies}
+          - {key: summary, title: Summary, page: page_outputs, analysis: summary}
