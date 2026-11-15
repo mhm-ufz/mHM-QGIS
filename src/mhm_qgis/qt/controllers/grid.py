@@ -35,7 +35,9 @@ from ...core.grid.raster import raster_grid
 from ...core.handlers.file.netcdf.raster import source as raster_source
 from ...core.handlers.state import processing
 from ...core.handlers.store.paths import temp_morphology_folder
+from ...core.verify import rules
 from ...qgis_bridge import layers as qgis_layers
+from ...vSpecific.common import resolution
 from ..project_tree import ICONS
 from .version import selected as selected_version
 from .workflow_state import invalidate as invalidate_workflows
@@ -404,6 +406,12 @@ def set_resolution(dialog):
     dialog.log_selected_input_paths("Set resolutions")
     try:
         metadata = build_grid(dialog)
+        # the cell sizes as the namelist will hold them
+        problems = rules.resolutions(selected_version(dialog).startswith("6"), current_l0_resolution(dialog),
+                                     resolution(dialog, "current_l1_resolution"),
+                                     resolution(dialog, "current_l11_resolution"), metadata["l2_resolution"])
+        if problems:
+            raise ValueError("\n".join(problems))
     except ValueError as error:
         clear_headers(dialog)
         QMessageBox.warning(dialog, "Resolution", str(error))

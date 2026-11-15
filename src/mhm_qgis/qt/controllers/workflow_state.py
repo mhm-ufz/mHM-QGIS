@@ -2,8 +2,25 @@
 
 from qgis.PyQt.QtWidgets import QMessageBox
 
+from ...core import verify
 from ...core.handlers.state import processing
 from .. import project_tree
+
+# The `core.verify` stages a finished ▶ prepared the files for
+VERIFY = {"execute_all_morphology": ("morphology", "gauges"), "execute_all_meteo": ("meteo",)}
+
+
+def report(dialog, *stages):
+    """Log and show what mHM would stop on in `stages` of the saved setup."""
+    try:
+        problems = [problem for stage in stages for problem in verify.check(dialog.setup_folder, stage)]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        dialog.log_message(f"WARNING: Could not check the inputs against mHM: {error}")
+        return
+    for problem in problems:
+        dialog.log_message(f"ERROR: {problem}")
+    if problems and not dialog._closing:
+        QMessageBox.warning(dialog, "mHM input check", "mHM would stop on:\n\n" + "\n".join(problems[:10]))
 
 
 def set_status(dialog, key, status, message=""):
@@ -143,6 +160,7 @@ def finish(dialog, workflow_key, ok, message):
             processing.mark_workflow(dialog.setup_folder, workflow_key, "completed", completed)
             set_button_state(dialog, workflow_key, "completed")
             dialog.log_message(completed)
+            report(dialog, *VERIFY.get(workflow_key, ()))
             return
         except Exception as error:  # An unrecordable success is a failure.
             message = str(error)

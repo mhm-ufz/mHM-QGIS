@@ -170,7 +170,7 @@ def test_aligned_extent_is_minimal_and_has_integer_l0_l2_dimensions():
         "cellsize": 30.0,
         "nodata_value": -9999.0,
         "unit": "m",
-        "cellsize_precision": 8,
+        "cellsize_precision": 12,
     }
     assert l0["ncols"] == 3 * l2["ncols"]
     assert l0["nrows"] == 3 * l2["nrows"]

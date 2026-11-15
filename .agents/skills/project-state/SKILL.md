@@ -38,6 +38,12 @@ The setup is shared between computers, so paths stay portable at one boundary.
 - `state/cache.fingerprint` hashes file name, size and whole-second mtime and strips
   folders from its config. A copy that keeps mtimes (Nextcloud, `rsync -a`, `cp -p`) reuses its
   caches. A test that edits a file must move its mtime by a second.
+- `core/verify` reproduces what mHM v5/v6 stop on (`rules`: pure functions citing the mHM
+  source line). `check(setup, stage)` reads the first domain's saved namelists, prepared files
+  and the `nml-settings.json` period and gauges. The Resolution Set checks the values the
+  namelist will hold, Set Periods runs `period`, the end of each ▶ runs its stages
+  (`workflow_state.VERIFY`), and Run mHM asks before running past any of them. Namelist cell
+  sizes are floored to 12 decimals; mHM needs `|anint(r) - r| <= 1e-7` for `r = level / L0`.
 
 ## Domain Delineator And Project Settings
 
