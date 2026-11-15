@@ -65,6 +65,26 @@
         </item>
         <item>
          <property name="text">
+          <string>Slope</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Aspect</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Flow direction</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Flow accumulation</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
           <string>Land use</string>
          </property>
         </item>
@@ -278,7 +298,7 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>3</number>
+           <number>8</number>
           </property>
           <widget class="QWidget" name="page_projectIntro">
            <layout class="QVBoxLayout" name="verticalLayout_projectIntro"/>
@@ -537,7 +557,7 @@
                  <x>0</x>
                  <y>0</y>
                  <width>808</width>
-                 <height>593</height>
+                 <height>592</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -975,7 +995,7 @@
                  <x>0</x>
                  <y>0</y>
                  <width>808</width>
-                 <height>593</height>
+                 <height>592</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_page_resolution">
@@ -2396,8 +2416,14 @@ CODE,NAME,MHM_CLASS
               </item>
               <item>
                <widget class="QCheckBox" name="checkBox_gaugeOption">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
                 <property name="text">
                  <string/>
+                </property>
+                <property name="checked">
+                 <bool>true</bool>
                 </property>
                </widget>
               </item>
@@ -2545,6 +2571,9 @@ CODE,NAME,MHM_CLASS
               <property name="selectionBehavior">
                <enum>QAbstractItemView::SelectRows</enum>
               </property>
+              <attribute name="horizontalHeaderDefaultSectionSize">
+               <number>125</number>
+              </attribute>
               <attribute name="horizontalHeaderStretchLastSection">
                <bool>true</bool>
               </attribute>
@@ -2564,6 +2593,36 @@ CODE,NAME,MHM_CLASS
               <column>
                <property name="text">
                 <string>Needed by</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Cell Size</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>nRows</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>nCols</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Extent</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Extent Modification</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Regridding</string>
                </property>
               </column>
               <column>
@@ -2731,76 +2790,67 @@ CODE,NAME,MHM_CLASS
              </widget>
             </item>
             <item>
-             <widget class="QTableWidget" name="tableWidget_demDerivatives">
-              <property name="editTriggers">
-               <set>QAbstractItemView::NoEditTriggers</set>
+             <spacer name="verticalSpacer_page_dem">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
               </property>
-              <property name="selectionBehavior">
-               <enum>QAbstractItemView::SelectRows</enum>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
               </property>
-              <attribute name="horizontalHeaderStretchLastSection">
-               <bool>true</bool>
-              </attribute>
-              <attribute name="verticalHeaderVisible">
-               <bool>false</bool>
-              </attribute>
-              <column>
-               <property name="text">
-                <string>Variable</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>NetCDF variable</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>Rows × cols</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>Units</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>File</string>
-               </property>
-              </column>
-             </widget>
+             </spacer>
             </item>
             <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_demGrid">
+             <layout class="QHBoxLayout" name="horizontalLayout_rasterResolution_2" stretch="0,0,0,0">
               <item>
-               <widget class="QLabel" name="label_demGrid">
-                <property name="text">
-                 <string>On the L0 reference grid</string>
+               <widget class="QLabel" name="label_demResolution">
+                <property name="minimumSize">
+                 <size>
+                  <width>20</width>
+                  <height>0</height>
+                 </size>
                 </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="pushButton_refL0Derivatives">
                 <property name="maximumSize">
                  <size>
-                  <width>24</width>
+                  <width>16777215</width>
                   <height>16777215</height>
                  </size>
                 </property>
-                <property name="toolTip">
-                 <string>Open source: Resolution (L0)</string>
-                </property>
-                <property name="styleSheet">
-                 <string notr="true">QPushButton { color: red; font-weight: bold; }</string>
-                </property>
                 <property name="text">
-                 <string>R</string>
+                 <string>Dem Resolution:</string>
                 </property>
                </widget>
               </item>
               <item>
-               <spacer name="horizontalSpacer_demGrid">
+               <widget class="QLabel" name="label_demResolutionValue">
+                <property name="minimumSize">
+                 <size>
+                  <width>40</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_demResolutionUnit">
+                <property name="minimumSize">
+                 <size>
+                  <width>40</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_rasterResolution_2">
                 <property name="orientation">
                  <enum>Qt::Horizontal</enum>
                 </property>
@@ -2814,67 +2864,290 @@ CODE,NAME,MHM_CLASS
               </item>
              </layout>
             </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="page_dem_derivatives_var">
+           <layout class="QVBoxLayout" name="verticalLayout_4">
             <item>
-             <widget class="QWidget" name="widget_demOverride" native="true">
-              <layout class="QHBoxLayout" name="horizontalLayout_demOverride">
-               <property name="leftMargin">
-                <number>0</number>
+             <layout class="QHBoxLayout" name="horizontalLayout_derivedFromDemGrid">
+              <item>
+               <widget class="QLabel" name="label_derivedFromDemGrid">
+                <property name="text">
+                 <string>Derived from the DEM grid:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="checkBox_isDerivedFromDemGrid">
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="checked">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_derivedFromDemGrid">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_refPageDem">
+                <property name="maximumSize">
+                 <size>
+                  <width>24</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="toolTip">
+                 <string>Open source: DEM</string>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">QPushButton { color: red; font-weight: bold; }</string>
+                </property>
+                <property name="text">
+                 <string>R</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="groupBox_replaceDemDerivativesVar">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="title">
+               <string>Replace &lt;dem-derivatives-var&gt;</string>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_10">
+               <property name="spacing">
+                <number>2</number>
                </property>
                <property name="topMargin">
-                <number>0</number>
-               </property>
-               <property name="rightMargin">
-                <number>0</number>
+                <number>2</number>
                </property>
                <property name="bottomMargin">
-                <number>0</number>
+                <number>2</number>
                </property>
                <item>
-                <widget class="QLabel" name="label_demOverride">
-                 <property name="text">
-                  <string>Replace with:</string>
-                 </property>
-                </widget>
+                <layout class="QHBoxLayout" name="horizontalLayout_rasterDemDerivativesVarInput" stretch="0,4,1">
+                 <item>
+                  <widget class="QLabel" name="label_rasterDemDerivativesVar">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>Input Layer</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QComboBox" name="comboBox_rasterDemDerivativesVarInput"/>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="pushButton_browseRasterDemDerivativesVarInput">
+                   <property name="maximumSize">
+                    <size>
+                     <width>40</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                   <property name="toolTip">
+                    <string>Select Project Folder</string>
+                   </property>
+                   <property name="text">
+                    <string>...</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
                </item>
                <item>
-                <widget class="QLineEdit" name="lineEdit_demOverride">
-                 <property name="placeholderText">
-                  <string>A raster on the L0 grid covering the whole DEM</string>
+                <layout class="QHBoxLayout" name="horizontalLayout_demDerivativesVarName">
+                 <property name="topMargin">
+                  <number>0</number>
                  </property>
-                </widget>
+                 <item>
+                  <widget class="QLabel" name="label_demDerivativesVarName">
+                   <property name="text">
+                    <string>Variable Name:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QComboBox" name="comboBox_demDerivativesVarName"/>
+                 </item>
+                </layout>
                </item>
                <item>
-                <widget class="QPushButton" name="pushButton_browseDemOverride">
-                 <property name="maximumSize">
-                  <size>
-                   <width>40</width>
-                   <height>16777215</height>
-                  </size>
+                <layout class="QHBoxLayout" name="horizontalLayout_crsDemDerivativesVarInput" stretch="1,6">
+                 <property name="topMargin">
+                  <number>0</number>
                  </property>
-                 <property name="text">
-                  <string>...</string>
-                 </property>
-                </widget>
+                 <item>
+                  <widget class="QLabel" name="label_crsDemDerivativesVarInput">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="text">
+                    <string>CRS:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QgsProjectionSelectionWidget" name="mProjectionSelectionWidget_crsDemDerivativesVarInput">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="toolTip">
+                    <string>Select the Coordinate Reference System for processing</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
                </item>
                <item>
-                <widget class="QPushButton" name="pushButton_demOverride">
-                 <property name="text">
-                  <string>Replace</string>
-                 </property>
-                </widget>
+                <layout class="QHBoxLayout" name="horizontalLayout_rasterDemDerivativesVarResolution" stretch="0,0,0,0">
+                 <item>
+                  <widget class="QLabel" name="label_rasterDemDerivativesVarResolution">
+                   <property name="minimumSize">
+                    <size>
+                     <width>20</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize">
+                    <size>
+                     <width>16777215</width>
+                     <height>16777215</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string>Raster Resolution:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="label_rasterDemDerivativesVarResolutionValue">
+                   <property name="minimumSize">
+                    <size>
+                     <width>40</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="label_rasterDemDerivativesVarResolutionUnit">
+                   <property name="minimumSize">
+                    <size>
+                     <width>40</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <spacer name="horizontalSpacer_rasterDemDerivativesVarResolution">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
                </item>
               </layout>
              </widget>
             </item>
             <item>
-             <spacer name="verticalSpacer_page_dem">
+             <layout class="QHBoxLayout" name="horizontalLayout_setDemDerivativesVar">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <spacer name="horizontalSpacer_setDemDerivativesVar">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_setDemDerivativesVar">
+                <property name="text">
+                 <string>Set</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_setDemDerivativesVarStatus">
+                <property name="minimumSize">
+                 <size>
+                  <width>28</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>28</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="verticalSpacer_demDerivativesVarPage">
               <property name="orientation">
                <enum>Qt::Vertical</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
                 <width>20</width>
-                <height>20</height>
+                <height>40</height>
                </size>
               </property>
              </spacer>
@@ -3459,7 +3732,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                <item>
                 <widget class="QRadioButton" name="radioButton_soilMultiHorizon">
                  <property name="text">
-                  <string>Multi-horizon Multi-variate Layers</string>
+                  <string>Multi-horizon Multi-variate Layers (Clay, Sand, Silt, Bulk Density)</string>
                  </property>
                 </widget>
                </item>
@@ -3469,7 +3742,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
             <item>
              <widget class="QStackedWidget" name="stackedWidget_soil">
               <property name="currentIndex">
-               <number>2</number>
+               <number>0</number>
               </property>
               <widget class="QWidget" name="page_mhmReadySoilInput">
                <layout class="QVBoxLayout" name="verticalLayout_20">
@@ -3853,7 +4126,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                    <bool>true</bool>
                   </property>
                   <property name="currentIndex">
-                   <number>3</number>
+                   <number>0</number>
                   </property>
                   <widget class="QWidget" name="tab_config">
                    <attribute name="title">
@@ -3956,7 +4229,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                     <item>
                      <widget class="QGroupBox" name="groupBox_classGrouping">
                       <property name="title">
-                       <string>Class Grouping:</string>
+                       <string>Class Grouping Settings:</string>
                       </property>
                       <layout class="QVBoxLayout" name="verticalLayout_25">
                        <property name="spacing">
@@ -3976,7 +4249,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                          <item>
                           <widget class="QLabel" name="label_compositionStep">
                            <property name="text">
-                            <string>Composition Step:</string>
+                            <string>Composition Grouping Step:</string>
                            </property>
                           </widget>
                          </item>
@@ -4023,7 +4296,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                          <item>
                           <widget class="QLabel" name="label_bulkDensityStep">
                            <property name="text">
-                            <string>Bulk Density Step:</string>
+                            <string>Bulk Density Grouping Step:</string>
                            </property>
                           </widget>
                          </item>

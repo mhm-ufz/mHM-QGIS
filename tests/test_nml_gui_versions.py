@@ -345,7 +345,7 @@ def test_geoparameter_orientation_is_version_specific(tmp_path: Path) -> None:
 def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
     pytest.importorskip("qgis.PyQt")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from nml_tools.gui.app import ProfileTab
+    from nml_tools.gui.dialog import NamelistPage
     from qtpy.QtWidgets import QApplication
 
     application = QApplication.instance() or QApplication([])
@@ -370,7 +370,7 @@ def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
         # The editor window normalizes names before building its tabs.
         dimensions = {name.lower(): size for name, size in dimensions.items()}
         for profile in project.profiles:
-            editor = ProfileTab(
+            editor = NamelistPage(
                 project,
                 profile,
                 profile_values(document, profile),

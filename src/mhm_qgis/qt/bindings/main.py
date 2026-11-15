@@ -72,8 +72,12 @@ def bind(dialog):
     dialog.lineEdit_ProjectFolder.textChanged.connect(lambda _text: project_tree.refresh(dialog))
     dialog.comboBox_mHMversion.currentIndexChanged.connect(lambda _index: project_tree.refresh(dialog))
     dialog.comboBox_mHMversion.currentIndexChanged.connect(lambda _index: process_cases.inputs(dialog))
-    # pushButton_refL0Derivatives → Resolution, whose common L0 grid the DEM derivatives lie on
-    dialog.pushButton_refL0Derivatives.clicked.connect(lambda: project_tree.go_to(dialog, "resolution"))
+    # pushButton_refPageDem → DEM, whose grid the derivatives are derived from or replaced on
+    dialog.pushButton_refPageDem.clicked.connect(lambda: project_tree.go_to(dialog, "dem"))
+    # checkBox_isDerivedFromDemGrid unticked → the Replace box (its raster: ReplaceBox); Set → grid.set_derivative
+    dialog.checkBox_isDerivedFromDemGrid.toggled.connect(
+        lambda derived: dialog.groupBox_replaceDemDerivativesVar.setEnabled(not derived))
+    dialog.pushButton_setDemDerivativesVar.clicked.connect(lambda: grid.set_derivative(dialog))
 
     # Project management
     # pushButton_BrowseProjectFolder → project.browse_folder; pushButton_setProject → project.set_folder
@@ -129,12 +133,6 @@ def bind(dialog):
     dialog.pushButton_observationDisplay_discharge.clicked.connect(
         lambda checked=False: main.display_observation_discharge(dialog)
     )
-
-    # pushButton_browseDemOverride / pushButton_demOverride → main.browse_dem_override / override_dem_derivative
-    dialog.pushButton_browseDemOverride.clicked.connect(lambda: main.browse_dem_override(dialog))
-    dialog.pushButton_demOverride.clicked.connect(lambda: main.override_dem_derivative(dialog))
-    dialog.tableWidget_demDerivatives.cellClicked.connect(lambda row, _column: main.show_dem_derivatives(
-        dialog, dialog.tableWidget_demDerivatives.item(row, 0).text()))
 
     pour_points = dialog.input_combo("pour_points")
     pour_points.layerChanged.connect(

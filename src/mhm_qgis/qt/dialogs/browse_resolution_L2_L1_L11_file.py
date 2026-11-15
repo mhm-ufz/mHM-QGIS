@@ -34,7 +34,7 @@ class _ReferenceFile:
         self.show_grid()
 
     def browse(self):
-        path, _ = open_file(self, f"{self.level} reference raster", "Rasters (*.tif *.tiff *.asc *.nc);;All files (*)")
+        path, _ = open_file(self.comboBox_rasterInput.window(), f"{self.level} reference raster", "Rasters (*.tif *.tiff *.asc *.nc);;All files (*)")
         if path:
             self.comboBox_rasterInput.setCurrentText(path)
 
@@ -115,4 +115,21 @@ class LevelFileDialog(_ReferenceFile, QDialog, load_form("browse_resolution_L2_L
         self._start(level, domain_crs, initial or {}, bind)
 
 
-__all__ = ["LevelFileDialog"]
+class ReplaceBox(_ReferenceFile):
+    """The DEM-derivative page's Replace box: this form's logic on the main dialog's widgets."""
+
+    def __init__(self, dialog):
+        for name, widget in (("pushButton_browseRasterInput", "pushButton_browseRasterDemDerivativesVarInput"),
+                             ("comboBox_rasterInput", "comboBox_rasterDemDerivativesVarInput"),
+                             ("comboBox_varName", "comboBox_demDerivativesVarName"),
+                             ("mProjectionSelectionWidget_crsFileInput", "mProjectionSelectionWidget_crsDemDerivativesVarInput"),
+                             ("label_rasterResolutionValue", "label_rasterDemDerivativesVarResolutionValue"),
+                             ("label_rasterResolutionUnit", "label_rasterDemDerivativesVarResolutionUnit")):
+            setattr(self, name, getattr(dialog, widget))
+        self.level, self.domain_crs = "Replacement", dialog.get_crs()
+        self.path, self.info, self.error = "", None, "Select a raster file."
+        self.comboBox_rasterInput.setEditable(True)
+        bind(self)
+
+
+__all__ = ["LevelFileDialog", "ReplaceBox"]

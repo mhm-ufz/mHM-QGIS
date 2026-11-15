@@ -96,9 +96,15 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   be saved by Domain Delineator. There are no late crop, per-outlet link or
   per-outlet DEM stages.
 - The ▶ of B. Meteorology runs only `core/executions/meteo`, never morphology.
-- A DEM derivative's row can replace it in `dem_derivatives.nc` with a raster on the same
-  grid covering the whole DEM (`core/handlers/raster/tasks.override_derivative`); a new DEM
-  rebuilds the bundle and drops it.
+- The derivatives the process cases need (slope, aspect, fdir, facc) have their own tree rows
+  after DEM, all on `page_dem_derivatives_var`. Unticking "Derived from the DEM grid" takes a
+  replacement raster: its Set (`grid.set_derivative`) wants the domain CRS (derivatives are never
+  resampled), L0's cells and the whole DEM covered. The ▶ places it as the DEM, shifted under half
+  a cell, then cropped or padded with no data (`dem_derivative_files(replacements=)`, which
+  fingerprints it). Replacing fdir leaves facc derived from the DEM's directions; Set warns. The
+  morphology summary gives each input's own grid, extent modification and regridding
+  (`grid.summary`); the inline Replace box is `ReplaceBox`, the reference-file form's logic on
+  the main dialog's widgets.
 - DEM processing does not modify mHM-tools. Derive terrain on the real DEM first, then place all
   variables once on the common L0 extent in `.temp/Morphology/dem_derivatives.nc`.
   Extract `dem_filled` as the single raster variable `dem` in `filled_dem.nc` with

@@ -462,6 +462,32 @@ def test_dem_derivatives_rebuild_when_the_source_grid_changes(tmp_path):
     dataset = None
 
 
+def test_a_replacement_derivative_is_shifted_and_padded_onto_the_header(tmp_path):
+    from mhm_qgis.core.handlers.file.netcdf.raster import source as raster_source
+
+    source, slope, folder = tmp_path / "dem.tif", tmp_path / "slope.tif", tmp_path / "geometry"
+    _dem(source)
+    raster = gdal.GetDriverByName("GTiff").Create(str(slope), 4, 3, 1, gdal.GDT_Float32)
+    raster.SetGeoTransform((230, 100, 0, 830, 0, -100))  # 0.3 cell off the L0 lattice
+    crs = osr.SpatialReference()
+    crs.ImportFromEPSG(32632)
+    raster.SetProjection(crs.ExportToWkt())
+    raster.GetRasterBand(1).Fill(7)
+    raster.GetRasterBand(1).SetNoDataValue(-9999)
+    raster = None
+    header = {"ncols": 12, "nrows": 12, "xllcorner": -100.0, "yllcorner": -100.0, "cellsize": 100.0,
+              "nodata_value": -9999.0}
+    options = {"log": lambda _m: None, "header": header, "source_crs": "EPSG:32632", "target_crs": "EPSG:32632"}
+    dem_derivative_files(str(source), str(folder), **options)
+    result = dem_derivative_files(str(source), str(folder), replacements={"slope": (str(slope), "EPSG:32632")},
+                                  **options)
+    assert result["reused"] is False  # the replacement is in the fingerprint
+    values = gdal.Open(raster_source(folder / "dem_derivatives.nc", "slope")).ReadAsArray()
+    assert (values[3:6, 3:7] == 7).all()  # shifted by -30 m to x 200..600, y 500..800
+    assert (values == 7).sum() == 12
+    assert values[2, 3] == values[0, 0] == -9999  # the DEM's slope is not kept beyond the raster
+
+
 def test_dem_derivatives_delegate_the_expensive_pass_to_the_caller(tmp_path):
     """The bridge injects a worker-backed `compute`; the hook must be honoured."""
     source = tmp_path / "dem.tif"

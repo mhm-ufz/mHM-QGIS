@@ -22,6 +22,7 @@ from ..controllers import post_context, process_cases, workflow_state
 from ..threads.task_coordinator import TaskCoordinator
 from ..ui import load_form
 from ..workflows.morphology import MorphologyTaskBridge
+from .browse_resolution_L2_L1_L11_file import ReplaceBox
 from .input_selection import elide_named_left
 from .map_canvas import MapCanvasWindow
 from .project_terminal import ProjectTerminalDialog
@@ -63,6 +64,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._header_notes = {}  # Updated Headers: why a value differs from its file
         self._displayed = {}  # Resolution page eyes: `L2` (a file) or `grid:L2` -> its layer name
         self._dem_error = None  # why the DEM cannot fill the common L0 grid, see grid.check_dem
+        self._dem_replacements = {}  # derivative row key -> its Set raster {path, variable, crs}
+        self._replace_box = ReplaceBox(self)  # the DEM-derivative page's raster input
         self._intro_answers = {}
         self._multi_domains = None
         self._intro_pending = False

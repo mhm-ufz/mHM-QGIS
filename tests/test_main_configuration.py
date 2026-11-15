@@ -223,6 +223,60 @@ def test_a_dem_off_the_l0_grid_is_refused_with_the_reason(tmp_path, monkeypatch)
     dialog.close()
 
 
+def test_a_replacement_derivative_must_have_l0_cells_and_cover_the_dem(tmp_path, monkeypatch):
+    import json
+
+    from mhm_qgis.qt import project_tree
+    from mhm_qgis.qt.controllers import input_state
+
+    warnings = []
+    monkeypatch.setattr(grid.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
+    dem = tmp_path / "dem.tif"
+    _geotiff(dem, 6, 4, (0, 100, 0, 400, 0, -100), 32632)
+    dialog = _open(tmp_path, 32632)
+    _browse(dialog, monkeypatch, "L0", dem)
+    for level in ("L1", "L11", "L2"):
+        getattr(dialog, f"lineEdit_{level}Resolution").setText("200")
+    dialog.pushButton_setLatLon.click()
+    dialog.input_combo("dem").setLayer(QgsRasterLayer(str(dem), "DEM"))
+    dialog.pushButton_setDEM.click()
+    assert not warnings
+    assert grid.summary(dialog, {"key": "dem"}) == ("100", "4", "6", "0, 600, 0, 400", "None", "None")
+    assert grid.summary(dialog, {"key": "aspect"})[5] == "Derived from the DEM (mhm-tools)."
+    dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "slope"))
+    assert dialog.stackedWidget_project.currentWidget() is dialog.page_dem_derivatives_var
+    assert dialog.groupBox_replaceDemDerivativesVar.title() == "Replace Slope"
+    assert not dialog.groupBox_replaceDemDerivativesVar.isEnabled()
+    dialog.checkBox_isDerivedFromDemGrid.setChecked(False)
+    assert dialog.groupBox_replaceDemDerivativesVar.isEnabled()
+
+    def replace(name, cols, rows, transform, epsg=32632):
+        _geotiff(tmp_path / name, cols, rows, transform, epsg)
+        dialog.comboBox_rasterDemDerivativesVarInput.setCurrentText(str(tmp_path / name))
+        dialog.pushButton_setDemDerivativesVar.click()
+
+    replace("other_crs.tif", 6, 4, (0, 100, 0, 400, 0, -100), 32633)
+    assert "not the domain CRS" in warnings[-1]
+    replace("coarse.tif", 3, 2, (0, 200, 0, 400, 0, -200))
+    assert "it must have L0's cells" in warnings[-1]
+    replace("short.tif", 5, 3, (100, 100, 0, 400, 0, -100))
+    assert warnings[-1].endswith("misses 1 column west, 1 row south.")
+    assert "slope" not in dialog._dem_replacements
+    replace("slope.tif", 8, 6, (-70, 100, 0, 530, 0, -100))  # 0.3 cell off L0, larger than the DEM
+    assert len(warnings) == 3
+    assert dialog._dem_replacements["slope"]["path"] == str(tmp_path / "slope.tif")
+    assert project_tree.item(dialog, "slope").text(project_tree.STATUS_COLUMN) == "🟢"
+    assert grid.summary(dialog, {"key": "slope"}) == (
+        "100", "6", "8", "-70, 730, -70, 530",
+        "Shifted by (-30, -30) onto the L0 lattice. Cropped: 1 column west, 1 column east, 1 row south, 1 row north.",
+        "None")
+    assert json.loads((tmp_path / ".temp" / "mhm_qgis_input_state.json").read_text())["dem_replacements"]
+    dialog._dem_replacements = {}
+    input_state.load(dialog)
+    assert dialog._dem_replacements["slope"]["path"] == str(tmp_path / "slope.tif")
+    dialog.close()
+
+
 def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
     from mhm_qgis.qt.dialogs.project_folder_tree import ProjectFolderTreeDialog
     opened = []

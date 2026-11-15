@@ -202,9 +202,8 @@ def test_domain_setup_pages_reference_buttons_and_combined_domains(dialog):
         assert dialog.stackedWidget_project.currentWidget() is page
     assert dialog.scrollArea_resolution.widget().isAncestorOf(dialog.lineEdit_L0Resolution)  # scrolls both ways
     assert dialog.page_settings.isAncestorOf(dialog.pushButton_edit_nmls)
-    tree.setCurrentItem(project_tree.item(dialog, "dem"))
-    dialog.pushButton_refL0Derivatives.click()
-    assert tree.currentItem() is project_tree.item(dialog, "resolution")
+    dialog.pushButton_refPageDem.click()
+    assert tree.currentItem() is project_tree.item(dialog, "dem")
     dialog.comboBox_mhmWorkType.setCurrentIndex(1)  # combine existing domains
     assert [project_tree.item(dialog, key).isHidden() for key in ("resolution", "settings")] == [True, False]
 
@@ -240,10 +239,9 @@ def test_input_rows_wait_for_domain_setup(dialog, tmp_path):
     processing.mark_workflow(tmp_path, "project_structure", "completed")
     process_cases.inputs(dialog)
     assert not project_tree.item(dialog, "meteo_pre").isHidden()
-    gauges = [project_tree.item(dialog, key) for key in ("gauges", "domain_definition")]
-    assert all(row.isHidden() for row in gauges)  # gauges are optional
-    dialog.checkBox_gaugeOption.setChecked(True)
-    assert not any(row.isHidden() for row in gauges)
+    assert dialog.checkBox_gaugeOption.isChecked()  # gauges are required
+    assert not dialog.checkBox_gaugeOption.isEnabled()
+    assert not any(project_tree.item(dialog, key).isHidden() for key in ("gauges", "domain_definition"))
 
 
 def test_process_cases_are_kept_in_the_state_and_the_namelists(dialog, tmp_path):
@@ -264,8 +262,7 @@ def test_process_cases_are_kept_in_the_state_and_the_namelists(dialog, tmp_path)
     assert all(row.isHidden() for row in temperatures)
     process_cases.changed(dialog, {"pet": 1})  # Hargreaves-Samani: tavg, tmin, tmax and aspect
     assert not any(row.isHidden() for row in temperatures)
-    dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "dem"))
-    assert not dialog.tableWidget_demDerivatives.isRowHidden(2)  # aspect, now needed
+    assert not project_tree.item(dialog, "aspect").isHidden()  # now needed
     state = json.loads((tmp_path / ".temp" / "mhm_qgis_input_state.json").read_text())
     assert state["process_cases"]["pet"] == 1
     assert nml_settings.load_settings(tmp_path)["intro_values"]["main"]["config_processes"]["pet"] == 1  # no namelist yet
@@ -289,16 +286,14 @@ def test_summary_tables_on_the_inputs_morphology_and_dem_derivative_pages(dialog
     tree.setCurrentItem(project_tree.item(dialog, "morphology"))
     table = dialog.tableWidget_morphologySummary
     assert "Precipitation" not in [table.item(row, 0).text() for row in range(table.rowCount())]
-    tree.setCurrentItem(project_tree.item(dialog, "dem"))
-    table = dialog.tableWidget_demDerivatives
-    needed = [not table.isRowHidden(row) for row in range(table.rowCount())]
-    assert needed == [True] + [name in dialog._input_findings for name in ("slope", "aspect", "fdir", "facc")]
-    assert not dialog.widget_demOverride.isVisibleTo(dialog)
-    table.cellClicked.emit(1, 0)
-    assert dialog._dem_override == "slope"
-    assert dialog.widget_demOverride.isVisibleTo(dialog)
-    dialog.pushButton_refL0Derivatives.click()
-    assert tree.currentItem() is project_tree.item(dialog, "resolution")
+    names = [table.item(row, 0).text() for row in range(table.rowCount())]
+    shown = [title for key, title, name in (("slope", "Slope", "slope"), ("aspect", "Aspect", "aspect"),
+                                            ("flow_direction", "Flow direction", "fdir"),
+                                            ("flow_accumulation", "Flow accumulation", "facc"))
+             if name in dialog._input_findings]
+    assert names[:1 + len(shown)] == ["DEM", *shown]  # the derivatives the process cases need, after DEM
+    assert table.columnCount() == 10
+    assert table.item(0, 7).text() == "Select the DEM."  # Extent Modification
 
 
 def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_path, monkeypatch):

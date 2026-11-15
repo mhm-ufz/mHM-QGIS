@@ -103,11 +103,11 @@ def save(dialog):
         "observation_inputs": dialog._observation_inputs,
         "pour_point_outlet_id_field": main.selected_outlet_id_field(dialog),
         "domain_definition_type": dialog._domain_definition_mode,
-        "gauges": dialog.checkBox_gaugeOption.isChecked(),
         "gauge_input": "raster" if dialog.radioButton_gaugesRasterInput.isChecked() else "point",
         "gauge_raster": _combo_path(dialog.comboBox_gaugeRaterInput),
         "crs_authid": dialog._set_crs,  # a CRS not yet Set is not kept
         "upscale_factor": dialog._upscale_factor,  # the DEM x this lies on L0, see grid.set_dem
+        "dem_replacements": dialog._dem_replacements,  # derivative row -> raster, see grid.set_derivative
         "intro": dialog._intro_answers,
         "process_cases": process_cases.current(dialog),
     }
@@ -214,7 +214,6 @@ def clear(dialog):
     dialog._land_cover_ready_source = ""
     categorical.fill(dialog)
     dialog._domain_definition_mode = ""
-    dialog.checkBox_gaugeOption.setChecked(False)
     main.check(dialog, "gauges", "Point Input")
     main.show_gauge_type(dialog)
     _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.setup_folder, "gauges", "")
@@ -321,7 +320,6 @@ def _restore_domain_inputs(dialog, state):
     text = main.DOMAIN_TYPES[_OLD_DOMAIN_TYPES[text]] if text in _OLD_DOMAIN_TYPES else text
     main.check(dialog, "domainDefinition", text)
     dialog._domain_definition_mode = text
-    dialog.checkBox_gaugeOption.setChecked(bool(state.get("gauges", text)))  # older setups: gauges if a domain was defined
     main.check(dialog, "gauges", "Raster Input" if state.get("gauge_input") == "raster" else "Point Input")
     main.show_gauge_type(dialog)
     _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.setup_folder, "gauges", state.get("gauge_raster", ""))

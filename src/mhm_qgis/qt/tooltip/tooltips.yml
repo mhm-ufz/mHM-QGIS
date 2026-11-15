@@ -32,13 +32,21 @@ pages:
   page_dem:
     - widget: comboBox_demInput
       title: DEM
-      text: The elevation model. Its cell times the upscale factor must equal L0, on the L0 lattice, and it must cover the common extent of the Resolution page.
+      text: The elevation model. Its cell times the upscale factor must equal L0; off the L0 lattice it is shifted onto it (under half a cell), then cropped or padded with no data to the common extent of the Resolution page, which it must overlap.
     - widget: pushButton_setDEM
       title: Set the DEM
       text: Checks the DEM against the common L0 grid; the note below says how it is placed on it.
-    - widget: tableWidget_demDerivatives
-      title: DEM derivatives
-      text: The derivatives the ▶ of A. Morphology wrote to dem_derivatives.nc, on the common L0 grid (R). On a derivative's row you can replace it with a raster on the same grid that covers the whole DEM.
+
+  page_dem_derivatives_var:
+    - widget: checkBox_isDerivedFromDemGrid
+      title: Derived from the DEM
+      text: The ▶ of A. Morphology derives this variable from the DEM (mhm-tools). Untick it to replace it with your own raster.
+    - widget: groupBox_replaceDemDerivativesVar
+      title: Replacement raster
+      text: In the domain CRS with L0's cells, covering the whole DEM. It is shifted onto the L0 lattice (under half a cell, never resampled), then cropped or padded with no data to the common extent.
+    - widget: pushButton_setDemDerivativesVar
+      title: Set
+      text: Checks the replacement raster (or takes the DEM's again when ticked); the ▶ of A. Morphology then writes it into dem_derivatives.nc.
 
   page_precipitation:
     - widget: widget_hostPrecipitationMeteoVarInput

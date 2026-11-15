@@ -130,9 +130,14 @@ def _dem(dialog, _node):
     return "added" if dialog.input_combo("dem").currentLayer() is not None and dialog._dem_error is None else "empty"
 
 
+def _derivative(dialog, node):
+    """Added once Set took its replacement raster; derived from the DEM otherwise."""
+    return "added" if node["key"] in dialog._dem_replacements else _dem(dialog, node)
+
+
 STATUS = {"intro": _intro, "project_setup": _project_setup, "domain_setup": _domain_setup, "gauges": _gauges,
           "categorical": _categorical, "domain": _domain, "meteo": _meteo, "precipitation": _precipitation,
-          "resolution": _resolution, "namelists": _namelists, "dem": _dem}
+          "resolution": _resolution, "namelists": _namelists, "dem": _dem, "derivative": _derivative}
 
 
 RUNS = {"morphology": "execute_all_morphology", "meteorology": "execute_all_meteo"}
@@ -203,8 +208,10 @@ def build(dialog) -> None:
 
 def indicate(dialog, key, label) -> None:
     """The row's status again on `label`, right of its page's Set button; a row may have several
-    (Precipitation: its form's and Set Periods'), and the labels of closed forms drop out."""
-    dialog._indicators = [(name, shown) for name, shown in dialog._indicators if not sip.isdeleted(shown)]
+    (Precipitation: its form's and Set Periods'); the labels of closed forms drop out, and a label
+    shared by rows (the DEM derivatives' page) follows the last one."""
+    dialog._indicators = [(name, shown) for name, shown in dialog._indicators
+                          if not sip.isdeleted(shown) and shown is not label]
     dialog._indicators.append((key, label))
     row = item(dialog, key)
     label.setText(row.text(STATUS_COLUMN))
@@ -245,7 +252,7 @@ def select(dialog, row) -> None:
     if "page" not in node:
         dialog.treeWidget_projectStructure.setCurrentItem(row.child(0))
         return
-    from ..controllers import forcing, intro, main, process_cases
+    from ..controllers import forcing, grid, intro, main, process_cases
 
     for page in ("meteoVar", "precipitation"):
         main.stash(dialog, page)  # the meteo form's unsaved input survives the switch
@@ -255,8 +262,8 @@ def select(dialog, row) -> None:
         _summary(dialog, getattr(dialog, node["summary"]), row)
     if key.startswith("meteo_"):
         forcing.show_meteo_input(dialog, key.removeprefix("meteo_"))
-    elif node["page"] == "page_dem":
-        main.show_dem_derivatives(dialog)
+    elif node["page"] == "page_dem_derivatives_var":
+        grid.show_derivative(dialog, key)
     else:
         hook = {"intro": intro.embed, "settings": process_cases.show,
                 "domain_definition": main.show_domain_definition}
@@ -373,7 +380,10 @@ def _file(dialog, node) -> str:
 
 
 def _summary(dialog, table, top) -> None:
-    """The shown rows under `top` with a status or inputs: status, what needs them, prepared file."""
+    """The shown rows under `top` with a status or inputs: status, what needs them, prepared file;
+    a wider table (morphology) also gets each input's grid and how it is fitted to L0."""
+    from ..controllers.grid import summary
+
     rows = [row for row in _rows(dialog, top)
             if row is not top and _shown(row) and {"status", "input"} & _node(row).keys()]
     table.setRowCount(len(rows))
@@ -381,7 +391,9 @@ def _summary(dialog, table, top) -> None:
         node = _node(row)
         findings = [dialog._input_findings[name] for name in _inputs(node) if name in dialog._input_findings]
         needed = ", ".join(dict.fromkeys(reason for finding in findings for reason in finding.reasons))
-        for column, text in enumerate((row.text(0), " ".join(SYMBOLS[_state(dialog, row)]), needed, _file(dialog, node))):
+        details = summary(dialog, node)[:table.columnCount() - 4]
+        for column, text in enumerate((row.text(0), " ".join(SYMBOLS[_state(dialog, row)]), needed, *details,
+                                       _file(dialog, node))):
             table.setItem(index, column, QTableWidgetItem(text))
     for column in range(table.columnCount() - 1):  # the last one stretches
         table.resizeColumnToContents(column)

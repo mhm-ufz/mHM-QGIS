@@ -400,7 +400,7 @@ def test_prerequisites_run_dem_first_then_their_own_stage(tmp_path):
     dialog.close()
 
 
-def test_without_gauges_execute_all_skips_them_and_takes_the_whole_dem(monkeypatch):
+def test_execute_all_places_the_required_gauges_before_the_mask(monkeypatch):
     from mhm_qgis.qt.workflows import morphology as workflow
 
     _app()
@@ -414,9 +414,5 @@ def test_without_gauges_execute_all_skips_them_and_takes_the_whole_dem(monkeypat
         start(stage, lambda: None) for stage in stages
         if stage.command in ("gauge_position", "whole_dem_domain", "morph_mask")])
     bridge._run_execute_all(None, lambda *_args: None)
-    assert calls == ["whole DEM", "mask"]
-    calls.clear()
-    dialog.checkBox_gaugeOption.setChecked(True)
-    bridge._run_execute_all(None, lambda *_args: None)
-    assert calls == ["gauges", "mask"]
+    assert calls == ["gauges", "mask"]  # gauges are required: never the whole DEM
     dialog.close()

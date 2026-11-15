@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+from qgis.core import QgsCoordinateReferenceSystem
 from qgis.PyQt.QtCore import QSignalBlocker
 from qgis.PyQt.QtWidgets import QMessageBox
 
@@ -43,6 +44,7 @@ from .workflow_state import invalidate_meteo
 LEVELS = ("L0", "L1", "L11", "L2")
 CORNERS = (("nCols", "ncols"), ("nRows", "nrows"), ("xLowerLeft", "xllcorner"), ("yLowerLeft", "yllcorner"))
 CHANGED = "#1565c0"
+DERIVATIVES = {"slope": "slope", "aspect": "aspect", "flow_direction": "fdir", "flow_accumulation": "facc"}
 
 
 def _domain(dialog):
@@ -622,6 +624,8 @@ def restore(dialog, state):
         show_headers(dialog)
     else:
         clear_headers(dialog)
+    dialog._dem_replacements = {key: dict(value) for key, value in (state.get("dem_replacements") or {}).items()
+                                if key in DERIVATIVES and isinstance(value, dict) and value.get("path")}
     check_dem(dialog)
 
 
@@ -642,7 +646,7 @@ def clear(dialog):
         show_file_row(dialog, level)
     clear_headers(dialog)
     show_l0(dialog)
-    dialog._dem_error = None
+    dialog._dem_error, dialog._dem_replacements = None, {}
     dialog.label_demDescription.setText("")
 
 
@@ -666,38 +670,56 @@ def set_crs(dialog):
 
 # --- DEM ---------------------------------------------------------------------
 
-def _dem_note(dialog):
-    """What happens to the DEM on the common L0 grid; ValueError when it cannot fill it."""
+def _fit(dialog, source, crs, factor=1):
+    """`source` (in `crs`, its cells x `factor`) against the common L0 grid: its own header, its cell
+    and extent in the domain CRS, the extent moved onto the L0 lattice when its cells are L0's (under
+    half a cell, never resampled) and a note on that shift."""
+    l0, (domain, unit) = dialog._grid_l2_metadata["l0_header"], _domain(dialog)
+    own = raster_grid(source, crs, crs)["header"]
+    placed = raster_grid(source, crs, domain, unit, factor)["header"]
+    bounds = header_bounds(own)
+    extent = Extent.from_bounds(bounds if crs_equal(crs, domain) else inner_bounds(bounds, crs, domain))
+    cell, notes = float(l0["cellsize"]), []
+    if math.isclose(float(placed["cellsize"]), cell, rel_tol=1e-9):
+        shift = [(round(value) - value) * cell for value in ((float(placed[key]) - float(l0[key])) / cell
+                                                              for key in ("xllcorner", "yllcorner"))]
+        if any(abs(value) > 1e-6 * cell for value in shift):  # copy_rasters(shift=True) moves it
+            notes.append(f"Shifted by ({shift[0]:.6g}, {shift[1]:.6g}) onto the L0 lattice.")
+            extent = Extent(extent.xmin + shift[0], extent.xmax + shift[0],
+                            extent.ymin + shift[1], extent.ymax + shift[1])
+    return {"header": own, "cell": float(placed["cellsize"]), "extent": extent, "notes": notes}
+
+
+def _dem_fit(dialog):
+    """The DEM's fit, its extent notes (in DEM cells) and regridding; ValueError when it cannot fill
+    the common L0 grid."""
     layer = dialog.input_combo("dem").currentLayer()
     if layer is None:
         raise ValueError("Select the DEM.")
     if not grid_current(dialog):
         raise ValueError("Set the resolutions first (Resolution page): the DEM must lie on the common L0 grid.")
-    l0 = dialog._grid_l2_metadata["l0_header"]
-    domain, unit = _domain(dialog)
+    l0, (domain, unit) = dialog._grid_l2_metadata["l0_header"], _domain(dialog)
     data = dialog.input_combo("dem").currentData()
     crs = (data.get("source_crs", "") if isinstance(data, dict) else "") or qgis_layers.crs_string(layer.crs())
-    source, factor = dialog.input_combo("dem").source_uri() or layer.source(), dialog._upscale_factor
-    dem = raster_grid(source, crs, domain, unit, factor)["header"]
-    extent = Extent.from_bounds(header_bounds(raster_grid(source, crs, domain, unit)["header"]) if crs_equal(
-        crs, domain) else inner_bounds(header_bounds(raster_grid(source, crs, crs)["header"]), crs, domain))
+    factor = dialog._upscale_factor
+    fit = _fit(dialog, dialog.input_combo("dem").source_uri() or layer.source(), crs, factor)
     cell = float(l0["cellsize"])
-    if not math.isclose(float(dem["cellsize"]), cell, rel_tol=1e-9):
-        raise ValueError(f"The DEM x {factor} has cells of {float(dem['cellsize']):.10g} {unit}, but L0 is "
+    if not math.isclose(fit["cell"], cell, rel_tol=1e-9):
+        raise ValueError(f"The DEM x {factor} has cells of {fit['cell']:.10g} {unit}, but L0 is "
                          f"{cell:.10g} {unit}: set the upscale factor to L0 / DEM cell, or choose another L0.")
     common = Extent.from_header(l0)
-    if common.intersect(extent) is None:
-        raise ValueError(f"The DEM ({', '.join(f'{v:.10g}' for v in extent.bounds)}) does not overlap the common "
-                         f"extent ({', '.join(f'{v:.10g}' for v in common.bounds)}).")
-    steps = [] if crs_equal(crs, domain) else [f"Warped {crs} → {domain}."]
-    if factor > 1:
-        steps.append(f"Topography upscaled x {factor} (mhm-tools).")
-    shift = [(round(value) - value) * cell for value in ((float(dem[key]) - float(l0[key])) / cell
-                                                          for key in ("xllcorner", "yllcorner"))]
-    if any(abs(value) > 1e-6 * cell for value in shift):  # copy_rasters(shift=True) moves it, never resamples
-        steps.append(f"Shifted by ({shift[0]:.6g}, {shift[1]:.6g}) onto the L0 lattice.")
-        extent = Extent(extent.xmin + shift[0], extent.xmax + shift[0], extent.ymin + shift[1], extent.ymax + shift[1])
-    return "\n".join(steps + _edges(extent, common, cell / factor, 0.01 * cell) or ["Used as is."])  # DEM cells
+    if common.intersect(fit["extent"]) is None:
+        raise ValueError(f"The DEM ({', '.join(f'{v:.10g}' for v in fit['extent'].bounds)}) does not overlap "
+                         f"the common extent ({', '.join(f'{v:.10g}' for v in common.bounds)}).")
+    regrid = ([] if crs_equal(crs, domain) else [f"Warped {crs} → {domain}."]) + (
+        [f"Topography upscaled x {factor} (mhm-tools)."] if factor > 1 else [])
+    return fit, fit["notes"] + _edges(fit["extent"], common, cell / factor, 0.01 * cell), regrid
+
+
+def _dem_note(dialog):
+    """What happens to the DEM on the common L0 grid; ValueError when it cannot fill it."""
+    edges, regrid = _dem_fit(dialog)[1:]
+    return "\n".join(regrid + edges or ["Used as is."])
 
 
 def check_dem(dialog):
@@ -721,3 +743,145 @@ def set_dem(dialog):
     if error := check_dem(dialog):
         QMessageBox.warning(dialog, "DEM", error)
     dialog.save_input_state()
+
+
+# --- DEM derivatives -----------------------------------------------------------
+
+def show_derivative(dialog, key):
+    """The derivative page for row `key`: derived from the DEM, or the Set replacement raster."""
+    from ..project_tree import indicate, item
+
+    dialog._derivative = key
+    saved, box = dialog._dem_replacements.get(key, {}), dialog._replace_box
+    dialog.groupBox_replaceDemDerivativesVar.setTitle(f"Replace {item(dialog, key).text(0)}")
+    with QSignalBlocker(dialog.checkBox_isDerivedFromDemGrid):
+        dialog.checkBox_isDerivedFromDemGrid.setChecked(not saved)
+    dialog.groupBox_replaceDemDerivativesVar.setEnabled(bool(saved))
+    box.domain_crs = dialog.get_crs()
+    with QSignalBlocker(box.comboBox_rasterInput):
+        box.comboBox_rasterInput.setCurrentText(saved.get("path", ""))
+    box.read(saved.get("path", ""))
+    box.comboBox_varName.setCurrentText(saved.get("variable", ""))
+    if saved.get("crs") and box.mProjectionSelectionWidget_crsFileInput.isEnabled():
+        box.mProjectionSelectionWidget_crsFileInput.setCrs(QgsCoordinateReferenceSystem(saved["crs"]))
+    indicate(dialog, key, dialog.label_setDemDerivativesVarStatus)
+
+
+def _derivative_fit(dialog, key, selection):
+    """A replacement raster for `key` on the common L0 grid, its extent notes and regridding;
+    ValueError when it cannot replace the DEM's: another CRS, another cell or short of the DEM."""
+    fit = _dem_fit(dialog)[0]
+    l0, (domain, unit) = dialog._grid_l2_metadata["l0_header"], _domain(dialog)
+    name, cell = Path(selection["path"]).name, float(l0["cellsize"])
+    if not crs_equal(selection["crs"], domain):
+        raise ValueError(f"{name} is in {selection['crs'] or 'no CRS'}, not the domain CRS {domain}: "
+                         f"reproject it first ({key.replace('_', ' ')} cannot be resampled).")
+    raster = _fit(dialog, raster_source(selection["path"], selection["variable"]), selection["crs"])
+    if not math.isclose(raster["cell"], cell, rel_tol=1e-9):
+        raise ValueError(f"{name} has cells of {raster['cell']:.10g} {unit}, but L0 is {cell:.10g} {unit}: "
+                         "it must have L0's cells.")
+    common = Extent.from_header(l0)
+    dem = fit["extent"].intersect(common)
+    short = [line for line in _edges(raster["extent"], dem, cell, 0.01 * cell) if line.startswith("Padded")]
+    if short:
+        raise ValueError(f"{name} does not cover the DEM: it misses "
+                         f"{short[0].removeprefix('Padded with no data: ')}")
+    return raster, raster["notes"] + _edges(raster["extent"], common, cell, 0.01 * cell), []
+
+
+def set_derivative(dialog):
+    """The derivative page's Set: derived from the DEM (ticked), or the checked replacement raster."""
+    key, box = dialog._derivative, dialog._replace_box
+    previous = dialog._dem_replacements.pop(key, None)
+    if not dialog.checkBox_isDerivedFromDemGrid.isChecked():
+        selection = box.selection()
+        try:
+            if box.error:
+                raise ValueError(box.error)
+            _derivative_fit(dialog, key, selection)
+        except (OSError, RuntimeError, ValueError) as error:
+            if previous:
+                dialog._dem_replacements[key] = previous
+            QMessageBox.warning(dialog, "Replace DEM derivative", str(error))
+            return
+        dialog._dem_replacements[key] = selection
+    if dialog._dem_replacements.get(key) != previous and dialog.setup_folder:
+        invalidate_workflows(dialog, "execute_all_morphology")
+    if "flow_direction" in dialog._dem_replacements and "flow_accumulation" not in dialog._dem_replacements:
+        dialog.log_message("WARNING: Flow direction is replaced, but flow accumulation is still derived from "
+                           "the DEM's flow directions: replace it too if routing needs both.")
+    dialog.save_input_state()
+    from .. import project_tree
+
+    project_tree.refresh(dialog)
+
+
+def _categorical_input(dialog, kind):
+    """The first file of a categorical row's Set input, its variable and CRS, and how it is regridded
+    onto L0 (mhm-tools, or a GDAL warp for an mHM-ready raster); None without one."""
+    from .categorical import (
+        categorical_source_config,
+        land_use_input_value,
+        uses_advanced_categorical_input,
+    )
+
+    if kind == "lai" and dialog._lai_input_config.get("input_path"):
+        config = dialog._lai_input_config
+        return config["input_path"], config.get("variable", ""), config.get("source_crs", ""), "Bilinear (mhm-tools)."
+    if uses_advanced_categorical_input(dialog, kind) and kind == "lc":
+        value = land_use_input_value(dialog._advanced_inputs["land_cover"])
+        return value.as_dict()["periods"][0]["file_path"], "", value.crs, "Mode (mhm-tools)."
+    if uses_advanced_categorical_input(dialog, kind):
+        value = dialog._advanced_inputs["soil"]
+        data = value.as_dict() if hasattr(value, "as_dict") else value
+        horizon = data["horizons"][0]
+        return next(path for name, path in horizon.items() if name.endswith("_layer")), "", data.get("crs", ""), \
+            "Auto (mhm-tools)."
+    config = categorical_source_config(dialog, kind)
+    if not config:
+        return None
+    path = config["layers"][0][0] if config.get("layers") else config["input_path"]
+    regrid = "Nearest (GDAL warp)." if "lookup_table" not in config else (
+        "Mode (mhm-tools)." if kind == "lc" else "Nearest (mhm-tools).")
+    return path, config.get("variable", ""), config.get("source_crs", ""), regrid
+
+
+def _input_fit(dialog, key):
+    """A morphology row's input: its fit, extent notes and regridding; None without a raster input."""
+    if key == "dem":
+        return _dem_fit(dialog)
+    if key in dialog._dem_replacements:
+        return _derivative_fit(dialog, key, dialog._dem_replacements[key])
+    if key in DERIVATIVES:
+        fit, edges, regrid = _dem_fit(dialog)
+        return fit, edges, [*regrid, "Derived from the DEM (mhm-tools)."]
+    found = _categorical_input(dialog, key) if key in ("lc", "soil", "geology", "lai") else None
+    if not found:
+        return None
+    path, variable, crs, regrid = found
+    if Path(str(path).split("|", 1)[0]).suffix.lower() not in (".tif", ".tiff", ".asc", ".nc"):
+        return None, ["Rasterized onto the L0 grid (mhm-tools)."], ["Rasterized (mhm-tools)."]
+    if not grid_current(dialog):
+        raise ValueError("Set the resolutions first (Resolution page).")
+    uri = raster_source(path, variable)
+    fit = _fit(dialog, uri, crs or qgis_layers.crs_string(qgis_layers.crs_of(uri)))
+    cell = float(dialog._grid_l2_metadata["l0_header"]["cellsize"])
+    on_l0 = math.isclose(fit["cell"], cell, rel_tol=1e-9) and not fit["notes"]
+    edges = _edges(fit["extent"], Extent.from_header(dialog._grid_l2_metadata["l0_header"]), cell, 0.01 * cell)
+    return fit, edges, [] if on_l0 else [regrid]  # edges in L0 cells
+
+
+def summary(dialog, node):
+    """The morphology summary's Cell Size, nRows, nCols, Extent (the input's own grid), Extent
+    Modification and Regridding for a row; "—" where it has no raster input."""
+    try:
+        found = _input_fit(dialog, node["key"])
+    except (KeyError, IndexError, OSError, RuntimeError, ValueError) as error:
+        return ("—", "—", "—", "—", str(error), "—")
+    if found is None:
+        return ("—",) * 6
+    fit, edges, regrid = found
+    header = fit["header"] if fit else None
+    grid = (f"{float(header['cellsize']):.10g}", str(header["nrows"]), str(header["ncols"]),
+            ", ".join(f"{value:.10g}" for value in header_bounds(header))) if header else ("—",) * 4
+    return (*grid, " ".join(edges) or "None", " ".join(regrid) or "None")

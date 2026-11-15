@@ -35,6 +35,10 @@ nodes:
         action: run
         children:
           - {key: dem, title: DEM, page: page_dem, display: dem, status: dem, set: label_setDEMStatus}
+          - {key: slope, title: Slope, page: page_dem_derivatives_var, input: slope, display: slope, status: derivative}
+          - {key: aspect, title: Aspect, page: page_dem_derivatives_var, input: aspect, display: aspect, status: derivative}
+          - {key: flow_direction, title: Flow direction, page: page_dem_derivatives_var, input: fdir, display: flow_direction, status: derivative}
+          - {key: flow_accumulation, title: Flow accumulation, page: page_dem_derivatives_var, input: facc, display: flow_accumulation, status: derivative}
           - {key: lc, title: Land use, page: page_landUse, display: land_cover, status: categorical, set: label_setLandUseStatus}
           - {key: soil, title: Soil, page: page_soil, input: soil_class, display: soil, status: categorical, set: label_setSoilStatus}
           - {key: geology, title: Geology, page: page_geology, input: geo_class, display: geology, status: categorical, set: label_setGeologyStatus}
