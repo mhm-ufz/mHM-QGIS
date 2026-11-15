@@ -199,18 +199,18 @@ def test_switching_domains_restores_only_the_selected_setup(tmp_path, monkeypatc
     project.populate_domains(dialog)
     project.create_structure(dialog)
     first = Path(dialog.setup_folder)
-    dialog.spinBox_L2ResolutionMultiplier.setValue(4)
+    dialog.lineEdit_L2Resolution.setText("4000.0")
     dialog._meteo_inputs = {"tavg": asdict(MeteoFolderSpec("tavg", str(tmp_path), unit="K"))}
     dialog.save_input_state()
     dialog.comboBox_domainFolderSelector.setCurrentIndex(dialog.comboBox_domainFolderSelector.count() - 1)
     project.create_structure(dialog)
     assert Path(dialog.setup_folder).name == "Valley"
     assert dialog._meteo_inputs == {}
-    assert dialog.spinBox_L2ResolutionMultiplier.value() == 1
+    assert dialog.lineEdit_L2Resolution.text() == ""
     dialog.comboBox_domainFolderSelector.setCurrentIndex(dialog.comboBox_domainFolderSelector.findData("Alpine"))
     project.create_structure(dialog)
     assert Path(dialog.setup_folder) == first
-    assert dialog.spinBox_L2ResolutionMultiplier.value() == 4
+    assert dialog.lineEdit_L2Resolution.text() == "4000.0"
     assert set(dialog._meteo_inputs) == {"tavg"}
     assert dialog.tableWidget_meteoInputs.rowCount() == 1
     assert dialog._meteo_inspections == {}

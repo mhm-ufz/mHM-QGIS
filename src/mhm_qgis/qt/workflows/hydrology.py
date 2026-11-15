@@ -14,6 +14,7 @@ from pathlib import Path
 from qgis.PyQt import QtCore
 
 from ...core.executions.morphology import commands
+from ...core.handlers.file.netcdf.raster import source as raster_source
 from ...core.handlers.store.paths import temp_morphology_folder
 from ...qgis_bridge import layers
 from ..controllers import grid
@@ -75,6 +76,8 @@ def dem_options(dialog):
         "reprojected_path": str(folder / "dem_reprojected.nc"),
         "header": grid.common_l0_header(dialog),
         "upscale_factor": dialog._upscale_factor,
+        "replacements": {grid.DERIVATIVES[key]: (raster_source(value["path"], value["variable"]), value["crs"])
+                         for key, value in dialog._dem_replacements.items()},
     }
 
 
@@ -101,7 +104,6 @@ def start_dem_derivatives(dialog, *, key="execute-all-dem-derivatives", controls
         lifecycle.register(dialog, result["dem_derivatives"], "DEM derivatives")
         if not result.get("reused"):
             dialog.log_message("DEM derivatives prepared successfully.")
-        grid.update_l0_resolution_from_dem(dialog)
         if done is not None:
             done(result)
 

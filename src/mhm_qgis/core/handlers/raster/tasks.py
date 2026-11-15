@@ -8,7 +8,6 @@ from pathlib import Path
 from ....externals import pyflwdir_handler
 from ...grid import (
     aligned_window,
-    crs_equal,
     geotransform_from_header,
     header_bounds,
     header_from_geotransform,
@@ -641,10 +640,12 @@ DEM_DERIVATIVE_VARIABLES = {
 
 def dem_derivative_files(
     source, output_folder, *, source_crs="", target_crs="",
-    reprojected_path="", compute=None, log=None, task=None, header=None, upscale_factor=1,
+    reprojected_path="", compute=None, log=None, task=None, header=None, upscale_factor=1, replacements=None,
 ):
     """Prepare one derivative dataset and a single-variable filled DEM; with `upscale_factor`, on the
-    upscaled topography grid (`core.grid.raster.dem_grid` with that factor)."""
+    upscaled topography grid (`core.grid.raster.raster_grid` with that factor). `replacements`
+    ({bundle variable: (GDAL source, CRS)}, in the target CRS with L0's cells) take the place of
+    derivatives, placed like the DEM."""
     from netCDF4 import Dataset
 
     from ..file.netcdf.raster import copy_rasters, file_path
@@ -660,9 +661,11 @@ def dem_derivative_files(
         "filled_dem": str(filled), "dem_derivatives": str(bundle),
         **{key: raster_source(bundle, var) for key, var in DEM_DERIVATIVE_VARIABLES.items()},
     }
-    digest = fingerprint((file_path(source),), {
+    replacements = replacements or {}
+    digest = fingerprint((file_path(source), *(file_path(uri) for uri, _crs in replacements.values())), {
         "source": str(source), "source_crs": source_crs, "target_crs": target_crs,
         "format": "dem-netcdf-2", "header": header, "upscale_factor": upscale_factor,
+        "replacements": {name: list(value) for name, value in replacements.items()},
     })
     try:
         with Dataset(bundle) as dataset:
@@ -700,7 +703,10 @@ def dem_derivative_files(
                 # Derive only on real terrain, then pad all variables once.
                 # Padding cannot create sinks or flow paths outside the DEM.
                 names = ("dem", "dem_filled", *DEM_DERIVATIVE_VARIABLES.values())
-                copy_rasters(bundle, {name: raster_source(written, name) for name in names}, header, task=task)
+                given = {name: _prepared_dem_source(uri, crs, target_crs, folder / f"{name}_replacement.nc")
+                         for name, (uri, crs) in replacements.items()}  # only gives a CRS-less file its CRS
+                copy_rasters(bundle, {name: given.get(name) or raster_source(written, name) for name in names},
+                             header, task=task, shift=True)  # off the L0 lattice: moved onto it (under half a cell)
                 with Dataset(bundle, "r+") as dataset:
                     dataset.input_fingerprint = digest
             else:
@@ -710,36 +716,6 @@ def dem_derivative_files(
         dataset.input_fingerprint = digest
     _progress(task, 100)
     return {**result, "reused": False}
-
-
-def override_derivative(folder, variable, raster):
-    """Write `raster` over `variable` of `folder`/dem_derivatives.nc. It must be on the
-    bundle's grid (CRS, cell size, alignment) and cover all of it."""
-    from netCDF4 import Dataset
-    from osgeo import gdal
-
-    from ..file.netcdf.raster import source
-
-    bundle = Path(folder) / "dem_derivatives.nc"
-    target, given = gdal.Open(source(bundle, variable)), gdal.Open(str(raster))
-    if target is None or given is None:
-        raise ValueError(f"Cannot open {raster} or {variable} of {bundle}.")
-    if not crs_equal(given.GetProjection(), target.GetProjection()):
-        raise ValueError(f"{Path(raster).name} is not in the DEM's CRS.")
-    window = aligned_window(
-        header_from_geotransform(given.GetGeoTransform(), given.RasterXSize, given.RasterYSize),
-        header_from_geotransform(target.GetGeoTransform(), target.RasterXSize, target.RasterYSize),
-        label=Path(raster).name,
-    )
-    if (window["copy_rows"], window["copy_cols"]) != (window["target_rows"], window["target_cols"]):
-        raise ValueError(f"{Path(raster).name} does not cover the whole DEM.")
-    values = given.GetRasterBand(1).ReadAsArray(
-        window["source_x"], window["source_y"], window["target_cols"], window["target_rows"])
-    target = given = None
-    with Dataset(bundle, "a") as handle:
-        stored = handle[variable]
-        y = handle[stored.dimensions[-2]][:]
-        stored[:] = (values[::-1] if y[0] < y[-1] else values).astype(stored.dtype)  # GDAL reads north first
 
 
 def _compute_dem_derivatives(prepared, staging, log, factor=1):

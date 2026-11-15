@@ -28,12 +28,6 @@ def specs(dialog):
             "completed_message": "Project structure is ready.",
             "failed_message": "Project structure setup failed.",
         },
-        "scan_precipitation": {
-            "button": dialog.pushButton_scanPrecipitationFiles,
-            "label": "Precipitation Scan",
-            "completed_message": "Precipitation scan completed.",
-            "failed_message": "Precipitation scan failed.",
-        },
         "execute_all_morphology": {
             "button": project_tree.button(dialog, "morphology"),
             "label": "Execute All Morphology",

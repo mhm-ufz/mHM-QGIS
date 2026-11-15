@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import itertools
+import math
 import os
 import tempfile
 from dataclasses import dataclass, replace
@@ -9,6 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from ...grid import (
+    Extent,
     TargetGrid,
     assert_header_file_matches,
     assert_matches_header,
@@ -528,13 +530,41 @@ def file_defaults(spec):
     return found
 
 
+def netcdf_grid(path, variable, crs=None):
+    """A NetCDF variable's grid as the forcing reads it, from its axes only (GDAL builds a band per
+    time step: minutes for a long series): cell-edge bounds (xmin, xmax, ymin, ymax), columns, rows
+    and the CRS the file declares (else `crs`)."""
+    try:
+        metadata = _inspect_file(Path(path), MeteoFolderSpec("pre", Path(path).parent, crs=crs), variable).metadata
+    except (KeyError, ValueError) as error:
+        raise ValueError(f"{Path(path).name}: no grid information (lower-left corner and cell size): {error}. "
+                         "Select another file.") from error
+    bounds = Extent.from_centres(metadata.bounds, metadata.x_resolution, metadata.y_resolution).bounds
+    return bounds, metadata.shape[1], metadata.shape[0], metadata.crs
+
+
+
+def netcdf_first_slice(path, variable):
+    """A variable's first time step as a 2-D array, north row first (for display only)."""
+    import numpy as np
+
+    with _open_dataset(Path(path)) as ds:
+        da = ds[variable]
+        y_dim, x_dim = _spatial_dims(da)
+        da = da.isel({dim: 0 for dim in da.dims if dim not in (y_dim, x_dim)}).transpose(y_dim, x_dim)
+        y = _axis_values(ds, y_dim, "y")[1]
+        values = np.asarray(da.values, dtype="float32")
+    return values[::-1] if y is not None and len(y) > 1 and float(y[0]) < float(y[-1]) else values
+
+
 def _inspect_file(
         path: Path,
-        spec: MeteoFolderSpec) -> _SpatialSignature:
+        spec: MeteoFolderSpec,
+        variable: str | None = None) -> _SpatialSignature:
     import numpy as np
 
     with _open_dataset(path) as ds:
-        variable = _find_variable(ds, spec.kind)
+        variable = variable or _find_variable(ds, spec.kind)
         da = ds[variable]
         y_dim, x_dim = _spatial_dims(da)
         x_name, x_values = _axis_values(ds, x_dim, "x")
@@ -808,6 +838,27 @@ def validate_coverage(metadata: SpatialMetadata, bounds, crs, l0_resolution=0.0)
             f"({', '.join(f'{value:.10g}' for value in edges)}) do not cover the study extent "
             f"({xmin:.10g}, {xmax:.10g}, {ymin:.10g}, {ymax:.10g}): use inputs that cover the whole domain.")
 
+
+
+def grid_note(metadata: SpatialMetadata, grid, crs) -> str:
+    """How an inspected input reaches the common L2 grid (`grid`, the saved grid metadata), as
+    `_resample_ready` will do it: copied, shifted onto the lattice, or resampled (nearest).
+    ValueError when it does not cover the common extent."""
+    validate_coverage(metadata, grid["study_bounds"], crs, grid.get("l0_resolution", 0.0))
+    header, source_crs = grid["l2_header"], metadata.crs or ("EPSG:4326" if metadata.unit in {"deg", "degree"} else None)
+    cell = float(header["cellsize"])
+    if source_crs and crs and _same_crs(source_crs, crs) and all(
+            math.isclose(value, cell, rel_tol=1e-6) for value in (metadata.x_resolution, metadata.y_resolution)):
+        offsets = []
+        for centre, corner in ((metadata.bounds[0], header["xllcorner"]), (metadata.bounds[2], header["yllcorner"])):
+            steps = (centre - float(corner)) / cell - 0.5
+            offsets.append((round(steps) - steps) * cell)
+        if all(abs(value) <= 1e-6 * cell for value in offsets):
+            return "Covers the common extent; already on the L2 grid: copied."
+        return (f"Covers the common extent; shifted by ({offsets[0]:.6g}, {offsets[1]:.6g}) onto the L2 grid "
+                "(nearest cells), not resampled.")
+    return (f"Covers the common extent; resampled (nearest) from {metadata.x_resolution:.6g} {metadata.unit} "
+            f"({source_crs or 'no CRS'}) to the L2 grid ({cell:.6g}).")
 
 def _resample_ready(da, ds, source_crs, target, np, xr):
     y_dim, x_dim = _spatial_dims(da)

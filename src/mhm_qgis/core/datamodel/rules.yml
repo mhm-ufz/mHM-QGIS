@@ -5,7 +5,7 @@
 version: 1
 
 inputs:
-  pre:         {label: Precipitation, locate: {meteo: pre}, add: "Meteorology tab: Scan Precipitation"}
+  pre:         {label: Precipitation, locate: {meteo: pre}, add: "Precipitation page: Set"}
   pet:         {label: Potential evapotranspiration, locate: {meteo: pet}, add: "Meteorology tab: add variable pet"}
   tavg:        {label: Mean air temperature, locate: {meteo: tavg}, add: "Meteorology tab: add variable tavg"}
   tmin:        {label: Minimum air temperature, locate: {meteo: tmin}, add: "Meteorology tab: add variable tmin"}

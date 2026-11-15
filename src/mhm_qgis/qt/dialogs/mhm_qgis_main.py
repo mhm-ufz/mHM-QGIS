@@ -22,6 +22,7 @@ from ..controllers import post_context, process_cases, workflow_state
 from ..threads.task_coordinator import TaskCoordinator
 from ..ui import load_form
 from ..workflows.morphology import MorphologyTaskBridge
+from .browse_resolution_L2_L1_L11_file import ReplaceBox
 from .input_selection import elide_named_left
 from .map_canvas import MapCanvasWindow
 from .project_terminal import ProjectTerminalDialog
@@ -48,8 +49,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._lai_input_config = {}
         self._drafts = {}  # unsaved form values by form key, see main.stash
         self._set_crs = ""  # the domain CRS last Set, see grid.set_crs
-        self._study_extent = None  # the Custom L0 Extent last Set, see grid.set_dem
-        self._upscale_factor = 1  # L0 = DEM x this factor, last Set, see grid.set_dem
+        self._upscale_factor = 1  # the DEM x this lies on L0, last Set, see grid.set_dem
         self._failed_step = None  # the tree row of a failed Execute All stage, for ➤
         self._land_cover_ready_source = ""
         self._domain_definition_mode = ""
@@ -57,16 +57,19 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._meteo_inspections = {}
         self._observation_inputs = {}
         self._observation_inspections = {}
-        self._grid_l0_info = None
-        self._grid_l2_metadata = None
-        self._grid_l2_header = None
-        self._l2_multiplier_user_selected = False
+        self._resolution_files = {}  # Resolution page: level -> path, variable, crs (L0: factor)
+        self._level_file_info = {}  # level -> that file's grid and extent in the domain CRS
+        self._grid_l0_info = None  # the L0 file's grid x its factor
+        self._grid_l2_metadata = None  # the Set common grid, see grid.set_resolution
+        self._header_notes = {}  # Updated Headers: why a value differs from its file
+        self._displayed = {}  # Resolution page eyes: `L2` (a file) or `grid:L2` -> its layer name
+        self._dem_error = None  # why the DEM cannot fill the common L0 grid, see grid.check_dem
+        self._dem_replacements = {}  # derivative row key -> its Set raster {path, variable, crs}
+        self._replace_box = ReplaceBox(self)  # the DEM-derivative page's raster input
         self._intro_answers = {}
         self._multi_domains = None
         self._intro_pending = False
         self._process_cases = {}  # Settings page: process -> case chosen this session
-        self._preferred_l1_resolution = None
-        self._preferred_l11_resolution = None
 
         # Save guards, see `connect_input_state_teardown_guards`.
         self._loading_input_state = False
@@ -87,7 +90,6 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         main_controller.configure_input_adapters(self)
         for level in ("L2", "L1", "L11"):
             getattr(self, f"spinBox_{level}ResolutionMultiplier").setRange(1, 1_000_000)
-        self.lineEdit_precipitationGlobDefinition.setText("*.nc")
         self.comboBox_mhmWorkType.setCurrentIndex(0)
         self.comboBox_mhmWorkType.model().item(2).setEnabled(False)  # mRM only: not yet
         self.stackedWidget_configuration.setCurrentWidget(self.page_singleDomain)
@@ -103,8 +105,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.refresh_input_sources()
         self.update_gauged_outlet_count()
         post_context.clear(self)
-        grid.refresh_precipitation_folder(self)
-        grid.refresh_grid_resolution_controls(self)
+        grid.clear(self)
 
     def log_message(self, message):
         """Append to the UI log without feeding back into captured stdout."""
@@ -149,7 +150,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             if config.get("lookup_table"):
                 log(f"{label} lookup: {config['lookup_table']} | "
                     f"{config['mapping_field']} -> {config['class_field']}")
-        log(f"Precipitation folder: {grid.precipitation_folder(self) or '<not selected>'}")
+        for level, selection in self._resolution_files.items():
+            log(f"{level} reference file: {selection['path']}")
 
     # --- Names other packages call ----------------------------------------
 

@@ -117,6 +117,10 @@ def test_exact_copy_rejects_misalignment_and_cancel_preserves_previous_file(tmp_
         def isCanceled(self):
             return True
 
+    shifted = copy_rasters(tmp_path / "shifted.nc", {"dem": original}, {**header, "xllcorner": 30}, shift=True)
+    placed = gdal.Open(source(shifted, "dem"))  # 0.3 cells off: moved onto the target lattice, not resampled
+    assert placed.GetGeoTransform()[0] == 30
+    assert (placed.ReadAsArray() == gdal.Open(str(original)).ReadAsArray()).all()
     with pytest.raises(RuntimeError, match="cancelled"):
         copy_rasters(output, {"dem": original}, task=Cancelled())
     assert output.read_bytes() == before
@@ -272,15 +276,15 @@ def test_execute_all_publishes_one_domain_on_prescanned_grid(tmp_path, version, 
 
 def test_upscaled_topography_pads_whole_blocks_and_matches_the_l0_grid(tmp_path):
     """Factor 2 on 5 x 7 DEM cells: a nodata row on top and column on the right make whole blocks,
-    the lower-left corner stays, and the bundle is the grid `dem_grid` gives L0."""
+    the lower-left corner stays, and the bundle is the grid `raster_grid` gives L0."""
     pytest.importorskip("mhm_tools.pre.topography_upscaling")
-    from mhm_qgis.core.grid.raster import dem_grid
+    from mhm_qgis.core.grid.raster import raster_grid
 
     original = _raster(tmp_path / "source.tif", np.arange(35, dtype="float64").reshape(5, 7) + 100)
     result = dem_derivative_files(original, tmp_path / "geometry", upscale_factor=2)
     assert {"dem", "dem_filled", "slope", "aspect", "facc", "fdir"} <= set(variables(result["dem_derivatives"]))
     bundle = gdal.Open(source(result["dem_derivatives"], "dem_filled"))
-    header = dem_grid(original, "EPSG:32632", "EPSG:32632", factor=2)["header"]
+    header = raster_grid(original, "EPSG:32632", "EPSG:32632", factor=2)["header"]
     assert (bundle.RasterXSize, bundle.RasterYSize) == (header["ncols"], header["nrows"]) == (4, 3)
     x0, cell, _, top, _, _ = bundle.GetGeoTransform()
     assert (x0, cell, top - 3 * cell) == pytest.approx((header["xllcorner"], header["cellsize"], header["yllcorner"]))

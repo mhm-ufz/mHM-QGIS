@@ -42,10 +42,11 @@ pages:
     kind: info
     title: DEM and precipitation
     text: >-
-      The DEM defines the L0 grid; cover the whole basin with some margin and keep NoData
-      outside it. Precipitation is read from a folder of NetCDF files selected with a glob
-      such as pre_*.nc; Scan Precipitation reads its grid and time span and sets up the
-      common L2 grid. Run the scan before Execute All.
+      The Resolution page sets the grids from reference files, usually the DEM for L0 and a
+      precipitation file for L2, and its Set makes the common extent that the DEM and every
+      forcing must cover; cover the whole basin with some margin. Precipitation is read from
+      a folder of NetCDF files selected with a glob such as pre_*.nc; its Set reads the time
+      span and checks the coverage.
 
   - id: resolution
     kind: choice

@@ -33,17 +33,17 @@ def test_help_walks_the_visible_page_and_esc_only_ends_the_tour():
 
     dialog = MhmQgisDialog()
     dialog.show()
-    dialog.stackedWidget_project.setCurrentWidget(dialog.tab)
+    dialog.stackedWidget_project.setCurrentWidget(dialog.page_setup)
     pages = tooltip.load()["pages"]
 
     dialog.Closure.helpRequested.emit()
     tour = dialog.findChild(tooltip.Tour)
     assert tour.isVisible()
-    assert pages["tab"][0]["title"] in tour.title.text()
+    assert pages["page_setup"][0]["title"] in tour.title.text()
     assert not tour.back.isEnabled()
     assert not tour.help.isEnabled()  # no help_url yet
     steps = [step["widget"] for _widget, step in tour.steps]
-    assert steps[:len(pages["tab"])] == [step["widget"] for step in pages["tab"]]
+    assert steps[:len(pages["page_setup"])] == [step["widget"] for step in pages["page_setup"]]
     assert pages["page_singleDomain"][0]["widget"] in steps  # the visible stacked page follows
     tour.next.click()
     assert tour.index == 1
@@ -61,7 +61,7 @@ def test_help_walks_the_visible_page_and_esc_only_ends_the_tour():
     assert dialog.isVisible()
 
     tour = tooltip.start(dialog)
-    dialog.stackedWidget_project.setCurrentWidget(dialog.tab_meteo)
+    dialog.stackedWidget_project.setCurrentWidget(dialog.page_meteo)
     assert not tour.isVisible()
 
     dialog.close()

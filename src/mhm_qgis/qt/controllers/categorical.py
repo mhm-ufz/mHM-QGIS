@@ -54,7 +54,8 @@ _READY, _LOOKUP = "mHM ready", "Single Categorical Layer (with Lookup Table)"
 _PERIODS = "Categorical Periods (with Lookup Table)"
 MODES = {  # in the order of the radios and of the stacked pages
     "lc": (_READY, _PERIODS),
-    "soil": (_READY, "Categorical Layer (with Lookup Table)", "Multi-horizon Multi-variate Layers"),
+    "soil": (_READY, "Categorical Layer (with Lookup Table)",
+             "Multi-horizon Multi-variate Layers (Clay, Sand, Silt, Bulk Density)"),
     "geology": (_READY, _LOOKUP),
     "lai": ("mHM ready (Class Layer)", "NetCDF File", _LOOKUP),
 }
@@ -62,6 +63,7 @@ _OLD_MODES = {  # texts saved before the types moved onto the main form
     ("lc", _LOOKUP.lower()): _PERIODS,
     ("lc", "multi historical periods (with lookup table)"): _PERIODS,
     ("soil", _LOOKUP.lower()): MODES["soil"][1],
+    ("soil", "multi-horizon multi-variate layers"): MODES["soil"][2],
     ("lai", "mhm ready"): MODES["lai"][0],
 }
 # class file combo, its browse, class definition combo, its browse

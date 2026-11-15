@@ -2,6 +2,7 @@
 
 from .api import (
     MeteoForcingResult,
+    grid_note,
     inspect_meteo_folder,
     inspect_meteo_inputs,
     process_meteo_inputs,
@@ -26,6 +27,7 @@ __all__ = [
     "MeteoFolderSpec",
     "MeteoForcingResult",
     "SpatialMetadata",
+    "grid_note",
     "inspect_meteo_folder",
     "inspect_meteo_folder_cached",
     "inspect_meteo_inputs",

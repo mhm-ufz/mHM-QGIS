@@ -11,7 +11,6 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QMessageBox,
     QRadioButton,
-    QTableWidgetItem,
 )
 
 from ...core.handlers.store.morphology import resolve_display_output
@@ -522,56 +521,6 @@ def _domain_delineator_preflight_failed(dialog, message):
     QMessageBox.critical(dialog, "Gauges", error_detail(message))
 
 
-# --- DEM derivatives ------------------------------------------------------
-
-DEM_BUNDLE_VARIABLES = {"dem": "dem_filled", "slope": "slope", "aspect": "aspect", "fdir": "fdir", "facc": "facc"}
-
-
-def show_dem_derivatives(dialog, variable=None):
-    """The DEM page: the DEM and the derivatives the data model needs, from dem_derivatives.nc;
-    `variable`, a clicked row, gets the Replace row."""
-    from ...core.handlers.file.netcdf.raster import describe
-    from ...core.handlers.store.paths import temp_morphology_folder
-
-    path = os.path.join(temp_morphology_folder(dialog.setup_folder), "dem_derivatives.nc") \
-        if dialog.setup_folder else ""
-    present, table = describe(path) if path else {}, dialog.tableWidget_demDerivatives
-    table.setRowCount(len(DEM_BUNDLE_VARIABLES))
-    for row, (key, name) in enumerate(DEM_BUNDLE_VARIABLES.items()):
-        shape, units = present.get(name, ((), ""))
-        file = os.path.relpath(path, dialog.setup_folder) if name in present else "—"
-        for column, text in enumerate((key, name, " \N{MULTIPLICATION SIGN} ".join(map(str, shape[-2:])) or "—", units, file)):
-            table.setItem(row, column, QTableWidgetItem(text))
-        table.setRowHidden(row, key != "dem" and key not in dialog._input_findings)
-    for column in range(table.columnCount() - 1):  # the last one stretches
-        table.resizeColumnToContents(column)
-    dialog._dem_override = variable
-    dialog.widget_demOverride.setVisible(variable is not None)
-    dialog.widget_demOverride.setEnabled(DEM_BUNDLE_VARIABLES.get(variable) in present)
-
-
-def browse_dem_override(dialog):
-    path, _ = open_file(dialog, "Replacement raster", "Rasters (*.tif *.tiff *.nc *.asc);;All files (*)")
-    if path:
-        dialog.lineEdit_demOverride.setText(path)
-
-
-def override_dem_derivative(dialog):
-    """Replace the page's derivative with the chosen raster (same grid, whole DEM)."""
-    from ...core.handlers.raster.tasks import override_derivative
-    from ...core.handlers.store.paths import temp_morphology_folder
-    from .. import project_tree
-
-    path, variable = dialog.lineEdit_demOverride.text().strip(), dialog._dem_override
-    try:
-        override_derivative(temp_morphology_folder(dialog.setup_folder), DEM_BUNDLE_VARIABLES[variable], path)
-    except (OSError, RuntimeError, ValueError) as error:
-        QMessageBox.warning(dialog, "Replace DEM Derivative", str(error))
-        return
-    dialog.log_message(f"Replaced {variable} in dem_derivatives.nc with {path}.")
-    project_tree.refresh(dialog)
-
-
 # --- Result display -------------------------------------------------------
 
 def display_morphology(dialog, key) -> str:
@@ -631,7 +580,7 @@ def on_page_changed(dialog, page):
     dialog.log_message(f"Switched to '{dialog.tabWidget_steps.tabText(0)}'.")
     # mHM reports nothing when it finishes, so the Outputs page re-reads the
     # runs each time it is shown.
-    if page is dialog.tab_outputs:
+    if page is dialog.page_outputs:
         from . import post_context
 
         post_context.populate(dialog)

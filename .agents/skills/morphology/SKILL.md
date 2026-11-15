@@ -54,15 +54,13 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
     ragged arrays): the editor dimension `nGaugesTotal` is the widest row, while the value
     `nGaugesTotal` is the sum, which mHM needs for its discharge buffers.
   - Switching the work type closes an open setup of the other kind.
-- `pushButton_scanPrecipitationFiles` is the explicit metadata scan boundary.
-  The selected folder and relative `lineEdit_precipitationGlobDefinition` determine
-  the file set, never a recursive search of every NetCDF in the project. No scan
-  runs during project restoration. The worker returns metadata; the controller
-  updates coverage, the multiplier default, and the persisted common grid.
-- Precipitation Scan and Add/Edit Meteorology open `meteo_var_details_input.ui`.
-  Only OK (Set, when embedded on a forcing row's page) starts metadata inspection; Cancel
-  leaves saved inputs unchanged. The
-  variable table is populated after successful inspection and restores without scanning.
+- A forcing's Set (`meteo_var_details_input.ui`, embedded on its row's page; precipitation
+  has its own `page_precipitation`, which also holds the simulation period) is the explicit
+  metadata scan boundary: the folder and relative glob fix the file set, never a recursive
+  search. No scan runs during project restoration. A Set input must cover the common extent
+  once the grid is Set; the form's `label_description` says whether it is copied, shifted or
+  resampled onto L2 (`forcing/api.grid_note`). Add/Edit in the variable table opens the same
+  form; Cancel leaves saved inputs unchanged.
 - Forcings: `pre`, `tavg`, `tmin`, `tmax`, `tann`, `pet`, `ssrd`, `strd`, `netrad`, `eabs`,
   `windspeed` (`layout.METEO_VARIABLES`, `forcing/temporal.VARIABLES`, `forcing/types`,
   `state/nml_outputs.METEO_FIELDS`, and `comboBox_meteoVar` must list the same names;
@@ -89,17 +87,24 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   and `dateTimeEdit_simulationEndTimeInput` persist under `nml-settings.json:time`.
   Core validates start <= evaluation <= end, whole dates for v5 and whole hours
   for v6, then hands periods to nml-tools. Meteorology validates input coverage.
-- Scan establishes the common grid before either execution. `core/grid/raster.py`
-  reads DEM metadata only (a warped VRT when CRS conversion is necessary).
+- The Resolution page's Set establishes the common grid before either execution.
+  `core/grid/raster.raster_grid` reads a reference file's or the DEM's grid only (a warped VRT
+  when CRS conversion is necessary).
 - The ▶ of A. Morphology schedules `EXECUTE_ALL_STAGES`: NetCDF DEM
   derivatives, saved gauge positions, morphology mask, categorical inputs, LAI,
   then one version-aware publication stage. Snapping and delineation must already
   be saved by Domain Delineator. There are no late crop, per-outlet link or
   per-outlet DEM stages.
 - The ▶ of B. Meteorology runs only `core/executions/meteo`, never morphology.
-- A DEM derivative's row can replace it in `dem_derivatives.nc` with a raster on the same
-  grid covering the whole DEM (`core/handlers/raster/tasks.override_derivative`); a new DEM
-  rebuilds the bundle and drops it.
+- The derivatives the process cases need (slope, aspect, fdir, facc) have their own tree rows
+  after DEM, all on `page_dem_derivatives_var`. Unticking "Derived from the DEM grid" takes a
+  replacement raster: its Set (`grid.set_derivative`) wants the domain CRS (derivatives are never
+  resampled), L0's cells and the whole DEM covered. The ▶ places it as the DEM, shifted under half
+  a cell, then cropped or padded with no data (`dem_derivative_files(replacements=)`, which
+  fingerprints it). Replacing fdir leaves facc derived from the DEM's directions; Set warns. The
+  morphology summary gives each input's own grid, extent modification and regridding
+  (`grid.summary`); the inline Replace box is `ReplaceBox`, the reference-file form's logic on
+  the main dialog's widgets.
 - DEM processing does not modify mHM-tools. Derive terrain on the real DEM first, then place all
   variables once on the common L0 extent in `.temp/Morphology/dem_derivatives.nc`.
   Extract `dem_filled` as the single raster variable `dem` in `filled_dem.nc` with
@@ -137,34 +142,47 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   alignment gaps, coordinate axes and array matching. Its local `Resolution` does
   no file I/O or rounding; `Grid` adds per-level extents and one common extent.
   Core accepts plain values/paths/CRS strings, never widgets or QGIS objects.
-- The common extent covers the **study extent**: the Custom L0 Extent Set on the DEM page
-  (`groupBox_customExtent`, which must lie inside the DEM; `grid.study_bounds`), else the
-  whole DEM -- never the catchment bounds. Saved catchments must lie inside it (the mask
-  stage refuses a cut catchment), and every meteo input must cover it
-  (`forcing.validate_coverage`: precipitation at Scan, the rest at Execute All Meteo; 1% of
-  an L0 cell absorbs lat/lon rounding, never a real shortfall -- the data are not moved to fit).
+- The Resolution page (`qt/controllers/grid.py`) takes each level from a reference raster
+  (`browse_resolution_*.ui`; L0 is required, optionally upscaled by a whole factor) or a typed
+  resolution / multiplier of L0. The **common extent is the study extent**: the intersection
+  of the ticked files' extents (`checkBox_extent{L}enforce`; a file in another CRS gives the
+  inner box of its footprint, `grid.inner_bounds`; shrunk by 1% of an L0 cell for lat/lon
+  rounding), snapped **outward** to whole blocks of lcm(L1, L11, L2 factors) L0 cells on the L2
+  lattice (`Grid.for_meteorology(block=)`), so every level nests exactly -- v5 anchors coarse
+  grids NW, v6 LL; they agree only then. Meteo cells are never padded: Set refuses an extent that
+  leaves the L2 file's cells (`grid._inside_meteo`), and every meteo input must cover it
+  (`forcing.validate_coverage`: at its Set and at Execute All Meteo; 1% of an L0 cell absorbs
+  lat/lon rounding, never a real shortfall). The DEM's cell (x the DEM page factor) must equal L0;
+  off the lattice it is shifted onto it by under half a cell (`copy_rasters(shift=True)` in
+  `dem_derivative_files`, never resampled), then cropped or padded with no data to the extent,
+  which it must overlap (`grid.check_dem`). Saved
+  catchments must lie inside it (the mask stage refuses a cut catchment).
+  `grid.validate_mhm_grid` adds mHM's rules: every level a whole multiple of L0, L11 and L1
+  nested, and v5.13 only takes an even L11/L1 ratio (`mo_common_mHM_mRM_read_config.f90`).
   Meteo cell centres come from `forcing/api._centre_axes`, shared by Scan and Execute: 2-D
   lat/lon centres projected to the meteo CRS place the 1-D axes (which keep the row order --
   the mHM test domain stores lat south-to-north against north-to-south data); without them,
   `xc`/`yc` are the left/upper cell edges (that domain's `header.txt` confirms it).
-  Snap it outward to an L0-aligned L2 lattice. Derive L0 from L2 (same corners,
-  `ncols*n`, `nrows*n`) so n x n cells per L2 cell holds by construction.
-  `validate_l0_l2_alignment()` checks every header pair.
-- The exact raw L2/L0 integer factor is a spin-box default only. Once the user
-  chooses a multiplier it wins, including after rescans or project restoration.
+  Derive L0 from L2 (same corners, `ncols*n`, `nrows*n`) so n x n cells per L2 cell holds
+  by construction. `validate_l0_l2_alignment()` checks every header pair.
+- A level's file rounds its multiplier to the nearest whole factor of L0 (a non-whole ratio
+  is logged and its data resampled); after that the typed multiplier wins. Set shows the
+  common headers in Updated Headers: a value that differs from its file's is blue with an ⓘ
+  giving the reason, and the Description column lists what happens to each file.
 - Compare cell-edge origins when measuring alignment. Meteo with L2's spacing and the
   processing CRS is shifted onto the L0 lattice (under half an L0 cell,
   `grid.shift_onto_header`) and window-copied -- meteo files are huge, so they are never
-  resampled for that. Only another spacing or CRS resamples (nearest). Prepared L0 is
-  never shifted. Expand boundaries outward only; never shrink a misaligned boundary.
+  resampled for that. Only another spacing or CRS resamples (nearest). Only the DEM is
+  shifted onto L0 (see above); other prepared L0 rasters never are.
 - Never round a grid-defining cell size. 1/1200 degree and 120 times that value
   must be carried verbatim: display rounding can introduce cumulative drift or
   make an exact 0.1-degree ratio fail validation. `floor_cellsize`/`ceil_cellsize`
   are display-only. Persist both exact headers and the multiplier in processing
   state's `grid` section; restore those, not rounded widget text.
-- Grid validity includes DEM file fingerprint, CRS, precipitation selection/files,
-  multiplier and study extent. Changing any requires a new scan. Changing catchment
-  selection invalidates morphology, not the DEM-wide common extent.
+- Grid validity (`grid.grid_fingerprint`) covers the reference files, their variables,
+  CRS and factor, the ticked extents, the domain CRS and the L1/L11/L2 resolutions. Changing
+  any clears Updated Headers until the next Set. Changing catchment selection invalidates
+  morphology, not the common extent.
 - Prepared L0 rasters use integer window copies and padding, never resampling.
   `crop_aligned_l0_raster()`/`mask_aligned_l0_raster()` remain low-level APIs and
   reject a misaligned or wrong-CRS source; they are not a late crop workflow.

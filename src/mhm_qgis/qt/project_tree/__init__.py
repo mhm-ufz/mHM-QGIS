@@ -11,6 +11,7 @@ from functools import cache
 from pathlib import Path
 
 import yaml
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor, QIcon
 from qgis.PyQt.QtWidgets import QHeaderView, QPushButton, QTableWidgetItem
@@ -97,36 +98,24 @@ def _meteo(dialog, node):
     return "added" if node["key"].removeprefix("meteo_") in dialog._meteo_inputs else "empty"
 
 
-def _l0(dialog, _node):
-    return "processed" if dialog._grid_l0_info else "empty"
+def _precipitation(dialog, _node):
+    """Added once its Set has scanned; processed once the simulation period is Set as well."""
+    if "pre" not in dialog._meteo_inputs:
+        return "empty"
+    from ...core.handlers.state.nml_settings import load_settings
 
-
-def _l2(dialog, _node):
-    """Processed while the saved common grid still matches its inputs, as Execute All requires."""
-    from ..controllers.grid import grid_fingerprint, precipitation_folder
-
-    saved = (dialog._grid_l2_metadata or {}).get("configuration_fingerprint")
-    try:
-        current = bool(dialog._grid_l2_header) and saved == grid_fingerprint(dialog)
-    except (OSError, ValueError):  # precipitation not configured
-        current = False
-    return "processed" if current else "added" if precipitation_folder(dialog) else "empty"
+    return "processed" if dialog.setup_folder and load_settings(dialog.setup_folder).get("time") else "added"
 
 
 def _resolution(dialog, _node):
-    """L1 and L11 set; processed once latlon.nc exists where the version needs it (v5.13)."""
-    from ..controllers.grid import (
-        current_l1_resolution,
-        current_l11_resolution,
-        resolution_error,
-    )
+    """Added with an L0 file; processed once Set made the common grid (still current) and the
+    latlon.nc where the version needs it."""
+    from ..controllers.grid import grid_current
 
-    if not (current_l1_resolution(dialog) and current_l11_resolution(dialog)):
+    if not dialog._grid_l0_info:
         return "empty"
-    if dialog._grid_l2_header and resolution_error(dialog):
-        return "added"
     latlon = dialog._input_findings.get("latlon")
-    return "added" if latlon and not latlon.ok else "processed"
+    return "processed" if grid_current(dialog) and not (latlon and not latlon.ok) else "added"
 
 
 def _namelists(dialog, _node):
@@ -137,13 +126,18 @@ def _namelists(dialog, _node):
 
 
 def _dem(dialog, _node):
-    """Added once the DEM is read; ▶ fills it and makes the derivatives."""
-    return "added" if dialog._grid_l0_info else "empty"
+    """Added once its Set found it on the common L0 grid; ▶ fills it and makes the derivatives."""
+    return "added" if dialog.input_combo("dem").currentLayer() is not None and dialog._dem_error is None else "empty"
+
+
+def _derivative(dialog, node):
+    """Added once Set took its replacement raster; derived from the DEM otherwise."""
+    return "added" if node["key"] in dialog._dem_replacements else _dem(dialog, node)
 
 
 STATUS = {"intro": _intro, "project_setup": _project_setup, "domain_setup": _domain_setup, "gauges": _gauges,
-          "categorical": _categorical, "domain": _domain, "meteo": _meteo, "l0": _l0, "l2": _l2,
-          "resolution": _resolution, "namelists": _namelists, "dem": _dem}
+          "categorical": _categorical, "domain": _domain, "meteo": _meteo, "precipitation": _precipitation,
+          "resolution": _resolution, "namelists": _namelists, "dem": _dem, "derivative": _derivative}
 
 
 RUNS = {"morphology": "execute_all_morphology", "meteorology": "execute_all_meteo"}
@@ -182,7 +176,7 @@ def build(dialog) -> None:
     """Columns, keys on the Designer rows, statuses, and Project Configuration selected."""
     from ..controllers import post_context
 
-    dialog._input_findings, dialog._viewed, dialog._indicators = {}, {}, {}
+    dialog._input_findings, dialog._viewed, dialog._indicators = {}, {}, []
     tree = dialog.treeWidget_projectStructure
     tree.setColumnCount(len(COLUMNS))
     tree.setHeaderLabels(COLUMNS)
@@ -213,12 +207,12 @@ def build(dialog) -> None:
 
 
 def indicate(dialog, key, label) -> None:
-    """The row's status again on `label`, right of its page's Set button. The meteo rows
-    share one form, so a new one drops the other variables' labels."""
-    if key.startswith("meteo_"):
-        dialog._indicators = {name: shown for name, shown in dialog._indicators.items()
-                              if not name.startswith("meteo_")}
-    dialog._indicators[key] = label
+    """The row's status again on `label`, right of its page's Set button; a row may have several
+    (Precipitation: its form's and Set Periods'); the labels of closed forms drop out, and a label
+    shared by rows (the DEM derivatives' page) follows the last one."""
+    dialog._indicators = [(name, shown) for name, shown in dialog._indicators
+                          if not sip.isdeleted(shown) and shown is not label]
+    dialog._indicators.append((key, label))
     row = item(dialog, key)
     label.setText(row.text(STATUS_COLUMN))
     label.setToolTip(row.toolTip(STATUS_COLUMN))
@@ -260,17 +254,18 @@ def select(dialog, row) -> None:
         return
     from ..controllers import forcing, grid, intro, main, process_cases
 
-    main.stash(dialog, "meteoVar")  # the meteo form's unsaved input survives the switch
+    for page in ("meteoVar", "precipitation"):
+        main.stash(dialog, page)  # the meteo form's unsaved input survives the switch
     dialog.save_input_state()
     key = node["key"]
     if "summary" in node:
         _summary(dialog, getattr(dialog, node["summary"]), row)
     if key.startswith("meteo_"):
         forcing.show_meteo_input(dialog, key.removeprefix("meteo_"))
-    elif node["page"] == "page_demDerivatives":
-        main.show_dem_derivatives(dialog)
+    elif node["page"] == "page_dem_derivatives_var":
+        grid.show_derivative(dialog, key)
     else:
-        hook = {"intro": intro.embed, "resolution": grid.show_resolution_summary, "settings": process_cases.show,
+        hook = {"intro": intro.embed, "settings": process_cases.show,
                 "domain_definition": main.show_domain_definition}
         if key in hook:
             hook[key](dialog)
@@ -385,7 +380,10 @@ def _file(dialog, node) -> str:
 
 
 def _summary(dialog, table, top) -> None:
-    """The shown rows under `top` with a status or inputs: status, what needs them, prepared file."""
+    """The shown rows under `top` with a status or inputs: status, what needs them, prepared file;
+    a wider table (morphology) also gets each input's grid and how it is fitted to L0."""
+    from ..controllers.grid import summary
+
     rows = [row for row in _rows(dialog, top)
             if row is not top and _shown(row) and {"status", "input"} & _node(row).keys()]
     table.setRowCount(len(rows))
@@ -393,7 +391,9 @@ def _summary(dialog, table, top) -> None:
         node = _node(row)
         findings = [dialog._input_findings[name] for name in _inputs(node) if name in dialog._input_findings]
         needed = ", ".join(dict.fromkeys(reason for finding in findings for reason in finding.reasons))
-        for column, text in enumerate((row.text(0), " ".join(SYMBOLS[_state(dialog, row)]), needed, _file(dialog, node))):
+        details = summary(dialog, node)[:table.columnCount() - 4]
+        for column, text in enumerate((row.text(0), " ".join(SYMBOLS[_state(dialog, row)]), needed, *details,
+                                       _file(dialog, node))):
             table.setItem(index, column, QTableWidgetItem(text))
     for column in range(table.columnCount() - 1):  # the last one stretches
         table.resizeColumnToContents(column)
@@ -431,6 +431,7 @@ def refresh(dialog) -> None:
     from ..controllers import workflow_state
 
     tree, runs = dialog.treeWidget_projectStructure, []
+    dialog._indicators = [(name, shown) for name, shown in dialog._indicators if not sip.isdeleted(shown)]
     for row in _rows(dialog):
         node = _node(row)
         state = _state(dialog, row)
@@ -439,9 +440,10 @@ def refresh(dialog) -> None:
             row.setText(STATUS_COLUMN, symbol)
             row.setToolTip(STATUS_COLUMN, meaning)
             row.setTextAlignment(STATUS_COLUMN, Qt.AlignmentFlag.AlignCenter)
-            if node["key"] in dialog._indicators:
-                dialog._indicators[node["key"]].setText(symbol)
-                dialog._indicators[node["key"]].setToolTip(meaning)
+            for name, shown in dialog._indicators:
+                if name == node["key"]:
+                    shown.setText(symbol)
+                    shown.setToolTip(meaning)
         if node.get("action") == "run":
             runs.append(row)
         if {"display", "input", "grid", "view"} & node.keys():

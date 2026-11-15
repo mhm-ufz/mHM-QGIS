@@ -5,7 +5,6 @@ pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from mhm_qgis.core.handlers.store.layout import METEO_VARIABLES
 from mhm_qgis.qt import project_tree
-from mhm_qgis.qt.controllers import grid
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
 
 
@@ -14,10 +13,10 @@ def test_each_step_owns_its_controls():
     for tab, button in (
         (dialog.tab_project, dialog.lineEdit_ProjectFolder),
         (dialog.page_gauges, dialog.comboBox_pourPointInput),
-        (dialog.tab_meteo, dialog.tableWidget_meteoInputs),
-        (dialog.tab_hydro, dialog.pushButton_observationDisplay_discharge),
-        (dialog.tab_execution, dialog.pushButton_execute_mHM),
-        (dialog.tab_outputs, dialog.pushButton_postRefresh),
+        (dialog.page_meteo, dialog.tableWidget_meteoInputs),
+        (dialog.page_hydro, dialog.pushButton_observationDisplay_discharge),
+        (dialog.page_execution, dialog.pushButton_execute_mHM),
+        (dialog.page_outputs, dialog.pushButton_postRefresh),
     ):
         dialog.stackedWidget_project.setCurrentWidget(tab)
         assert tab.isAncestorOf(button)
@@ -39,7 +38,7 @@ def test_work_type_switches_configuration_page():
 def test_resolution_fields_preserve_exact_positive_values_for_click_validation():
     dialog = MhmQgisDialog()
     exact = 1 / 1200
-    grid._populate_resolution_input(dialog, "L1", [exact, 2 * exact], unit="°")
+    dialog.lineEdit_L1Resolution.setText(repr(exact))
     assert dialog.current_l1_resolution() == exact
     dialog.lineEdit_L1Resolution.setText(repr(2 * exact))
     assert dialog.current_l1_resolution() == 2 * exact
@@ -65,29 +64,11 @@ def test_reopening_the_dem_refreshes_it(tmp_path):
     dialog.close()
 
 
-def test_a_new_crs_resets_l1_l11_and_l2(tmp_path):
-    from qgis.core import QgsCoordinateReferenceSystem
-
-    dialog = MhmQgisDialog()
-    dialog.setup_folder = str(tmp_path)
-    dialog.lineEdit_L1Resolution.setText("1000")
-    dialog.lineEdit_L11Resolution.setText("2000")
-    dialog.spinBox_L2ResolutionMultiplier.setValue(4)
-    dialog._grid_l2_header = {"cellsize": 4000}
-    dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:3035"))
-    assert dialog.lineEdit_L1Resolution.text() == "1000"  # nothing applies before Set
-    dialog.pushButton_setCRS.click()
-    assert (dialog.lineEdit_L1Resolution.text(), dialog.lineEdit_L11Resolution.text()) == ("", "")
-    assert dialog.spinBox_L2ResolutionMultiplier.value() == 1
-    assert dialog._grid_l2_header is None
-    dialog.close()
-
-
-def test_l1_and_l11_spin_boxes_hold_the_integer_multiple_of_l0():
+def test_the_multiplier_spin_boxes_hold_the_integer_multiple_of_l0():
     dialog = MhmQgisDialog()
     l0 = 1 / 1200
     dialog._grid_l0_info = {"resolution": l0}
-    for level in ("L1", "L11"):
+    for level in ("L1", "L11", "L2"):
         field, spin = (getattr(dialog, f"lineEdit_{level}Resolution"),
                        getattr(dialog, f"spinBox_{level}ResolutionMultiplier"))
         spin.setValue(3)
@@ -100,47 +81,12 @@ def test_l1_and_l11_spin_boxes_hold_the_integer_multiple_of_l0():
 
 
 def test_meteo_combo_offers_every_prepared_forcing():
-    # Precipitation has its own scan; every other forcing is added here (netrad
+    # Precipitation has its own page; every other forcing is added here (netrad
     # was missing, which made PET cases 2 and 3 unpreparable).
     dialog = MhmQgisDialog()
     combo = dialog.comboBox_meteoVar
     assert {combo.itemText(i) for i in range(combo.count())} == set(METEO_VARIABLES) - {"pre"}
     dialog.close()
-
-
-def test_set_dem_keeps_a_custom_extent_inside_the_dem_and_a_reload_restores_it(tmp_path, monkeypatch):
-    from qgis.core import QgsCoordinateReferenceSystem, QgsRectangle
-
-    dialog = MhmQgisDialog()
-    dialog.setup_folder = str(tmp_path)
-    dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:32632"))
-    dialog._set_crs = "EPSG:32632"
-    header = {"ncols": 10, "nrows": 10, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 100.0}
-    dialog._grid_l0_info = {"header": header, "exact_x_resolution": 100.0}
-    warnings = []
-    monkeypatch.setattr(grid.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
-    box = dialog.mExtentGroupBox_customExtent
-    dialog.groupBox_customExtent.setChecked(True)
-    box.setOutputExtentFromUser(QgsRectangle(-100, 0, 500, 500), dialog.get_crs())
-    dialog.pushButton_setDEM.click()
-    assert warnings == ["The custom L0 extent must be a non-empty box inside the DEM."]
-    assert dialog._study_extent is None
-
-    box.setOutputExtentFromUser(QgsRectangle(200, 300, 600, 700), dialog.get_crs())
-    dialog.pushButton_setDEM.click()
-    assert grid.study_bounds(dialog) == (200, 600, 300, 700)
-    dialog.close()
-
-    restored = MhmQgisDialog()
-    restored.setup_folder = str(tmp_path)
-    restored.load_input_state()
-    assert restored._study_extent == [200, 600, 300, 700]
-    assert restored.groupBox_customExtent.isChecked()
-    restored._grid_l0_info = dialog._grid_l0_info
-    restored.groupBox_customExtent.setChecked(False)
-    restored.pushButton_setDEM.click()
-    assert grid.study_bounds(restored) == (0, 1000, 0, 1000)
-    restored.close()
 
 
 @pytest.mark.parametrize("key", ["lc_ready", "lc_lookup"])

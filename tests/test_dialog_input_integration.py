@@ -230,24 +230,22 @@ def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
     from dataclasses import asdict
 
     from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
-    from mhm_qgis.qt.controllers import forcing, grid
+    from mhm_qgis.qt.controllers import forcing
     folder = tmp_path / "forcing"
     folder.mkdir()
     dialog = MhmQgisDialog()
     dialog.setup_folder = str(tmp_path)
     dialog._loading_input_state = True
-    grid.refresh_precipitation_folder(dialog)
-    grid.select_precipitation_folder(dialog, str(folder))
     dialog._meteo_inputs = {v: asdict(MeteoFolderSpec(v, str(folder), unit=unit))
                             for v, unit in (("pre", "mm"), ("tavg", "K"))}
-    dialog.spinBox_L2ResolutionMultiplier.setValue(4)
+    dialog.lineEdit_L2Resolution.setText("4000.0")
     dialog._loading_input_state = False
     dialog.save_input_state()
     dialog.close()
     restored = MhmQgisDialog()
     restored.setup_folder = str(tmp_path)
     restored.load_input_state()
-    assert restored.spinBox_L2ResolutionMultiplier.value() == 4
+    assert restored.lineEdit_L2Resolution.text() == "4000.0"
     assert restored.tableWidget_meteoInputs.rowCount() == 2
     assert [s.kind for s in forcing.selected_meteo_specs(restored)] == ["pre", "tavg"]
     assert restored._meteo_inspections == {}
@@ -324,7 +322,6 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
 
 @pytest.mark.parametrize(("workflow", "button"), [
     ("project_structure", "pushButton_createOrLoadDomainStructure"),
-    ("scan_precipitation", "pushButton_scanPrecipitationFiles"),
     ("execute_all_observations", "pushButton_executeAllObservation"),
     ("run_mhm", "pushButton_execute_mHM"),
 ])

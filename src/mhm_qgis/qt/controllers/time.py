@@ -41,6 +41,20 @@ def save(dialog):
     show_period(dialog)
 
 
+
+def set_period(dialog):
+    """Set Periods on the Precipitation page: the checked simulation period, into nml-settings.json."""
+    from qgis.PyQt.QtWidgets import QMessageBox
+
+    try:
+        values(dialog)
+    except ValueError as error:
+        QMessageBox.warning(dialog, "Simulation period", str(error))
+        return
+    save(dialog)
+    dialog.save_input_state()  # Precipitation's status: a saved period completes it
+
+
 def show_period(dialog):
     """The plugin's time toolbar on the simulation period, a step a day, unless a run's outputs hold it.
 

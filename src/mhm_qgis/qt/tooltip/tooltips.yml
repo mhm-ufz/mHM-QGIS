@@ -16,7 +16,7 @@ pages:
       title: Project folder
       text: The outer project folder. Setups live inside it under <code>mhm-qgis/&lt;name&gt;</code>.
 
-  tab:
+  page_setup:
     - widget: mProjectionSelectionWidget_crs
       title: Model CRS
       text: All grids are prepared in this CRS. EPSG:4326 or a projected CRS in metres (e.g. UTM) both work; L1 and L11 resolutions are entered in its unit.
@@ -29,24 +29,29 @@ pages:
       title: Create or open the setup
       text: Opens the selected setup, or asks for a name and creates its folders and state files.
 
-  page_l0Reference:
+  page_dem:
     - widget: comboBox_demInput
       title: DEM
-      text: The elevation model. Its extent and cell size define the L0 grid every other input is aligned to.
+      text: The elevation model. Its cell times the upscale factor must equal L0; off the L0 lattice it is shifted onto it (under half a cell), then cropped or padded with no data to the common extent of the Resolution page, which it must overlap.
+    - widget: pushButton_setDEM
+      title: Set the DEM
+      text: Checks the DEM against the common L0 grid; the note below says how it is placed on it.
 
-  page_l2Reference:
-    - widget: comboBox_precipitationFile
-      title: Precipitation folder
-      text: Folder with the precipitation NetCDF files. Together with the glob below it fixes the file set; nothing else is searched.
-    - widget: lineEdit_precipitationGlobDefinition
-      title: Precipitation files
-      text: Glob pattern relative to the folder, e.g. <code>pre*.nc</code> or <code>*/pre_*.nc</code>.
-    - widget: pushButton_scanPrecipitationFiles
-      title: Scan precipitation
-      text: Reads the precipitation metadata (time span, grid, units) and sets up the common L2 grid. Run it before Execute All.
-    - widget: spinBox_L2ResolutionMultiplier
-      title: L2 / L0 factor
-      text: How many L0 cells fit along one L2 (forcing) cell. Defaults to the exact ratio found by the scan; your choice wins after that.
+  page_dem_derivatives_var:
+    - widget: checkBox_isDerivedFromDemGrid
+      title: Derived from the DEM
+      text: The ▶ of A. Morphology derives this variable from the DEM (mhm-tools). Untick it to replace it with your own raster.
+    - widget: groupBox_replaceDemDerivativesVar
+      title: Replacement raster
+      text: In the domain CRS with L0's cells, covering the whole DEM. It is shifted onto the L0 lattice (under half a cell, never resampled), then cropped or padded with no data to the common extent.
+    - widget: pushButton_setDemDerivativesVar
+      title: Set
+      text: Checks the replacement raster (or takes the DEM's again when ticked); the ▶ of A. Morphology then writes it into dem_derivatives.nc.
+
+  page_precipitation:
+    - widget: widget_hostPrecipitationMeteoVarInput
+      title: Precipitation input
+      text: Folder, file glob, unit and time step of the precipitation files. Set scans them and checks that they cover the common extent; the note says whether they are copied, shifted or resampled onto L2.
     - widget: dateTimeEdit_simulationStartTimeInput
       title: Simulation start
       text: First model time step, including the warm-up. mHM 5.13 needs whole days, mHM 6 whole hours.
@@ -56,20 +61,29 @@ pages:
     - widget: dateTimeEdit_simulationEndTimeInput
       title: Simulation end
       text: Last model time step. The meteorology must cover the whole simulation period.
+    - widget: pushButton_setSimulationPeriod
+      title: Set the periods
+      text: Saves the simulation period; Precipitation is complete once its input and the period are Set.
 
   page_resolution:
+    - widget: pushButton_browseL0File
+      title: L0 reference file
+      text: A raster (ASC, GeoTIFF or NetCDF with a grid) whose lattice and cell size, optionally upscaled, define L0.
     - widget: lineEdit_L1Resolution
       title: L1 (hydrology) resolution
-      text: Cell size mHM runs its hydrology on. Only multiples of L0 that fit the common grid are accepted.
+      text: Cell size mHM runs its hydrology on, a whole multiple of L0; type it, set the multiplier, or browse a file.
     - widget: lineEdit_L11Resolution
       title: L11 (routing) resolution
-      text: Cell size of the river routing grid; usually equal to or coarser than L1.
+      text: Cell size of the river routing grid. mHM 5.13 takes it equal to L1 or an even multiple of it.
+    - widget: pushButton_browseL2File
+      title: L2 reference file
+      text: Usually a precipitation file. Its cell sets the L2 multiplier, and its lattice anchors L2 so the forcing is shifted rather than resampled.
+    - widget: checkBox_extentL0enforce
+      title: Extents
+      text: The common extent lies inside every ticked file's extent, snapped inward to whole blocks of all levels, so the DEM and the forcing need no padding.
     - widget: pushButton_setLatLon
-      title: Lat/lon file
-      text: Writes <code>data/latlon.nc</code> with coordinates for all model levels.
-    - widget: comboBox_gridVariableToDisplay
-      title: Show a grid
-      text: Displays the prepared grid levels on the map to check their extent and alignment.
+      title: Set the grid
+      text: Checks the four levels against mHM's rules, shows the updated headers (blue with ⓘ where they differ from a file) and writes <code>data/latlon.nc</code>.
 
   page_settings:
     - widget: pushButton_edit_nmls
@@ -98,11 +112,6 @@ pages:
     - widget: pushButton_prepareMultiDomainSetup
       title: Prepare the combined run
       text: Checks that the domains agree on processes, land-cover scenes, soil horizons and geology, copies the first domain's parameter and output namelists if this setup has none, then writes the namelist handoff.
-
-  page_demDerivatives:
-    - widget: tableWidget_demDerivatives
-      title: DEM derivatives
-      text: The derivatives the ▶ of A. Morphology wrote to dem_derivatives.nc, on the L0 reference grid (R). On a derivative's row you can replace it with a raster on the same grid that covers the whole DEM.
 
   page_gauges:
     - widget: comboBox_pourPointInput
@@ -137,7 +146,7 @@ pages:
       title: Domain definition
       text: How the model domain is defined. Below it opens the gauge assignment for the DEM extent (Set applies it) or the Domain Delineator, which snaps outlets and saves the catchments.
 
-  tab_meteo:
+  page_meteo:
     - widget: comboBox_meteoVar
       title: Forcing variable
       text: Pick the variable to add. Your PET choice decides what you need, e.g. tmin and tmax for Hargreaves-Samani, netrad for Priestley-Taylor, plus eabs and windspeed for Penman-Monteith.
@@ -148,7 +157,7 @@ pages:
       title: Forcing inputs
       text: The variables that will be prepared, with their source and time step.
 
-  tab_hydro:
+  page_hydro:
     - widget: comboBox_observationVar
       title: Observation
       text: Gridded observations for evaluation, e.g. evapotranspiration, soil moisture or TWS anomalies.
@@ -165,7 +174,7 @@ pages:
       title: Gauge discharge
       text: Plots the observed discharge of a saved gauge.
 
-  tab_execution:
+  page_execution:
     - widget: pushButton_editNmlsFinal
       title: Edit namelists
       text: Opens the namelist editor with everything the plugin prepared filled in; review process cases and outputs before running.
@@ -182,7 +191,7 @@ pages:
       title: Run mHM
       text: Runs mHM in the setup folder and shows its output in the terminal.
 
-  tab_outputs:
+  page_outputs:
     - widget: comboBox_postRun
       title: Run
       text: The current output/ or an archived run. Opening a run scans its output once in the background; right-click to archive the current run before the next one overwrites it.

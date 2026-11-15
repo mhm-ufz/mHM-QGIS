@@ -60,7 +60,10 @@ class MorphologyTaskBridge:
     def _check_execute_all(self):
         if self.coordinator.resource_busy("morphology-files"):
             raise ValueError("Another preprocessing task is currently running.")
-        return grid.require_common_grid(self.dialog)
+        common = grid.require_common_grid(self.dialog)
+        if error := grid.check_dem(self.dialog):
+            raise ValueError(error)
+        return common
 
     def _run_execute_all(self, _grid, finished):
         # One entry per `Stage.command` in `morphology.EXECUTE_ALL_STAGES`.
