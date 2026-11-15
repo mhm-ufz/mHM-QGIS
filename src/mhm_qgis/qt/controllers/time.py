@@ -53,6 +53,9 @@ def set_period(dialog):
         return
     save(dialog)
     dialog.save_input_state()  # Precipitation's status: a saved period completes it
+    from .workflow_state import report
+
+    report(dialog, "period")
 
 
 def show_period(dialog):

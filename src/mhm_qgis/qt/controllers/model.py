@@ -191,30 +191,40 @@ def edit_namelists(dialog, namelists=None, *, update_inputs=True) -> bool:
 
 
 def inputs_ready(dialog, setup_folder) -> bool:
-    """Warn about inputs the saved processes read but nobody prepared; Yes runs anyway."""
-    from ...core import datamodel
+    """Warn about inputs the saved processes read but nobody prepared, and about what mHM would
+    stop on (`core.verify`); Yes runs anyway."""
+    from ...core import datamodel, verify
 
     try:
         if multi_domain.is_multi(setup_folder):
             from ...core.handlers.state.nml_settings import load_settings
 
             stored = load_settings(setup_folder).get(multi_domain.SECTION, {}).get("domains", [])
+            domains = multi_domain.resolve(setup_folder, stored)
             missing = [finding._replace(message=f"{domain.name}: {finding.message}")
-                       for domain in multi_domain.resolve(setup_folder, stored)
-                       for finding in datamodel.check(domain) if not finding.ok]
+                       for domain in domains for finding in datamodel.check(domain) if not finding.ok]
         else:
+            domains = [Path(setup_folder)]
             missing = [finding for finding in datamodel.check(setup_folder) if not finding.ok]
     except ValueError as error:
         dialog.log_message(f"WARNING: Could not check the model inputs: {error}")
         return True
-    if not missing:
+    try:
+        problems = [f"{domain.name}: {problem}" if len(domains) > 1 else problem
+                    for domain in domains for problem in verify.check(domain)]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        dialog.log_message(f"WARNING: Could not check the inputs against mHM: {error}")
+        problems = []
+    if not missing and not problems:
         return True
     for finding in missing:
         dialog.log_message(f"WARNING: {finding.message}")
+    for problem in problems:
+        dialog.log_message(f"ERROR: {problem}")
     answer = QMessageBox.question(
-        dialog, "Model inputs missing",
-        f"{len(missing)} input(s) the selected processes read look missing; the log lists them "
-        "and what needs them.\n\nRun mHM anyway?",
+        dialog, "Model inputs",
+        f"{len(missing)} input(s) the selected processes read look missing, and mHM would stop on "
+        f"{len(problems)} check(s); the log lists them.\n\nRun mHM anyway?",
         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         QMessageBox.StandardButton.No,
     )
