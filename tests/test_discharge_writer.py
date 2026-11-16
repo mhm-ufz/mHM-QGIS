@@ -86,3 +86,17 @@ def test_an_mhm_ready_gauge_file_reads_as_a_discharge_table(tmp_path):
 
     assert [record.timestamp.day for record in records] == [1, 2]
     assert records[0].value == 1.5
+
+
+def test_missing_days_are_written_as_nodata_lines():
+    from datetime import datetime
+
+    from mhm_qgis.core.handlers.file.discharge import (
+        DischargeRecord,
+        sort_and_deduplicate,
+    )
+
+    records = sort_and_deduplicate([DischargeRecord(datetime(2000, 1, 4), 4.0),
+                                    DischargeRecord(datetime(2000, 1, 1), 1.0)])
+    assert [record.timestamp.day for record in records] == [1, 2, 3, 4]
+    assert [record.value == record.value for record in records] == [True, False, False, True]

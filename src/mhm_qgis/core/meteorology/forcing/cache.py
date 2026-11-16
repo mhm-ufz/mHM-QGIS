@@ -24,7 +24,7 @@ SECTION = "meteo_inspection"
 _INSPECTED_FIELDS = (
     "kind", "source", "crs", "pattern",
     "temporal_resolution", "output_temporal_resolution", "unit",
-    "cumulative", "cumulative_resolution",
+    "cumulative", "cumulative_resolution", "variable",
 )
 
 
@@ -48,6 +48,9 @@ def preparation_fingerprint(spec: MeteoFolderSpec) -> str:
     """Return a digest covering every option the prepared forcing depends on."""
     values = asdict(spec)
     values.pop("clip_negative")  # clipping only lets a run finish; it never changes a finished output
+    for name, default in (("variable", ""), ("cumulative_reset", None)):
+        if values[name] == default:  # forcing prepared before these options existed stays reusable
+            del values[name]
     return fingerprint(_files_for_spec(spec), {**values, "folder": str(spec.folder), "preparation_version": 3})
 
 

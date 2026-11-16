@@ -9,7 +9,7 @@ from ...core.grid import target_grid_from_header
 from ...core.handlers.state.meteo_outputs import MeteorologyOutputState
 from ...core.meteorology.forcing.temporal import NegativeAmounts
 from ..controllers import forcing, grid, time
-from . import lifecycle
+from . import lifecycle, post
 
 WORKFLOW_KEY = "execute_all_meteo"
 TASK_KEY = f"workflow-{WORKFLOW_KEY}"
@@ -66,6 +66,7 @@ def start(dialog):
             TASK_KEY, "Meteorology Preparation", prepare,
             on_success=done,
             on_error=lambda message: finished(False, message),
+            resource=post.RESOURCE,  # libnetcdf is not thread-safe: never beside a post job
         )
 
     return lifecycle.start(dialog, WORKFLOW_KEY, build, submit)

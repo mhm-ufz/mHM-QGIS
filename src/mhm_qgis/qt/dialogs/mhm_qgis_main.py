@@ -19,6 +19,7 @@ from ..bindings.main import bind as bind_main_form
 from ..controllers import categorical, grid, input_state
 from ..controllers import main as main_controller
 from ..controllers import post_context, process_cases, workflow_state
+from ..docks import host
 from ..threads.task_coordinator import TaskCoordinator
 from ..ui import load_form
 from ..workflows.morphology import MorphologyTaskBridge
@@ -244,19 +245,13 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Cancel active work before closing through Cancel or Escape."""
         if self._closing:
             return
-        terminal = self._terminal_dialog
         running_key = workflow_state.running_key(self)
         busy = running_key is not None or self.task_coordinator.is_busy()
-        if int(result) == int(QDialog.DialogCode.Rejected) and (
-            busy or (terminal is not None and terminal.is_running())
-        ):
-            self.shutdown(result)
+        if int(result) == int(QDialog.DialogCode.Rejected) and busy and running_key != "run_mhm":
+            self.shutdown(result)  # a running mHM is never stopped by closing the window
             return
-        terminal_busy = terminal is not None and terminal.command_running()
-        if busy or terminal_busy:
-            spec = workflow_state.specs(self).get(
-                running_key or ("run_mhm" if terminal_busy else ""), {}
-            )
+        if busy:
+            spec = workflow_state.specs(self).get(running_key or "", {})
             QMessageBox.warning(
                 self,
                 spec.get("label", "Morphology Processing"),
@@ -274,6 +269,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             return
         self._closing = True
         self._close_result = result
+        post_context.end_workspace(self)  # docks and toolbar live in QGIS's window, not in this dialog
+        host.drop_time_toolbar(self)
         self.suspend_input_state_saves()
         self.task_coordinator.cancel_all()
         if self._terminal_dialog is not None:

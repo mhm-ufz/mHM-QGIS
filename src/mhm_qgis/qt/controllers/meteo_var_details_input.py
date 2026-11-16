@@ -1,13 +1,15 @@
 """Populate and validate meteorology metadata without opening data files."""
+import calendar
 from pathlib import Path
 
 from qgis.core import QgsCoordinateReferenceSystem
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QSignalBlocker, Qt
 from qgis.PyQt.QtWidgets import QApplication, QMessageBox
 
 from ...core.meteorology.forcing.api import file_defaults
 from ...core.meteorology.forcing.temporal import (
     CADENCES,
+    RESETS,
     VARIABLES,
     normalize_unit,
     validate_spec,
@@ -35,6 +37,39 @@ def populate(dialog, initial):
     dialog.comboBox_unitInput.addItems(VARIABLES[dialog.variable][2])
     dialog.comboBox_unitInput.setCurrentText(normalize_unit(initial.get("unit", VARIABLES[dialog.variable][2][0])))
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem(initial.get("crs") or ""))
+    if initial.get("variable"):
+        dialog.comboBox_varName.addItem(initial["variable"])
+    dialog.groupBox_cumulative.setChecked(bool(initial.get("cumulative")))
+    dialog.comboBox_cumulativeInterval.setEnabled(False)  # accumulated at the input step
+    populate_resets(dialog, initial.get("cumulative_resolution"), initial.get("cumulative_reset"))
+
+
+def populate_resets(dialog, interval=None, reset=None):
+    """The accumulation is sampled at the input step and resets at a coarser one."""
+    step = dialog.comboBox_temporalResolutionInput.currentText()
+    dialog.comboBox_cumulativeInterval.setCurrentText(step)
+    cadences = list(CADENCES)
+    coarser = cadences[cadences.index(step) + 1:] if step in cadences else []
+    combo, previous = dialog.comboBox_resetInterval, dialog.comboBox_resetInterval.currentText()
+    interval = interval or previous
+    with QSignalBlocker(combo):
+        combo.clear()
+        combo.addItems(coarser)
+        combo.setCurrentText(interval if interval in coarser else (coarser[0] if coarser else ""))
+    if reset is None and combo.currentText() == previous:  # the same reset unit keeps its choice
+        reset = dialog.comboBox_resetTimestamp.currentData()
+    populate_reset_timestamps(dialog, reset)
+
+
+def populate_reset_timestamps(dialog, reset=None):
+    """The last hour, day or month a cycle covers, the last one by default."""
+    combo, interval = dialog.comboBox_resetTimestamp, dialog.comboBox_resetInterval.currentText()
+    values = RESETS.get(interval, range(0))
+    combo.clear()
+    for value in values:
+        label = f"{value:02d}" if interval == "Daily" else calendar.month_abbr[value] if interval == "Yearly" else str(value)
+        combo.addItem(label, value)
+    combo.setCurrentIndex(values.index(reset) if reset in values else len(values) - 1)
 
 
 def populate_output_resolutions(dialog, selected=None):
@@ -73,19 +108,24 @@ def scan_file(dialog):
     QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
     try:
         found = file_defaults(MeteoFolderSpec(
-            dialog.variable, Path(values["folder"]).expanduser(), pattern=values["pattern"]))
+            dialog.variable, Path(values["folder"]).expanduser(), pattern=values["pattern"],
+            variable=values["variable"]))
     except (OSError, RuntimeError, ValueError) as error:
         QMessageBox.warning(dialog, "Meteorology input", str(error))
         return
     finally:
         QApplication.restoreOverrideCursor()
+    dialog.comboBox_varName.clear()
+    dialog.comboBox_varName.addItems(found["variables"])
+    dialog.comboBox_varName.setCurrentIndex(dialog.comboBox_varName.findText(found.get("variable", "")))  # -1: none
     if "temporal_resolution" in found:  # its signal re-offers the output resolutions
         dialog.comboBox_temporalResolutionInput.setCurrentText(found["temporal_resolution"])
     if "unit" in found:
         dialog.comboBox_unitInput.setCurrentText(found["unit"])
     if "crs" in found:
         dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem(found["crs"]))
-    missing = [label for key, label in (("temporal_resolution", "time step"), ("unit", "unit"),
+    missing = [label for key, label in (("variable", "variable: pick one and Scan again"),
+                                        ("temporal_resolution", "time step"), ("unit", "unit"),
                                         ("crs", "CRS")) if key not in found]
     dialog.pushButton_scanFile.setToolTip(
         f"Read from {found['file']}" + (f"; not declared: {', '.join(missing)}" if missing else ""))
@@ -102,6 +142,10 @@ def draft(dialog):
                         else dialog.comboBox_temporalAggregationTypeMeteoOutput.currentText()),
         "unit": dialog.comboBox_unitInput.currentText(),
         "crs": crs_string(dialog.mProjectionSelectionWidget_crs.crs()),
+        "variable": dialog.comboBox_varName.currentText(),
+        "cumulative": dialog.groupBox_cumulative.isChecked(),
+        "cumulative_resolution": dialog.comboBox_resetInterval.currentText(),
+        "cumulative_reset": dialog.comboBox_resetTimestamp.currentData(),
     }
 
 

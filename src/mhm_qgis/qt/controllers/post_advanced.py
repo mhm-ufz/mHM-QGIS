@@ -152,6 +152,8 @@ def _compare(dialog) -> None:
         return "", (maps, pair, scores)
 
     def done(result):
+        if not state.workspace:  # its panel went with the analysis layout
+            return
         reason, found = result
         ui.label_postCompareNotes.setText(reason or f"A: {state.run.ref.label}; B: {ref_b.label}; {basin}.")
         if found is None:

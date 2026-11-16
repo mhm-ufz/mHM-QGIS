@@ -552,9 +552,13 @@ def test_forcing_must_cover_the_simulation_period_shown_on_the_time_bar(dialog, 
     time.save(dialog)
     assert dialog._post.ui.horizontalSlider_postTime.maximum() == 9  # ten days
     short = SimpleNamespace(start_time="2000-01-01T00:00", end_time="2000-01-05T00:00")
-    assert "not the simulation period 2000-01-01 to 2000-01-10" in forcing._outside_period(dialog, "tavg", short)
+    daily = SimpleNamespace(output_temporal_resolution="Daily", temporal_resolution="Daily")
+    assert "not the simulation period 2000-01-01 to 2000-01-10" in forcing._outside_period(dialog, "tavg", short, daily)
     long = SimpleNamespace(start_time="1999-12-31T00:00", end_time="2000-01-10T00:00")
-    assert forcing._outside_period(dialog, "tavg", long) is None
+    assert forcing._outside_period(dialog, "tavg", long, daily) is None
+    yearly = SimpleNamespace(start_time="2000-01-01T00:00", end_time="2000-01-01T00:00")  # one whole year
+    assert forcing._outside_period(dialog, "tann", yearly, SimpleNamespace(
+        output_temporal_resolution="Yearly", temporal_resolution="Yearly")) is None
 
 
 def test_inputs_count_after_their_run_until_a_new_crs_and_a_failed_stage_gets_the_pointer(dialog, tmp_path, monkeypatch):

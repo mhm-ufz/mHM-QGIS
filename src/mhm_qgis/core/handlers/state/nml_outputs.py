@@ -109,15 +109,14 @@ def _variables(path) -> dict[str, int] | None:
 
 
 def register_observations(setup_folder, outputs, specs=(), *, v6):
+    steps = {spec.kind: TIME_STEPS.get(spec.output_temporal_resolution or spec.temporal_resolution)
+             for spec in specs}
     values = {
         OBSERVATION_FIELDS[variable]: [relative_workspace_path(setup_folder, path)]
         for variable, path in outputs.items() if variable in OBSERVATION_FIELDS
     }
-    for spec in specs:
-        field = OBSERVATION_TIME_FIELDS.get(spec.kind)
-        cadence = spec.output_temporal_resolution or spec.temporal_resolution
-        if field and cadence in TIME_STEPS:
-            values[field] = TIME_STEPS[cadence]
+    values.update({OBSERVATION_TIME_FIELDS[kind]: step for kind, step in steps.items()
+                   if kind in OBSERVATION_TIME_FIELDS and step is not None})
     managed = set(OBSERVATION_FIELDS.values()) | set(
         OBSERVATION_TIME_FIELDS.values())
     register_values(
@@ -125,7 +124,8 @@ def register_observations(setup_folder, outputs, specs=(), *, v6):
         managed=managed, v6=v6)
     state = load_settings(setup_folder)
     state["observations"] = {
-        variable: {"path": relative_workspace_path(setup_folder, path), "variable": variable}
+        variable: {"path": relative_workspace_path(setup_folder, path), "variable": variable,
+                   "time_step": steps.get(variable)}  # v5.13's optional_data reads it
         for variable, path in outputs.items()
     }
     save_settings(setup_folder, state)

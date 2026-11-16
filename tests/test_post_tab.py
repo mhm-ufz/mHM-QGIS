@@ -75,6 +75,16 @@ def _page(dialog, text):
     _wait(lambda: not dialog.task_coordinator.is_busy())
 
 
+def test_closing_the_dialog_takes_its_docks_out_of_the_host_window(opened):
+    dialog, _ = opened
+    _open(dialog)
+    _page(dialog, "Map Explorer")
+    _wait(lambda: dialog._post.widgets.get("map_layer") is not None)
+    dialog.shutdown()  # a close while busy; reopening the plugin then deletes this dialog
+    assert (dialog._post.workspace, dialog._post.docks, dialog._post.panels) == (False, {}, {})
+    assert dialog._post.toolbar is None
+
+
 def test_the_tab_links_its_views_without_reading_netcdf_on_the_gui_thread(opened, monkeypatch):
     dialog, truth = opened
     real = netCDF4.Dataset

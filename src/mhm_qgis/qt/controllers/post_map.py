@@ -589,7 +589,8 @@ def build_cache(dialog) -> None:
         from ...core.post import cache
 
         state.index = cache.load_index(state.root)
-        refresh(dialog, {"cell", "variable"})
+        if state.workspace:  # the docks went with the analysis layout
+            refresh(dialog, {"cell", "variable"})
 
     work.submit(dialog, "scan", "Building the series cache for all variables", rescan, done)
 

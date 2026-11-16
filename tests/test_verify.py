@@ -95,3 +95,14 @@ def test_check_reads_a_v5_setup(tmp_path, monkeypatch):
     assert "Geology: IDs [3]" in problems[0]
     nml["mainconfig"]["resolution_hydrology"] = [250.0]
     assert "not a whole multiple" in verify.check(tmp_path, "grid")[0]
+
+
+def test_a_period_set_after_the_namelist_was_saved_is_reported(tmp_path):
+    nml = {("time_periods", "eval_per"): {"yStart": 2001, "mStart": 1, "dStart": 1, "yEnd": 2005, "mEnd": 1, "dEnd": 1},
+           ("time_periods", "warming_days"): 366}
+    setup = SimpleNamespace(v6=False, folder=tmp_path, get=lambda group, key, default=None: nml.get((group, key), default),
+                            settings={"time": {"sim_start": "2000-01-01T00:00", "eval_start": "2001-01-01T00:00",
+                                               "sim_end": "2005-01-01T00:00"}})
+    assert verify._stale(setup) == []
+    setup.settings["time"]["sim_end"] = "2003-01-01T00:00"
+    assert "Edit Namelists" in verify._stale(setup)[0]

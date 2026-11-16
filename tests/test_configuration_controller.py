@@ -55,6 +55,7 @@ class Dialog:
         self.saved = 0
         self.terminal = Terminal()
         self._loading_input_state = False
+        self._running_workflow = None
         self.groupBox_editCalibrationNamelists = SimpleNamespace(setEnabled=lambda _enabled: None)
         self.run_name = ""
         self.comboBox_runName = SimpleNamespace(currentText=lambda: self.run_name)
@@ -144,8 +145,9 @@ def test_edit_namelists_opens_the_setups_v6_project(tmp_path: Path, monkeypatch,
     assert selections == [expected]
 
 def _no_buttons(monkeypatch):
-    from mhm_qgis.qt.controllers import workflow_state
+    from mhm_qgis.qt.controllers import post_context, workflow_state
 
+    monkeypatch.setattr(post_context, "populate", lambda _dialog, **_options: None)  # the Outputs tab
     monkeypatch.setattr(workflow_state, "set_button_state", lambda *_args: None)
     monkeypatch.setattr(controller_module, "set_button_state", lambda *_args: None)
     monkeypatch.setattr(controller_module, "populate_run_names", lambda *_args: None)
@@ -208,7 +210,7 @@ def test_a_named_run_points_the_namelists_at_its_folder(tmp_path: Path, monkeypa
     monkeypatch.setattr(controller_module, "ensure_project_structure", lambda path, version: [])
     monkeypatch.setattr(controller_module, "require_v6_executable", lambda owner: str(tmp_path / "mhmv6"))
     monkeypatch.setattr(controller_module, "inputs_ready", lambda owner, folder: True)
-    monkeypatch.setattr(post_context, "populate", lambda _dialog: None)
+    monkeypatch.setattr(post_context, "populate", lambda _dialog, **_options: None)
     from mhm_qgis.externals import mhm_handler
     monkeypatch.setattr(mhm_handler, "executable", lambda version, v6_path=None: Path(v6_path))
     (tmp_path / "mhm.nml").write_text('&config_mhm\n  output_path(1) = "output/mhm_output.nc"\n/\n')

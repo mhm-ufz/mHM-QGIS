@@ -443,7 +443,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
 
     def eventFilter(self, watched, event):
         if self._picking and event.type() == QEvent.Type.MouseButtonPress:
-            position = self.canvas.mapFromGlobal(event.globalPos())
+            point = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()  # Qt6/Qt5
+            position = self.canvas.mapFromGlobal(point)
             if not self.canvas.rect().contains(position):
                 self._stop_picking()
                 QMessageBox.warning(

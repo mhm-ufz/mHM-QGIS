@@ -119,6 +119,29 @@ def test_scan_preselects_what_the_first_file_declares(tmp_path, monkeypatch):
     assert form.comboBox_unitInput.currentText() == "K"
     assert form.mProjectionSelectionWidget_crs.crs().authid() == "EPSG:4326"
     assert form.pushButton_scanFile.toolTip() == "Read from a.nc"
+    assert ([form.comboBox_varName.itemText(i) for i in range(form.comboBox_varName.count())],
+            form.comboBox_varName.currentText()) == (["t2m"], "t2m")
+
+
+def test_the_cumulative_reset_follows_the_input_step(tmp_path):
+    from mhm_qgis.qt.controllers import meteo_var_details_input as controller
+    from mhm_qgis.qt.dialogs.meteo_var_details_input import MeteoVarDetailsDialog
+
+    _app()
+    form = MeteoVarDetailsDialog("pre", str(tmp_path), {"folder": str(tmp_path), "temporal_resolution": "Daily"})
+    resets = form.comboBox_resetInterval
+
+    assert (form.comboBox_cumulativeInterval.currentText(), form.comboBox_cumulativeInterval.isEnabled()) == ("Daily", False)
+    assert [resets.itemText(i) for i in range(resets.count())] == ["Monthly", "Yearly"]
+    resets.setCurrentText("Yearly")
+    assert (form.comboBox_resetTimestamp.count(), form.comboBox_resetTimestamp.currentText()) == (12, "Dec")
+    form.comboBox_temporalResolutionInput.setCurrentText("Hourly")
+    assert (form.comboBox_cumulativeInterval.currentText(), resets.currentText()) == ("Hourly", "Yearly")
+    resets.setCurrentText("Daily")
+    assert form.comboBox_resetTimestamp.currentText() == "23"  # ERA5-Land: the 23:00-24:00 hour ends a day
+    form.groupBox_cumulative.setChecked(True)
+    assert {key: controller.draft(form)[key] for key in ("cumulative", "cumulative_resolution", "cumulative_reset")} \
+        == {"cumulative": True, "cumulative_resolution": "Daily", "cumulative_reset": 23}
 
 def test_a_file_layer_carries_the_crs_assigned_to_it(tmp_path):
     _app()
