@@ -2,7 +2,7 @@
 one tab (`tab_project`), titled after the row.
 
 Rows are made in Designer; `tree.yml` gives each its key, page, status, inputs, display,
-action and summary table, matched by title. Columns: ➤ next step | name | status or ▶ | eye.
+action and summary table, matched by title. Columns: ➤ next step | name | status or ▶ | eye or ↺.
 """
 from __future__ import annotations
 
@@ -218,23 +218,23 @@ def indicate(dialog, key, label) -> None:
     label.setToolTip(row.toolTip(STATUS_COLUMN))
 
 
-def _action(dialog, row, symbol, tip, slot):
-    """The row's button in the status column (rows without a status), made on first use."""
+def _action(dialog, row, symbol, tip, slot, column=STATUS_COLUMN):
+    """The row's button in `column` (rows without a status or view), made on first use."""
     tree = dialog.treeWidget_projectStructure
-    button = tree.itemWidget(row, STATUS_COLUMN)
+    button = tree.itemWidget(row, column)
     if button is None:
         button = QPushButton()
         button.setFlat(True)
         button.setFixedSize(24, 24)
         button.clicked.connect(lambda _checked=False: slot())
-        tree.setItemWidget(row, STATUS_COLUMN, button)
+        tree.setItemWidget(row, column, button)
     button.setText(symbol)
     button.setToolTip(tip)
     return button
 
 
 def button(dialog, key):
-    """The row's action button (▶ of A. Morphology / B. Meteorology for `workflow_state`)."""
+    """The row's action button (▶ of A. Morphology, B. Meteorology, C. Observations for `workflow_state`)."""
     return dialog.treeWidget_projectStructure.itemWidget(item(dialog, key), STATUS_COLUMN)
 
 
@@ -406,12 +406,36 @@ def outputs_shown(dialog, on) -> None:
 
 
 def _run(dialog, key) -> None:
+    from ..workflows import meteorology, observations
+
     if key == "morphology":
         dialog.morphology_tasks.start_execute_all()
     else:
-        from ..workflows import meteorology
+        (meteorology if key == "meteorology" else observations).start(dialog)
 
-        meteorology.start(dialog)
+
+def _reset(dialog, key) -> None:
+    """↺: delete what the group's ▶ prepared and its reuse records, so the next ▶ starts afresh."""
+    from qgis.PyQt.QtWidgets import QMessageBox
+
+    from ...core.executions import reset
+    from ..controllers import process_cases, workflow_state
+
+    if not dialog.setup_folder:
+        return
+    title = _node(item(dialog, key))["title"]
+    if workflow_state.running_key(dialog) or dialog.task_coordinator.is_busy():
+        QMessageBox.warning(dialog, title, "Finish or cancel the running tasks first.")
+        return
+    again = "\n\nSet Gauges and the domain again before ▶." if key == "morphology" else ""
+    if QMessageBox.question(dialog, title, f"Delete the files the ▶ of {title} prepared (.temp and data/) and its "
+                            f"reuse records, so the next ▶ prepares everything afresh?{again}") \
+            != QMessageBox.StandardButton.Yes:
+        return
+    deleted = reset.clear(dialog.setup_folder, key, log=dialog.log_message)
+    dialog.log_message(f"{title}: reset, {deleted} files deleted.")
+    workflow_state.refresh_all(dialog)
+    process_cases.inputs(dialog)
 
 
 def _waits(dialog, row) -> bool:
@@ -459,8 +483,12 @@ def refresh(dialog) -> None:
                   and "status" in _node(child)]
         ready = bool(needed) and all(child.text(STATUS_COLUMN) != "⚪" for child in needed)
         key = _node(row)["key"]
+        if key == "observations":
+            ready = bool(dialog._observation_inputs)
         _action(dialog, row, "▶", "Run", lambda key=key: _run(dialog, key)).setEnabled(
             ready and workflow_state.running_key(dialog) is None)
+        _action(dialog, row, "↺", "Reset: delete what ▶ prepared, so it prepares everything afresh",
+                lambda key=key: _reset(dialog, key), VIEW)
     failed = item(dialog, dialog._failed_step) if dialog._failed_step else None
     pointed = failed if failed is not None and _shown(failed) else next(
         (row for row in _rows(dialog) if _shown(row) and _waits(dialog, row)), item(dialog, "execution"))

@@ -58,7 +58,7 @@ def specs(dialog):
             "failed_message": "Meteorology preparation failed. Check the log for details.",
         },
         "execute_all_observations": {
-            "button": dialog.pushButton_executeAllObservation,
+            "button": project_tree.button(dialog, "observations"),
             "label": "Observation Preparation",
             "completed_message": "Observation preparation completed.",
             "failed_message": "Observation preparation failed.",
@@ -122,7 +122,7 @@ def set_button_state(dialog, workflow_key, status):
         )
     else:
         control.setStyleSheet(dialog._workflow_button_default_styles.get(workflow_key, ""))
-    if status != "running" and workflow_key in ("execute_all_morphology", "execute_all_meteo"):
+    if status != "running" and workflow_key in ("execute_all_morphology", "execute_all_meteo", "execute_all_observations"):
         from . import process_cases
 
         process_cases.inputs(dialog)  # re-check the prepared files: the statuses and ▶ follow them
