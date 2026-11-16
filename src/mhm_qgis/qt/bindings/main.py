@@ -23,7 +23,6 @@ from ..controllers import (
     version,
 )
 from ..dialogs.input_selection import _browse_raster_into_combo
-from ..workflows import observations
 
 
 def _bind_input_sources(dialog):
@@ -116,9 +115,6 @@ def bind(dialog):
     # pushButton_addObservationVar → forcing.edit_observation_input
     dialog.pushButton_addObservationVar.clicked.connect(
         lambda: forcing.edit_observation_input(dialog))
-    # pushButton_executeAllObservation → observations.start
-    dialog.pushButton_executeAllObservation.clicked.connect(
-        lambda: observations.start(dialog))
     # pushButton_setSimulationPeriod → time.set_period
     dialog.pushButton_setSimulationPeriod.clicked.connect(lambda: time.set_period(dialog))
     # pushButton_setGauges → main.set_gauges: the drainage network and flow accumulation

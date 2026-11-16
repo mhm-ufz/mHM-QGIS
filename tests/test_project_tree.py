@@ -431,6 +431,14 @@ def test_columns_the_run_buttons_and_the_next_step(dialog, tmp_path, monkeypatch
     assert (run.text(), run.toolTip(), run.isEnabled()) == ("▶", "Run", False)  # nothing added, no setup
     assert project_tree.button(dialog, "lc") is None  # no add or edit buttons
     assert {button.size().width() for button in (run, project_tree.button(dialog, "outputs"))} == {24}
+    observe = project_tree.button(dialog, "observations")
+    assert not observe.isEnabled()  # no additional observation
+    dialog._observation_inputs["sm"] = {}
+    project_tree.refresh(dialog)
+    assert observe.isEnabled()
+    dialog._observation_inputs.clear()
+    assert {tree.itemWidget(project_tree.item(dialog, key), project_tree.VIEW).text()
+            for key in ("morphology", "meteorology", "observations")} == {"↺"}
 
     def pointed():
         project_tree.refresh(dialog)

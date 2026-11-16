@@ -1,4 +1,4 @@
-"""Observation workflow started by ``pushButton_executeAllObservation``."""
+"""Observation workflow started by the ▶ of C. Observations in the project tree."""
 from pathlib import Path
 
 from ...core.executions.observations import ObservationRun, prepare

@@ -61,7 +61,7 @@ nodes:
           - {key: meteo_ssrd, title: Shortwave radiation, page: page_meteoVar, input: ssrd, status: meteo}
           - {key: meteo_strd, title: Longwave radiation, page: page_meteoVar, input: strd, status: meteo}
           - {key: meteo_tann, title: Annual mean air temperature, page: page_meteoVar, input: tann, status: meteo}
-      - {key: observations, title: C. Observations, page: page_hydro}
+      - {key: observations, title: C. Observations, page: page_hydro, action: run}
   - {key: execution, title: 3. Execution, page: page_execution}
   - key: outputs
     title: 4. Outputs

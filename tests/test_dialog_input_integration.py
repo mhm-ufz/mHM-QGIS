@@ -320,9 +320,19 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     restored.close()
 
 
+
+def test_observations_green_state_restores_on_its_tree_button(tmp_path):
+    _app()
+    processing.mark_workflow(tmp_path, "execute_all_observations", "completed")
+    dialog = MhmQgisDialog()
+    dialog.setup_folder = str(tmp_path)
+    workflow_state.refresh_all(dialog)
+
+    assert "#a5d6a7" in project_tree.button(dialog, "observations").styleSheet()
+    dialog.close()
+
 @pytest.mark.parametrize(("workflow", "button"), [
     ("project_structure", "pushButton_createOrLoadDomainStructure"),
-    ("execute_all_observations", "pushButton_executeAllObservation"),
     ("run_mhm", "pushButton_execute_mHM"),
 ])
 def test_additional_workflow_green_state_restores(

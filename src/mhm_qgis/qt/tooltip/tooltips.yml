@@ -166,10 +166,7 @@ pages:
       text: Opens the details for its files, unit and time step.
     - widget: tableWidget_observationVarInputs
       title: Observations
-      text: The observations that will be prepared on the L2 grid.
-    - widget: pushButton_executeAllObservation
-      title: Execute All Observations
-      text: Prepares every observation on the common L2 grid.
+      text: The observations the ▶ of C. Observations in the project tree prepares on the L2 grid.
     - widget: comboBox_displayOutletStation
       title: Gauge discharge
       text: Plots the observed discharge of a saved gauge.
