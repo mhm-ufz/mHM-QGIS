@@ -98,13 +98,11 @@ def _meteo(dialog, node):
     return "added" if node["key"].removeprefix("meteo_") in dialog._meteo_inputs else "empty"
 
 
-def _precipitation(dialog, _node):
-    """Added once its Set has scanned; processed once the simulation period is Set as well."""
-    if "pre" not in dialog._meteo_inputs:
-        return "empty"
+def _time_period(dialog, _node):
+    """Processed once Set saved the simulation period."""
     from ...core.handlers.state.nml_settings import load_settings
 
-    return "processed" if dialog.setup_folder and load_settings(dialog.setup_folder).get("time") else "added"
+    return "processed" if dialog.setup_folder and load_settings(dialog.setup_folder).get("time") else "empty"
 
 
 def _resolution(dialog, _node):
@@ -136,7 +134,7 @@ def _derivative(dialog, node):
 
 
 STATUS = {"intro": _intro, "project_setup": _project_setup, "domain_setup": _domain_setup, "gauges": _gauges,
-          "categorical": _categorical, "domain": _domain, "meteo": _meteo, "precipitation": _precipitation,
+          "categorical": _categorical, "domain": _domain, "meteo": _meteo, "time_period": _time_period,
           "resolution": _resolution, "namelists": _namelists, "dem": _dem, "derivative": _derivative}
 
 

@@ -107,20 +107,26 @@ def test_scan_preselects_what_the_first_file_declares(tmp_path, monkeypatch):
     warnings = []
     monkeypatch.setattr(controller.QMessageBox, "warning", lambda *args: warnings.append(args[2]))
     form = MeteoVarDetailsDialog("tavg", str(tmp_path), {"folder": str(tmp_path), "temporal_resolution": "Hourly"})
-    form.pushButton_scanFile.click()
+    form.pushButton_scanFiles.click()
     assert len(warnings) == 1
     assert "No NetCDF files" in warnings[0]
 
     xr.Dataset({"t2m": (("time", "lat", "lon"), np.ones((2, 2, 2)), {"units": "K"})},
                coords={"time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"),
                        "lat": [51.0, 50.0], "lon": [10.0, 11.0]}).to_netcdf(tmp_path / "a.nc", engine="scipy")
-    form.pushButton_scanFile.click()
+    form.pushButton_scanFiles.click()
     assert form.comboBox_temporalResolutionInput.currentText() == "Daily"
     assert form.comboBox_unitInput.currentText() == "K"
     assert form.mProjectionSelectionWidget_crs.crs().authid() == "EPSG:4326"
-    assert form.pushButton_scanFile.toolTip() == "Read from a.nc"
+    assert form.pushButton_scanFiles.toolTip().startswith("Read from a.nc. 1 files: 2001-01-01T00:00")
     assert ([form.comboBox_varName.itemText(i) for i in range(form.comboBox_varName.count())],
             form.comboBox_varName.currentText()) == (["t2m"], "t2m")
+    xr.Dataset({"t2m": (("time", "lat", "lon"), np.ones((1, 2, 2)), {"units": "degC"})},
+               coords={"time": np.array(["2001-01-03"], dtype="datetime64[ns]"),
+                       "lat": [51.0, 50.0], "lon": [10.0, 11.0]}).to_netcdf(tmp_path / "b.nc", engine="scipy")
+    form.lineEdit_fileNameGlobDefinition.setText("*.nc")
+    form.pushButton_scanFiles.click()  # every file is checked, not only the first
+    assert "differs from selected" in warnings[-1]
 
 
 def test_the_cumulative_reset_follows_the_input_step(tmp_path):

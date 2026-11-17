@@ -22,6 +22,7 @@ nodes:
         set: label_setCRSStatus
         children:
           - {key: resolution, title: Resolution, page: page_resolution, status: resolution, grid: [L0, L1, L11, L2], set: label_setLatLonStatus}
+          - {key: time_period, title: Time Period, page: page_timePeriod, status: time_period, set: label_setTimePeriodInputStatus}
           - {key: settings, title: Settings, page: page_settings, status: namelists, view: pushButton_editNmlsFinal}
   - key: inputs
     title: 2. Inputs
@@ -50,7 +51,7 @@ nodes:
         page: page_meteo
         action: run
         children:
-          - {key: meteo_pre, title: Precipitation, page: page_precipitation, input: pre, status: precipitation, set: label_setPrecipitationInputStatus}
+          - {key: meteo_pre, title: Precipitation, page: page_precipitation, input: pre, status: meteo}
           - {key: meteo_pet, title: Potential evapotranspiration, page: page_meteoVar, input: pet, status: meteo}
           - {key: meteo_tavg, title: Mean air temperature, page: page_meteoVar, input: tavg, status: meteo}
           - {key: meteo_tmin, title: Minimum air temperature, page: page_meteoVar, input: tmin, status: meteo}

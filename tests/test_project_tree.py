@@ -90,29 +90,45 @@ def test_the_meteo_form_shows_its_variables_status_right_of_set(dialog):
 
     forcing.show_meteo_input(dialog, "pre")
     form, row = main.form_on(dialog, "precipitation"), project_tree.item(dialog, "meteo_pre")
-    assert dialog.widget_hostPrecipitationMeteoVarInput.isAncestorOf(form)  # its own page, with the period
-    for label in (form.label_setStatus, dialog.label_setPrecipitationInputStatus):
-        assert ("meteo_pre", label) in dialog._indicators
-        assert (label.text(), label.toolTip()) == (row.text(project_tree.STATUS_COLUMN),
-                                                   row.toolTip(project_tree.STATUS_COLUMN))
+    assert dialog.widget_hostPrecipitationMeteoVarInput.isAncestorOf(form)  # its own page
+    label = form.label_setStatus
+    assert ("meteo_pre", label) in dialog._indicators
+    assert (label.text(), label.toolTip()) == (row.text(project_tree.STATUS_COLUMN),
+                                               row.toolTip(project_tree.STATUS_COLUMN))
     assert form.label_description.text().startswith("Set the resolutions")  # no grid, no scan yet
     forcing.show_meteo_input(dialog, "tavg")
     assert ("meteo_tavg", main.form_on(dialog, "meteoVar").label_setStatus) in dialog._indicators
     project_tree.refresh(dialog)
 
 
-def test_precipitation_is_complete_once_its_period_is_set(dialog, tmp_path):
-    def status():
+def test_the_time_period_is_complete_once_set_and_precipitation_by_its_own_set(dialog, tmp_path):
+    def status(key):
         project_tree.refresh(dialog)
-        return project_tree.item(dialog, "meteo_pre").text(project_tree.STATUS_COLUMN)
+        return project_tree.item(dialog, key).text(project_tree.STATUS_COLUMN)
 
     _set_up(dialog, tmp_path)
-    assert status() == "⚪"
+    assert (status("time_period"), status("meteo_pre")) == ("⚪", "⚪")
     dialog._meteo_inputs["pre"] = {"kind": "pre", "folder": str(tmp_path)}
-    assert status() == "🟢"  # its Set scanned, the period is not Set yet
-    dialog.pushButton_setSimulationPeriod.click()
-    assert status() == "✅"
-    assert dialog.label_setPrecipitationInputStatus.text() == "✅"
+    assert status("meteo_pre") == "🟢"  # its Set scanned
+    dialog.pushButton_setTimePeriod.click()
+    assert (status("time_period"), dialog.label_setTimePeriodInputStatus.text()) == ("✅", "✅")
+
+
+def test_the_time_window_proposes_the_period_after_its_warm_up(dialog, tmp_path, monkeypatch):
+    from qgis.PyQt.QtWidgets import QDialog
+
+    from mhm_qgis.qt.controllers import time
+    from mhm_qgis.qt.dialogs.time_period_netcdf_input import TimePeriodDialog
+
+    _set_up(dialog, tmp_path)
+    found = {"start": "2001-01-01T00:00", "end": "2002-12-31T00:00", "step": "Daily"}
+    monkeypatch.setattr(TimePeriodDialog, "exec", lambda prompt: setattr(prompt, "found", found)
+                        or QDialog.DialogCode.Accepted)
+    dialog.spinBox_warmingDays.setValue(365)
+    time.open_window_dialog(dialog)
+    assert dialog.label_fileEndTimeValue.text() == "2002-12-31T00:00"
+    assert [getattr(dialog, name).dateTime().toString("yyyy-MM-dd") for name in time.TIME_WIDGETS.values()] == [
+        "2001-01-01", "2002-01-01", "2003-01-01"]  # v6 runs up to the end of the last day
 
 
 def test_set_crs_without_an_open_setup_asks_to_create_or_open_one(dialog, monkeypatch):
@@ -454,7 +470,7 @@ def test_columns_the_run_buttons_and_the_next_step(dialog, tmp_path, monkeypatch
     dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
     dialog._grid_l2_metadata = {"l1_header": {"ncols": 1}, "configuration_fingerprint": "set"}
     monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "set")
-    assert pointed() == ["settings"]
+    assert pointed() == ["time_period"]  # the next Setup step
     monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "changed")
     assert pointed() == ["resolution"]  # an input changed: Set the grid again
 
@@ -626,3 +642,21 @@ def test_an_embedded_form_drops_its_window_minimum(dialog):
     assert (form.minimumSize().width(), form.minimumSize().height()) == (0, 0)
     assert dialog.widget_domainDefinitionForm.minimumSizeHint().width() < 800
     main.embed(dialog, "domainDefinition", None)
+
+
+def test_the_time_window_dialog_closes_on_ok_once_scanned(dialog, monkeypatch):
+    from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox
+
+    from mhm_qgis.qt.dialogs import time_period_netcdf_input
+    from mhm_qgis.qt.dialogs.time_period_netcdf_input import TimePeriodDialog
+
+    warned = []
+    monkeypatch.setattr(time_period_netcdf_input.QMessageBox, "warning", lambda *args: warned.append(args[2]))
+    prompt = TimePeriodDialog({}, dialog)
+    prompt.show()
+    ok = prompt.buttonBox.button(QDialogButtonBox.StandardButton.Ok)
+    ok.click()
+    assert (warned, prompt.isVisible()) == (["Scan the files first."], True)
+    prompt.found = {"start": "2001-01-01T00:00", "end": "2001-12-31T00:00", "step": "Daily"}
+    ok.click()
+    assert (prompt.result(), prompt.isVisible()) == (QDialog.DialogCode.Accepted, False)

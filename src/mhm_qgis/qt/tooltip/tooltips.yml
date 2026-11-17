@@ -51,19 +51,7 @@ pages:
   page_precipitation:
     - widget: widget_hostPrecipitationMeteoVarInput
       title: Precipitation input
-      text: Folder, file glob, unit and time step of the precipitation files. Set scans them and checks that they cover the common extent; the note says whether they are copied, shifted or resampled onto L2.
-    - widget: dateTimeEdit_simulationStartTimeInput
-      title: Simulation start
-      text: First model time step, including the warm-up. mHM 5.13 needs whole days, mHM 6 whole hours.
-    - widget: dateTimeEdit_evaluationStartTimeInput
-      title: Evaluation start
-      text: End of the warm-up; results are evaluated from here on. Must lie between the start and the end.
-    - widget: dateTimeEdit_simulationEndTimeInput
-      title: Simulation end
-      text: Last model time step. The meteorology must cover the whole simulation period.
-    - widget: pushButton_setSimulationPeriod
-      title: Set the periods
-      text: Saves the simulation period; Precipitation is complete once its input and the period are Set.
+      text: A precipitation file and the glob of its record; Scan Files checks every matching file (one grid, unit and time step, no gap). Set checks they cover the Time Period and the common extent; the note says whether they are copied, shifted or resampled onto L2.
 
   page_resolution:
     - widget: pushButton_browseL0File
@@ -84,6 +72,26 @@ pages:
     - widget: pushButton_setLatLon
       title: Set the grid
       text: Checks the four levels against mHM's rules, shows the updated headers (blue with ⓘ where they differ from a file) and writes <code>data/latlon.nc</code>.
+
+  page_timePeriod:
+    - widget: pushButton_dialogTimePeriodNetcdfFile
+      title: Period from NetCDF files
+      text: Scans the time axis of a NetCDF glob (start, end, time step) and proposes the simulation period from it.
+    - widget: dateTimeEdit_simulationStartTimeInput
+      title: Simulation start
+      text: First model time step, including the warm-up. mHM 5.13 needs whole days, mHM 6 whole hours.
+    - widget: dateTimeEdit_evaluationStartTimeInput
+      title: Evaluation start
+      text: End of the warm-up; results are evaluated from here on. Must lie between the start and the end.
+    - widget: dateTimeEdit_simulationEndTimeInput
+      title: Simulation end
+      text: Last model time step. The meteorology must cover the whole simulation period.
+    - widget: spinBox_warmingDays
+      title: Warming days
+      text: Days between the simulation start and the evaluation start; either one updates the other.
+    - widget: pushButton_setTimePeriod
+      title: Set the period
+      text: Saves the simulation period. Every meteorology Set needs it first and checks its files cover it.
 
   page_settings:
     - widget: pushButton_edit_nmls
