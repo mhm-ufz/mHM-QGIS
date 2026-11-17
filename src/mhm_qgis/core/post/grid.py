@@ -54,7 +54,9 @@ def axes(path) -> Axes:
         x, y = (np.asarray(handle[name][:], dtype="f8") for name in names)
         x_bnds, y_bnds = (np.asarray(handle[f"{name}_bnds"][:], dtype="f8") if f"{name}_bnds" in handle.variables
                           else _edges(centres) for name, centres in zip(names, (x, y), strict=True))
-        geographic = "degree" in getattr(handle[names[0]], "units", "")
+        lon = handle.variables.get("lon")  # mHM v6 labels lat/lon x and y in "m": its 2-D lon tells
+        geographic = "degree" in getattr(handle[names[0]], "units", "") or (
+            lon is not None and lon.ndim == 2 and lon.shape[-1] == x.size and np.allclose(lon[0, :], x))
     if len(y) > 1 and not (np.diff(y) < 0).all():
         raise ValueError(f"{Path(path).name}: y must be descending (north first).")
     return Axes(x, y, x_bnds, y_bnds, geographic)

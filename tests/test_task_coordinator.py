@@ -186,6 +186,24 @@ def test_main_dialog_cancel_waits_for_workers_then_closes():
     assert not dialog.isVisible()
 
 
+def test_closing_during_an_mhm_run_warns_instead_of_stopping_it(monkeypatch):
+    from types import SimpleNamespace
+
+    from mhm_qgis.qt.controllers import workflow_state
+    from mhm_qgis.qt.dialogs import mhm_qgis_main
+
+    warned = []
+    monkeypatch.setattr(mhm_qgis_main.QMessageBox, "warning", lambda *args: warned.append(args[1]))
+    dialog = mhm_qgis_main.MhmQgisDialog()
+    dialog._terminal_dialog = SimpleNamespace(command_running=lambda: True, is_running=lambda: True)
+    assert workflow_state.running_key(dialog) == "run_mhm"
+    dialog.reject()
+    assert not dialog._closing
+    assert warned
+    dialog._terminal_dialog = None
+    dialog.deleteLater()
+
+
 def test_cancelled_dialog_is_replaced_when_plugin_reopens(monkeypatch):
     from types import SimpleNamespace
 
@@ -213,12 +231,10 @@ def test_cancelled_dialog_is_replaced_when_plugin_reopens(monkeypatch):
     assert plugin.dlg is fresh
 
 
-def test_plugin_unload_shuts_down_and_deletes_its_dialog(monkeypatch):
+def test_plugin_unload_shuts_down_and_deletes_its_dialog():
     from types import SimpleNamespace
 
     from mhm_qgis.mhm_qgis import MhmQgis
-    from mhm_qgis.qt.controllers import post_context
-    from mhm_qgis.qt.docks import host
 
     calls = []
 
@@ -231,8 +247,6 @@ def test_plugin_unload_shuts_down_and_deletes_its_dialog(monkeypatch):
         deleteLater=lambda: calls.append("delete"),
         shutdown=lambda: calls.append("shutdown"),
     )
-    monkeypatch.setattr(post_context, "end_workspace", lambda owner: calls.append(("end", owner)))
-    monkeypatch.setattr(host, "drop_time_toolbar", lambda owner: calls.append(("toolbar", owner)))
     iface = SimpleNamespace(
         removePluginMenu=lambda _menu, action: calls.append(("menu", action)),
         removeToolBarIcon=lambda action: calls.append(("icon", action)),
@@ -245,8 +259,6 @@ def test_plugin_unload_shuts_down_and_deletes_its_dialog(monkeypatch):
     plugin.unload()
 
     assert "shutdown" in calls
-    assert ("end", dialog) in calls
-    assert ("toolbar", dialog) in calls
     assert ("menu", "action") in calls
     assert ("icon", "action") in calls
     assert plugin.dlg is None

@@ -24,7 +24,13 @@ from .categorical import refresh_advanced_nml_settings
 from .time import restore as restore_simulation_times
 from .time import values as simulation_times
 from .version import selected as selected_version
-from .workflow_state import invalidate, require_active, set_button_state, set_status
+from .workflow_state import (
+    invalidate,
+    require_active,
+    running_key,
+    set_button_state,
+    set_status,
+)
 
 MHM_V6_SETTINGS_KEY = "mhm_qgis/executables/v6"
 NEW_RUN = "<new>"
@@ -268,7 +274,8 @@ def browse_parameter_namelist(dialog):
 
 
 def run(dialog) -> bool:
-    if not require_active(dialog) or (
+    # while mHM or a workflow runs, a second run would delete the first one's staged outputs
+    if running_key(dialog) or not require_active(dialog) or (
         dialog.comboBox_runName.currentText().strip() == NEW_RUN
         and not select_run_name(dialog, dialog.comboBox_runName.currentIndex())
     ):
@@ -302,13 +309,13 @@ def run(dialog) -> bool:
                     return
                 dialog.log_message(f"Run {name} is in runs/{name}/; the Outputs tab lists it.")
                 if dialog.setup_folder == setup_folder:
-                    from . import post_context
-
-                    post_context.populate(dialog)
                     populate_run_names(dialog, name)
             processing.mark_workflow(setup_folder, "run_mhm", "completed")
             if dialog.setup_folder == setup_folder:
+                from . import post_context
+
                 set_button_state(dialog, "run_mhm", "completed")
+                post_context.populate(dialog, rescan=True)  # output/ is the same ref with new files
             dialog.log_message("mHM completed successfully.")
             return
         message = f"mHM exited with code {exit_code}."

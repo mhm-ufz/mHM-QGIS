@@ -1,5 +1,6 @@
 import importlib
 import warnings
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -112,6 +113,20 @@ def test_native_cadence_is_preserved(tmp_path, cadence, times):
         assert raw.variables["time_bnds"].units == raw.variables["time"].units
 
 
+def test_v5_radiation_goes_where_mhm_5_13_reads_it(tmp_path):
+    times = ("2001-01-01", "2001-01-02")
+    specs = []
+    for kind in ("ssrd", "strd", "netrad"):
+        _write_nc(tmp_path / f"raw/{kind}/{kind}.nc", kind, times=times, units="W m-2")
+        specs.append(MeteoFolderSpec(kind, tmp_path / f"raw/{kind}", unit="W m-2", temporal_resolution="Daily"))
+    result = process_meteo_inputs(specs, tmp_path / "out", target())
+    assert {kind: path.relative_to(tmp_path / "out").as_posix() for kind, path in result.outputs.items()} == {
+        "ssrd": "ssrd/ssrd.nc", "strd": "ssrd/strd.nc", "netrad": "netrad/net_rad.nc"}
+    assert (tmp_path / "out/ssrd/header.txt").is_file()
+    with xr.open_dataset(result.outputs["netrad"]) as ds:
+        assert "net_rad" in ds
+
+
 def test_cumulative_hourly_cross_file_and_chunk_boundaries(tmp_path):
     times = np.datetime64("2001-01-01T01") + np.arange(72) * np.timedelta64(1, "h")
     values = np.broadcast_to(((np.arange(72) % 24 + 1) / 1000.)[:, None, None], (72, 2, 2))
@@ -125,9 +140,55 @@ def test_cumulative_hourly_cross_file_and_chunk_boundaries(tmp_path):
     with xr.open_dataset(result.outputs["pre"]) as ds:
         assert ds.sizes["time"] == 72
         np.testing.assert_allclose(ds.pre, 1., atol=1e-12)
-        np.testing.assert_array_equal(ds.time, times.astype("datetime64[ns]"))
-        np.testing.assert_array_equal(ds.time_bnds[:, 1], ds.time)
+        np.testing.assert_array_equal(ds.time_bnds[:, 1], times.astype("datetime64[ns]"))
+        np.testing.assert_array_equal(ds.time, ds.time_bnds[:, 0])  # stamped at the start, as v5.13 reads it
         assert ds.time_bnds[0, 0] == np.datetime64("2001-01-01T00")
+
+
+def test_a_cumulative_cycle_starts_after_its_reset_hour(tmp_path):
+    times = np.datetime64("2001-01-01T07") + np.arange(48) * np.timedelta64(1, "h")  # first hour 06-07
+    values = np.broadcast_to(((np.arange(48) % 24 + 1) / 1000.)[:, None, None], (48, 2, 2))
+    _write_nc(tmp_path / "raw/a.nc", "tp", times=times, values=values, units="m")
+    spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="m", temporal_resolution="Hourly",
+                          cumulative=True, cumulative_resolution="Daily", cumulative_reset=5)
+    result = process_meteo_inputs([spec], tmp_path / "out", target(), flat_layout=True)
+    with xr.open_dataset(result.outputs["pre"]) as ds:
+        np.testing.assert_allclose(ds.pre, 1., atol=1e-12)
+    # ERA5-Land: the first stamp (00:00) holds the previous day's total; the default reset (23) opens at 00-01
+    era = np.datetime64("2001-01-01T00") + np.arange(49) * np.timedelta64(1, "h")
+    totals = np.r_[24, np.arange(48) % 24 + 1] / 1000.
+    _write_nc(tmp_path / "era/a.nc", "tp", times=era, values=np.broadcast_to(totals[:, None, None], (49, 2, 2)),
+              units="m")
+    result = process_meteo_inputs([replace(spec, folder=tmp_path / "era", cumulative_reset=None)], tmp_path / "out2",
+                                  target(), flat_layout=True)
+    with xr.open_dataset(result.outputs["pre"]) as ds:
+        assert ds.time.size == 48
+        np.testing.assert_allclose(ds.pre, 1., atol=1e-12)
+
+
+def test_stamps_inside_their_period_stand_for_the_whole_period(tmp_path):
+    _write_nc(tmp_path / "raw/et.nc", "et", times=("2001-01-31T23:00", "2001-02-28T23:00", "2001-03-31T23:00"))
+    metadata = inspect_meteo_folder(tmp_path / "raw", "et", temporal_resolution="Monthly", unit="mm")
+    assert (metadata.start_time[:10], metadata.end_time[:10]) == ("2001-01-01", "2001-03-01")
+
+
+def test_a_chosen_variable_resolves_what_the_aliases_cannot(tmp_path):
+    from mhm_qgis.core.meteorology.forcing.api import file_defaults
+
+    (tmp_path / "raw").mkdir()
+    data = (("time", "latitude", "longitude"), np.ones((2, 2, 2)), {"units": "mm"})
+    ds = xr.Dataset({"rain": data, "snow": data, "time_bnds": (("time", "bnds"), np.array(
+        [["2001-01-01", "2001-01-02"], ["2001-01-02", "2001-01-03"]], dtype="datetime64[ns]"))}, coords={
+        "time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"), "latitude": LAT, "longitude": LON,
+    })
+    ds.time.attrs["bounds"] = "time_bnds"
+    ds.to_netcdf(tmp_path / "raw/two.nc", engine="scipy")
+    spec = MeteoFolderSpec("pre", tmp_path / "raw")
+    found = file_defaults(spec)
+    assert (found["variables"], "variable" in found) == (["rain", "snow"], False)  # not the bounds
+    found = file_defaults(replace(spec, variable="snow"))
+    assert (found["variable"], found["unit"], found["temporal_resolution"]) == ("snow", "mm", "Daily")
+    assert inspect_meteo_folder(replace(spec, variable="snow", unit="mm")).shape == (2, 2)
 
 
 @pytest.mark.parametrize(("variable", "source", "method", "expected"), [
@@ -241,7 +302,7 @@ def test_units_for_independent_variables(tmp_path, variable, source, unit, value
     result = process_meteo_inputs([spec], tmp_path / "out", target())
     assert tuple(result.outputs) == (variable,)
     with xr.open_dataset(result.outputs[variable]) as ds:
-        np.testing.assert_allclose(ds[variable], expected, atol=1e-12)
+        np.testing.assert_allclose(ds[result.outputs[variable].stem], expected, atol=1e-12)
 
 
 def test_discontinuous_times_units_and_grids_are_rejected(tmp_path):
@@ -318,7 +379,7 @@ def test_incomplete_cumulative_cycle_does_not_replace_outputs(tmp_path):
     output.write_bytes(b"original")
     spec = MeteoFolderSpec("pre", tmp_path / "raw", unit="m", temporal_resolution="Hourly",
                           cumulative=True, cumulative_resolution="Daily")
-    with pytest.raises(ValueError, match="mid-cycle"):
+    with pytest.raises(ValueError, match="no start of an accumulation cycle"):
         process_meteo_inputs([spec], output.parent, target(), flat_layout=True)
     assert output.read_bytes() == b"original"
 
@@ -533,6 +594,25 @@ def test_file_defaults_reads_what_the_first_file_declares(tmp_path):
     _write_nc(tmp_path / "a.nc", "t2m", times=("2001-01-01", "2001-01-02"), units="K")
     _write_nc(tmp_path / "b.nc", "t2m")
     assert file_defaults(MeteoFolderSpec("tavg", tmp_path)) == {
-        "file": "a.nc", "crs": "EPSG:4326", "unit": "K", "temporal_resolution": "Daily"}
+        "file": "a.nc", "variables": ["t2m"], "variable": "t2m", "crs": "EPSG:4326", "unit": "K",
+        "temporal_resolution": "Daily"}
     assert file_defaults(MeteoFolderSpec("tavg", tmp_path, pattern="b.nc")) == {
-        "file": "b.nc", "crs": "EPSG:4326"}
+        "file": "b.nc", "variables": ["t2m"], "variable": "t2m", "crs": "EPSG:4326"}
+
+
+def test_the_data_cover_up_to_the_end_of_their_last_period():
+    from mhm_qgis.core.meteorology.forcing.temporal import covers_end
+
+    assert covers_end("2003-01-01T00:00", "2002-12-31T00:00", "Daily", v6=True)  # v6 stops before sim_end
+    assert not covers_end("2003-01-01T01:00", "2002-12-31T00:00", "Daily", v6=True)
+    assert covers_end("2002-12-31T00:00", "2002-12-31T00:00", "Daily", v6=False)  # v5.13 runs the whole day
+    assert not covers_end("2003-01-01T00:00", "2002-12-31T00:00", "Daily", v6=False)
+    assert covers_end("2002-06-30T00:00", "2002-01-01T00:00", "Yearly", v6=False)
+
+
+def test_mid_month_stamps_are_continuous_months():
+    from mhm_qgis.core.meteorology.forcing.temporal import time_index
+
+    time_index(np.array(["2001-01-16T12", "2001-02-15", "2001-03-16T12"], dtype="datetime64[ns]"), "Monthly")
+    with pytest.raises(ValueError, match="not continuous"):
+        time_index(np.array(["2001-01-16", "2001-03-16"], dtype="datetime64[ns]"), "Monthly")

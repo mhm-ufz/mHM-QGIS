@@ -1,7 +1,9 @@
 """Background work of the Outputs tab, on the shared task coordinator.
 
-Every post job holds the `post-io` resource, so netCDF/HDF5 reads never run in two
-of our threads at once (§11); full-file passes go further, into the native worker.
+Every post job, and meteorology and observation preparation, holds the `post-io` resource,
+so netCDF/HDF5 reads never run in two of our threads at once (§11); full-file passes go
+further, into the native worker. ponytail: QGIS's render threads reading a VRT still overlap;
+move those reads into the native worker if that crashes.
 `submit` runs `runner(task)` off the GUI thread and calls `done(result)` on it.
 """
 from __future__ import annotations

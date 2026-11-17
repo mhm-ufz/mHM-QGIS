@@ -77,8 +77,9 @@ def button(dialog, workflow_key):
 
 
 def running_key(dialog):
-    """Return the Execute workflow in progress, or None; at most one runs."""
-    return dialog._running_workflow
+    """Return the Execute workflow in progress (a running mHM is "run_mhm"), or None; at most one runs."""
+    terminal = getattr(dialog, "_terminal_dialog", None)
+    return dialog._running_workflow or ("run_mhm" if terminal is not None and terminal.command_running() else None)
 
 
 def begin(dialog, workflow_key):

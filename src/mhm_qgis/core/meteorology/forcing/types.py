@@ -13,7 +13,6 @@ _KINDS = {
     "temperature": "tavg",
     **{name: name for name in ("tavg", "tmin", "tmax", "tann", "ssrd", "strd", "netrad", "eabs", "windspeed")},
     "pet": "pet",
-    "q_bkfl": "Q_bkfl",
     **{name: name for name in ("et", "sm", "neutrons", "twsa")},
 }
 
@@ -54,6 +53,8 @@ class MeteoFolderSpec:
     unit: str = ""
     cumulative: bool = False
     cumulative_resolution: str = ""
+    cumulative_reset: int | None = None  # the last hour, day or month a cycle covers; None: the period's last
+    variable: str = ""  # the source variable; empty: the one `kind`'s aliases name
     clip_negative: bool = False  # the user accepted clipping the input's small negative amounts
 
     def normalized(self) -> MeteoFolderSpec:
@@ -76,6 +77,8 @@ class MeteoFolderSpec:
             unit=self.unit,
             cumulative=self.cumulative,
             cumulative_resolution=self.cumulative_resolution if self.cumulative else "",
+            cumulative_reset=self.cumulative_reset if self.cumulative else None,
+            variable=self.variable,
             clip_negative=self.clip_negative,
         )
 

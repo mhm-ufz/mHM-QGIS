@@ -4,7 +4,7 @@ from pathlib import Path
 from ...core.executions.observations import ObservationRun, prepare
 from ...core.grid import target_grid_from_header
 from ..controllers import forcing, grid
-from . import lifecycle
+from . import lifecycle, post
 
 
 def start(dialog):
@@ -29,7 +29,7 @@ def start(dialog):
             lambda task: prepare(run, cancelled=task.isCanceled),
             on_success=lambda _result: finished(True),
             on_error=lambda message: finished(False, message),
-            resource="morphology-files",
+            resource=post.RESOURCE,  # libnetcdf is not thread-safe: never beside a post job
         )
 
     return lifecycle.start(dialog, "execute_all_observations", build, submit)

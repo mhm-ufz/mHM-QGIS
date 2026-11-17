@@ -26,6 +26,7 @@ from ...grid import (
     shift_onto_header,
     slice_and_pad,
 )
+from ...handlers.store.layout import meteo_file
 from .io import write_header, write_netcdf
 from .temporal import (
     CADENCES,
@@ -34,6 +35,7 @@ from .temporal import (
     about_variable,
     complete_window,
     convert_units,
+    cycle_starts,
     deaccumulate_values,
     interval_bounds,
     normalize_unit,
@@ -74,7 +76,7 @@ def inspect_meteo_folder(folder, kind=None, source=AUTO, crs_fallback=None,
         _check_cancel(cancelled)
         signatures.append(_inspect_file(path, spec))
         with _open_dataset(path) as ds:
-            variable = _find_variable(ds, spec.kind)
+            variable = _find_variable(ds, spec)
             units = ds[variable].attrs.get("units")
             if units and normalize_unit(units) != normalize_unit(spec.unit):
                 raise ValueError(f"{path.name}: metadata unit {units!r} differs from selected {spec.unit!r}.")
@@ -88,6 +90,13 @@ def inspect_meteo_folder(folder, kind=None, source=AUTO, crs_fallback=None,
     time_index(times, spec.temporal_resolution, continuous=False)
     if (bounds[:-1, 1] != bounds[1:, 0]).any():
         raise ValueError("Meteorology files contain overlapping or missing intervals.")
+    if spec.cumulative:  # e.g. ERA5-Land's first 00:00 stamp: the previous day's total, no cycle of its own
+        import pandas as pd
+
+        opens = cycle_starts(pd.DatetimeIndex(bounds[:, 0]), spec.cumulative_resolution, spec.cumulative_reset)
+        if not opens.any():
+            raise ValueError("Cumulative data hold no start of an accumulation cycle: check the reset.")
+        bounds = bounds[int(np.argmax(opens)):]
     start, _, last = complete_window(
         bounds, spec.temporal_resolution, spec.output_temporal_resolution)
     return replace(signatures[0].metadata, files=tuple(item[0] for item in records),
@@ -141,7 +150,7 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
                 validate_spec(spec)
                 metadata = inspected[spec.kind]
                 _validate_target_coverage(metadata, target_grid)
-                output = stage / (f"{spec.kind}.nc" if flat_layout else f"{spec.kind}/{spec.kind}.nc")
+                output = stage / meteo_file(spec.kind, flat_layout)
                 count = 0
                 handle = None
                 try:
@@ -151,7 +160,8 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
                     ):
                         _check_cancel(cancelled)
                         assert_matches_header(block, spec.kind, target_grid.header)
-                        handle = _write_time_block(block, spec.kind, output, count, handle)
+                        handle = _write_time_block(block.rename({spec.kind: output.stem}), output.stem, output,
+                                                   count, handle)
                         count += block.sizes["time"]
                         block.close()
                 finally:
@@ -212,7 +222,7 @@ def _prepared_blocks(spec, metadata, target, *, window=None, log=None,
         _check_cancel(cancelled)
         last_path = path
         with _open_dataset(path) as ds:
-            variable = _find_variable(ds, spec.kind)
+            variable = _find_variable(ds, spec)
             raw = ds[variable]
             time_name = "time" if "time" in raw.dims else "valid_time"
             bounds = interval_bounds(ds, time_name, spec, variable)
@@ -242,8 +252,7 @@ def _prepared_blocks(spec, metadata, target, *, window=None, log=None,
                     chunk_bounds = chunk_bounds[selected]
                     values = values[selected]
                 if spec.output_temporal_resolution == spec.temporal_resolution:
-                    if not spec.cumulative:
-                        chunk = chunk.assign_coords(time=chunk_bounds[:, 0])
+                    chunk = chunk.assign_coords(time=chunk_bounds[:, 0])  # v5.13 reads only `time`
                     converted = convert_units(values, chunk_bounds, spec, variable)
                     yield _prepared_dataset(
                         chunk.copy(data=converted), chunk_bounds, ds, spec,
@@ -430,14 +439,8 @@ def _publish_meteo_result(
 
     try:
         for variable in managed_variables:
-            finals = (
-                (output_root / f"{variable}.nc",)
-                if flat_layout else
-                (
-                    output_root / variable / f"{variable}.nc",
-                    output_root / variable / "header.txt",
-                )
-            )
+            final = output_root / meteo_file(variable, flat_layout)
+            finals = (final,) if flat_layout else (final, final.with_name("header.txt"))
             for final in finals:
                 if not final.exists():
                     continue
@@ -449,17 +452,12 @@ def _publish_meteo_result(
         final_outputs = {}
         final_headers = {}
         for variable, staged_output in staged.outputs.items():
-            if flat_layout:
-                final_output = output_root / f"{variable}.nc"
-                final_header = None
-            else:
-                final_dir = output_root / variable
-                final_dir.mkdir(parents=True, exist_ok=True)
-                final_output = final_dir / f"{variable}.nc"
-                final_header = final_dir / "header.txt"
+            final_output = output_root / meteo_file(variable, flat_layout)
+            final_output.parent.mkdir(parents=True, exist_ok=True)
+            final_header = None if flat_layout else final_output.with_name("header.txt")
             os.replace(staged_output, final_output)
             published.append(final_output)
-            if final_header is not None:
+            if final_header is not None and final_header not in published:  # strd shares ssrd's folder
                 os.replace(staged.headers[variable], final_header)
                 published.append(final_header)
                 final_headers[variable] = final_header
@@ -510,13 +508,19 @@ def _open_dataset(path: Path):
 
 
 def file_defaults(spec):
-    """The time step, unit and CRS the first matching file declares; undeclared ones are left out."""
+    """The first matching file's time-dependent `variables`, and the `variable`, time step, unit and
+    CRS it declares; undeclared ones are left out (no `variable` when its name is not known)."""
     path = _files_for_spec(spec)[0]
     found = {"file": path.name}
-    if crs := _inspect_file(path, replace(spec, crs=None)).metadata.crs:
-        found["crs"] = crs
     with _open_dataset(path) as ds:
-        variable = _find_variable(ds, spec.kind)
+        bounds = {item.attrs.get("bounds") for item in ds.variables.values()}  # e.g. time_bnds
+        found["variables"] = [name for name, data in ds.data_vars.items()
+                              if {"time", "valid_time"} & set(data.dims) and name not in bounds]
+        try:
+            variable = _find_variable(ds, spec if spec.variable in found["variables"] else replace(spec, variable=""))
+        except ValueError:
+            return found
+        found["variable"] = variable
         if (unit := normalize_unit(ds[variable].attrs.get("units", ""))) in VARIABLES[spec.kind][2]:
             found["unit"] = unit
         times = ds["time" if "time" in ds[variable].dims else "valid_time"].values
@@ -527,6 +531,8 @@ def file_defaults(spec):
             continue
         found["temporal_resolution"] = cadence
         break
+    if crs := _inspect_file(path, replace(spec, crs=None), variable).metadata.crs:
+        found["crs"] = crs
     return found
 
 
@@ -564,7 +570,7 @@ def _inspect_file(
     import numpy as np
 
     with _open_dataset(path) as ds:
-        variable = variable or _find_variable(ds, spec.kind)
+        variable = variable or _find_variable(ds, spec)
         da = ds[variable]
         y_dim, x_dim = _spatial_dims(da)
         x_name, x_values = _axis_values(ds, x_dim, "x")
@@ -623,8 +629,13 @@ def _inspect_file(
         return _SpatialSignature(metadata, x_values, y_values)
 
 
-def _find_variable(ds, kind):
-    """Resolve an exact output name or one unambiguous known source alias."""
+def _find_variable(ds, spec):
+    """The chosen source variable, else the exact output name or one unambiguous known source alias."""
+    if spec.variable:
+        if spec.variable not in ds.data_vars:
+            raise ValueError(f"No variable {spec.variable!r}; the file has {list(ds.data_vars)}.")
+        return spec.variable
+    kind = spec.kind
     candidates = [name for name in VARIABLES[kind][0] if name in ds.data_vars
                   and ("time" in ds[name].dims or "valid_time" in ds[name].dims)]
     if kind in candidates:
@@ -840,12 +851,12 @@ def validate_coverage(metadata: SpatialMetadata, bounds, crs, l0_resolution=0.0)
 
 
 
-def grid_note(metadata: SpatialMetadata, grid, crs) -> str:
-    """How an inspected input reaches the common L2 grid (`grid`, the saved grid metadata), as
+def grid_note(metadata: SpatialMetadata, grid, crs, level="L2") -> str:
+    """How an inspected input reaches the common `level` grid (`grid`, the saved grid metadata), as
     `_resample_ready` will do it: copied, shifted onto the lattice, or resampled (nearest).
     ValueError when it does not cover the common extent."""
     validate_coverage(metadata, grid["study_bounds"], crs, grid.get("l0_resolution", 0.0))
-    header, source_crs = grid["l2_header"], metadata.crs or ("EPSG:4326" if metadata.unit in {"deg", "degree"} else None)
+    header, source_crs = grid[f"{level.lower()}_header"], metadata.crs or ("EPSG:4326" if metadata.unit in {"deg", "degree"} else None)
     cell = float(header["cellsize"])
     if source_crs and crs and _same_crs(source_crs, crs) and all(
             math.isclose(value, cell, rel_tol=1e-6) for value in (metadata.x_resolution, metadata.y_resolution)):
@@ -854,11 +865,11 @@ def grid_note(metadata: SpatialMetadata, grid, crs) -> str:
             steps = (centre - float(corner)) / cell - 0.5
             offsets.append((round(steps) - steps) * cell)
         if all(abs(value) <= 1e-6 * cell for value in offsets):
-            return "Covers the common extent; already on the L2 grid: copied."
-        return (f"Covers the common extent; shifted by ({offsets[0]:.6g}, {offsets[1]:.6g}) onto the L2 grid "
+            return f"Covers the common extent; already on the {level} grid: copied."
+        return (f"Covers the common extent; shifted by ({offsets[0]:.6g}, {offsets[1]:.6g}) onto the {level} grid "
                 "(nearest cells), not resampled.")
     return (f"Covers the common extent; resampled (nearest) from {metadata.x_resolution:.6g} {metadata.unit} "
-            f"({source_crs or 'no CRS'}) to the L2 grid ({cell:.6g}).")
+            f"({source_crs or 'no CRS'}) to the {level} grid ({cell:.6g}).")
 
 def _resample_ready(da, ds, source_crs, target, np, xr):
     y_dim, x_dim = _spatial_dims(da)

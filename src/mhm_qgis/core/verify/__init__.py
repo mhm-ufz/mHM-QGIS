@@ -5,6 +5,7 @@ saved; a file the namelist names but the setup lacks is skipped (`datamodel.chec
 """
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 from functools import cached_property
 from pathlib import Path
@@ -13,6 +14,7 @@ import numpy as np
 
 from .. import datamodel
 from ..grid.model import integer_resolution_factor, read_header_file
+from ..handlers.state import processing
 from ..handlers.state.nml_settings import load_settings
 from ..handlers.store import layout
 from . import rules
@@ -24,6 +26,7 @@ V5_FORCING = {"pre": "dir_precipitation", "tavg": "dir_temperature", "pet": "dir
               "tmin": "dir_mintemperature", "tmax": "dir_maxtemperature", "net_rad": "dir_netradiation",
               "eabs": "dir_absvappressure", "windspeed": "dir_windspeed", "ssrd": "dir_radiation",
               "strd": "dir_radiation", "tann": "dir_temperature"}
+TIMES = ("sim_start", "eval_start", "sim_end")
 V6_FORCING = ("pre", "pet", "temp", "tann", "tmin", "tmax", "ssrd", "strd", "netrad", "eabs", "wind")
 _BLOCK = 366  # time steps read at once
 
@@ -59,6 +62,12 @@ class _Setup:
         """(values, cell size) of the DEM, or None."""
         path = self.path("config_input", "dem_path") if self.v6 else self.morph("dem.asc")
         return (read(path, self.get("config_input", "dem_var")), cell(path)) if path else None
+
+    @cached_property
+    def domain(self):
+        """The L0 cells mHM computes: v6 its morph mask (fdir and the rest are cut to it), else the DEM's."""
+        path = self.v6 and self.path("config_input", "morph_mask_path")
+        return read(path, self.get("config_input", "morph_mask_var")) == 1 if path else ~np.isnan(self.dem[0])
 
     @cached_property
     def settings(self):
@@ -161,7 +170,7 @@ def _grid(setup):
 def _morphology(setup):
     if setup.dem is None:
         return []
-    mask, problems = ~np.isnan(setup.dem[0]), []
+    mask, problems = setup.domain, []
 
     def classes(name, path, variable=None, allowed=None, source="its lookup table"):
         if path:
@@ -221,7 +230,7 @@ def _forcing(setup, values):
     if values and setup.dem is not None:
         l2 = [cell(path) for _name, path, _variable in setup.forcings()[:1]]
         factor = l2 and integer_resolution_factor(l2[0], setup.dem[1])
-        mask = _coarse(~np.isnan(setup.dem[0]), factor, setup.v6) if factor else None
+        mask = _coarse(setup.domain, factor, setup.v6) if factor else None
     import xarray as xr
 
     problems = []
@@ -259,5 +268,29 @@ def _gauges(setup):
     return rules.gauges([int(gauge) for gauge in ids], read(grid)) if grid else []
 
 
-STAGES = {"grid": _grid, "morphology": _morphology, "period": _period, "gauges": _gauges,
+def _stale(setup):
+    """What Set saved but the saved namelist does not hold yet: mHM runs the namelist."""
+    fix, problems = "open Edit Namelists and save it before running mHM", []
+    time = setup.settings.get("time") or {}
+    if setup.v6:
+        held = tuple(str(setup.get("config_time", key) or "")[:16] for key in TIMES)
+        wanted = tuple(str(time.get(key) or "")[:16] for key in TIMES)
+    elif per := setup.get("time_periods", "eval_per"):
+        evaluation = date(per["yStart"], per["mStart"], per["dStart"])
+        held = (str(evaluation - timedelta(days=int(setup.get("time_periods", "warming_days", 0)))),
+                str(evaluation), str(date(per["yEnd"], per["mEnd"], per["dEnd"])))
+        wanted = tuple(str(time.get(key) or "")[:10] for key in TIMES)
+    else:
+        held = wanted = ()
+    if time.get("sim_start") and all(held) and held != wanted:
+        problems.append(f"The namelist simulates {' / '.join(held)} (start / evaluation / end), "
+                        f"Set Periods saved {' / '.join(wanted)}: {fix}.")
+    l1 = ((processing.section(setup.folder, "grid", {}) or {}).get("l1_header") or {}).get("cellsize")
+    held_l1 = setup.get("config_resolution", "hydro") if setup.v6 else setup.get("mainconfig", "resolution_hydrology")
+    if l1 and held_l1 and not math.isclose(float(held_l1), float(l1), rel_tol=1e-9):
+        problems.append(f"The namelist's L1 cell size is {held_l1}, Set Resolution saved {l1}: {fix}.")
+    return problems
+
+
+STAGES = {"namelist": _stale, "grid": _grid, "morphology": _morphology, "period": _period, "gauges": _gauges,
           "meteo": lambda setup: _forcing(setup, values=True)}

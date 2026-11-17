@@ -179,3 +179,16 @@ def test_bankfull_map_from_mrm(tmp_path):
         q = np.ma.filled(handle["Q_bkfl"][:], np.nan)
     assert np.isfinite(q[truth.mask]).all()
     assert (q[truth.mask] > 1.0).all()
+
+
+def test_v6_lat_lon_output_labelled_in_metres_is_geographic(tmp_path):
+    import netCDF4
+
+    with netCDF4.Dataset(tmp_path / "mhm_output.nc", "w") as handle:
+        handle.createDimension("x", 3)
+        handle.createDimension("y", 2)
+        x, y = handle.createVariable("x", "f8", ("x",)), handle.createVariable("y", "f8", ("y",))
+        x.units = y.units = "m"
+        x[:], y[:] = [79.0, 79.1, 79.2], [28.1, 28.0]
+        handle.createVariable("lon", "f8", ("y", "x"))[:] = np.tile(x[:], (2, 1))
+    assert grid.axes(tmp_path / "mhm_output.nc").geographic

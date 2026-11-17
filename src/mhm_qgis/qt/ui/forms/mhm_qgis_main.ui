@@ -6345,11 +6345,6 @@ date,discharge
                    </property>
                    <item>
                     <property name="text">
-                     <string>Q_bkfl</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
                      <string>et</string>
                     </property>
                    </item>

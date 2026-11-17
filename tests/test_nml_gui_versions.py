@@ -314,6 +314,20 @@ def test_domain_dimensions_and_paths_follow_plugin_domains(tmp_path: Path) -> No
     assert v6_values["main"]["config_input"] == {}
 
 
+def test_v5_13_reads_the_prepared_observations_from_optional_data(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from mhm_qgis.core.handlers.state.nml_outputs import register_observations
+
+    dialog = Dialog(tmp_path)
+    dialog._input_adapters["pour_points"] = LayerWidget()
+    spec = SimpleNamespace(kind="sm", output_temporal_resolution="Daily", temporal_resolution="Daily")
+    register_observations(tmp_path, {"sm": tmp_path / "data/observation/sm.nc"}, [spec], v6=False)
+    optional = build_initial_values("5.13", dialog)["main"]["optional_data"]
+    assert optional == {"dir_soil_moisture": [optional["dir_soil_moisture"][0]], "timeStep_sm_input": -1}
+    assert optional["dir_soil_moisture"][0].endswith("/observation/")
+
+
 def test_geoparameter_orientation_is_version_specific(tmp_path: Path) -> None:
     metadata = Path(temp_morphology_folder(tmp_path)) / "geology_class_metadata.json"
     metadata.parent.mkdir(parents=True)

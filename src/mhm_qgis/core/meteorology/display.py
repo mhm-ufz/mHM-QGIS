@@ -98,7 +98,7 @@ def resolve_meteo_output(setup_folder, variable: str, when):
         return None
     index = step_for_when(steps, when)
     label = VARIABLE_LABELS.get(variable, variable)
-    return MeteoOutput(path, variable, index + 1, steps[index], f"{label} ({variable})")
+    return MeteoOutput(path, path.stem, index + 1, steps[index], f"{label} ({variable})")
 
 
 __all__ = [

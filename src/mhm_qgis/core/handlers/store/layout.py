@@ -110,19 +110,21 @@ def meteo_mask_path(setup_folder) -> Path:
     return meteo_output_root(setup_folder) / "mask.nc"
 
 
+# where mHM 5.13 reads them: net_rad from dir_NetRadiation, strd beside ssrd, tann beside tavg
+V5_METEO_FILES = {"netrad": "netrad/net_rad.nc", "strd": "ssrd/strd.nc", "tann": "tavg/tann.nc"}
+
+
+def meteo_file(variable, flat=False) -> str:
+    """The forcing file relative to the meteo root; its variable is named after its stem."""
+    return f"{variable}.nc" if flat else V5_METEO_FILES.get(variable, f"{variable}/{variable}.nc")
+
+
 def expected_meteo_outputs(setup_folder) -> dict[str, dict[str, Path | None]]:
     """Return final meteorology paths for the project's mHM version."""
-    root = meteo_output_root(setup_folder)
-    if is_v6(setup_folder):
-        return {
-            variable: {"netcdf": root / f"{variable}.nc", "header": None}
-            for variable in METEO_VARIABLES
-        }
+    root, flat = meteo_output_root(setup_folder), is_v6(setup_folder)
     return {
-        variable: {
-            "netcdf": root / variable / f"{variable}.nc",
-            "header": root / variable / "header.txt",
-        }
+        variable: {"netcdf": root / meteo_file(variable, flat),
+                   "header": None if flat else (root / meteo_file(variable)).with_name("header.txt")}
         for variable in METEO_VARIABLES
     }
 

@@ -87,13 +87,16 @@ def _meteo_initial(dialog, variable):
     return {**initial, **dialog._drafts.get(f"meteo:{variable}", {})}
 
 
-def _outside_period(dialog, variable, metadata):
-    """Why `metadata` does not span the saved simulation period (by date), or None."""
+def _outside_period(dialog, variable, metadata, spec):
+    """Why `metadata` does not span the saved simulation period, or None."""
     from ...core.handlers.state.nml_settings import load_settings
+    from ...core.meteorology.forcing.temporal import covers_end
 
     period = load_settings(dialog.setup_folder).get("time") or {}
     start, end = period.get("sim_start", "")[:10], period.get("sim_end", "")[:10]
-    if start and end and (metadata.start_time[:10] > start or metadata.end_time[:10] < end):
+    if start and end and (metadata.start_time[:10] > start or not covers_end(
+            period["sim_end"], metadata.end_time, spec.output_temporal_resolution or spec.temporal_resolution,
+            selected_version(dialog).startswith("6"))):
         return (f"{variable} data cover {metadata.start_time[:10]} to {metadata.end_time[:10]}, "
                 f"not the simulation period {start} to {end}.")
     return None
@@ -104,21 +107,16 @@ def submit_meteo_input(dialog, variable, spec):
     extent once it is Set; precipitation shows its span and proposes the simulation period."""
 
     def scanned(metadata):
-        if variable != "pre" and (error := _outside_period(dialog, variable, metadata)):
+        if variable != "pre" and (error := _outside_period(dialog, variable, metadata, spec)):
             failed(ValueError(error))
             return
-        if grid.grid_current(dialog):
-            saved = dialog._grid_l2_metadata
-            try:
-                validate_coverage(metadata, saved["study_bounds"], dialog.selected_meteo_crs(), saved["l0_resolution"])
-            except ValueError as error:
-                failed(error)
-                return
+        if not _covers_grid(dialog, metadata, failed):
+            return
         dialog._meteo_inputs[variable] = _spec_state(spec)
         dialog._meteo_inspections[variable] = metadata
         dialog._drafts.pop(f"meteo:{variable}", None)
         if variable == "pre":
-            _precipitation_period(dialog, metadata)
+            _precipitation_period(dialog, metadata, spec)
         if getattr(main.form_on(dialog, page(variable)), "draft_key", None) == f"meteo:{variable}":
             show_meteo_input(dialog, variable)  # rebuilt from the scanned input, with its note
         invalidate_meteo(dialog)
@@ -135,24 +133,44 @@ def submit_meteo_input(dialog, variable, spec):
     ))
 
 
-def _precipitation_period(dialog, metadata):
-    """The precipitation span, and the simulation period from it while none is saved."""
+def _precipitation_period(dialog, metadata, spec):
+    """The precipitation span, and the simulation period from it while none is saved (v6 runs up
+    to its end, v5.13 through its last day)."""
     from ...core.handlers.state.nml_settings import load_settings
+    from ...core.meteorology.forcing.temporal import covered_until
 
     dialog.label_precipitationStartTimeValue.setText(metadata.start_time[:16])
     dialog.label_precipitationEndTimeValue.setText(metadata.end_time[:16])
     if load_settings(dialog.setup_folder).get("time"):
         return
     for key, name in time.TIME_WIDGETS.items():
-        text = metadata.end_time if key == "sim_end" else metadata.start_time
-        value = QDateTime.fromString(text[:16] if selected_version(dialog).startswith("6") else text[:10] + "T00:00",
+        v6 = selected_version(dialog).startswith("6")
+        text = metadata.start_time if key != "sim_end" else covered_until(
+            metadata.end_time, spec.output_temporal_resolution or spec.temporal_resolution) if v6 else metadata.end_time
+        value = QDateTime.fromString(text[:16] if v6 else text[:10] + "T00:00",
                                      "yyyy-MM-ddTHH:mm")
         with QSignalBlocker(getattr(dialog, name)):
             getattr(dialog, name).setDateTime(value)
 
 
+def _covers_grid(dialog, metadata, failed, level=None) -> bool:
+    """Whether the scanned input covers the common extent once it is Set (else `failed` says why);
+    with `level`, the log says how it reaches that grid."""
+    if not grid.grid_current(dialog):
+        return True
+    saved = dialog._grid_l2_metadata
+    try:
+        validate_coverage(metadata, saved["study_bounds"], dialog.selected_meteo_crs(), saved["l0_resolution"])
+        if level:
+            dialog.log_message(f"{metadata.kind}: {grid_note(metadata, saved, dialog.selected_meteo_crs(), level)}")
+    except ValueError as error:
+        failed(error)
+        return False
+    return True
+
+
 def edit_observation_input(dialog, variable=None):
-    """Collect and inspect one L2 gridded observation."""
+    """Collect and inspect one gridded observation; it is prepared on L1."""
     variable = variable or dialog.comboBox_observationVar.currentText()
     spec = _accepted_spec(
         dialog, variable, _initial(dialog, dialog._observation_inputs, variable),
@@ -162,6 +180,8 @@ def edit_observation_input(dialog, variable=None):
         return None
 
     def scanned(metadata):
+        if not _covers_grid(dialog, metadata, failed, "L1"):
+            return
         dialog._observation_inputs[variable] = _spec_state(spec)
         dialog._observation_inspections[variable] = metadata
         invalidate(dialog, "execute_all_observations", "run_mhm")
@@ -248,7 +268,12 @@ def selected_meteo_specs(dialog):
     if "pre" not in dialog._meteo_inputs:
         raise ValueError("Configure and scan precipitation first.")
     needed = datamodel.meteo_variables(selected_version(dialog), process_cases.current(dialog))
-    return tuple(_spec(dialog, value) for key, value in dialog._meteo_inputs.items() if key in needed)
+    specs = tuple(_spec(dialog, value) for key, value in dialog._meteo_inputs.items() if key in needed)
+    steps = {spec.output_temporal_resolution or spec.temporal_resolution for spec in specs}
+    if not selected_version(dialog).startswith("6") and (len(steps) > 1 or steps - {"Daily", "Hourly"}):
+        raise ValueError("mHM 5.13 reads every forcing at one time step, Daily or Hourly: "
+                         f"set the output time step of all variables alike (now {', '.join(sorted(steps))}).")
+    return specs
 
 
 def observation_specs(dialog):

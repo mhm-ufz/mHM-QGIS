@@ -119,12 +119,12 @@ def test_reference_files_set_the_common_grid_the_dem_and_precipitation_cover(tmp
     _wait(dialog, "meteo-scan-pre")
     assert not warnings
     assert dialog.label_precipitationStartTimeValue.text().startswith("2001-01-01")
-    assert dialog.dateTimeEdit_simulationEndTimeInput.dateTime().toString("yyyy-MM-dd") == "2001-01-03"
+    assert dialog.dateTimeEdit_simulationEndTimeInput.dateTime().toString("yyyy-MM-dd") == "2001-01-04"  # v6: exclusive
     assert "copied" in forcing.note(dialog, "pre")
     assert "copied" in main.form_on(dialog, "precipitation").label_description.text()
     assert not nml_settings.load_settings(tmp_path).get("time")  # only Set Periods saves it
     dialog.pushButton_setSimulationPeriod.click()
-    assert nml_settings.load_settings(tmp_path)["time"]["sim_end"] == "2001-01-03T00:00"
+    assert nml_settings.load_settings(tmp_path)["time"]["sim_end"] == "2001-01-04T00:00"
 
     dialog.spinBox_L1ResolutionMultiplier.setValue(4)
     assert dialog.label_nColsL0Common.text() == ""  # Set again

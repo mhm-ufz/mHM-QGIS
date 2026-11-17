@@ -403,3 +403,16 @@ def test_the_first_netcdf_slice_is_north_first(tmp_path):
                coords={"time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"),
                        "latitude": [50.0, 51.0], "longitude": [9.0, 10.0, 11.0]}).to_netcdf(tmp_path / "tp.nc")
     assert netcdf_first_slice(tmp_path / "tp.nc", "tp").tolist() == values[0][::-1].tolist()
+
+
+def test_a_half_cell_offset_shifts_the_whole_axis_one_way():
+    import numpy as np
+
+    from mhm_qgis.core.grid.arrays import shift_onto_header
+
+    header = {"ncols": 40, "nrows": 40, "xllcorner": 10.0, "yllcorner": 50.0, "cellsize": 0.1}
+    x = np.round(10.0 + np.arange(40) * 0.1, 2)  # ERA5-Land centres on the edges of the target cells
+    y = np.round(54.0 - np.arange(40) * 0.1, 2)
+    sx, sy = shift_onto_header(x, y, header)
+    assert (np.unique(sx).size, np.unique(sy).size) == (40, 40)
+    assert (np.allclose(np.diff(sx), 0.1), np.allclose(np.diff(sy), -0.1)) == (True, True)

@@ -26,7 +26,7 @@ from ...meteorology.forcing import (
     process_meteo_inputs,
     validate_coverage,
 )
-from ...meteorology.forcing.temporal import VARIABLE_LABELS, NegativeAmounts
+from ...meteorology.forcing.temporal import VARIABLE_LABELS, NegativeAmounts, covers_end
 from ...meteorology.mask import write_meteo_mask
 from ...meteorology.reuse import stale_meteo_variables
 
@@ -120,8 +120,10 @@ def prepare_forcing(run: MeteorologyRun, state, *, log=None, progress=None, canc
         if run.times:
             from ...handlers.state.nml_settings import validate_times
             times = validate_times(run.times, "v6" if is_v6(run.setup_folder) else "v5.13")
+            cadences = {spec.kind: spec.output_temporal_resolution or spec.temporal_resolution for spec in run.inputs}
             for kind, metadata in inspected.items():
-                if times["sim_start"] < metadata.start_time[:16] or times["sim_end"] > metadata.end_time[:16]:
+                if times["sim_start"] < metadata.start_time[:16] or not covers_end(
+                        times["sim_end"], metadata.end_time, cadences[kind], is_v6(run.setup_folder)):
                     raise ValueError(
                         f"The simulation period is outside the {VARIABLE_LABELS.get(kind, kind).lower()} data "
                         f"({metadata.start_time} to {metadata.end_time}): shorten the simulation or extend the input.")

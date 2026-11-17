@@ -105,7 +105,8 @@ def shift_onto_header(x_values, y_values, header: Mapping):
         values = np.asarray(axis, dtype="float64")
         steps = np.abs(np.diff(values))
         if steps.size and float(np.abs(steps - cellsize).max()) <= cellsize * 1e-6:
-            return origin + np.floor((values - origin) / cellsize + 0.5) * cellsize  # one shift, ties too
+            first = np.floor((values[0] - origin) / cellsize + 0.5)  # one shift for the axis, ties too
+            return origin + (first + np.rint((values - values[0]) / cellsize)) * cellsize
         return values
 
     target_x, target_y = header_center_coordinates(header)

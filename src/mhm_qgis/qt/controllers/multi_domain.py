@@ -14,6 +14,7 @@ from ...core import multi_domain
 from ...core.handlers.state import nml_settings
 from ...core.handlers.store.layout import ensure_multi_structure
 from ..dialogs.file_picker import open_directory
+from . import post_context
 from .version import selected as selected_version
 from .workflow_state import switch_busy
 
@@ -50,6 +51,7 @@ def create_or_load(dialog):
             root = multi_domain.multi_folder(directory, name)
         dialog.save_input_state()  # the setup being left
         dialog.setup_folder = str(root)
+        post_context.clear(dialog)  # the run of the setup being left
         if name is None:
             dialog._multi_domains = []
             dialog.save_input_state()

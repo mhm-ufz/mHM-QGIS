@@ -9,5 +9,7 @@ def bind(dialog):
     dialog.pushButton_scanFile.clicked.connect(lambda: controller.scan_file(dialog))
     dialog.comboBox_temporalResolutionInput.currentTextChanged.connect(
         lambda: controller.populate_output_resolutions(dialog))
+    dialog.comboBox_temporalResolutionInput.currentTextChanged.connect(lambda: controller.populate_resets(dialog))
+    dialog.comboBox_resetInterval.currentTextChanged.connect(lambda: controller.populate_reset_timestamps(dialog))
     dialog.comboBox_temporalResolutionOutput.currentTextChanged.connect(
         lambda: controller.update_aggregation_control(dialog))

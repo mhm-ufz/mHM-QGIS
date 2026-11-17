@@ -81,6 +81,20 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   during execution, in that order. Cumulative sequences must be continuous across files;
   missing prefixes or ambiguous interval conventions fail rather than guessing.
   CF bounds describe intervals; recognized ERA cumulative variables use interval ends.
+  Any other stamp stands for the calendar period holding it, so month-end or 23:00 stamps
+  (mHM's own observation files) are whole months and days.
+  - `cumulative_reset` (`groupBox_cumulative`) is the last hour, day or month a cycle
+    covers; the default is the period's last, so ERA5-Land is Daily/23.
+  - `comboBox_varName` sets `MeteoFolderSpec.variable` when no alias names the source.
+  - Observations are prepared on L1, and their Set checks coverage as meteo does.
+  - A cumulative record's window starts at its first cycle start (ERA5-Land's first 00:00
+    stamp is the previous day's total); output is always stamped at interval starts, the
+    only coordinate v5.13 reads.
+  - Continuity is one stamp per consecutive calendar period. Data cover up to the end of
+    their last period: v6 runs to `sim_end` exclusive, v5.13 through the day `sim_end`.
+  - v5.13 needs one forcing step for all variables (Daily or Hourly). Its files are
+    `<var>/<var>.nc` except `netrad/net_rad.nc`, `ssrd/strd.nc` and `tavg/tann.nc`
+    (`layout.meteo_file`); a file's variable is named after its stem.
   Fingerprints include all options and files. Display selects actual timestamps,
   not arithmetic day offsets.
 - `dateTimeEdit_simulationStartTimeInput`, `dateTimeEdit_evaluationStartTimeInput`

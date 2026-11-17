@@ -13,6 +13,7 @@ from qgis.PyQt.QtCore import QSignalBlocker
 from ...core.handlers.file import json as jsonio
 from ...core.handlers.store.layout import input_state_path
 from ...core.handlers.store.paths import version_key
+from ...core.meteorology.forcing.temporal import VARIABLES
 from ...qgis_bridge import layers as qgis_layers
 from ..dialogs.input_selection import _combo_path, _populate_file_combo
 from . import categorical, forcing, grid, main, model, process_cases, time, version
@@ -168,7 +169,8 @@ def load(dialog):
         _restore_input_layers(dialog, state.get("layers", {}))
         _restore_domain_inputs(dialog, state)
         _restore_meteo_inputs(dialog, state.get("meteo_inputs", {}))
-        dialog._observation_inputs = dict(state.get("observation_inputs", {}))
+        dialog._observation_inputs = {key: value for key, value in state.get("observation_inputs", {}).items()
+                                      if key in VARIABLES}  # a kind since removed (Q_bkfl) is dropped
         forcing.populate_observation_table(dialog)
         time.restore(dialog)
         grid.restore(dialog, state)

@@ -17,7 +17,6 @@ VARIABLES = {
     "eabs": (("eabs", "vapour_pressure", "vapor_pressure"), "Pa", ("Pa", "hPa", "kPa")),
     "windspeed": (("windspeed", "wind_speed"), "m s-1", ("m s-1", "km/h")),
     # Additional observations are already expressed in their model units.
-    "Q_bkfl": (("Q_bkfl", "q_bkfl"), "m3 s-1", ("m3 s-1",)),
     "et": (("et", "evapotranspiration"), "mm", ("mm",)),
     "sm": (("sm", "soil_moisture"), "m3 m-3", ("m3 m-3",)),
     "neutrons": (("neutrons",), "counts", ("counts",)),
@@ -34,6 +33,8 @@ VARIABLE_LABELS = {
     "eabs": "Vapour pressure", "windspeed": "Wind speed",
 }
 PERIOD_UNITS = {"Hourly": "h", "Daily": "D", "Monthly": "M", "Yearly": "Y"}
+# The last hour, day or month an accumulation covers before it resets; the last one by default.
+RESETS = {"Daily": range(24), "Monthly": range(1, 32), "Yearly": range(1, 13)}
 AGGREGATIONS = ("Average", "Sum", "Minimum", "Maximum")
 ERA_END_VARIABLES = {"tp", "total_precipitation", "pev", "potential_evaporation",
                      "ssrd", "strd", "surface_solar_radiation_downwards",
@@ -79,6 +80,8 @@ def validate_spec(spec):
             raise ValueError("Accumulation cannot reset more often than the input sampling.")
         if unit not in ("m", "mm", "kg m-2", "J m-2"):
             raise ValueError("Cumulative data must be an amount, not a rate or temperature.")
+        if spec.cumulative_reset is not None and spec.cumulative_reset not in RESETS.get(spec.cumulative_resolution, ()):
+            raise ValueError("Select when the accumulation resets.")
 
 
 def output_periods(starts, cadence):
@@ -98,6 +101,19 @@ def period_bounds(key):
     return key.astype("datetime64[ns]"), (key + 1).astype("datetime64[ns]")
 
 
+def covered_until(last_start, cadence) -> str:
+    """The end of the last complete `cadence` period, which starts at `last_start`."""
+    import numpy as np
+
+    return str(period_bounds(output_periods(np.datetime64(last_start[:16]), cadence))[1])[:16]
+
+
+def covers_end(sim_end, last_start, cadence, v6) -> bool:
+    """v6 runs up to `sim_end` (exclusive); v5.13 through the whole day `sim_end`."""
+    covered = covered_until(last_start, cadence)
+    return sim_end[:16] <= covered if v6 else sim_end[:10] < covered[:10]
+
+
 def time_index(values, cadence, *, continuous=True):
     """Validate an ordered continuous Gregorian coordinate against its declared cadence."""
     import numpy as np
@@ -110,9 +126,8 @@ def time_index(values, cadence, *, continuous=True):
         raise ValueError("Meteorology timestamps must be nonempty, unique and ordered.")
     offset = {"Hourly": pd.DateOffset(hours=1), "Daily": pd.DateOffset(days=1),
               "Monthly": pd.DateOffset(months=1), "Yearly": pd.DateOffset(years=1)}[cadence]
-    if cadence == "Monthly" and index.is_month_end.all():
-        offset = pd.offsets.MonthEnd(1)
-    if continuous and len(index) > 1 and not np.array_equal((index[:-1] + offset).values, index[1:].values):
+    # one stamp in each consecutive calendar period, wherever in it (mid-month, month end, 23:00)
+    if continuous and len(index) > 1 and not (np.diff(output_periods(index.values, cadence).astype("int64")) == 1).all():
         raise ValueError(f"Timestamps are not continuous {cadence.lower()} input.")
     return index, offset
 
@@ -136,8 +151,8 @@ def interval_bounds(ds, time_name, spec, source_name):
         bounds = np.column_stack(((index - offset).values, index.values))
     elif spec.cumulative:
         raise ValueError("Cumulative input requires CF time bounds or a recognized ERA interval-end variable.")
-    else:
-        bounds = np.column_stack((index.values, (index + offset).values))
+    else:  # the calendar period holding each stamp: month-end or 23:00 stamps are whole months and days
+        bounds = np.column_stack(period_bounds(output_periods(index.values, spec.temporal_resolution)))
     if (bounds.shape != (len(index), 2) or np.isnat(bounds).any()
             or (bounds[:, 1] <= bounds[:, 0]).any()
             or (bounds[:-1, 1] != bounds[1:, 0]).any()):
@@ -177,18 +192,31 @@ def deaccumulate_values(values, bounds, spec, previous=None):
     result = np.asarray(values, dtype="float64")
     if spec.cumulative:
         result = result.copy()
-        frequency = PERIOD_UNITS[spec.cumulative_resolution]
-        starts = pd.DatetimeIndex(bounds[:, 0])
-        groups = starts.to_period(frequency)
-        for number, group in enumerate(groups):
+        opens = cycle_starts(pd.DatetimeIndex(bounds[:, 0]), spec.cumulative_resolution, spec.cumulative_reset)
+        for number, opened in enumerate(opens):
             raw = result[number].copy()
-            at_reset = starts[number] == group.start_time
-            if not at_reset:
-                if previous is None or previous[0] != group or previous[2] != bounds[number, 0]:
+            if not opened and previous is None:  # the record's leading fragment: before its window
+                result[number] = np.nan
+            elif not opened:
+                if previous[1] != bounds[number, 0]:
                     raise ValueError("Cumulative data starts mid-cycle without its preceding sample.")
-                result[number] -= previous[1]
-            previous = (group, raw, bounds[number, 1])
+                result[number] -= previous[0]
+            previous = (raw, bounds[number, 1])
     return result, previous
+
+
+def cycle_starts(starts, cadence, reset=None):
+    """Whether each interval start opens an accumulation cycle: the `reset` hour, day or month (the
+    last a cycle covers) has just ended. A day past the month's length is its last day."""
+    import pandas as pd
+
+    last = RESETS[cadence][-1] if reset is None else reset
+    if cadence == "Daily":
+        return (starts.hour == (last + 1) % 24) & (starts == starts.floor("h"))
+    midnight = starts == starts.normalize()
+    if cadence == "Monthly":
+        return midnight & ((starts.day == last + 1) | ((starts.day == 1) & ((starts - pd.Timedelta(days=1)).days_in_month <= last)))
+    return midnight & (starts.day == 1) & (starts.month == last % 12 + 1)
 
 
 @contextmanager

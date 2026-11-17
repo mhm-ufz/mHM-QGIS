@@ -389,7 +389,8 @@ def parse_discharge_value(value) -> float:
 
 
 def sort_and_deduplicate(records: list[DischargeRecord]) -> list[DischargeRecord]:
-    """Sort records by date and keep the last value for duplicated dates."""
+    """One record per day from the first to the last, the last value of a duplicated date and NaN
+    (written as -9999) for a missing one: mHM 5.13 reads (end - start + 1) lines by position."""
     by_day = {}
     for record in records:
         key = datetime(
@@ -398,4 +399,8 @@ def sort_and_deduplicate(records: list[DischargeRecord]) -> list[DischargeRecord
             record.timestamp.day,
         )
         by_day[key] = DischargeRecord(timestamp=key, value=record.value)
-    return [by_day[key] for key in sorted(by_day)]
+    if not by_day:
+        return []
+    first, last = min(by_day), max(by_day)
+    days = (first + timedelta(days=offset) for offset in range((last - first).days + 1))
+    return [by_day.get(day, DischargeRecord(timestamp=day, value=math.nan)) for day in days]

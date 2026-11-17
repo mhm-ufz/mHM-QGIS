@@ -70,7 +70,11 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   keep it to values the plugin owns (paths, variable names).
 - Run mHM first calls `model.inputs_ready`: `datamodel.check` lists every input the saved
   process cases read but nobody prepared, logs each with what needs it, and asks to run
-  anyway. mHM stays the final judge.
+  anyway. mHM stays the final judge. `verify`'s `namelist` stage reports a period or L1
+  that Set saved but the saved namelist does not hold yet (only Edit Namelists writes them).
+- v5.13 observations: `register_observations` keeps each kind's `time_step` in
+  `nml-settings.json` `observations`; the v5.13 builder fills `optional_data` (`dir_*` =
+  `data/observation/`, `timeStep_*`) from it.
 - Version-specific initial values are built by `vSpecific/` (`build_initial_values`,
   `build_dimensions`), which reads `nml-settings.json` through
   `state/nml_settings.load_settings`.
