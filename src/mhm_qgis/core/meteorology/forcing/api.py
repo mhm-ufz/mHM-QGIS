@@ -507,6 +507,43 @@ def _open_dataset(path: Path):
     raise RuntimeError(f"Could not open {path} ({first_error}): check that it is a complete NetCDF file.")
 
 
+def _cadence(times):
+    """The step at which `times` hold one stamp in every period, or None (one stamp fits any)."""
+    for cadence in CADENCES if len(times) > 1 else ():
+        try:
+            time_index(times, cadence)
+        except ValueError:
+            continue
+        return cadence
+    return None
+
+
+def time_window(folder, pattern, time_name=""):
+    """The time axis of every file the glob matches, read from its time variable alone: the
+    candidate `times` variables, the `time` used, its `step`, the first period's `start` and the
+    last period's start as `end`, and the number of `files`."""
+    import numpy as np
+
+    files, stamps, names, name = _files_for_spec(MeteoFolderSpec("pre", Path(folder), pattern=pattern)), [], [], ""
+    for path in files:
+        with _open_dataset(path) as ds:
+            names = names or [key for key, item in ds.variables.items()
+                              if item.ndim == 1 and np.issubdtype(item.dtype, np.datetime64)]
+            name = time_name or (names[0] if names else "")
+            if name not in ds.variables or not np.issubdtype(ds[name].dtype, np.datetime64):
+                raise ValueError(f"{path.name} has no time variable {name!r}." if name else
+                                 f"{path.name} has no time information.")
+            stamps.append(ds[name].values)
+    times = np.sort(np.concatenate(stamps))
+    step = _cadence(times)
+    if step is None:
+        raise ValueError("The files do not hold one time stamp in every period from start to end "
+                         "(a gap, an overlap or an irregular step).")
+    keys = output_periods(times, step)
+    return {"files": len(files), "times": names, "time": name, "step": step,
+            "start": str(period_bounds(keys[0])[0])[:16], "end": str(period_bounds(keys[-1])[0])[:16]}
+
+
 def file_defaults(spec):
     """The first matching file's time-dependent `variables`, and the `variable`, time step, unit and
     CRS it declares; undeclared ones are left out (no `variable` when its name is not known)."""
@@ -524,13 +561,8 @@ def file_defaults(spec):
         if (unit := normalize_unit(ds[variable].attrs.get("units", ""))) in VARIABLES[spec.kind][2]:
             found["unit"] = unit
         times = ds["time" if "time" in ds[variable].dims else "valid_time"].values
-    for cadence in CADENCES if len(times) > 1 else ():  # one timestamp passes any cadence
-        try:
-            time_index(times, cadence)
-        except ValueError:
-            continue
+    if cadence := _cadence(times):
         found["temporal_resolution"] = cadence
-        break
     if crs := _inspect_file(path, replace(spec, crs=None), variable).metadata.crs:
         found["crs"] = crs
     return found

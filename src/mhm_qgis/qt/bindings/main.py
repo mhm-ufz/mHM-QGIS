@@ -115,8 +115,13 @@ def bind(dialog):
     # pushButton_addObservationVar → forcing.edit_observation_input
     dialog.pushButton_addObservationVar.clicked.connect(
         lambda: forcing.edit_observation_input(dialog))
-    # pushButton_setSimulationPeriod → time.set_period
-    dialog.pushButton_setSimulationPeriod.clicked.connect(lambda: time.set_period(dialog))
+    # pushButton_setTimePeriod → time.set_period; pushButton_dialogTimePeriodNetcdfFile → time.open_window_dialog
+    dialog.pushButton_setTimePeriod.clicked.connect(lambda: time.set_period(dialog))
+    dialog.pushButton_dialogTimePeriodNetcdfFile.clicked.connect(lambda: time.open_window_dialog(dialog))
+    dialog.spinBox_warmingDays.setMaximum(36600)  # Designer's 99 is shorter than a usual warm-up
+    dialog.spinBox_warmingDays.valueChanged.connect(lambda _days: time.warming_changed(dialog))
+    dialog.dateTimeEdit_simulationStartTimeInput.dateTimeChanged.connect(lambda _when: time.warming_changed(dialog))
+    dialog.dateTimeEdit_evaluationStartTimeInput.dateTimeChanged.connect(lambda _when: time.evaluation_changed(dialog))
     # pushButton_setGauges → main.set_gauges: the drainage network and flow accumulation
     dialog.pushButton_setGauges.clicked.connect(lambda: main.set_gauges(dialog))
     dialog.stackedWidget_project.currentChanged.connect(

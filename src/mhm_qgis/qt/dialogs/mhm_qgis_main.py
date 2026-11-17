@@ -58,6 +58,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._meteo_inspections = {}
         self._observation_inputs = {}
         self._observation_inspections = {}
+        self._time_source = {}  # Time Period page: the scanned NetCDF glob and its time window
         self._resolution_files = {}  # Resolution page: level -> path, variable, crs (L0: factor)
         self._level_file_info = {}  # level -> that file's grid and extent in the domain CRS
         self._grid_l0_info = None  # the L0 file's grid x its factor

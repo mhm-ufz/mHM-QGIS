@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from qgis.PyQt.QtCore import QDateTime, QSignalBlocker, Qt
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetItem
 
 from ...core import datamodel
@@ -21,7 +21,7 @@ from ...core.meteorology.forcing import (
 )
 from .. import project_tree
 from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
-from . import grid, main, process_cases, time
+from . import grid, main, process_cases
 from .version import selected as selected_version
 from .workflow_state import (
     invalidate,
@@ -103,11 +103,16 @@ def _outside_period(dialog, variable, metadata, spec):
 
 
 def submit_meteo_input(dialog, variable, spec):
-    """Scan an accepted spec; a failed scan keeps the old input. The input must cover the common
-    extent once it is Set; precipitation shows its span and proposes the simulation period."""
+    """Scan an accepted spec; a failed scan keeps the old input. The input must cover the saved
+    Time Period, so that is Set first, and the common extent once that is Set."""
+    from ...core.handlers.state.nml_settings import load_settings
+
+    if not load_settings(dialog.setup_folder).get("time"):
+        QMessageBox.warning(dialog, "Meteorology input", "Set the Time Period first: every forcing is checked against it.")
+        return False
 
     def scanned(metadata):
-        if variable != "pre" and (error := _outside_period(dialog, variable, metadata, spec)):
+        if error := _outside_period(dialog, variable, metadata, spec):
             failed(ValueError(error))
             return
         if not _covers_grid(dialog, metadata, failed):
@@ -115,8 +120,6 @@ def submit_meteo_input(dialog, variable, spec):
         dialog._meteo_inputs[variable] = _spec_state(spec)
         dialog._meteo_inspections[variable] = metadata
         dialog._drafts.pop(f"meteo:{variable}", None)
-        if variable == "pre":
-            _precipitation_period(dialog, metadata, spec)
         if getattr(main.form_on(dialog, page(variable)), "draft_key", None) == f"meteo:{variable}":
             show_meteo_input(dialog, variable)  # rebuilt from the scanned input, with its note
         invalidate_meteo(dialog)
@@ -131,26 +134,6 @@ def submit_meteo_input(dialog, variable, spec):
         dialog.tabWidget_steps, dialog.pushButton_BrowseProjectFolder,
         dialog.comboBox_domainFolderSelector, dialog.pushButton_createOrLoadDomainStructure,
     ))
-
-
-def _precipitation_period(dialog, metadata, spec):
-    """The precipitation span, and the simulation period from it while none is saved (v6 runs up
-    to its end, v5.13 through its last day)."""
-    from ...core.handlers.state.nml_settings import load_settings
-    from ...core.meteorology.forcing.temporal import covered_until
-
-    dialog.label_precipitationStartTimeValue.setText(metadata.start_time[:16])
-    dialog.label_precipitationEndTimeValue.setText(metadata.end_time[:16])
-    if load_settings(dialog.setup_folder).get("time"):
-        return
-    for key, name in time.TIME_WIDGETS.items():
-        v6 = selected_version(dialog).startswith("6")
-        text = metadata.start_time if key != "sim_end" else covered_until(
-            metadata.end_time, spec.output_temporal_resolution or spec.temporal_resolution) if v6 else metadata.end_time
-        value = QDateTime.fromString(text[:16] if v6 else text[:10] + "T00:00",
-                                     "yyyy-MM-ddTHH:mm")
-        with QSignalBlocker(getattr(dialog, name)):
-            getattr(dialog, name).setDateTime(value)
 
 
 def _covers_grid(dialog, metadata, failed, level=None) -> bool:

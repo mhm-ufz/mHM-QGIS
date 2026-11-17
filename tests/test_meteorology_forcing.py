@@ -616,3 +616,16 @@ def test_mid_month_stamps_are_continuous_months():
     time_index(np.array(["2001-01-16T12", "2001-02-15", "2001-03-16T12"], dtype="datetime64[ns]"), "Monthly")
     with pytest.raises(ValueError, match="not continuous"):
         time_index(np.array(["2001-01-16", "2001-03-16"], dtype="datetime64[ns]"), "Monthly")
+
+
+def test_the_time_window_spans_every_file_and_refuses_a_gap(tmp_path):
+    from mhm_qgis.core.meteorology.forcing.api import time_window
+
+    _write_nc(tmp_path / "raw/a.nc", "pre", times=("2001-01-01", "2001-01-02"))
+    _write_nc(tmp_path / "raw/b.nc", "pre", times=("2001-01-03T12",))
+    found = time_window(tmp_path / "raw", "*.nc")
+    assert (found["files"], found["step"], found["start"], found["end"], found["time"]) == (
+        2, "Daily", "2001-01-01T00:00", "2001-01-03T00:00", "time")
+    _write_nc(tmp_path / "raw/c.nc", "pre", times=("2001-01-05",))
+    with pytest.raises(ValueError, match="every period"):
+        time_window(tmp_path / "raw", "*.nc")

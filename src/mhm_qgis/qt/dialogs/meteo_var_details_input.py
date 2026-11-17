@@ -14,6 +14,7 @@ class MeteoVarDetailsDialog(QDialog, load_form("meteo_var_details_input.ui")):
         elide_named_left(self)  # long paths keep their file name in sight
         self.variable = variable
         self.project_directory = project_directory
+        self.setup_folder = getattr(parent, "setup_folder", None)  # Scan Files caches its scan there
         self.spec = None
         controller.populate(self, initial or {})
         bind(self)

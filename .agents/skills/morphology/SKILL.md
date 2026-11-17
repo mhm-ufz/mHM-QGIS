@@ -86,6 +86,12 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   - `cumulative_reset` (`groupBox_cumulative`) is the last hour, day or month a cycle
     covers; the default is the period's last, so ERA5-Land is Daily/23.
   - `comboBox_varName` sets `MeteoFolderSpec.variable` when no alias names the source.
+  - The form picks a file (`comboBox_inputFile`; its name becomes the glob); the input is still saved as
+    `folder` + `pattern`. Scan Files reads every matching file's metadata through the cached
+    inspection that Set reuses. A meteo Set needs the saved Time Period first and checks it.
+  - The Time Period page (`controllers/time.py`, `time_period_netcdf_input.ui`) takes its
+    proposal from `forcing.api.time_window`: a glob's time variable alone. `spinBox_warmingDays`
+    and the evaluation start follow each other.
   - Observations are prepared on L1, and their Set checks coverage as meteo does.
   - A cumulative record's window starts at its first cycle start (ERA5-Land's first 00:00
     stamp is the previous day's total); output is always stamped at interval starts, the

@@ -114,17 +114,19 @@ def test_reference_files_set_the_common_grid_the_dem_and_precipitation_cover(tmp
     assert dialog._dem_error is None
     assert dialog.label_demDescription.text() == "Used as is."
 
+    from qgis.PyQt.QtCore import QDateTime
+
+    for name, text in (("dateTimeEdit_simulationStartTimeInput", "2001-01-01T00:00"),
+                       ("dateTimeEdit_simulationEndTimeInput", "2001-01-04T00:00")):  # v6: exclusive
+        getattr(dialog, name).setDateTime(QDateTime.fromString(text, "yyyy-MM-ddTHH:mm"))
+    dialog.pushButton_setTimePeriod.click()  # every meteo Set needs it first
+    assert nml_settings.load_settings(tmp_path)["time"]["sim_end"] == "2001-01-04T00:00"
     dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "meteo_pre"))
     forcing.submit_meteo_input(dialog, "pre", MeteoFolderSpec("pre", folder, unit="mm", pattern="wanted*.nc"))
     _wait(dialog, "meteo-scan-pre")
     assert not warnings
-    assert dialog.label_precipitationStartTimeValue.text().startswith("2001-01-01")
-    assert dialog.dateTimeEdit_simulationEndTimeInput.dateTime().toString("yyyy-MM-dd") == "2001-01-04"  # v6: exclusive
     assert "copied" in forcing.note(dialog, "pre")
     assert "copied" in main.form_on(dialog, "precipitation").label_description.text()
-    assert not nml_settings.load_settings(tmp_path).get("time")  # only Set Periods saves it
-    dialog.pushButton_setSimulationPeriod.click()
-    assert nml_settings.load_settings(tmp_path)["time"]["sim_end"] == "2001-01-04T00:00"
 
     dialog.spinBox_L1ResolutionMultiplier.setValue(4)
     assert dialog.label_nColsL0Common.text() == ""  # Set again
@@ -321,13 +323,15 @@ def test_a_failed_scan_from_the_popup_keeps_the_entered_values(tmp_path, monkeyp
     (source / "bad.nc").write_text("not a NetCDF file")
 
     def enter(prompt):
-        prompt.comboBox_inputFolder.setCurrentText(str(source))
+        prompt.comboBox_inputFile.setCurrentText(str(source))  # a folder, as setups saved before files were picked
         prompt.lineEdit_fileNameGlobDefinition.setText("bad*.nc")
         prompt.accept()
         return prompt.result()
 
     dialog = MhmQgisDialog()
     dialog.setup_folder = str(tmp_path)
+    nml_settings.update_section(tmp_path, "time", {"sim_start": "2001-01-01T00:00", "eval_start": "2001-01-01T00:00",
+                                                   "sim_end": "2001-01-02T00:00"})
     monkeypatch.setattr(MeteoVarDetailsDialog, "exec", enter)
     forcing.edit_meteo_input(dialog, "tavg")
     deadline = time.monotonic() + 15

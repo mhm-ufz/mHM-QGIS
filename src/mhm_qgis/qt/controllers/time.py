@@ -1,8 +1,14 @@
-"""Simulation-time widgets and their namelist state."""
+"""Simulation-time widgets and their namelist state, and the time window of a NetCDF glob."""
 
-from qgis.PyQt.QtCore import QDateTime, QSignalBlocker
+from pathlib import Path
 
+from qgis.PyQt.QtCore import QDateTime, QSignalBlocker, Qt
+from qgis.PyQt.QtWidgets import QApplication, QDialog, QMessageBox
+
+from ..dialogs.file_picker import open_file
 from .version import selected as selected_version
+
+FORMAT = "yyyy-MM-ddTHH:mm"
 
 TIME_WIDGETS = {
     "sim_start": "dateTimeEdit_simulationStartTimeInput",
@@ -43,7 +49,7 @@ def save(dialog):
 
 
 def set_period(dialog):
-    """Set Periods on the Precipitation page: the checked simulation period, into nml-settings.json."""
+    """Set on the Time Period page: the checked simulation period, into nml-settings.json."""
     from qgis.PyQt.QtWidgets import QMessageBox
 
     try:
@@ -52,7 +58,7 @@ def set_period(dialog):
         QMessageBox.warning(dialog, "Simulation period", str(error))
         return
     save(dialog)
-    dialog.save_input_state()  # Precipitation's status: a saved period completes it
+    dialog.save_input_state()  # the Time Period status: a saved period completes it
     from .workflow_state import report
 
     report(dialog, "period")
@@ -91,5 +97,94 @@ def restore(dialog):
         if value.isValid():
             with QSignalBlocker(widget):
                 widget.setDateTime(value)
+    evaluation_changed(dialog)
     if saved:
         show_period(dialog)
+
+
+def warming_changed(dialog):
+    """Evaluation starts the warming days after the simulation start."""
+    widget = dialog.dateTimeEdit_evaluationStartTimeInput
+    with QSignalBlocker(widget):
+        widget.setDateTime(dialog.dateTimeEdit_simulationStartTimeInput.dateTime().addDays(
+            dialog.spinBox_warmingDays.value()))
+
+
+def evaluation_changed(dialog):
+    """The warming days an edited evaluation start leaves."""
+    with QSignalBlocker(dialog.spinBox_warmingDays):
+        dialog.spinBox_warmingDays.setValue(dialog.dateTimeEdit_simulationStartTimeInput.dateTime().daysTo(
+            dialog.dateTimeEdit_evaluationStartTimeInput.dateTime()))
+
+
+def show_source(dialog):
+    """The Time Period page's file window, as the dialog last scanned it."""
+    dialog.label_fileStartTimeValue.setText(dialog._time_source.get("start", ""))
+    dialog.label_fileEndTimeValue.setText(dialog._time_source.get("end", ""))
+
+
+def open_window_dialog(dialog):
+    """Scan a NetCDF glob's time window; OK proposes the simulation period from it (Set saves it):
+    v6 runs up to the window's end, v5.13 through its last day."""
+    from ...core.meteorology.forcing.temporal import covered_until
+    from ..dialogs.time_period_netcdf_input import TimePeriodDialog
+
+    prompt = TimePeriodDialog(dialog._time_source, dialog)
+    if prompt.exec() != QDialog.DialogCode.Accepted:
+        return
+    dialog._time_source = window = prompt.found
+    show_source(dialog)
+    v6 = selected_version(dialog).startswith("6")
+    end = covered_until(window["end"], window["step"]) if v6 else window["end"][:10] + "T00:00"
+    for name, text in (("dateTimeEdit_simulationStartTimeInput", window["start"] if v6 else window["start"][:10] + "T00:00"),
+                       ("dateTimeEdit_simulationEndTimeInput", end)):
+        getattr(dialog, name).setDateTime(QDateTime.fromString(text[:16], FORMAT))
+    warming_changed(dialog)
+    dialog.save_input_state()
+
+
+def populate_window(dialog, source):
+    """The time-window dialog with the last scanned glob and its window."""
+    dialog.comboBox_inputTimePeriodFile.setEditable(True)
+    dialog.comboBox_inputTimePeriodFile.addItem(source.get("file", ""))
+    dialog.lineEdit_timePeriodFileNameGlobDefinition.setText(source.get("pattern", "*.nc"))
+    dialog.comboBox_timeVarName.addItems(source.get("times", []))
+    dialog.comboBox_timeVarName.setCurrentText(source.get("time", ""))
+    _show_window(dialog, source or None)
+
+
+def browse_window_file(dialog):
+    """Pick a NetCDF file; its name becomes the glob, to widen when the record spans files."""
+    path, _filter = open_file(dialog, "NetCDF file with the time axis", "NetCDF (*.nc)")
+    if path:
+        dialog.comboBox_inputTimePeriodFile.setCurrentText(path)
+        dialog.lineEdit_timePeriodFileNameGlobDefinition.setText(Path(path).name)
+        dialog.comboBox_timeVarName.clear()
+
+
+def scan_window(dialog):
+    """The time axis of every file the glob matches: its start, end and step, or why not."""
+    from ...core.meteorology.forcing.api import time_window
+
+    file = Path(dialog.comboBox_inputTimePeriodFile.currentText().strip()).expanduser()
+    pattern = dialog.lineEdit_timePeriodFileNameGlobDefinition.text().strip()
+    QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+    try:
+        found = time_window(file if file.is_dir() else file.parent, pattern, dialog.comboBox_timeVarName.currentText())
+    except (OSError, RuntimeError, ValueError) as error:
+        QMessageBox.warning(dialog, "Time period", str(error))
+        return
+    finally:
+        QApplication.restoreOverrideCursor()
+    with QSignalBlocker(dialog.comboBox_timeVarName):
+        dialog.comboBox_timeVarName.clear()
+        dialog.comboBox_timeVarName.addItems(found["times"])
+        dialog.comboBox_timeVarName.setCurrentText(found["time"])
+    _show_window(dialog, {**found, "file": str(file), "pattern": pattern})
+
+
+def _show_window(dialog, window):
+    dialog.found = window
+    for label, key in ((dialog.label_fileStartTimeValue, "start"), (dialog.label_fileEndTimeValue, "end"),
+                       (dialog.label_temporalResolutionValue, "step")):
+        label.setText(window[key] if window else "")

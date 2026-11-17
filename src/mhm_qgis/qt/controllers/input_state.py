@@ -102,6 +102,7 @@ def save(dialog):
         "drafts": dialog._drafts,
         "meteo_inputs": {"variables": dialog._meteo_inputs},
         "observation_inputs": dialog._observation_inputs,
+        "time_period_source": dialog._time_source,
         "pour_point_outlet_id_field": main.selected_outlet_id_field(dialog),
         "domain_definition_type": dialog._domain_definition_mode,
         "gauge_input": "raster" if dialog.radioButton_gaugesRasterInput.isChecked() else "point",
@@ -173,6 +174,8 @@ def load(dialog):
                                       if key in VARIABLES}  # a kind since removed (Q_bkfl) is dropped
         forcing.populate_observation_table(dialog)
         time.restore(dialog)
+        dialog._time_source = state.get("time_period_source") or {}
+        time.show_source(dialog)
         grid.restore(dialog, state)
     finally:
         dialog._loading_input_state = False
@@ -200,6 +203,8 @@ def clear(dialog):
     dialog._meteo_inputs = {}
     dialog._observation_inspections = {}
     dialog._observation_inputs = {}
+    dialog._time_source = {}
+    time.show_source(dialog)
     grid.clear(dialog)
     forcing.populate_meteo_table(dialog)
     forcing.populate_observation_table(dialog)
