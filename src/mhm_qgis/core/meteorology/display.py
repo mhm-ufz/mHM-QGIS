@@ -10,10 +10,10 @@ from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 
+from ...externals.mhm_tools_handler import VARIABLE_LABELS
 from ..handlers.file.netcdf import time_axis
 from ..handlers.store.layout import METEO_VARIABLES, expected_meteo_outputs
 from ..post import step_for_when
-from .forcing.temporal import VARIABLE_LABELS
 
 #: Historical forcing files used days since this epoch.
 TIME_EPOCH = date(1900, 1, 1)

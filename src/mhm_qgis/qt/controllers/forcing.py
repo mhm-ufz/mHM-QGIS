@@ -13,12 +13,8 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetItem
 
 from ...core import datamodel
-from ...core.meteorology.forcing import (
-    MeteoFolderSpec,
-    grid_note,
-    inspect_meteo_folder_cached,
-    validate_coverage,
-)
+from ...core.meteorology.forcing import inspect_meteo_folder_cached
+from ...externals.mhm_tools_handler import MeteoFolderSpec, grid_note, validate_coverage
 from .. import project_tree
 from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
 from . import grid, main, process_cases
@@ -90,7 +86,7 @@ def _meteo_initial(dialog, variable):
 def _outside_period(dialog, variable, metadata, spec):
     """Why `metadata` does not span the saved simulation period, or None."""
     from ...core.handlers.state.nml_settings import load_settings
-    from ...core.meteorology.forcing.temporal import covers_end
+    from ...externals.mhm_tools_handler import covers_end
 
     period = load_settings(dialog.setup_folder).get("time") or {}
     start, end = period.get("sim_start", "")[:10], period.get("sim_end", "")[:10]

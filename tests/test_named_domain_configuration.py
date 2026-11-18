@@ -13,7 +13,7 @@ from mhm_qgis.core.handlers.state.nml_outputs import (
 )
 from mhm_qgis.core.handlers.store import layout, paths
 from mhm_qgis.core.handlers.store.clone import clone_domain_inputs
-from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec
 from mhm_qgis.vSpecific import build_initial_values
 
 

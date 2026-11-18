@@ -38,9 +38,9 @@ def _netcdf_grid(source, crs):
     data-less VRT that GDAL can warp."""
     from osgeo import gdal, osr
 
-    from ..meteorology.forcing.api import netcdf_grid
+    from ...externals.mhm_tools_handler import get_netcdf_grid
 
-    (xmin, xmax, ymin, ymax), cols, rows, _declared = netcdf_grid(source.split('"')[1], source.rsplit(":", 1)[1], crs)
+    (xmin, xmax, ymin, ymax), cols, rows, _declared = get_netcdf_grid(source.split('"')[1], source.rsplit(":", 1)[1], crs)
     dataset = gdal.GetDriverByName("VRT").Create("", cols, rows, 1)
     dataset.SetGeoTransform((xmin, (xmax - xmin) / cols, 0, ymax, 0, -(ymax - ymin) / rows))
     if crs:

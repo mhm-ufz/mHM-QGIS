@@ -5,17 +5,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from ....externals.mhm_tools_handler import MeteoFolderSpec, SpatialMetadata
 from ...grid import TargetGrid
 from ...handlers.state.nml_outputs import register_observations
 from ...handlers.store import registry
 from ...handlers.store.layout import is_v6
 from ...handlers.store.paths import data_folder
-from ...meteorology.forcing import (
-    MeteoFolderSpec,
-    SpatialMetadata,
-    inspect_meteo_inputs_cached,
-    process_meteo_inputs,
-)
+from ...meteorology.forcing import inspect_meteo_inputs_cached, process_meteo_inputs
 
 
 @dataclass(frozen=True)

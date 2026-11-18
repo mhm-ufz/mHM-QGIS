@@ -11,7 +11,7 @@ from osgeo import gdal, osr
 from qgis.core import QgsApplication, QgsCoordinateReferenceSystem, QgsRasterLayer
 
 from mhm_qgis.core.handlers.state import nml_settings, processing
-from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec
 from mhm_qgis.qt.controllers import grid, main, project
 from mhm_qgis.qt.dialogs.meteo_var_details_input import MeteoVarDetailsDialog
 from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog

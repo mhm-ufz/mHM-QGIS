@@ -10,14 +10,18 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
+from mhm_tools.pre.format_meteo import (
+    SpatialMetadata,
+    _resample_ready,
+    validate_coverage,
+)
+
 from mhm_qgis.core.grid import (
     TargetGrid,
     assert_header_file_matches,
     assert_matches_header,
+    write_header_file,
 )
-from mhm_qgis.core.meteorology.forcing.api import _resample_ready, validate_coverage
-from mhm_qgis.core.meteorology.forcing.io import write_header
-from mhm_qgis.core.meteorology.forcing.types import SpatialMetadata
 
 xr = pytest.importorskip("xarray")
 
@@ -143,7 +147,7 @@ def test_prepared_grid_and_written_header_are_validated(tmp_path):
         assert_matches_header(wrong, "pre", L2_HEADER)
 
     header_file = tmp_path / "header.txt"
-    write_header(dataset, "pre", header_file, header=dict(L2_HEADER))
+    write_header_file(header_file, L2_HEADER)
     assert_header_file_matches(header_file, L2_HEADER)
 
     with pytest.raises(ValueError, match="Written L2 header"):

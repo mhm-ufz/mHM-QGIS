@@ -229,7 +229,7 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
 def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
     from dataclasses import asdict
 
-    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+    from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec
     from mhm_qgis.qt.controllers import forcing
     folder = tmp_path / "forcing"
     folder.mkdir()
@@ -255,7 +255,7 @@ def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
 def test_meteo_requires_pre_but_not_unconfigured_variables(tmp_path):
     from dataclasses import asdict
 
-    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+    from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec
     from mhm_qgis.qt.controllers import forcing
     dialog = MhmQgisDialog()
     dialog.setup_folder = str(tmp_path)
@@ -269,7 +269,7 @@ def test_meteo_requires_pre_but_not_unconfigured_variables(tmp_path):
 def test_meteo_runs_only_the_variables_the_process_cases_read(tmp_path):
     from dataclasses import asdict
 
-    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+    from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec
     from mhm_qgis.qt.controllers import forcing
     dialog = MhmQgisDialog()
     dialog.setup_folder = str(tmp_path)

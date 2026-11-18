@@ -12,7 +12,7 @@ from qgis.PyQt.QtCore import QSignalBlocker
 
 from ...core.handlers.file import json as jsonio
 from ...core.handlers.store.layout import input_state_path
-from ...core.meteorology.forcing.temporal import VARIABLES
+from ...externals.mhm_tools_handler import VARIABLES
 from ...qgis_bridge import layers as qgis_layers
 from ..dialogs.input_selection import _combo_path, _populate_file_combo
 from . import categorical, forcing, grid, main, model, process_cases, time, version

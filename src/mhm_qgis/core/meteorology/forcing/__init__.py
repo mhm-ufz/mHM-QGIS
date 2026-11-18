@@ -1,12 +1,10 @@
-"""Inspect inputs and prepare model-ready meteorology forcing."""
+"""Prepare model-ready forcing with mhm-tools' `format_meteo`: the multi-variable run, staging,
+publication and inspection cache. The meteo names themselves come through `externals.mhm_tools_handler`."""
 
 from .api import (
     MeteoForcingResult,
-    grid_note,
-    inspect_meteo_folder,
     inspect_meteo_inputs,
     process_meteo_inputs,
-    validate_coverage,
 )
 from .cache import (
     inspect_meteo_folder_cached,
@@ -14,28 +12,13 @@ from .cache import (
     inspection_fingerprint,
     preparation_fingerprint,
 )
-from .types import (
-    MHM_READY,
-    MeteoFolderSpec,
-    SpatialMetadata,
-    normalize_kind,
-    normalize_source,
-)
 
 __all__ = [
-    "MHM_READY",
-    "MeteoFolderSpec",
     "MeteoForcingResult",
-    "SpatialMetadata",
-    "grid_note",
-    "inspect_meteo_folder",
     "inspect_meteo_folder_cached",
     "inspect_meteo_inputs",
     "inspect_meteo_inputs_cached",
     "inspection_fingerprint",
-    "normalize_kind",
-    "normalize_source",
     "preparation_fingerprint",
     "process_meteo_inputs",
-    "validate_coverage",
 ]

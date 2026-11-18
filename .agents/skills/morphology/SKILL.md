@@ -59,10 +59,10 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   metadata scan boundary: the folder and relative glob fix the file set, never a recursive
   search. No scan runs during project restoration. A Set input must cover the common extent
   once the grid is Set; the form's `label_description` says whether it is copied, shifted or
-  resampled onto L2 (`forcing/api.grid_note`). Add/Edit in the variable table opens the same
+  resampled onto L2 (`format_meteo.grid_note`). Add/Edit in the variable table opens the same
   form; Cancel leaves saved inputs unchanged.
 - Forcings: `pre`, `tavg`, `tmin`, `tmax`, `tann`, `pet`, `ssrd`, `strd`, `netrad`, `eabs`,
-  `windspeed` (`layout.METEO_VARIABLES`, `forcing/temporal.VARIABLES`, `forcing/types`,
+  `windspeed` (`layout.METEO_VARIABLES`, `mhm_tools.pre.format_meteo.VARIABLES` and `_KINDS`,
   `state/nml_outputs.METEO_FIELDS`, and `comboBox_meteoVar` must list the same names;
   `test_meteo_combo_offers_every_prepared_forcing` checks the form). `netrad` (W m-2) is
   what PET Priestley-Taylor (case 2) and Penman-Monteith (case 3) read, with `eabs` and
@@ -90,7 +90,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
     `folder` + `pattern`. Scan Files reads every matching file's metadata through the cached
     inspection that Set reuses. A meteo Set needs the saved Time Period first and checks it.
   - The Time Period page (`controllers/time.py`, `time_period_netcdf_input.ui`) takes its
-    proposal from `forcing.api.time_window`: a glob's time variable alone. `spinBox_warmingDays`
+    proposal from `format_meteo.get_meteo_time_window`: a glob's time variable alone. `spinBox_warmingDays`
     and the evaluation start follow each other.
   - Observations are prepared on L1, and their Set checks coverage as meteo does.
   - A cumulative record's window starts at its first cycle start (ERA5-Land's first 00:00
@@ -179,7 +179,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   catchments must lie inside it (the mask stage refuses a cut catchment).
   `grid.validate_mhm_grid` adds mHM's rules: every level a whole multiple of L0, L11 and L1
   nested, and v5.13 only takes an even L11/L1 ratio (`mo_common_mHM_mRM_read_config.f90`).
-  Meteo cell centres come from `forcing/api._centre_axes`, shared by Scan and Execute: 2-D
+  Meteo cell centres come from `format_meteo._centre_axes` (mhm-tools), shared by Scan and Execute: 2-D
   lat/lon centres projected to the meteo CRS place the 1-D axes (which keep the row order --
   the mHM test domain stores lat south-to-north against north-to-south data); without them,
   `xc`/`yc` are the left/upper cell edges (that domain's `header.txt` confirms it).
@@ -317,10 +317,10 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   every input (`outputs_newer_than_inputs`), only when that stage has no recorded fingerprint, so changed configuration
   cannot adopt its own stale outputs. An output older than an input is certainly stale
   and is rebuilt instead.
-- `core/meteorology/forcing/cache.py` wraps `inspect_meteo_folder`, which opens every
+- `core/meteorology/forcing/cache.py` wraps mhm-tools' `read_meteo_metadata`, which opens every
   NetCDF in a folder **twice**. On a 552-file ERA5-Land record that froze project load for
   ~22 s per folder; reusing an unchanged inspection brings the whole `load_input_state`
-  from 22.6 s to 0.26 s. Do not call `inspect_meteo_folder` directly from the dialog.
+  from 22.6 s to 0.26 s. Do not call `read_meteo_metadata` directly from the dialog.
 - That cache has **two** digests, and they are not interchangeable.
   `inspection_fingerprint` covers only what inspection reads (files, kind, source,
   CRS, pattern, input and output cadence, unit, cumulative settings); it deliberately
@@ -346,7 +346,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   interval that straddles a file boundary. The read block is sized only by the
   64 MiB budget: the old hard cap of 32 steps split every month file into 24
   chunks and made whole-interval reduction impossible.
-- Aggregated intervals are stacked into batches of `api.INTERVAL_BATCH` before
+- Aggregated intervals are stacked into batches of `format_meteo.INTERVAL_BATCH` before
   they are aligned and written, and the output NetCDF is opened **once** per
   variable. Doing either per output interval meant one resample, one Dataset
   build and one file append per day, and the append cost grew with the unlimited

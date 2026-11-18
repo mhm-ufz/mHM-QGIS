@@ -7,7 +7,7 @@ from qgis.PyQt.QtWidgets import QMessageBox
 from ...core.executions import meteo
 from ...core.grid import target_grid_from_header
 from ...core.handlers.state.meteo_outputs import MeteorologyOutputState
-from ...core.meteorology.forcing.temporal import NegativeAmounts
+from ...externals.mhm_tools_handler import NegativeAmounts
 from ..controllers import forcing, grid, time
 from . import lifecycle, post
 

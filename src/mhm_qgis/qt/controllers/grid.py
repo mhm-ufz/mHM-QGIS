@@ -575,12 +575,12 @@ def _show_file(dialog, level):
     import rioxarray  # noqa: F401  (the .rio accessor)
     import xarray as xr
 
-    from ...core.meteorology.forcing.api import netcdf_first_slice
+    from ...externals.mhm_tools_handler import read_netcdf_first_slice
 
     header = raster_grid(raster_source(selection["path"], selection["variable"]), selection["crs"],
                          selection["crs"])["header"]
     cell, (xmin, _xmax, _ymin, ymax) = float(header["cellsize"]), header_bounds(header)
-    data = xr.DataArray(netcdf_first_slice(selection["path"], selection["variable"]), dims=("y", "x"), coords={
+    data = xr.DataArray(read_netcdf_first_slice(selection["path"], selection["variable"]), dims=("y", "x"), coords={
         "y": ymax - (np.arange(header["nrows"]) + 0.5) * cell, "x": xmin + (np.arange(header["ncols"]) + 0.5) * cell})
     return name if canvas.show_dataarray(dialog, data.rio.write_crs(selection["crs"]), name) is not None else None
 

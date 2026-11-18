@@ -6,16 +6,16 @@ from qgis.core import QgsCoordinateReferenceSystem
 from qgis.PyQt.QtCore import QSignalBlocker, Qt
 from qgis.PyQt.QtWidgets import QApplication, QMessageBox
 
-from ...core.meteorology.forcing.api import file_defaults
 from ...core.meteorology.forcing.cache import inspect_meteo_folder_cached
-from ...core.meteorology.forcing.temporal import (
+from ...externals.mhm_tools_handler import (
     CADENCES,
     RESETS,
     VARIABLES,
+    MeteoFolderSpec,
+    get_meteo_file_defaults,
     normalize_unit,
     validate_spec,
 )
-from ...core.meteorology.forcing.types import MeteoFolderSpec
 from ...qgis_bridge.layers import crs_string
 from ..dialogs.file_picker import open_file
 
@@ -111,7 +111,7 @@ def scan_files(dialog):
     values = draft(dialog)
     QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
     try:
-        found = file_defaults(MeteoFolderSpec(
+        found = get_meteo_file_defaults(MeteoFolderSpec(
             dialog.variable, Path(values["folder"]).expanduser(), pattern=values["pattern"],
             variable=values["variable"]))
     except (OSError, RuntimeError, ValueError) as error:
