@@ -35,3 +35,21 @@ def test_tracked_command_marker_may_span_output_chunks():
     assert "".join(output) == "model output\nafter\n"
     assert statuses == [0]
     terminal.deleteLater()
+
+
+def test_enter_sends_the_command_and_keeps_the_output():
+    from qgis.PyQt import QtCore
+    from qgis.PyQt.QtTest import QTest
+
+    terminal = ProjectTerminalDialog()
+    sent = []
+    terminal._write_command = sent.append
+    terminal.is_running = lambda: True
+    terminal.output.setPlainText("earlier output")
+    terminal.show()
+    terminal.command_edit.setText("ls")
+    QTest.keyClick(terminal.command_edit, QtCore.Qt.Key.Key_Return)
+    assert sent == ["ls"]
+    assert terminal.output.toPlainText() == "earlier output"  # Enter clicked no Clear
+    terminal.hide()
+    terminal.deleteLater()

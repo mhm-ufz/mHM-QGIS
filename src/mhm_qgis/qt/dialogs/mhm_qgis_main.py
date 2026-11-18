@@ -10,7 +10,7 @@ import sys
 
 from qgis.core import QgsProject
 from qgis.PyQt import QtCore
-from qgis.PyQt.QtWidgets import QDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QTextBrowser, QVBoxLayout
 
 from ...core.handlers.store.paths import workspace_folder
 from ...qgis_bridge import layers as qgis_layers
@@ -82,6 +82,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._map_window = None
         self._terminal_dialog = None
         self._thread_display_dialog = None
+        self._log_dialog = None
         self._discharge_plot = None
         self._closing = False
         self._running_workflow = None  # See `controllers/workflow_state.running_key`.
@@ -308,6 +309,28 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         window.raise_()
         window.activateWindow()
         return window
+
+    def open_python_console(self, checked=False):
+        """Show QGIS Desktop's Python console."""
+        action = self.iface.actionShowPythonDialog()
+        if not action.isChecked():
+            action.trigger()
+
+    def open_log(self, checked=False):
+        """Show the log in a larger window; it views LogText's own document."""
+        if self._log_dialog is None:
+            self._log_dialog = QDialog(self)
+            self._log_dialog.setWindowTitle("mHM QGIS Log")
+            self._log_dialog.resize(900, 600)
+            view = QTextBrowser(self._log_dialog)
+            view.setDocument(self.LogText.document())
+            bar = view.verticalScrollBar()
+            view.textChanged.connect(lambda: bar.setValue(bar.maximum()))
+            QVBoxLayout(self._log_dialog).addWidget(view)
+        self._log_dialog.show()
+        self._log_dialog.raise_()
+        self._log_dialog.activateWindow()
+        return self._log_dialog
 
     def map_displayed(self, when=None):
         """Show the standalone map with the displayed layer's time; Desktop needs nothing."""

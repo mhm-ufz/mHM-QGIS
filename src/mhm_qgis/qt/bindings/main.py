@@ -183,6 +183,13 @@ def bind(dialog):
     dialog.pushButton_mapCanvas.clicked.connect(dialog.open_map_canvas)
     # pushButton_terminal → dialog.open_project_terminal
     dialog.pushButton_terminal.clicked.connect(dialog.open_project_terminal)
+    # pushButton_log → dialog.open_log
+    dialog.pushButton_log.clicked.connect(dialog.open_log)
+    # pushButton_pythonConsole → dialog.open_python_console; QGIS Desktop only
+    dialog.pushButton_pythonConsole.clicked.connect(dialog.open_python_console)
+    if dialog.iface is None:
+        dialog.pushButton_pythonConsole.setEnabled(False)
+        dialog.pushButton_pythonConsole.setToolTip("Available in QGIS Desktop")
     dialog.comboBox_mHMversion.currentIndexChanged.connect(
         lambda index=None: model.version_changed(dialog)
     )
