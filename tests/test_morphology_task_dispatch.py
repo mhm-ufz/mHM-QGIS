@@ -410,8 +410,8 @@ def test_execute_all_places_the_required_gauges_before_the_mask(monkeypatch):
     monkeypatch.setattr(bridge, "start_morph_mask", lambda **_k: calls.append("mask") or True)
     monkeypatch.setattr(bridge, "start_whole_dem_domain", lambda **_k: calls.append("whole DEM") or True)
     monkeypatch.setattr(workflow, "configured_gauged_outlet_ids", lambda _folder: ["1"])
-    monkeypatch.setattr(workflow.morphology, "run_stages", lambda stages, start, **_k: [
-        start(stage, lambda: None) for stage in stages
+    monkeypatch.setattr(workflow.morphology, "main", lambda start, **_k: [
+        start(stage, lambda: None) for stage in workflow.morphology.EXECUTE_ALL_STAGES
         if stage.command in ("gauge_position", "whole_dem_domain", "morph_mask")])
     bridge._run_execute_all(None, lambda *_args: None)
     assert calls == ["gauges", "mask"]  # gauges are required: never the whole DEM

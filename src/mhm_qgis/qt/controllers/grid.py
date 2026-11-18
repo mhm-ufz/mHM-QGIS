@@ -881,7 +881,16 @@ def _input_fit(dialog, key):
 
 def summary(dialog, node):
     """The morphology summary's Cell Size, nRows, nCols, Extent (the input's own grid), Extent
-    Modification and Regridding for a row; "—" where it has no raster input."""
+    Modification and Regridding for a row; "—" where it has no raster input. A meteorology row
+    gives its scan's grid and how it reaches L2."""
+    variable = node["key"].removeprefix("meteo_")
+    if variable != node["key"]:
+        from .forcing import scan_details
+
+        spec = dialog._meteo_inputs.get(variable)
+        details = scan_details(dialog, variable, spec, dialog._meteo_inspections.get(variable), "L2") \
+            if spec else ("—",) * 9
+        return (*details[2:6], "—", details[8])
     try:
         found = _input_fit(dialog, node["key"])
     except (KeyError, IndexError, OSError, RuntimeError, ValueError) as error:

@@ -23,7 +23,8 @@ def dialog():
 def test_rows_match_tree_yml_and_open_on_project_configuration(dialog):
     tree = dialog.treeWidget_projectStructure
     rows = list(project_tree._rows(dialog))
-    assert sorted(row.text(0) for row in rows) == sorted(project_tree.load())  # Designer and tree.yml agree
+    assert sorted(((row.parent() and row.parent().text(0), row.text(0)) for row in rows), key=str) == sorted(
+        project_tree.load(), key=str)  # Designer and tree.yml agree
     assert tree.columnCount() == len(project_tree.COLUMNS)
     assert [tree.headerItem().text(c) for c in (1, 2, 3)] == ["", "", ""]
     assert [tree.columnWidth(c) for c in (1, 2, 3)] == [28, 28, 28]  # one symbol each
@@ -454,7 +455,9 @@ def test_columns_the_run_buttons_and_the_next_step(dialog, tmp_path, monkeypatch
     assert observe.isEnabled()
     dialog._observation_inputs.clear()
     assert {tree.itemWidget(project_tree.item(dialog, key), project_tree.VIEW).text()
-            for key in ("morphology", "meteorology", "observations")} == {"↺"}
+            for key in ("morphology_process", "meteorology_process", "observations")} == {"↺"}
+    assert tree.itemWidget(project_tree.item(dialog, "morphology"), project_tree.STATUS_COLUMN) is None
+    assert run is tree.itemWidget(project_tree.item(dialog, "morphology_process"), project_tree.STATUS_COLUMN)
 
     def pointed():
         project_tree.refresh(dialog)

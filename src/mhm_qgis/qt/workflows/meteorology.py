@@ -43,7 +43,7 @@ def start(dialog):
             # A worker thread must not raise a modal dialog: failures come back through
             # the coordinator, and small negative amounts as the result for `done` to ask.
             try:
-                ok = meteo.prepare_forcing(
+                ok = meteo.main(
                     run, state, log=log, progress=task.setProgress, cancelled=task.isCanceled,
                 )
             except NegativeAmounts as negative:

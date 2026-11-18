@@ -289,7 +289,7 @@ def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_pat
     failures = []
     monkeypatch.setattr(workflow_state.QMessageBox, "critical",
                         lambda _parent, _title, message: failures.append(message))
-    monkeypatch.setattr(meteo, "prepare_forcing", prepare)
+    monkeypatch.setattr(meteo, "main", prepare)
     monkeypatch.setattr(meteo, "MeteorologyRun", lambda **_kwargs: None)
     monkeypatch.setattr(grid, "require_common_grid", lambda _dialog: {"l2_header": {}})
     monkeypatch.setattr(meteorology, "target_grid_from_header",
@@ -334,7 +334,7 @@ def test_small_negative_forcing_asks_then_reruns_clipped_or_fails(monkeypatch, t
             raise NegativeAmounts("pre", -6.3e-5)
         return True
 
-    monkeypatch.setattr(meteo, "prepare_forcing", prepare)
+    monkeypatch.setattr(meteo, "main", prepare)
     monkeypatch.setattr(grid, "require_common_grid", lambda _dialog: {"l2_header": {}})
     monkeypatch.setattr(meteorology, "target_grid_from_header",
                         lambda *_args: SimpleNamespace(validate=lambda: None))

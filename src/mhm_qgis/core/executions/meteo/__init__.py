@@ -110,8 +110,8 @@ def reuse_prepared(run: MeteorologyRun, state, *, log=None) -> bool:
     return True
 
 
-def prepare_forcing(run: MeteorologyRun, state, *, log=None, progress=None, cancelled=None) -> bool:
-    """Prepare every selected meteorology forcing file; a failure raises its reason."""
+def main(run: MeteorologyRun, state, *, log=None, progress=None, cancelled=None) -> bool:
+    """Entry point: prepare every selected meteorology forcing file; a failure raises its reason."""
     _say(log, "\n--- Preparing meteorology forcing files ---")
     _say(log, f"Meteorology output folder: {meteo_output_root(run.setup_folder)}")
     try:
@@ -201,6 +201,6 @@ __all__ = [
     "MeteorologyRun",
     "covers_period",
     "existing_outputs",
-    "prepare_forcing",
+    "main",
     "reuse_prepared",
 ]

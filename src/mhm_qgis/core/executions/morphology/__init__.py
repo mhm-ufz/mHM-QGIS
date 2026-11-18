@@ -51,9 +51,9 @@ PUBLICATION_STAGES = (
 )
 
 
-def run_stages(stages, start, *, on_done, on_fail):
-    """Run asynchronous stages sequentially through a supplied scheduler."""
-    stages = tuple(stages)
+def main(start, *, on_done, on_fail):
+    """Entry point: run `EXECUTE_ALL_STAGES` in order, each started by `start(stage, advance)`."""
+    stages = EXECUTE_ALL_STAGES
 
     def advance(index=0):
         if index >= len(stages):
@@ -75,6 +75,6 @@ __all__ = [
     "PUBLICATION_STAGES",
     "Stage",
     "commands",
-    "run_stages",
+    "main",
     "setup",
 ]

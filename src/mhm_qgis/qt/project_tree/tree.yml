@@ -1,10 +1,12 @@
-# One entry per row of treeWidget_projectStructure, matched to the Designer item by title.
+# One entry per row of treeWidget_projectStructure, matched to the Designer item by its title
+# and its parent's (both `Process` rows share a title).
 # `page`: the stackedWidget_project page it shows (a row without one shows its first
 # child's); `status`: a key of STATUS in __init__.py (added or empty); `children`: nested rows.
 # `input`: data-model id(s); the row shows only when the process cases need one.
 # `display`: a `resolve_display_output` key, processed when its file exists, shown by the eye.
-# `action: run`: ▶ in the status column prepares the children.
-# `summary`: a table on its page listing the rows below with their status and prepared file.
+# `action: run`: ▶ prepares the children; ▶ and ↺ sit on its `<key>_process` row, else on it.
+# `summary`: a table on its page listing the rows below with their status and prepared file
+# (a row without children, i.e. Process, lists its group's).
 # `grid`: the model grid levels its eye shows; `view`: the button its eye clicks.
 # `set`: the label right of the page's Set button; it shows the row's status.
 nodes:
@@ -46,6 +48,7 @@ nodes:
           - {key: lai, title: LAI, page: page_lai, input: [lai_class, lai_gridded], display: lai, status: categorical, set: label_setLaiStatus}
           - {key: gauges, title: Gauges, page: page_gauges, display: idgauges, status: gauges, set: label_setGaugesStatus}
           - {key: domain_definition, title: Domain Definition, page: page_domainDefinition, display: domain_mask, status: domain}
+          - {key: morphology_process, title: Process, page: page_morphology, summary: tableWidget_morphologySummary}
       - key: meteorology
         title: B. Meteorology
         page: page_meteo
@@ -62,6 +65,7 @@ nodes:
           - {key: meteo_ssrd, title: Shortwave radiation, page: page_meteoVar, input: ssrd, status: meteo}
           - {key: meteo_strd, title: Longwave radiation, page: page_meteoVar, input: strd, status: meteo}
           - {key: meteo_tann, title: Annual mean air temperature, page: page_meteoVar, input: tann, status: meteo}
+          - {key: meteorology_process, title: Process, page: page_meteo}
       - {key: observations, title: C. Observations, page: page_hydro, action: run}
   - {key: execution, title: 3. Execution, page: page_execution}
   - key: outputs

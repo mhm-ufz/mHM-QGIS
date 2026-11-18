@@ -447,7 +447,7 @@ def test_execute_meteo_prepares_and_reuses_the_configured_collection(tmp_path, m
                                      pattern=f"{variable}.nc", temporal_resolution="Hourly"))
     run = meteo.MeteorologyRun(root, tuple(inputs), target(), {"l2_header": target().header})
     state = MeteorologyOutputState(root)
-    assert meteo.prepare_forcing(run, state)
+    assert meteo.main(run, state)
     assert (root / "data/meteo/pre.nc").is_file()
     assert (root / "data/meteo/tavg.nc").is_file()
     assert (root / "data/meteo/mask.nc").is_file()
@@ -455,7 +455,7 @@ def test_execute_meteo_prepares_and_reuses_the_configured_collection(tmp_path, m
     assert meteo.covers_period(root, {"sim_start": "2001-01-01T00:00", "sim_end": "2001-01-01T01:00"})
     assert not meteo.covers_period(root, {"sim_start": "2001-01-01T00:00", "sim_end": "2001-01-01T03:00"})
     monkeypatch.setattr(meteo, "process_meteo_inputs", lambda **kwargs: pytest.fail("reused forcing was rebuilt"))
-    assert meteo.prepare_forcing(run, state)
+    assert meteo.main(run, state)
 
 
 def test_interval_batching_does_not_change_the_written_values(tmp_path, monkeypatch):

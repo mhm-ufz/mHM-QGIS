@@ -26,17 +26,19 @@ ICONS = Path(__file__).parents[1] / "ui" / "forms" / "Resources"
 
 @cache
 def load() -> dict:
-    """`tree.yml` as {title: node}, nested rows included."""
-    nodes, pending = {}, list(yaml.safe_load(Path(__file__).with_name("tree.yml").read_text(encoding="utf-8"))["nodes"])
+    """`tree.yml` as {(parent title, title): node}, nested rows included."""
+    nodes = {}
+    pending = [(None, node) for node in yaml.safe_load(
+        Path(__file__).with_name("tree.yml").read_text(encoding="utf-8"))["nodes"]]
     while pending:
-        node = pending.pop()
-        nodes[node["title"]] = node
-        pending += node.get("children", [])
+        parent, node = pending.pop()
+        nodes[parent, node["title"]] = node
+        pending += [(node["title"], child) for child in node.get("children", [])]
     return nodes
 
 
 def _node(row) -> dict:
-    return load()[row.text(0)]
+    return load()[row.parent().text(0) if row.parent() else None, row.text(0)]
 
 
 def _inputs(node) -> list:
@@ -233,7 +235,12 @@ def _action(dialog, row, symbol, tip, slot, column=STATUS_COLUMN):
 
 def button(dialog, key):
     """The row's action button (▶ of A. Morphology, B. Meteorology, C. Observations for `workflow_state`)."""
-    return dialog.treeWidget_projectStructure.itemWidget(item(dialog, key), STATUS_COLUMN)
+    return dialog.treeWidget_projectStructure.itemWidget(_run_row(dialog, key), STATUS_COLUMN)
+
+
+def _run_row(dialog, key):
+    """Where a group's ▶ and ↺ sit: its Process row, else the row itself (C. Observations)."""
+    return item(dialog, f"{key}_process") or item(dialog, key)
 
 
 def item(dialog, key):
@@ -264,7 +271,9 @@ def select(dialog, row) -> None:
         grid.show_derivative(dialog, key)
     else:
         hook = {"intro": intro.embed, "settings": process_cases.show,
-                "domain_definition": main.show_domain_definition}
+                "domain_definition": main.show_domain_definition,
+                "meteorology": forcing.populate_meteo_table, "meteorology_process": forcing.populate_meteo_table,
+                "observations": forcing.populate_observation_table}
         if key in hook:
             hook[key](dialog)
     dialog.tabWidget_steps.setTabText(0, node["title"])
@@ -382,6 +391,7 @@ def _summary(dialog, table, top) -> None:
     a wider table (morphology) also gets each input's grid and how it is fitted to L0."""
     from ..controllers.grid import summary
 
+    top = top if top.childCount() else top.parent()  # Process lists its group
     rows = [row for row in _rows(dialog, top)
             if row is not top and _shown(row) and {"status", "input"} & _node(row).keys()]
     table.setRowCount(len(rows))
@@ -441,7 +451,7 @@ def _waits(dialog, row) -> bool:
     outside a ▶ group (the precipitation scan, latlon). Introduction is optional."""
     node, status = _node(row), row.text(STATUS_COLUMN)
     if node.get("action") == "run":
-        return dialog.treeWidget_projectStructure.itemWidget(row, STATUS_COLUMN).isEnabled() and any(
+        return button(dialog, node["key"]).isEnabled() and any(
             child.text(STATUS_COLUMN) == SYMBOLS["added"][0] for child in _rows(dialog, row) if _shown(child))
     grouped = row.parent() is not None and _node(row.parent()).get("action") == "run"
     return node["key"] != "intro" and (
@@ -483,13 +493,15 @@ def refresh(dialog) -> None:
         key = _node(row)["key"]
         if key == "observations":
             ready = bool(dialog._observation_inputs)
-        _action(dialog, row, "▶", "Run", lambda key=key: _run(dialog, key)).setEnabled(
+        _action(dialog, _run_row(dialog, key), "▶", "Run", lambda key=key: _run(dialog, key)).setEnabled(
             ready and workflow_state.running_key(dialog) is None)
-        _action(dialog, row, "↺", "Reset: delete what ▶ prepared, so it prepares everything afresh",
+        _action(dialog, _run_row(dialog, key), "↺", "Reset: delete what ▶ prepared, so it prepares everything afresh",
                 lambda key=key: _reset(dialog, key), VIEW)
     failed = item(dialog, dialog._failed_step) if dialog._failed_step else None
     pointed = failed if failed is not None and _shown(failed) else next(
         (row for row in _rows(dialog) if _shown(row) and _waits(dialog, row)), item(dialog, "execution"))
+    if _node(pointed).get("action") == "run":
+        pointed = _run_row(dialog, _node(pointed)["key"])
     for row in _rows(dialog):
         row.setText(NEXT, "➤" if row is pointed else "")
     current = tree.currentItem()

@@ -98,8 +98,7 @@ class MorphologyTaskBridge:
                 **stage.options,
             )
 
-        return morphology.run_stages(
-            morphology.EXECUTE_ALL_STAGES,
+        return morphology.main(
             start,
             on_done=lambda: finished(True),
             on_fail=lambda message: finished(False, message),

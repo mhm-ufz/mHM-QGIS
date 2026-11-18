@@ -118,6 +118,11 @@
           <string>Domain Definition</string>
          </property>
         </item>
+        <item>
+         <property name="text">
+          <string>Process</string>
+         </property>
+        </item>
        </item>
        <item>
         <property name="text">
@@ -176,6 +181,11 @@
         <item>
          <property name="text">
           <string>Annual mean air temperature</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Process</string>
          </property>
         </item>
        </item>
@@ -293,7 +303,7 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>20</number>
+           <number>0</number>
           </property>
           <widget class="QWidget" name="page_projectIntro">
            <layout class="QVBoxLayout" name="verticalLayout_projectIntro"/>
@@ -2816,6 +2826,36 @@ CODE,NAME,MHM_CLASS
               <column>
                <property name="text">
                 <string>Needed by</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Cell Size</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>nRows</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>nCols</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Extent</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Extent Modification</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Regridding</string>
                </property>
               </column>
               <column>
@@ -6225,6 +6265,51 @@ date,discharge
                  </column>
                  <column>
                   <property name="text">
+                   <string>Files</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Period</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Cell Size</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>nRows</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>nCols</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Extent</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Accumulation</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Unit Conversion</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Regridding</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
                    <string>Edit</string>
                   </property>
                  </column>
@@ -6505,6 +6590,51 @@ date,discharge
                  <column>
                   <property name="text">
                    <string>Unit</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Files</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Period</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Cell Size</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>nRows</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>nCols</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Extent</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Accumulation</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Unit Conversion</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Regridding</string>
                   </property>
                  </column>
                  <column>
