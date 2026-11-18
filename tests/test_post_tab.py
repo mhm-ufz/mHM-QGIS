@@ -96,7 +96,7 @@ def test_the_tab_links_its_views_without_reading_netcdf_on_the_gui_thread(opened
     monkeypatch.setattr(netCDF4, "Dataset", guarded)
     _open(dialog)
     state = dialog._post
-    assert dialog.comboBox_postRun.currentText().startswith("Current (output/)")
+    assert dialog.comboBox_postRun.currentText().startswith("Default (output/)")
     _wait(lambda: "mm/yr" in dialog.textBrowser_postOverview.toPlainText())  # the Overview, in the tab
 
     _page(dialog, "Map Explorer")
@@ -159,18 +159,6 @@ def test_statistic_maps_balance_and_processes(opened):
     dialog.comboBox_postResolution.setCurrentText("Month")
     _page(dialog, "Processes")
     assert len(state.widgets["processes"].ci.items) >= 3
-
-
-def test_archiving_lists_the_archived_run(opened, monkeypatch):
-    dialog, _ = opened
-    _open(dialog)
-    answers = iter([("baseline", True), ("", True)])
-    monkeypatch.setattr(post_context.QInputDialog, "getText", lambda *_args, **_kwargs: next(answers))
-    post_context.archive(dialog)
-    _wait(lambda: any(ref.name == "baseline" for ref in dialog._post.refs) and not dialog.task_coordinator.is_busy())
-    assert dialog.comboBox_postRun.currentText().startswith("baseline")
-    assert dialog._post.run.ref.name == "baseline"
-    assert np.isfinite(dialog._post.intervals.astype("int64")).all()
 
 
 @pytest.fixture
@@ -362,15 +350,10 @@ def test_desktop_docks_go_through_iface(tmp_path, monkeypatch):
 
 
 def test_tier_c_views(opened_long, monkeypatch):
-    """Compare (Map B and Map Δ, extents linked), Extremes, Drought, Anomalies, Summary, Why here."""
-    from post_fixtures import make_run
-
-    from mhm_qgis.core.post import runs
+    """Extremes, Drought, Summary, Why here (Compare and Anomalies are hidden for now)."""
     from mhm_qgis.qt.controllers import post_advanced
 
-    dialog, _, folder = opened_long
-    runs.archive(folder, "baseline")
-    make_run(folder, days=800, seed=1)  # the current run, B's twin with other weather
+    dialog, _, _folder = opened_long
     real = netCDF4.Dataset
 
     def guarded(*args, **kwargs):
@@ -381,28 +364,6 @@ def test_tier_c_views(opened_long, monkeypatch):
     _open(dialog)
     state = dialog._post
     ui = state.ui
-    _page(dialog, "Compare")
-    assert host.stack(dialog).currentWidget() is state.panels["compare_maps"]  # the three maps in the centre
-    assert state.docks["compare"].isVisible()
-    combo = ui.comboBox_postCompareRun
-    combo.setCurrentIndex(next(i for i in range(combo.count()) if combo.itemText(i).startswith("baseline")))
-    combo.activated.emit(combo.currentIndex())
-    _wait(lambda: ui.tableWidget_postCompare.rowCount() > 1 and not dialog.task_coordinator.is_busy())
-    assert ui.tableWidget_postCompare.verticalHeaderItem(1).text().startswith("Gauge 398")
-    assert ui.mapCanvas_postA.layers()[-1].name().startswith("A: ")
-    assert ui.mapCanvas_postB.layers()[-1].name().startswith("B: ")
-    assert ui.mapCanvas_postDelta.layers()[-1].name().startswith("B - A")
-    extent = ui.mapCanvas_postB.extent()
-    extent.scale(0.5)
-    ui.mapCanvas_postB.setExtent(extent)
-    assert ui.mapCanvas_postA.extent().center() == ui.mapCanvas_postB.extent().center()  # linked
-    assert ui.mapCanvas_postDelta.scale() == pytest.approx(ui.mapCanvas_postB.scale(), rel=1e-6)
-    sizes, scale = ui.splitter_postCompareMaps.sizes(), ui.mapCanvas_postA.scale()
-    ui.splitter_postCompareMaps.moveSplitter(sizes[0] // 2, 1)  # A narrower, B wider: the scale stays
-    QCoreApplication.processEvents()
-    for canvas in (ui.mapCanvas_postA, ui.mapCanvas_postB, ui.mapCanvas_postDelta):
-        assert canvas.scale() == pytest.approx(scale, rel=1e-6)
-
     _page(dialog, "Extremes")
     _wait(lambda: "ten or more years" in ui.label_postExtremesNotes.text())  # 2 full years in 800 days
     assert state.widgets["widget_postExtremesAnnual"].listDataItems()
@@ -412,12 +373,6 @@ def test_tier_c_views(opened_long, monkeypatch):
     _wait(lambda: state.widgets.get("smi") is not None and not dialog.task_coordinator.is_busy())
     assert "streamflow droughts" in ui.label_postDroughtNotes.text()
     assert ui.mapCanvas_post.layers()[-2].name().startswith("SMI 2000-01")
-
-    _page(dialog, "Anomalies")
-    _wait(lambda: ui.label_postAnomaliesNotes.text() != "")
-    if ui.tableWidget_postFindings.rowCount():
-        ui.tableWidget_postFindings.selectRow(0)
-    assert "anomaly z" in ui.mapCanvas_post.layers()[-2].name()
 
     _page(dialog, "Summary")
     _wait(lambda: ui.tableWidget_postSummary.rowCount() == 2)

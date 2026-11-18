@@ -6,11 +6,11 @@ setup folder: the moved `output/`, any output file the namelists put elsewhere
 (moved), the restart file (copied), plus `namelists/` (copies) and `run.json`.
 A run's files therefore resolve the same way, current or archived (`catalog`).
 
-A **named run** (the Execute tab's run name) writes into a hidden staging folder:
-`link_outputs` points the namelists there before mHM starts, and `finish_named`
-publishes it as `runs/<name>/`, copies the namelists and the restart file and writes
-`run.json` with `linked: true`, so its paths resolve from the setup folder (an
-archived run's, and a named run's restart, resolve from its own).
+A **run case** (the Execute tab's Backup Namelist) is only a copy: mHM runs on the
+setup's namelists into `output/`, and `backup_namelists` copies them into
+`runs/<name>/` with their outputs pointed at `runs/<name>/output`, plus `run.json`.
+A `run.json` with `linked: true` is a named run of an earlier version, whose paths
+resolve from the setup folder.
 
 A v5.13 multi-domain run writes every domain into one `output/` (`output/<domain>/`),
 so it lists one run per domain; v6 domains write to their own folders and are
@@ -39,8 +39,6 @@ NAME = re.compile(r"(?!\.{1,2}$)(?!\.mhm-qgis$)[\w.-]+")
 _OUTPUT_KEYS = re.compile(r"^(\s*(?:dir_out|dirconfigout|output_path|output_node_path|output_poi_path|"
                           r"diagnostics_path)\s*(?:\(\s*\d+\s*\))?\s*=)(.*)$", re.IGNORECASE | re.MULTILINE)
 _QUOTED = re.compile(r"""(["'])(.*?)\1""")
-_RESTART_KEYS = re.compile(r"^\s*(?:mhm_file_restartout|restart_output_path)\s*(?:\(\s*\d+\s*\))?\s*=(.*)$",
-                           re.IGNORECASE | re.MULTILINE)
 
 
 def _valid_run_name(name) -> bool:
@@ -59,7 +57,7 @@ class RunRef:
 
     @property
     def label(self) -> str:
-        return f"{self.name or 'Current (output/)'} · {self.domain.name}"
+        return f"{self.name or 'Default (output/)'} · {self.domain.name}"
 
 
 def _domains(folder):
@@ -77,7 +75,6 @@ def _refs(setup, root, namelists, version, name, domains):
 def list_runs(folder) -> list[RunRef]:
     """The current run first, then archived runs, newest first."""
     folder = Path(folder)
-    _recover_named_publishes(folder)
     version = project_version(folder)
     domains = None
     if multi_domain.is_multi(folder):
@@ -117,37 +114,30 @@ def _namelist_folders(folder) -> list[Path]:
     return [folder]
 
 
-def link_outputs(folder, name="") -> list[Path]:
-    """Point outputs into a named run's staging folder, or back to `output/`."""
-    if name and not _valid_run_name(name):
+def link_outputs(folder) -> list[Path]:
+    """Point outputs back to `output/` (an earlier plugin version ran named runs in `runs/`)."""
+    return _set_output_prefix(folder, "")
+
+
+def backup_namelists(folder, name, note="") -> None:
+    """Copy the namelists into `runs/<name>/`, their outputs pointed at `runs/<name>/output`.
+    Nothing runs these copies."""
+    if not _valid_run_name(name):
         raise ValueError("Name the run with letters, digits, '.', '_' or '-'.")
-    if name:
-        for base in _namelist_folders(folder):
-            _recover_named_publish(base, name)
-            target = Path(base) / RUNS / name
-            if target.exists() and not (target / "run.json").is_file():
-                shutil.rmtree(target)
-            stage = _named_stage(base, name)
-            if stage.exists():
-                shutil.rmtree(stage)
-    prefix = f"{RUNS}/{TRANSACTIONS}/pending/{name}/" if name else ""
-    try:
-        return _set_output_prefix(folder, prefix, required=bool(name))
-    except BaseException:
-        for base in _namelist_folders(folder):
-            stage = _named_stage(base, name)
-            if name and stage.exists():
-                shutil.rmtree(stage)
-        raise
+    for base in _namelist_folders(folder):
+        target = base / RUNS / name
+        target.mkdir(parents=True, exist_ok=True)
+        for path in base.glob("*.nml"):
+            shutil.copy2(path, target / path.name)
+        _set_output_prefix(target, f"{RUNS}/{name}/", create=False)
+        _write_meta(base, target, name, note, None)
 
 
-def _set_output_prefix(folder, prefix, *, required=False, create=True) -> list[Path]:
+def _set_output_prefix(folder, prefix, *, create=True) -> list[Path]:
     changes, made = [], []
     for base in _namelist_folders(folder):
         path = base / "mhm.nml"
         if not path.is_file():
-            if required:
-                raise ValueError(f"{base.name} has no mhm.nml: save its namelists first.")
             continue  # nothing to point back to output/
 
         def relink(match, base=base):
@@ -177,107 +167,8 @@ def _set_output_prefix(folder, prefix, *, required=False, create=True) -> list[P
     return made
 
 
-def finish_named(folder, name, note="") -> list[RunRef]:
-    """Finalize and atomically publish a successful named run."""
-    if not _valid_run_name(name):
-        raise ValueError("Name the run with letters, digits, '.', '_' or '-'.")
-    bases = _namelist_folders(folder)
-    items = []
-    try:
-        _set_output_prefix(folder, f"{RUNS}/{name}/", required=True, create=False)
-        for base in bases:
-            stage = _named_stage(base, name)
-            if not stage.is_dir():
-                raise OSError(f"The staged run is missing: {stage}")
-            (stage / "namelists").mkdir(parents=True, exist_ok=True)
-            for path in base.glob("*.nml"):
-                shutil.copy2(path, stage / "namelists" / path.name)
-            for match in _RESTART_KEYS.finditer((base / "mhm.nml").read_text(encoding="utf-8")):
-                for _, text in _QUOTED.findall(match.group(1)):  # copied, as an archive keeps it
-                    restart = Path(os.path.normpath(base / text))
-                    if restart.is_file() and restart.is_relative_to(base):
-                        (stage / restart.relative_to(base)).parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(restart, stage / restart.relative_to(base))
-            items.append({
-                "base": base,
-                "stage": stage,
-                "target": base / RUNS / name,
-                "backup": _transaction_path(base, "previous", name),
-                "backed": False,
-                "published": False,
-            })
-        for item in items:
-            if item["backup"].exists():
-                shutil.rmtree(item["backup"])
-            if item["target"].exists():
-                item["backup"].parent.mkdir(parents=True, exist_ok=True)
-                os.replace(item["target"], item["backup"])
-                item["backed"] = True
-            os.replace(item["stage"], item["target"])
-            item["published"] = True
-        for item in items:
-            _write_meta(item["base"], item["target"], name, note, None, linked=True)
-    except BaseException:
-        for item in reversed(items):
-            if item["published"] and item["target"].exists():
-                os.replace(item["target"], item["stage"])
-            if item["backed"] and item["backup"].exists():
-                os.replace(item["backup"], item["target"])
-        fail_named(folder, name)
-        raise
-    for item in items:
-        if item["backup"].exists():
-            shutil.rmtree(item["backup"], ignore_errors=True)
-    return [ref for ref in list_runs(folder) if ref.name == name]
-
-
-def fail_named(folder, name) -> None:
-    """Discard a failed named run while preserving any published predecessor."""
-    if not _valid_run_name(name):
-        raise ValueError("Name the run with letters, digits, '.', '_' or '-'.")
-    bases = _namelist_folders(folder)
-    for base in bases:
-        _recover_named_publish(base, name)
-        stage = _named_stage(base, name)
-        if stage.exists():
-            shutil.rmtree(stage)
-        target = base / RUNS / name
-        if target.exists() and not (target / "run.json").is_file():
-            shutil.rmtree(target)
-    prefix = f"{RUNS}/{name}/" if all(
-        (base / RUNS / name / "run.json").is_file() for base in bases
-    ) else ""
-    _set_output_prefix(folder, prefix)
-
-
-def _named_stage(base, name) -> Path:
-    return _transaction_path(base, "pending", name)
-
-
 def _transaction_path(base, kind, name) -> Path:
     return Path(base) / RUNS / TRANSACTIONS / kind / name
-
-
-def _recover_named_publishes(folder) -> None:
-    for base in _namelist_folders(folder):
-        backups = Path(base) / RUNS / TRANSACTIONS / "previous"
-        if not backups.is_dir():
-            continue
-        for backup in backups.iterdir():
-            _recover_named_publish(base, backup.name)
-
-
-def _recover_named_publish(base, name) -> None:
-    target = Path(base) / RUNS / name
-    backup = _transaction_path(base, "previous", name)
-    if not backup.exists():
-        return
-    if target.is_dir() and (target / "run.json").is_file():
-        shutil.rmtree(backup)
-        return
-    if target.exists():
-        shutil.rmtree(target)
-    os.replace(backup, target)
 
 
 def _replace_text(path, text) -> None:
@@ -289,7 +180,7 @@ def _replace_text(path, text) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _write_meta(folder, target, name, note, period, linked=False) -> None:
+def _write_meta(folder, target, name, note, period) -> None:
     from ..datamodel import current_processes
 
     try:
@@ -305,7 +196,6 @@ def _write_meta(folder, target, name, note, period, linked=False) -> None:
         "fingerprint": fingerprint(sorted(p for p in target.rglob("*") if p.is_file())),
         "note": note,
         "domains": _domains(folder)[1] if multi_domain.is_multi(folder) else None,
-        "linked": linked,  # paths resolve from the setup folder (a named run), not from `target`
     }
     jsonio.write(target / "run.json", meta)
 

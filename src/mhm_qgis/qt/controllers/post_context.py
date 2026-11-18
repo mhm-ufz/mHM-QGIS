@@ -105,9 +105,8 @@ def bind(dialog) -> None:
     dialog._post = PostState(AnalysisContext(dialog))
     context = dialog._post.context
     context.changed.connect(lambda name: changed(dialog, name))
-    # comboBox_postRun → run_selected; its context menu archives the current run
+    # comboBox_postRun → run_selected; run_menu (archive) is unbound while only output/ is listed
     dialog.comboBox_postRun.activated.connect(lambda _index: run_selected(dialog))
-    dialog.comboBox_postRun.customContextMenuRequested.connect(lambda point: run_menu(dialog, point))
     # comboBox_postBasin → basin_selected
     dialog.comboBox_postBasin.activated.connect(lambda _index: basin_selected(dialog))
     dialog.dateEdit_postStart.dateChanged.connect(lambda _date: period_changed(dialog))
@@ -292,7 +291,7 @@ def populate(dialog, rescan=False) -> None:
         clear(dialog)
         return
     try:
-        refs = runs.list_runs(dialog.setup_folder)
+        refs = [ref for ref in runs.list_runs(dialog.setup_folder) if not ref.name]  # output/ only, for now
     except (OSError, ValueError) as error:
         dialog.log_message(f"WARNING: Could not list the runs: {error}")
         refs = []

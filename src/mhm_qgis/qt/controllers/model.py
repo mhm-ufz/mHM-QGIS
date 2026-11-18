@@ -172,6 +172,10 @@ def edit_namelists(dialog, namelists=None, *, update_inputs=True) -> bool:
         from ...externals.nml_tools_handler import launch_editor
 
         dialog.log_message(f"Opening the namelist editor for mHM {version} (project {project})...")
+        if project == "v5":
+            from ...externals.mhm_handler import name_mrm_group
+
+            name_mrm_group(workspace, runnable=False)  # a run left mHM's group name; the schema reads _mrm
         before = _namelist_stamps(workspace)
         launch_editor(
             schemas_dir,
@@ -274,16 +278,17 @@ def browse_parameter_namelist(dialog):
 
 
 def run(dialog) -> bool:
-    # while mHM or a workflow runs, a second run would delete the first one's staged outputs
+    # while mHM or a workflow runs, a second run would overwrite the first one's outputs
+    backup = dialog.groupBox_backupNamelists.isChecked()
     if running_key(dialog) or not require_active(dialog) or (
-        dialog.comboBox_runName.currentText().strip() == NEW_RUN
-        and not select_run_name(dialog, dialog.comboBox_runName.currentIndex())
+        backup and dialog.comboBox_runName.currentText().strip() in ("", NEW_RUN)
+        and not select_run_name(dialog, dialog.comboBox_runName.findText(NEW_RUN))
     ):
         return False
     from ...core.post import runs
 
     setup_folder = dialog.setup_folder
-    name = dialog.comboBox_runName.currentText().strip()
+    name = dialog.comboBox_runName.currentText().strip() if backup else ""
 
     def failed(message):
         processing.mark_workflow(setup_folder, "run_mhm", "failed", message)
@@ -293,23 +298,6 @@ def run(dialog) -> bool:
 
     def finished(exit_code):
         if exit_code == 0:
-            if name:
-                try:
-                    runs.finish_named(setup_folder, name)
-                except Exception as error:
-                    try:
-                        runs.fail_named(setup_folder, name)
-                    except OSError as cleanup_error:
-                        dialog.log_message(
-                            f"ERROR: Could not clean up the staged run: {cleanup_error}"
-                        )
-                    message = f"mHM finished, but run {name} could not be published: {error}"
-                    failed(message)
-                    QMessageBox.critical(dialog, "mHM Run Publication Error", message)
-                    return
-                dialog.log_message(f"Run {name} is in runs/{name}/; the Outputs tab lists it.")
-                if dialog.setup_folder == setup_folder:
-                    populate_run_names(dialog, name)
             processing.mark_workflow(setup_folder, "run_mhm", "completed")
             if dialog.setup_folder == setup_folder:
                 from . import post_context
@@ -318,16 +306,10 @@ def run(dialog) -> bool:
                 post_context.populate(dialog, rescan=True)  # output/ is the same ref with new files
             dialog.log_message("mHM completed successfully.")
             return
-        message = f"mHM exited with code {exit_code}."
-        if name:
-            try:
-                runs.fail_named(setup_folder, name)
-            except OSError as error:
-                message += f" The staged run could not be cleaned up: {error}"
-        failed(message)
+        failed(f"mHM exited with code {exit_code}.")
 
-    linked = False
     try:
+        from ...externals.mhm_handler import name_mrm_group
         from ...externals.mhm_handler import run as run_mhm
 
         version = selected_version(dialog)
@@ -350,11 +332,16 @@ def run(dialog) -> bool:
             if not parameter.is_file():
                 raise ValueError(f"Parameter namelist not found: {parameter}")
         if name and any(ref.name == name for ref in runs.list_runs(setup_folder)) and QMessageBox.question(
-                dialog, "Run name", f"A run named {name} exists. Run again and overwrite its outputs?") \
+                dialog, "Run name", f"A backup named {name} exists. Overwrite its namelists?") \
                 != QMessageBox.StandardButton.Yes:
             return False
-        runs.link_outputs(setup_folder, name)  # a named run stages its outputs until success
-        linked = True
+        runs.link_outputs(setup_folder)
+        if not version.startswith("6"):
+            name_mrm_group(setup_folder, runnable=True)  # mHM v5's name; edit_namelists renames it back
+        if name:
+            runs.backup_namelists(setup_folder, name)
+            dialog.log_message(f"Namelists backed up in runs/{name}/; mHM writes to output/.")
+            populate_run_names(dialog, name)
         workspace = workspace_folder(setup_folder)
         terminal = dialog.open_project_terminal()
         if terminal is None:
@@ -374,11 +361,6 @@ def run(dialog) -> bool:
             finished(-1)
         return started
     except (OSError, ValueError, RuntimeError) as error:
-        if linked and name:
-            try:
-                runs.fail_named(setup_folder, name)
-            except OSError as cleanup_error:
-                dialog.log_message(f"ERROR: Could not clean up the staged run: {cleanup_error}")
         set_status(dialog, "run_mhm", "failed", str(error))
         dialog.log_message(f"ERROR: Run mHM failed. Details: {error}")
         QMessageBox.critical(dialog, "mHM Execution Error", str(error))

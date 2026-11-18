@@ -55,7 +55,7 @@ def _locate(ref, values, kind, spec) -> Path | None:
         return None
     linked = ref.name and ref.root == ref.setup  # a named run: the setup's namelists link its outputs
     root = ref.setup if spec.get("input") else ref.root
-    if linked and kind == "restart":  # restart/ is shared by every run: finish_named keeps this one's copy
+    if linked and kind == "restart":  # restart/ is shared by every run: an earlier version's named run kept its copy
         root = ref.namelists.parent
 
     def path_value(key):  # only a named run's own link is its path; the current or an archived run strips it

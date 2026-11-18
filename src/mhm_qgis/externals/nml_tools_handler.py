@@ -18,16 +18,26 @@ def read_namelists(folder, schemas_dir, *, lower=True, project=None) -> dict:
     """
     from nml_tools.gui.model import load_profile, load_project, recover_dimensions
 
+    from .mhm_handler import mrm_text
+
     try:
         project = load_project(schemas_dir, folder, project)
         dimensions = recover_dimensions(project)
         values = {}
-        for profile in project.profiles:
-            for group, fields in load_profile(project, profile, dimensions).items():
-                if lower:
-                    values[group.lower()] = {key.lower(): value for key, value in fields.items()}
+        with TemporaryDirectory() as scratch:
+            for profile in project.profiles:
+                path = Path(folder) / profile.default_file
+                if profile.name == "mrm_output" and path.is_file():  # a v5 run leaves mHM's group name
+                    text = path.read_text(encoding="utf-8")
+                    path = Path(scratch) / path.name
+                    path.write_text(mrm_text(text, runnable=False), encoding="utf-8")
                 else:
-                    values[group] = fields
+                    path = None
+                for group, fields in load_profile(project, profile, dimensions, path=path).items():
+                    if lower:
+                        values[group.lower()] = {key.lower(): value for key, value in fields.items()}
+                    else:
+                        values[group] = fields
     except (OSError, RuntimeError, ValueError) as error:
         raise ValueError(f"Could not read the namelists in {folder}: {error}") from error
     return values

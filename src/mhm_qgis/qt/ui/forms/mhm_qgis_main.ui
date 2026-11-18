@@ -250,22 +250,12 @@
         </property>
         <item>
          <property name="text">
-          <string>Compare</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
           <string>Extremes</string>
          </property>
         </item>
         <item>
          <property name="text">
           <string>Drought</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Anomalies</string>
          </property>
         </item>
         <item>
@@ -303,7 +293,7 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>20</number>
           </property>
           <widget class="QWidget" name="page_projectIntro">
            <layout class="QVBoxLayout" name="verticalLayout_projectIntro"/>
@@ -6617,45 +6607,6 @@ date,discharge
              <number>4</number>
             </property>
             <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_runName" stretch="0,1,1">
-              <property name="topMargin">
-               <number>0</number>
-              </property>
-              <item>
-               <widget class="QLabel" name="label_runName">
-                <property name="text">
-                 <string>Name of Case Run:</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QComboBox" name="comboBox_runName">
-                <property name="currentIndex">
-                 <number>-1</number>
-                </property>
-                <item>
-                 <property name="text">
-                  <string>&lt;new&gt;</string>
-                 </property>
-                </item>
-               </widget>
-              </item>
-              <item>
-               <spacer name="horizontalSpacer">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>40</width>
-                  <height>20</height>
-                 </size>
-                </property>
-               </spacer>
-              </item>
-             </layout>
-            </item>
-            <item>
              <layout class="QHBoxLayout" name="horizontalLayout_nmlFinal">
               <property name="topMargin">
                <number>0</number>
@@ -6808,6 +6759,69 @@ date,discharge
              </widget>
             </item>
             <item>
+             <widget class="QGroupBox" name="groupBox_backupNamelists">
+              <property name="title">
+               <string>Backup Namelist</string>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+              <property name="checked">
+               <bool>false</bool>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_42">
+               <property name="spacing">
+                <number>2</number>
+               </property>
+               <property name="topMargin">
+                <number>2</number>
+               </property>
+               <property name="bottomMargin">
+                <number>2</number>
+               </property>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_runName" stretch="0,1,1">
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QLabel" name="label_runName">
+                   <property name="text">
+                    <string>Name of Case Run:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QComboBox" name="comboBox_runName">
+                   <property name="currentIndex">
+                    <number>-1</number>
+                   </property>
+                   <item>
+                    <property name="text">
+                     <string>&lt;new&gt;</string>
+                    </property>
+                   </item>
+                  </widget>
+                 </item>
+                 <item>
+                  <spacer name="horizontalSpacer_runName">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
              <widget class="QGroupBox" name="groupBox_executemHM">
               <property name="title">
                <string>Execute mHM</string>
@@ -6892,7 +6906,7 @@ date,discharge
                     </size>
                    </property>
                    <property name="text">
-                    <string>Run mHM</string>
+                    <string>Start mHM execution:</string>
                    </property>
                   </widget>
                  </item>
@@ -6906,7 +6920,7 @@ date,discharge
                    </property>
                    <property name="maximumSize">
                     <size>
-                     <width>23</width>
+                     <width>16777215</width>
                      <height>16777215</height>
                     </size>
                    </property>
@@ -6918,15 +6932,11 @@ date,discharge
                    </property>
                    <property name="styleSheet">
                     <string notr="true">    QPushButton {
-            text-align: left;
+            text-align: center;
         }</string>
                    </property>
                    <property name="text">
-                    <string/>
-                   </property>
-                   <property name="icon">
-                    <iconset>
-                     <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
+                    <string>Run</string>
                    </property>
                   </widget>
                  </item>
@@ -6985,7 +6995,7 @@ date,discharge
               <item>
                <widget class="QLabel" name="label_postRun">
                 <property name="text">
-                 <string>Run</string>
+                 <string>Open:</string>
                 </property>
                </widget>
               </item>

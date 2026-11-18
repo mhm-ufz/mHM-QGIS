@@ -90,42 +90,19 @@ def test_run_uses_selected_v6_binary(tmp_path, monkeypatch):
     assert calls[-1] == f"{binary} -p {tmp_path / 'other.nml'}"
 
 
-def test_v5_multi_run_uses_the_real_mrm_group_only_while_running(tmp_path, monkeypatch):
-    binary = _executable(tmp_path / "mhm")
-    root = tmp_path / "mhm-qgis-multi" / "combined"
-    root.mkdir(parents=True)
-    outputs = root / "mrm_outputs.nml"
-    outputs.write_text("&NLoutputResults_mrm\n  timeStep = -2\n/\n", encoding="utf-8")
-    callbacks = []
-    finished = []
-    monkeypatch.setattr(mhm_handler, "executable", lambda *_args, **_kwargs: binary)
+def test_the_mrm_group_keeps_mhms_name_after_a_run_and_still_reads(tmp_path):
+    from mhm_qgis.core.handlers.store.paths import schemas_folder
+    from mhm_qgis.externals.nml_tools_handler import read_namelists
 
-    def launch(_command, **options):
-        assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults\n")
-        callbacks.append(options["on_finished"])
-        return True
+    outputs = tmp_path / "mrm_outputs.nml"
+    editable = "&NLoutputResults_mrm\n  timeStep_model_outputs_mrm = -2\n/\n"
+    outputs.write_text(editable, encoding="utf-8")
 
-    def completed(exit_code):
-        assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults_mrm\n")
-        finished.append(exit_code)
+    mhm_handler.name_mrm_group(tmp_path, runnable=True)  # what a v5 run does
+    assert outputs.read_text(encoding="utf-8") == "&NLoutputResults\n  timeStep_model_outputs_mrm = -2\n/\n"
+    values = read_namelists(tmp_path, schemas_folder("5.13"), project="v5")
+    assert values["nloutputresults_mrm"]["timestep_model_outputs_mrm"] == -2
+    assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults\n")  # reading leaves it
 
-    assert mhm_handler.run("5.13", root, launch, on_finished=completed)
-    assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults\n")
-    callbacks[0](0)
-    assert finished == [0]
-    assert outputs.read_text(encoding="utf-8").startswith("&NLoutputResults_mrm\n")
-    assert not (root / ".mrm_outputs.nml.mhm-qgis-original").exists()
-
-
-def test_v5_run_recovers_a_namelist_left_temporary_by_a_crash(tmp_path):
-    root = tmp_path / "project"
-    root.mkdir()
-    outputs = root / "mrm_outputs.nml"
-    original = "&NLoutputResults_mrm\n  timeStep = -2\n/\n"
-    outputs.write_text("&NLoutputResults\n  timeStep = -2\n/\n", encoding="utf-8")
-    (root / ".mrm_outputs.nml.mhm-qgis-original").write_text(original, encoding="utf-8")
-
-    mhm_handler.recover_v5_mrm_outputs(root)
-
-    assert outputs.read_text(encoding="utf-8") == original
-    assert not (root / ".mrm_outputs.nml.mhm-qgis-original").exists()
+    mhm_handler.name_mrm_group(tmp_path, runnable=False)  # what the editor buttons do
+    assert outputs.read_text(encoding="utf-8") == editable

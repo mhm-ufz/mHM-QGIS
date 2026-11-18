@@ -19,7 +19,7 @@ from ..dependency_bootstrap import (
 
 V6_ENVIRONMENT_VARIABLE = "MHM_QGIS_MHMV6"
 _MRM_OUTPUT_GROUP = re.compile(
-    r"^(\s*&\s*)NLoutputResults_mrm\b", re.IGNORECASE | re.MULTILINE
+    r"^(\s*&\s*)NLoutputResults(?:_mrm)?\b", re.IGNORECASE | re.MULTILINE
 )
 
 
@@ -84,36 +84,17 @@ def executable(version: str, v6_path=None) -> Path:
     return _require_executable(selected, r"\b6(?:\.\d+)+\b", "v6")
 
 
-def _prepare_v5_mrm_outputs(cwd):
-    """Use mHM's real duplicate group name only while the executable runs."""
-    path = Path(cwd) / "mrm_outputs.nml"
-    recover_v5_mrm_outputs(cwd)
-    try:
-        original = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return lambda: None
-    runnable = _MRM_OUTPUT_GROUP.sub(r"\1NLoutputResults", original, count=1)
-    if runnable == original:
-        return lambda: None
-    backup = path.with_name(f".{path.name}.mhm-qgis-original")
-    _replace_text(backup, original)
-    _replace_text(path, runnable)
-    return lambda: os.replace(backup, path) if backup.is_file() else None
+def mrm_text(text, runnable) -> str:
+    """mRM's output group named for mHM v5 (`NLoutputResults`) or for the editor's schema."""
+    return _MRM_OUTPUT_GROUP.sub(r"\1NLoutputResults" + ("" if runnable else "_mrm"), text, count=1)
 
 
-def recover_v5_mrm_outputs(cwd) -> None:
-    """Restore a v5 mRM namelist left temporary by an interrupted process."""
-    path = Path(cwd) / "mrm_outputs.nml"
-    backup = path.with_name(f".{path.name}.mhm-qgis-original")
-    if backup.is_file():
-        original = backup.read_text(encoding="utf-8")
-        current = path.read_text(encoding="utf-8")
-        runnable = _MRM_OUTPUT_GROUP.sub(r"\1NLoutputResults", original, count=1)
-        if current not in {original, runnable}:
-            raise RuntimeError(
-                f"Cannot recover {path.name}: it changed while the mHM backup existed."
-            )
-        os.replace(backup, path)
+def name_mrm_group(folder, *, runnable) -> None:
+    path = Path(folder) / "mrm_outputs.nml"
+    if path.is_file():
+        old = path.read_text(encoding="utf-8")
+        if (new := mrm_text(old, runnable)) != old:
+            _replace_text(path, new)
 
 
 def _replace_text(path, text) -> None:
@@ -131,29 +112,14 @@ def run(version: str, cwd, run_command, on_finished=None, v6_path=None, namelist
     `namelist` is passed as `-n <file>`: a v6 combined run reads `combine.nml`;
     `parameter` as `-p <file>`, a parameter namelist other than the setup's.
     """
-    is_v5 = version_key(version) == "v5.13"
     path = executable(version, v6_path=v6_path)
-    restore = _prepare_v5_mrm_outputs(cwd) if is_v5 else lambda: None
-
-    def finished(exit_code):
-        restore()
-        if on_finished is not None:
-            on_finished(exit_code)
-
     options = {"cwd": str(cwd), "show": True}
-    if on_finished is not None or is_v5:
-        options["on_finished"] = finished
+    if on_finished is not None:
+        options["on_finished"] = on_finished
     arguments = [str(path), *(["-n", str(namelist)] if namelist else []),
                  *(["-p", str(parameter)] if parameter else [])]
     command = subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
-    try:
-        started = bool(run_command(command, **options))
-    except BaseException:
-        restore()
-        raise
-    if not started:
-        restore()
-    return started
+    return bool(run_command(command, **options))
 
 
-__all__ = ["executable", "recover_v5_mrm_outputs", "run"]
+__all__ = ["executable", "mrm_text", "name_mrm_group", "run"]
