@@ -9,7 +9,7 @@ pyqtgraph>=0.13.3
 pyflwdir>=0.5.12; python_version >= "3.11"
 pyflwdir>=0.5.11; python_version < "3.11"
 mhm>=5.13.4,<5.14
-mhm-tools>=0.3.0,<0.4
+mhm-tools>=0.3.2,<0.4
 nml-tools[gui]>=0.6.0,<0.7
 qtpy>=2.0
 guidata>=3.6

@@ -10,6 +10,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from ....externals.mhm_tools_handler import (
+    VARIABLE_LABELS,
+    MeteoFolderSpec,
+    NegativeAmounts,
+    SpatialMetadata,
+    covers_end,
+    validate_coverage,
+)
 from ...grid import TargetGrid
 from ...handlers.state import processing
 from ...handlers.store.layout import (
@@ -19,14 +27,10 @@ from ...handlers.store.layout import (
     meteo_output_root,
 )
 from ...meteorology.forcing import (
-    MeteoFolderSpec,
-    SpatialMetadata,
     inspect_meteo_inputs_cached,
     preparation_fingerprint,
     process_meteo_inputs,
-    validate_coverage,
 )
-from ...meteorology.forcing.temporal import VARIABLE_LABELS, NegativeAmounts, covers_end
 from ...meteorology.mask import write_meteo_mask
 from ...meteorology.reuse import stale_meteo_variables
 

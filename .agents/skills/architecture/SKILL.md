@@ -54,9 +54,10 @@ decision.
     elevation-band operations. `layers/advanced_inputs.py` prepares historical land
     cover and layered soil in staging; `layers/advanced_l0.py` handles final common-L0
     alignment and publication.
-  - `meteorology/`: QGIS-free forcing preparation; `forcing/` owns independent
-    variables and native-cadence streaming. `forcing/temporal.py` validates units,
-    time axes and cumulative reset intervals. Existing NetCDF writers are reused.
+  - `meteorology/`: QGIS-free forcing preparation. Each variable is formatted by
+    mhm-tools' `mhm_tools.pre.format_meteo` (`format-meteo`: units, time axes, cumulative resets,
+    streaming), reached through `externals/mhm_tools_handler`; `forcing/` keeps the
+    multi-variable run, staging, publication and the inspection cache.
   - `executions/`: canonical workflow plans and commands. `executions/morphology/`
     is the sole definition of Execute All and its publication ordering;
     `executions/observations/` reuses the forcing pipeline for L2 gridded observations.

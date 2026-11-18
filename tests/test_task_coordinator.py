@@ -321,8 +321,7 @@ def test_small_negative_forcing_asks_then_reruns_clipped_or_fails(monkeypatch, t
 
     from mhm_qgis.core.executions import meteo
     from mhm_qgis.core.handlers.state import processing
-    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
-    from mhm_qgis.core.meteorology.forcing.temporal import NegativeAmounts
+    from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec, NegativeAmounts
     from mhm_qgis.qt.controllers import forcing, grid, time, workflow_state
     from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
     from mhm_qgis.qt.workflows import meteorology

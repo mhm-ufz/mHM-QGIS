@@ -126,7 +126,7 @@ def show_source(dialog):
 def open_window_dialog(dialog):
     """Scan a NetCDF glob's time window; OK proposes the simulation period from it (Set saves it):
     v6 runs up to the window's end, v5.13 through its last day."""
-    from ...core.meteorology.forcing.temporal import covered_until
+    from ...externals.mhm_tools_handler import covered_until
     from ..dialogs.time_period_netcdf_input import TimePeriodDialog
 
     prompt = TimePeriodDialog(dialog._time_source, dialog)
@@ -164,13 +164,13 @@ def browse_window_file(dialog):
 
 def scan_window(dialog):
     """The time axis of every file the glob matches: its start, end and step, or why not."""
-    from ...core.meteorology.forcing.api import time_window
+    from ...externals.mhm_tools_handler import get_meteo_time_window
 
     file = Path(dialog.comboBox_inputTimePeriodFile.currentText().strip()).expanduser()
     pattern = dialog.lineEdit_timePeriodFileNameGlobDefinition.text().strip()
     QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
     try:
-        found = time_window(file if file.is_dir() else file.parent, pattern, dialog.comboBox_timeVarName.currentText())
+        found = get_meteo_time_window(file if file.is_dir() else file.parent, pattern, dialog.comboBox_timeVarName.currentText())
     except (OSError, RuntimeError, ValueError) as error:
         QMessageBox.warning(dialog, "Time period", str(error))
         return

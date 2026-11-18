@@ -4,11 +4,8 @@ import pytest
 import xarray as xr
 
 from mhm_qgis.core.handlers.state.nml_settings import update_section, validate_times
-from mhm_qgis.core.meteorology.forcing import (
-    MeteoFolderSpec,
-    inspect_meteo_folder,
-    inspect_meteo_folder_cached,
-)
+from mhm_qgis.core.meteorology.forcing import inspect_meteo_folder_cached
+from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec, read_meteo_metadata
 
 
 def precipitation(path, *, variable="pre", units="mm", hours=24, start="2001-01-01"):
@@ -22,7 +19,7 @@ def precipitation(path, *, variable="pre", units="mm", hours=24, start="2001-01-
 def test_glob_scan_detects_metadata_and_ignores_unmatched_files(tmp_path, variable, units, hours):
     precipitation(tmp_path / "wanted.nc", variable=variable, units=units, hours=hours)
     (tmp_path / "unrelated.nc").write_bytes(b"not a NetCDF")
-    metadata = inspect_meteo_folder(MeteoFolderSpec("pre", tmp_path, unit=units, temporal_resolution="Hourly" if hours == 1 else "Daily", pattern="wanted*.nc"))
+    metadata = read_meteo_metadata(MeteoFolderSpec("pre", tmp_path, unit=units, temporal_resolution="Hourly" if hours == 1 else "Daily", pattern="wanted*.nc"))
     assert metadata.source == "auto"
     assert [p.name for p in metadata.files] == ["wanted.nc"]
     assert metadata.start_time.startswith("2001-01-01")
@@ -33,7 +30,7 @@ def test_glob_scan_detects_metadata_and_ignores_unmatched_files(tmp_path, variab
 def test_ambiguous_or_unsupported_metadata_is_not_guessed(tmp_path, units, hours):
     precipitation(tmp_path / "pre.nc", units=units, hours=hours)
     with pytest.raises(ValueError, match=r"supported unit|metadata unit|continuous"):
-        inspect_meteo_folder(MeteoFolderSpec("pre", tmp_path, unit="mm"))
+        read_meteo_metadata(MeteoFolderSpec("pre", tmp_path, unit="mm"))
 
 
 def test_changed_glob_never_reuses_another_inspection(tmp_path):
@@ -43,7 +40,7 @@ def test_changed_glob_never_reuses_another_inspection(tmp_path):
     b = inspect_meteo_folder_cached(tmp_path, MeteoFolderSpec("pre", tmp_path, unit="mm", pattern="b.nc"))
     assert a.start_time != b.start_time
     with pytest.raises(ValueError, match="glob"):
-        inspect_meteo_folder(MeteoFolderSpec("pre", tmp_path, unit="mm", pattern="../*.nc"))
+        read_meteo_metadata(MeteoFolderSpec("pre", tmp_path, unit="mm", pattern="../*.nc"))
 
 
 def test_periods_validate_and_reach_both_namelist_versions(tmp_path):

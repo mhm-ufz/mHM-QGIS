@@ -10,15 +10,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 
-from mhm_qgis.core.meteorology.forcing import (
-    MeteoFolderSpec,
-)
 from mhm_qgis.core.meteorology.forcing import cache as inspection_cache
 from mhm_qgis.core.meteorology.forcing import (
     inspect_meteo_folder_cached,
     inspect_meteo_inputs_cached,
     inspection_fingerprint,
 )
+from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec
 
 xr = pytest.importorskip("xarray")
 
@@ -53,11 +51,11 @@ def test_an_unchanged_folder_is_not_reopened(tmp_path, monkeypatch):
     first = inspect_meteo_folder_cached(tmp_path, _spec(folder))
     assert len(first.files) == 2
 
-    # A second call must not touch inspect_meteo_folder at all.
+    # A second call must not touch read_meteo_metadata at all.
     def _fail(*_a, **_k):
         raise AssertionError("the inspection was repeated")
 
-    monkeypatch.setattr(inspection_cache, "inspect_meteo_folder", _fail)
+    monkeypatch.setattr(inspection_cache, "read_meteo_metadata", _fail)
     logged = []
     second = inspect_meteo_folder_cached(
         tmp_path, _spec(folder), log=logged.append)

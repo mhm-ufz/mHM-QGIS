@@ -65,10 +65,10 @@ class _ReferenceFile:
     def _netcdf_crs(self):
         """A NetCDF's own CRS (lon/lat axes or a grid mapping), locked; else the domain CRS, open to
         change. Read from its axes: through GDAL or a QGIS layer a long series takes minutes."""
-        from ...core.meteorology.forcing.api import netcdf_grid
+        from ...externals.mhm_tools_handler import get_netcdf_grid
 
         try:
-            declared = netcdf_grid(self.path, self.comboBox_varName.currentText().strip())[3]
+            declared = get_netcdf_grid(self.path, self.comboBox_varName.currentText().strip())[3]
         except (OSError, RuntimeError, ValueError):
             declared = None
         crs = QgsCoordinateReferenceSystem(declared) if declared else self.domain_crs

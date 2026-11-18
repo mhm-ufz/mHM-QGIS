@@ -8,12 +8,8 @@ import pytest
 import xarray as xr
 
 from mhm_qgis.core.grid import TargetGrid
-from mhm_qgis.core.meteorology.forcing import (
-    MeteoFolderSpec,
-    inspect_meteo_folder,
-    inspect_meteo_inputs,
-    process_meteo_inputs,
-)
+from mhm_qgis.core.meteorology.forcing import inspect_meteo_inputs, process_meteo_inputs
+from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec, read_meteo_metadata
 
 LAT = np.array([51.0, 50.0])
 LON = np.array([10.0, 11.0])
@@ -21,7 +17,7 @@ LON = np.array([10.0, 11.0])
 
 def test_the_source_specific_era5land_package_is_gone():
     """Preparation is source-independent; an old saved "ERA5Land" label loads as auto."""
-    from mhm_qgis.core.meteorology.forcing.types import AUTO, normalize_source
+    from mhm_tools.pre.format_meteo import AUTO, normalize_source
 
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("mhm_qgis.core.meteorology.ERA5Land")
@@ -85,7 +81,7 @@ def test_scan_reads_metadata_and_glob_only(tmp_path, monkeypatch):
     def no_data(*args, **kwargs):
         raise AssertionError("scan read a forcing cube")
     monkeypatch.setattr(xr.DataArray, "load", no_data)
-    metadata = inspect_meteo_folder(spec)
+    metadata = read_meteo_metadata(spec)
     assert metadata.shape == (2, 2)
     assert metadata.resolution == 1.
     assert len(metadata.files) == 1
@@ -168,12 +164,12 @@ def test_a_cumulative_cycle_starts_after_its_reset_hour(tmp_path):
 
 def test_stamps_inside_their_period_stand_for_the_whole_period(tmp_path):
     _write_nc(tmp_path / "raw/et.nc", "et", times=("2001-01-31T23:00", "2001-02-28T23:00", "2001-03-31T23:00"))
-    metadata = inspect_meteo_folder(tmp_path / "raw", "et", temporal_resolution="Monthly", unit="mm")
+    metadata = read_meteo_metadata(tmp_path / "raw", "et", temporal_resolution="Monthly", unit="mm")
     assert (metadata.start_time[:10], metadata.end_time[:10]) == ("2001-01-01", "2001-03-01")
 
 
 def test_a_chosen_variable_resolves_what_the_aliases_cannot(tmp_path):
-    from mhm_qgis.core.meteorology.forcing.api import file_defaults
+    from mhm_qgis.externals.mhm_tools_handler import get_meteo_file_defaults
 
     (tmp_path / "raw").mkdir()
     data = (("time", "latitude", "longitude"), np.ones((2, 2, 2)), {"units": "mm"})
@@ -184,11 +180,11 @@ def test_a_chosen_variable_resolves_what_the_aliases_cannot(tmp_path):
     ds.time.attrs["bounds"] = "time_bnds"
     ds.to_netcdf(tmp_path / "raw/two.nc", engine="scipy")
     spec = MeteoFolderSpec("pre", tmp_path / "raw")
-    found = file_defaults(spec)
+    found = get_meteo_file_defaults(spec)
     assert (found["variables"], "variable" in found) == (["rain", "snow"], False)  # not the bounds
-    found = file_defaults(replace(spec, variable="snow"))
+    found = get_meteo_file_defaults(replace(spec, variable="snow"))
     assert (found["variable"], found["unit"], found["temporal_resolution"]) == ("snow", "mm", "Daily")
-    assert inspect_meteo_folder(replace(spec, variable="snow", unit="mm")).shape == (2, 2)
+    assert read_meteo_metadata(replace(spec, variable="snow", unit="mm")).shape == (2, 2)
 
 
 @pytest.mark.parametrize(("variable", "source", "method", "expected"), [
@@ -249,7 +245,7 @@ def test_cf_edge_fragments_are_dropped_and_other_variables_share_precipitation_w
         MeteoFolderSpec("pre", folder, pattern="pre.nc", unit="mm"),
         MeteoFolderSpec("tavg", folder, pattern="tavg.nc", unit="Celsius"),
     ]
-    metadata = inspect_meteo_folder(specs[0])
+    metadata = read_meteo_metadata(specs[0])
     assert metadata.start_time.startswith("2001-01-01")
     assert metadata.end_time.startswith("2001-01-02")
     result = process_meteo_inputs(specs, tmp_path / "out", target())
@@ -310,14 +306,14 @@ def test_discontinuous_times_units_and_grids_are_rejected(tmp_path):
     _write_nc(folder / "a.nc", "pre", times=("2001-01-01",), units="mm")
     spec = MeteoFolderSpec("pre", folder, unit="m")
     with pytest.raises(ValueError, match="metadata unit"):
-        inspect_meteo_folder(spec)
+        read_meteo_metadata(spec)
     spec = MeteoFolderSpec("pre", folder, unit="mm")
     _write_nc(folder / "b.nc", "pre", times=("2001-01-03",), units="mm")
     with pytest.raises(ValueError, match="missing intervals"):
-        inspect_meteo_folder(spec)
+        read_meteo_metadata(spec)
     _write_nc(folder / "b.nc", "pre", times=("2001-01-02",), lon=np.array([10., 12.]), units="mm")
     with pytest.raises(ValueError, match="spatial"):
-        inspect_meteo_folder(spec)
+        read_meteo_metadata(spec)
 
 
 def test_projected_coordinates_without_a_grid_mapping_use_the_chosen_crs(tmp_path):
@@ -325,7 +321,7 @@ def test_projected_coordinates_without_a_grid_mapping_use_the_chosen_crs(tmp_pat
         "time": np.asarray(["2001-01-01"], dtype="datetime64[ns]"),
         "yc": [2951847.0, 2927847.0], "xc": [3973369.0, 3997369.0]})
     ds.to_netcdf(tmp_path / "pre.nc", engine="scipy")
-    metadata = inspect_meteo_folder(MeteoFolderSpec("pre", tmp_path, unit="mm", crs="EPSG:3035"))
+    metadata = read_meteo_metadata(MeteoFolderSpec("pre", tmp_path, unit="mm", crs="EPSG:3035"))
 
     assert (metadata.crs, metadata.unit, metadata.resolution) == ("EPSG:3035", "m", 24000.0)
 
@@ -351,7 +347,7 @@ def test_xc_yc_are_the_left_and_upper_cell_edges(tmp_path, latlon):
 
     _write_corner_nc(tmp_path / "pre.nc", latlon)
     spec = MeteoFolderSpec("pre", tmp_path, unit="mm", crs="EPSG:3035")
-    np.testing.assert_allclose(inspect_meteo_folder(spec).bounds,
+    np.testing.assert_allclose(read_meteo_metadata(spec).bounds,
                                (3985369.0, 4009369.0, 2915847.0, 2939847.0), atol=0.1)
     header = {"ncols": 2, "nrows": 2, "xllcorner": 3973369.0, "yllcorner": 2903847.0,
               "cellsize": 24000.0, "nodata_value": -9999.0}
@@ -363,11 +359,11 @@ def test_xc_yc_are_the_left_and_upper_cell_edges(tmp_path, latlon):
 def test_lat_lon_that_do_not_match_xc_yc_in_the_chosen_crs_are_refused(tmp_path):
     _write_corner_nc(tmp_path / "pre.nc", latlon=True)
     with pytest.raises(ValueError, match="do not match"):
-        inspect_meteo_folder(MeteoFolderSpec("pre", tmp_path, unit="mm", crs="EPSG:3857"))
+        read_meteo_metadata(MeteoFolderSpec("pre", tmp_path, unit="mm", crs="EPSG:3857"))
 
 
 def test_cf_and_slash_spellings_of_a_daily_rate_match():
-    from mhm_qgis.core.meteorology.forcing.temporal import normalize_unit
+    from mhm_qgis.externals.mhm_tools_handler import normalize_unit
 
     assert normalize_unit("mm d-1") == normalize_unit("mm/d") == normalize_unit("mm/day")
 
@@ -464,7 +460,7 @@ def test_execute_meteo_prepares_and_reuses_the_configured_collection(tmp_path, m
 
 def test_interval_batching_does_not_change_the_written_values(tmp_path, monkeypatch):
     """Batching exists only to stop one resample and one file append per day."""
-    from mhm_qgis.core.meteorology.forcing import api
+    from mhm_tools.pre import format_meteo
 
     hours = 24 * 7
     times = np.datetime64("2001-01-01T00") + np.arange(hours) * np.timedelta64(1, "h")
@@ -478,7 +474,7 @@ def test_interval_batching_does_not_change_the_written_values(tmp_path, monkeypa
     written = {}
     ticks = []
     for label, batch in (("one", 1), ("many", 256)):
-        monkeypatch.setattr(api, "INTERVAL_BATCH", batch)
+        monkeypatch.setattr(format_meteo, "INTERVAL_BATCH", batch)
         result = process_meteo_inputs(
             [spec], tmp_path / label, target(), progress=ticks.append)
         with xr.open_dataset(result.outputs["pre"]) as ds:
@@ -494,7 +490,7 @@ def test_interval_batching_does_not_change_the_written_values(tmp_path, monkeypa
 
 def test_calendar_interval_keys_and_bounds():
     """numpy calendar units must floor exactly where pandas offsets did."""
-    from mhm_qgis.core.meteorology.forcing.temporal import output_periods, period_bounds
+    from mhm_qgis.externals.mhm_tools_handler import output_periods, period_bounds
 
     starts = np.array([
         "1980-02-29T13:45", "2000-02-28T23:59", "2001-12-31T23:00",
@@ -567,12 +563,13 @@ def test_group_reduction_matches_a_plain_python_reference(method, cadence, days,
 
 def test_negative_precipitation_is_refused_asked_or_clipped(tmp_path):
     """ERA5 round-off (about -1e-4 mm) is the user's call; a whole millimetre is a wrong setting."""
-    from mhm_qgis.core.meteorology.forcing import preparation_fingerprint
-    from mhm_qgis.core.meteorology.forcing.temporal import (
+    from mhm_tools.pre.format_meteo import (
         NegativeAmounts,
         about_variable,
         convert_units,
     )
+
+    from mhm_qgis.core.meteorology.forcing import preparation_fingerprint
 
     bounds = np.array([["2001-01-01", "2001-01-02"]], dtype="datetime64[ns]")
     spec = MeteoFolderSpec("pre", tmp_path, unit="mm")
@@ -589,19 +586,19 @@ def test_negative_precipitation_is_refused_asked_or_clipped(tmp_path):
 
 
 def test_file_defaults_reads_what_the_first_file_declares(tmp_path):
-    from mhm_qgis.core.meteorology.forcing.api import file_defaults
+    from mhm_qgis.externals.mhm_tools_handler import get_meteo_file_defaults
 
     _write_nc(tmp_path / "a.nc", "t2m", times=("2001-01-01", "2001-01-02"), units="K")
     _write_nc(tmp_path / "b.nc", "t2m")
-    assert file_defaults(MeteoFolderSpec("tavg", tmp_path)) == {
+    assert get_meteo_file_defaults(MeteoFolderSpec("tavg", tmp_path)) == {
         "file": "a.nc", "variables": ["t2m"], "variable": "t2m", "crs": "EPSG:4326", "unit": "K",
         "temporal_resolution": "Daily"}
-    assert file_defaults(MeteoFolderSpec("tavg", tmp_path, pattern="b.nc")) == {
+    assert get_meteo_file_defaults(MeteoFolderSpec("tavg", tmp_path, pattern="b.nc")) == {
         "file": "b.nc", "variables": ["t2m"], "variable": "t2m", "crs": "EPSG:4326"}
 
 
 def test_the_data_cover_up_to_the_end_of_their_last_period():
-    from mhm_qgis.core.meteorology.forcing.temporal import covers_end
+    from mhm_qgis.externals.mhm_tools_handler import covers_end
 
     assert covers_end("2003-01-01T00:00", "2002-12-31T00:00", "Daily", v6=True)  # v6 stops before sim_end
     assert not covers_end("2003-01-01T01:00", "2002-12-31T00:00", "Daily", v6=True)
@@ -611,7 +608,7 @@ def test_the_data_cover_up_to_the_end_of_their_last_period():
 
 
 def test_mid_month_stamps_are_continuous_months():
-    from mhm_qgis.core.meteorology.forcing.temporal import time_index
+    from mhm_tools.pre.format_meteo import time_index
 
     time_index(np.array(["2001-01-16T12", "2001-02-15", "2001-03-16T12"], dtype="datetime64[ns]"), "Monthly")
     with pytest.raises(ValueError, match="not continuous"):
@@ -619,13 +616,13 @@ def test_mid_month_stamps_are_continuous_months():
 
 
 def test_the_time_window_spans_every_file_and_refuses_a_gap(tmp_path):
-    from mhm_qgis.core.meteorology.forcing.api import time_window
+    from mhm_qgis.externals.mhm_tools_handler import get_meteo_time_window
 
     _write_nc(tmp_path / "raw/a.nc", "pre", times=("2001-01-01", "2001-01-02"))
     _write_nc(tmp_path / "raw/b.nc", "pre", times=("2001-01-03T12",))
-    found = time_window(tmp_path / "raw", "*.nc")
+    found = get_meteo_time_window(tmp_path / "raw", "*.nc")
     assert (found["files"], found["step"], found["start"], found["end"], found["time"]) == (
         2, "Daily", "2001-01-01T00:00", "2001-01-03T00:00", "time")
     _write_nc(tmp_path / "raw/c.nc", "pre", times=("2001-01-05",))
     with pytest.raises(ValueError, match="every period"):
-        time_window(tmp_path / "raw", "*.nc")
+        get_meteo_time_window(tmp_path / "raw", "*.nc")

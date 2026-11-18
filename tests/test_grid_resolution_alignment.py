@@ -396,19 +396,18 @@ def test_a_window_copy_shifts_a_source_off_the_lattice_only_when_asked():
 def test_the_first_netcdf_slice_is_north_first(tmp_path):
     np = pytest.importorskip("numpy")
     xr = pytest.importorskip("xarray")
-    from mhm_qgis.core.meteorology.forcing.api import netcdf_first_slice
+    from mhm_qgis.externals.mhm_tools_handler import read_netcdf_first_slice
 
     values = np.arange(12, dtype="float32").reshape(2, 2, 3)
     xr.Dataset({"tp": (("time", "latitude", "longitude"), values)},
                coords={"time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"),
                        "latitude": [50.0, 51.0], "longitude": [9.0, 10.0, 11.0]}).to_netcdf(tmp_path / "tp.nc")
-    assert netcdf_first_slice(tmp_path / "tp.nc", "tp").tolist() == values[0][::-1].tolist()
+    assert read_netcdf_first_slice(tmp_path / "tp.nc", "tp").tolist() == values[0][::-1].tolist()
 
 
 def test_a_half_cell_offset_shifts_the_whole_axis_one_way():
     import numpy as np
-
-    from mhm_qgis.core.grid.arrays import shift_onto_header
+    from mhm_tools.pre.format_meteo import _shift_onto_header as shift_onto_header
 
     header = {"ncols": 40, "nrows": 40, "xllcorner": 10.0, "yllcorner": 50.0, "cellsize": 0.1}
     x = np.round(10.0 + np.arange(40) * 0.1, 2)  # ERA5-Land centres on the edges of the target cells
