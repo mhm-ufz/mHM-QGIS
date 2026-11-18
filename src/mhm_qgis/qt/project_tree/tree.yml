@@ -86,8 +86,9 @@ nodes:
       - key: advanced
         title: C. Advanced
         children:
-          - {key: compare, title: Compare, page: page_outputs, analysis: compare}
+          # Compare and Anomalies are hidden for now (their Designer rows are gone):
+          # - {key: compare, title: Compare, page: page_outputs, analysis: compare}
           - {key: extremes, title: Extremes, page: page_outputs, analysis: extremes}
           - {key: drought, title: Drought, page: page_outputs, analysis: drought}
-          - {key: anomalies, title: Anomalies, page: page_outputs, analysis: anomalies}
+          # - {key: anomalies, title: Anomalies, page: page_outputs, analysis: anomalies}
           - {key: summary, title: Summary, page: page_outputs, analysis: summary}

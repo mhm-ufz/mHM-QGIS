@@ -12,7 +12,6 @@ from qgis.PyQt.QtCore import QSignalBlocker
 
 from ...core.handlers.file import json as jsonio
 from ...core.handlers.store.layout import input_state_path
-from ...core.handlers.store.paths import version_key
 from ...core.meteorology.forcing.temporal import VARIABLES
 from ...qgis_bridge import layers as qgis_layers
 from ..dialogs.input_selection import _combo_path, _populate_file_combo
@@ -139,13 +138,6 @@ def load(dialog):
         if crs.isValid():  # first and painted now: the rest of the load holds the event loop
             dialog.mProjectionSelectionWidget_crs.setCrs(crs)
             dialog.mProjectionSelectionWidget_crs.repaint()
-        if version_key(state.get("mhm_version")) == "v5.13":
-            from ...externals.mhm_handler import recover_v5_mrm_outputs
-
-            try:
-                recover_v5_mrm_outputs(dialog.setup_folder)
-            except (OSError, RuntimeError) as error:
-                dialog.log_message(f"WARNING: Could not recover mrm_outputs.nml: {error}")
         _restore_combo_text(dialog.comboBox_mHMversion, state.get("mhm_version", ""))
         # A setup without saved answers keeps the ones given before it was opened.
         dialog._intro_answers = state.get("intro") or dialog._intro_answers
