@@ -253,14 +253,23 @@ def update_gauged_outlet_count(dialog, layer=None):
 DOMAIN_TYPES = ("Entire DEM extent as Domain", "Delineate Domain")  # the radios' texts
 
 
-def radios(dialog, name, chosen):
-    """Group the Designer radios `radioButton_<name>*`, wherever laid out; a click calls `chosen(text)`."""
+def radios(dialog, name, chosen, modes=()):
+    """Group the Designer radios `radioButton_<name>*`, wherever laid out; a click calls `chosen(text)`.
+    With `modes`, the radios in order stand for those saved texts, so their labels may differ."""
     group = QButtonGroup(dialog)
     for radio in dialog.findChildren(QRadioButton):
         if radio.objectName().startswith(f"radioButton_{name}"):
             group.addButton(radio)
-    group.buttonClicked.connect(lambda button: chosen(button.text()))
+    if modes:
+        for radio, mode in zip(group.buttons(), modes, strict=True):
+            radio.setProperty("mode", mode)
+    group.buttonClicked.connect(lambda button: chosen(mode_of(button)))
     setattr(dialog, f"buttonGroup_{name}", group)
+
+
+def mode_of(button) -> str:
+    """The saved text a radio stands for: its mode, else its label."""
+    return button.property("mode") or button.text()
 
 
 def check(dialog, name, text):
@@ -268,7 +277,7 @@ def check(dialog, name, text):
     group = getattr(dialog, f"buttonGroup_{name}")
     group.setExclusive(False)
     for button in group.buttons():
-        button.setChecked(button.text().lower() == str(text or "").lower().replace("_", " "))
+        button.setChecked(mode_of(button).lower() == str(text or "").lower().replace("_", " "))
     group.setExclusive(True)
 
 
@@ -392,6 +401,9 @@ def open_domain_assignment(dialog):
         return False
     assignment.accepted.connect(lambda: _assign(dialog, workflow, assignment))
     embed(dialog, "domainDefinition", assignment)
+    from .. import project_tree
+
+    project_tree.indicate(dialog, "domain_definition", assignment.label_setStatusDomainDefinitionDemExtent)
     return True
 
 
@@ -462,16 +474,27 @@ def set_gauges(dialog):
     if _selected_outlets(dialog, "Gauges") is None:
         return
 
+    box = QMessageBox(QMessageBox.Icon.Information, "Set Gauges", "Preparing the channel network and flow "
+                      "accumulation…\nThis closes when they are ready.", parent=dialog)
+    box.setModal(False)
+
     def ready(_context):
+        box.close()
         dialog.log_message("The drainage network and flow accumulation are ready.")
         dialog.save_input_state()
         from .. import project_tree
 
         project_tree.refresh(dialog)
 
-    if hydrology.start_domain_preflight(dialog, (dialog.page_gauges,), ready,
-                                        lambda message: _domain_delineator_preflight_failed(dialog, message)):
+    def failed(message):
+        box.close()
+        _domain_delineator_preflight_failed(dialog, message)
+
+    prepared = hydrology.domain_prepared(dialog)
+    if hydrology.start_domain_preflight(dialog, (dialog.page_gauges,), ready, failed):
         dialog.log_message("Creating the drainage network and flow accumulation…")
+        if not prepared:
+            box.show()
 
 
 def open_domain_delineator(dialog):
@@ -514,6 +537,9 @@ def _show_domain_delineator(dialog, context, pour_points_layer, outlet_id_field,
         QMessageBox.critical(dialog, "Domain Delineator", str(error))
         return
     embed(dialog, "domainDefinition", delineator)
+    from .. import project_tree
+
+    project_tree.indicate(dialog, "domain_definition", delineator.label_setStatusDomainDefinition)
 
 
 def _domain_delineator_preflight_failed(dialog, message):

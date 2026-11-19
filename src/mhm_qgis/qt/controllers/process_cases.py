@@ -39,7 +39,7 @@ def show(dialog) -> None:
     while form.rowCount():
         form.removeRow(0)
     for process, spec in datamodel.load_rules(version)["processes"].items():
-        combo = QComboBox(dialog.page_settings)
+        combo = QComboBox(dialog.page_processes)
         for case in spec.get("cases") or {}:
             combo.addItem(datamodel.case_label(version, process, case), int(case))
         if combo.findData(cases.get(process)) < 0 and process in cases:  # a case the rules don't list

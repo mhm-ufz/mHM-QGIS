@@ -50,11 +50,13 @@ def period_mask(intervals, period):
     return (intervals[:, 0] >= np.datetime64(period[0])) & (intervals[:, 1] <= np.datetime64(period[1]))
 
 
-def temporal(root, variable, how, freq="native", *, basin="domain", cell=None, period=None):
-    """A basin's (or a cell's) series aggregated to `freq` (native, day, month, year, period)."""
+def temporal(root, variable, how, freq="native", *, basin="domain", cell=None, period=None, values=None):
+    """A basin's (or a cell's) series aggregated to `freq` (native, day, month, year, period);
+    `values`: the period's series already read, else it comes from the cache."""
     info = semantics(root, variable)
     check(variable, info, how)
-    values = series.cell(root, variable, *cell, period) if cell else series.basin(root, variable, basin, period)
+    if values is None:
+        values = series.cell(root, variable, *cell, period) if cell else series.basin(root, variable, basin, period)
     if values is None:
         return None
     intervals = series.bounds(root)[period_mask(series.bounds(root), period)]

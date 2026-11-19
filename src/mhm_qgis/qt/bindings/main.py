@@ -82,6 +82,9 @@ def bind(dialog):
     # pushButton_BrowseProjectFolder → project.browse_folder; pushButton_setProject → project.set_folder
     dialog.pushButton_BrowseProjectFolder.clicked.connect(lambda: project.browse_folder(dialog))
     dialog.pushButton_setProject.clicked.connect(lambda: project.set_folder(dialog))
+    # pushButton_setPostCrs → project.set_post_crs; its label shows Domain Setup's status
+    dialog.pushButton_setPostCrs.clicked.connect(lambda: project.set_post_crs(dialog))
+    project_tree.indicate(dialog, "domain_setup", dialog.label_setPostCrsStatus)
     # pushButton_createOrLoadDomainStructure → project.create_structure
     dialog.pushButton_createOrLoadDomainStructure.clicked.connect(
         lambda: project.create_structure(dialog)

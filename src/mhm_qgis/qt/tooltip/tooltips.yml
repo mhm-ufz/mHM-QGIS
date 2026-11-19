@@ -93,7 +93,7 @@ pages:
       title: Set the period
       text: Saves the simulation period. Every meteorology Set needs it first and checks its files cover it.
 
-  page_settings:
+  page_processes:
     - widget: pushButton_edit_nmls
       title: Edit namelists
       text: Opens the namelist editor for the combined run.
@@ -206,9 +206,6 @@ pages:
     - widget: dateEdit_postStart
       title: Period
       text: Restricts every page to whole output intervals inside these dates.
-    - widget: comboBox_postResolution
-      title: Resolution
-      text: Aggregates series and balance tables; fluxes are summed, states averaged.
     - widget: textBrowser_postOverview
       title: Overview
       text: The selected run at a glance (water balance, ratios, the main gauge's scores) and what to check.

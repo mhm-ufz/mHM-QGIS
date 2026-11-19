@@ -277,9 +277,9 @@ def test_version_change_prepares_project_and_saves_state(
 
 def test_configuration_defaults_and_missing_project(monkeypatch):
     dialog = Dialog("", " ")
-    assert selected_version(dialog) == "6.0"
+    assert selected_version(dialog) == "5.13"
     del dialog.comboBox_mHMversion
-    assert selected_version(dialog) == "6.0"
+    assert selected_version(dialog) == "5.13"
     warnings = []
     monkeypatch.setattr(
         controller_module.QMessageBox, "warning",

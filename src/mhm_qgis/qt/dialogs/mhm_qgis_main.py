@@ -95,6 +95,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             getattr(self, f"spinBox_{level}ResolutionMultiplier").setRange(1, 1_000_000)
         self.comboBox_mhmWorkType.setCurrentIndex(0)
         self.comboBox_mhmWorkType.model().item(2).setEnabled(False)  # mRM only: not yet
+        self.comboBox_mHMversion.model().item(self.comboBox_mHMversion.findText("6.0")).setEnabled(False)  # mHM 6: not yet
         self.stackedWidget_configuration.setCurrentWidget(self.page_singleDomain)
         self.morphology_tasks = MorphologyTaskBridge(self)
         project_tree.build(self)  # before the styles: its ▶ buttons are workflow buttons
@@ -172,7 +173,9 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         return main_controller.update_gauged_outlet_count(self, layer)
 
     def get_crs(self):
-        return self.mProjectionSelectionWidget_crs.crs()
+        from ..controllers.project import post_only
+
+        return (self.mProjectionSelectionWidget_postCrs if post_only(self) else self.mProjectionSelectionWidget_crs).crs()
 
     def selected_meteo_crs(self):
         """Return the processing CRS in a form accepted by pyproj."""

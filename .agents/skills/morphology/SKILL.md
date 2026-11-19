@@ -29,6 +29,10 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   `page_singleDomain` (work type 0) and `page_multiDomain` (work type 1, combine
   domains); the mRM-only type 2 stays disabled. Do not restore the removed steps
   stacked widget.
+- **Post processing only** (work type 3, `page_postProcessingOnly`): the project folder is an
+  mHM setup that has run. Set checks its namelists and `output/`; the page's CRS Set makes the
+  folder itself `setup_folder` and loads `output/`. No mhm-qgis structure is created; only the
+  input state (version, CRS) is written. The tree keeps Introduction, Domain Setup and Outputs.
 - **Multi-domain setups** live at `<project>/mhm-qgis-multi/<name>/` (`.temp/`, `output/`,
   `restart/` and the combined namelists only). They prepare nothing: they combine
   single-domain setups that already run on their own, and **domains are read, never

@@ -61,7 +61,7 @@ def test_project_setup_status_follows_the_folder(dialog, tmp_path):
     assert row.text(project_tree.STATUS_COLUMN) == "⚪"
     assert row.toolTip(project_tree.STATUS_COLUMN) == "Empty: no inputs added"
     dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
-    assert row.text(project_tree.STATUS_COLUMN) == "🟢"  # browsed, not yet Set
+    assert row.text(project_tree.STATUS_COLUMN) == "🟡"  # browsed, not yet Set
     dialog.pushButton_setProject.click()
     assert row.text(project_tree.STATUS_COLUMN) == "✅"
 
@@ -110,7 +110,7 @@ def test_the_time_period_is_complete_once_set_and_precipitation_by_its_own_set(d
     _set_up(dialog, tmp_path)
     assert (status("time_period"), status("meteo_pre")) == ("⚪", "⚪")
     dialog._meteo_inputs["pre"] = {"kind": "pre", "folder": str(tmp_path)}
-    assert status("meteo_pre") == "🟢"  # its Set scanned
+    assert status("meteo_pre") == "🟡"  # its Set scanned
     dialog.pushButton_setTimePeriod.click()
     assert (status("time_period"), dialog.label_setTimePeriodInputStatus.text()) == ("✅", "✅")
 
@@ -214,11 +214,11 @@ def test_output_rows_wait_for_a_run_and_groups_select_their_first_view(dialog):
 
 def test_domain_setup_pages_reference_buttons_and_combined_domains(dialog):
     tree = dialog.treeWidget_projectStructure
-    for key, page in (("resolution", dialog.page_resolution), ("settings", dialog.page_settings)):
+    for key, page in (("resolution", dialog.page_resolution), ("settings", dialog.page_processes)):
         tree.setCurrentItem(project_tree.item(dialog, key))
         assert dialog.stackedWidget_project.currentWidget() is page
     assert dialog.scrollArea_resolution.widget().isAncestorOf(dialog.lineEdit_L0Resolution)  # scrolls both ways
-    assert dialog.page_settings.isAncestorOf(dialog.pushButton_edit_nmls)
+    assert dialog.page_processes.isAncestorOf(dialog.pushButton_edit_nmls)
     dialog.pushButton_refPageDem.click()
     assert tree.currentItem() is project_tree.item(dialog, "dem")
     dialog.comboBox_mhmWorkType.setCurrentIndex(1)  # combine existing domains
@@ -333,20 +333,20 @@ def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_pa
     assert statuses() == ["⚪"] * 3
     assert not any(eye(key) for key in keys[:2])
     dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
-    assert statuses()[0] == "🟢"  # an L0 file, no Set grid yet
+    assert statuses()[0] == "🟡"  # an L0 file, no Set grid yet
     dialog._grid_l2_metadata = {"l1_header": {"ncols": 1}, "configuration_fingerprint": "set"}
     monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "set")
     (tmp_path / "mhm.nml").write_text("")
     monkeypatch.setattr(dialog.input_combo("dem"), "currentLayer", object)
-    assert statuses() == ["✅", "✅", "🟢"]  # the DEM Set fits the grid, ▶ fills it and derives
+    assert statuses() == ["✅", "✅", "🟡"]  # the DEM Set fits the grid, ▶ fills it and derives
     assert all(eye(key) for key in keys[:2])
     dialog._dem_error = "The DEM does not cover the common extent."
     assert statuses()[2] == "⚪"
     dialog._input_findings["latlon"] = SimpleNamespace(ok=False)  # v5.13 also needs latlon.nc
-    assert statuses()[0] == "🟢"
+    assert statuses()[0] == "🟡"
     del dialog._input_findings["latlon"]
     monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "changed")  # e.g. another L2 file
-    assert statuses()[0] == "🟢"  # the Set grid no longer counts
+    assert statuses()[0] == "🟡"  # the Set grid no longer counts
 
     monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "set")
     shown, opened = [], []
@@ -481,8 +481,11 @@ def test_columns_the_run_buttons_and_the_next_step(dialog, tmp_path, monkeypatch
 def test_type_radios_are_designer_widgets_with_the_saved_mode_texts(dialog):
     from mhm_qgis.qt.controllers import categorical, main
 
-    for kind, page in categorical.PAGES.items():
-        assert [radio.text() for radio in getattr(dialog, f"buttonGroup_{page}").buttons()] == list(categorical.MODES[kind])
+    for kind, page in categorical.PAGES.items():  # the labels may differ from the saved mode texts
+        group = getattr(dialog, f"buttonGroup_{page}")
+        assert [main.mode_of(radio) for radio in group.buttons()] == list(categorical.MODES[kind])
+        assert all(categorical.is_ready(main.mode_of(radio)) == radio.objectName().endswith("Ready")
+                   for radio in group.buttons())
     assert [radio.text() for radio in dialog.buttonGroup_domainDefinition.buttons()] == list(main.DOMAIN_TYPES)
     assert dialog.radioButton_domainDefinitionDelineator.text() == main.DOMAIN_TYPES[1]
 
@@ -535,7 +538,7 @@ def test_next_step_waits_on_domain_setup_then_on_a_set_grid(dialog, tmp_path, mo
     assert status("domain_setup") == "✅"
     assert status("resolution") == "⚪"
     dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
-    assert status("resolution") == "🟢"
+    assert status("resolution") == "🟡"
     monkeypatch.setattr(grid, "grid_current", lambda _dialog: True)
     assert status("resolution") == "✅"
 
@@ -603,7 +606,7 @@ def test_inputs_count_after_their_run_until_a_new_crs_and_a_failed_stage_gets_th
     gdal.GetDriverByName("GTiff").Create(dem_path, 2, 2, 1).FlushCache()
     main.add_file_input(dialog, "dem", dem_path, manual=True, source_crs="EPSG:32632")
     dialog._dem_error = None  # as a DEM Set on the common grid leaves it
-    assert status() == "🟢"  # A has not run: its files do not count
+    assert status() == "🟡"  # A has not run: its files do not count
     processing.mark_workflow(tmp_path, "execute_all_morphology", "completed")
     assert status() == "✅"
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:3035"))
@@ -663,3 +666,13 @@ def test_the_time_window_dialog_closes_on_ok_once_scanned(dialog, monkeypatch):
     prompt.found = {"start": "2001-01-01T00:00", "end": "2001-12-31T00:00", "step": "Daily"}
     ok.click()
     assert (prompt.result(), prompt.isVisible()) == (QDialog.DialogCode.Accepted, False)
+
+
+def test_forcing_tables_show_how_each_input_reaches_the_grid(dialog):
+    from mhm_qgis.qt.controllers import forcing
+
+    for table in (dialog.tableWidget_meteoInputs, dialog.tableWidget_observationVarInputs):
+        headers = [table.horizontalHeaderItem(column).text() for column in range(table.columnCount())]
+        assert headers[7:] == ["Cell Size", "nRows", "nCols", "Extent", "Extent Modification",
+                               "Unit Conversion", "Regridding", "Edit"]
+        assert len(forcing.scan_details(dialog, "pre", {}, None, "L2")) == len(headers) - 8

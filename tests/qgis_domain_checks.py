@@ -118,7 +118,7 @@ def navigation(folder):  # noqa: PLR0915
         dialog.listWidget_outlets.setCurrentRow(1)
         assert dialog._draft_state["outlets"]["1"]["is_domain"]
         dialog.listWidget_outlets.setCurrentRow(0)
-        dialog.pushButton_nextPourPoint.click()
+        dialog.pushButton_nextGaugePoint.click()
         main.task_coordinator.submit.assert_not_called()
         dialog._point_picked(QgsPointXY(950, 50), Qt.MouseButton.LeftButton)
         main.task_coordinator.submit.assert_not_called()
@@ -134,7 +134,7 @@ def navigation(folder):  # noqa: PLR0915
         dialog.listWidget_outlets.setCurrentRow(1)
         main.task_coordinator.submit.assert_not_called()
         assert dialog._watershed_layer.isValid()
-        dialog.pushButton_save.click()
+        dialog.pushButton_setDomainDefinition.click()
         call = main.task_coordinator.submit.call_args
         assert call.args[0] == "domain-final-save"
         saved = call.args[2](None)

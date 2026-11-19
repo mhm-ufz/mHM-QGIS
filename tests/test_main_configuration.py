@@ -75,6 +75,7 @@ def test_reference_files_set_the_common_grid_the_dem_and_precipitation_cover(tmp
     folder = tmp_path / "precipitation"
     _precipitation(folder, [51., 50.], [10., 11.])
     dialog = _open(tmp_path)
+    dialog.comboBox_mHMversion.setCurrentText("6.0")  # its periods end exclusive (disabled in the UI, not in code)
 
     _browse(dialog, monkeypatch, "L0", dem)
     assert dialog.lineEdit_L0Resolution.text() == repr(0.5)
@@ -267,7 +268,7 @@ def test_a_replacement_derivative_must_have_l0_cells_and_cover_the_dem(tmp_path,
     replace("slope.tif", 8, 6, (-70, 100, 0, 530, 0, -100))  # 0.3 cell off L0, larger than the DEM
     assert len(warnings) == 3
     assert dialog._dem_replacements["slope"]["path"] == str(tmp_path / "slope.tif")
-    assert project_tree.item(dialog, "slope").text(project_tree.STATUS_COLUMN) == "🟢"
+    assert project_tree.item(dialog, "slope").text(project_tree.STATUS_COLUMN) == "🟡"
     assert grid.summary(dialog, {"key": "slope"}) == (
         "100", "6", "8", "-70, 730, -70, 530",
         "Shifted by (-30, -30) onto the L0 lattice. Cropped: 1 column west, 1 column east, 1 row south, 1 row north.",
@@ -372,4 +373,40 @@ def test_the_snapped_extent_must_stay_inside_the_meteo_grid(tmp_path, monkeypatc
     dialog.checkBox_extentL2enforce.setChecked(True)  # the meteo extent bounds it now
     dialog.pushButton_setLatLon.click()
     assert grid.require_common_grid(dialog)["study_bounds"] == [10.0, 11.0, 50.0, 51.0]
+    dialog.close()
+
+
+def test_post_processing_only_opens_a_run_setup_without_a_structure(tmp_path, monkeypatch):
+    import json
+
+    from qgis.PyQt.QtWidgets import QMessageBox
+
+    from mhm_qgis.qt import project_tree
+    from mhm_qgis.qt.controllers import post_context
+
+    warned, populated = [], []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warned.append(args[2]))
+    monkeypatch.setattr(post_context, "populate", lambda _dialog, rescan=False: populated.append(rescan))
+    dialog = MhmQgisDialog()
+    dialog.comboBox_mhmWorkType.setCurrentIndex(project.POST_ONLY)
+    dialog.comboBox_mHMversion.setCurrentText("5.13")
+    dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
+    dialog.pushButton_setProject.click()
+    assert "mhm.nml" in warned[-1]  # not a setup that ran
+    assert dialog.project_directory != str(tmp_path)
+    for name in ("mhm.nml", "mhm_parameter.nml", "output/discharge.nc"):
+        (tmp_path / name).parent.mkdir(exist_ok=True)
+        (tmp_path / name).write_text("")
+    dialog.pushButton_setProject.click()
+    dialog.mProjectionSelectionWidget_postCrs.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
+    dialog.pushButton_setPostCrs.click()
+    assert dialog.setup_folder == str(tmp_path)
+    assert not (tmp_path / "mhm-qgis").exists()
+    assert json.loads((tmp_path / ".temp/mhm_qgis_input_state.json").read_text())["mhm_version"].startswith("5")
+    assert dialog.get_crs().authid() == "EPSG:4326"
+    assert populated == [True]
+    keys = ("intro", "project_configuration", "domain_setup", "resolution", "time_period", "settings",
+            "inputs", "execution", "outputs")
+    assert [key for key in keys if not project_tree.item(dialog, key).isHidden()] == [
+        "intro", "project_configuration", "domain_setup", "outputs"]
     dialog.close()

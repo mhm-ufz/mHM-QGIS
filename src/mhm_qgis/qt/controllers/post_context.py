@@ -51,6 +51,7 @@ class PostState:
     axis: tuple | None = None     # (intervals, step(index)) the time toolbar is on: the run's or a forcing's
     view: str | None = None
     chosen: str | None = None     # the analysis last picked in the project tree
+    map_groups: tuple = ()        # its output groups the Map dock offers (tree.yml `map`); () for all
     workspace: bool = False
 
 
@@ -111,8 +112,6 @@ def bind(dialog) -> None:
     dialog.comboBox_postBasin.activated.connect(lambda _index: basin_selected(dialog))
     dialog.dateEdit_postStart.dateChanged.connect(lambda _date: period_changed(dialog))
     dialog.dateEdit_postEnd.dateChanged.connect(lambda _date: period_changed(dialog))
-    dialog.comboBox_postResolution.currentTextChanged.connect(
-        lambda text: context.set("resolution", text.lower()))
     # pushButton_postRefresh → populate (rescan)
     dialog.pushButton_postRefresh.clicked.connect(lambda: populate(dialog, rescan=True))
     # The analysis rows, the eye and the ↺ of "4. Outputs" are in the project tree (project_tree.clicked).
@@ -121,7 +120,6 @@ def bind(dialog) -> None:
 
     post_export.bind(dialog)
     dialog.task_coordinator.changed.connect(lambda: work.show_progress(dialog))
-    context.set("resolution", "native")
     if dialog.iface is not None:  # in QGIS's toolbars from the start; the standalone map window has it once used
         host.time_toolbar(dialog, _toolbar_created)
 
@@ -139,6 +137,7 @@ def _created(dialog, name) -> None:
         state.widgets["map_bound"] = True
         post_map.bind(dialog)
     binders = {"hydrograph": post_hydro.bind, "water_balance": post_balance.bind,
+               "processes": post_balance.bind_processes,
                "validation": post_validation.bind, "compare": post_advanced.bind_compare,
                "extremes": post_advanced.bind_extremes, "drought": post_advanced.bind_drought,
                "anomalies": post_advanced.bind_anomalies, "summary": post_advanced.bind_summary}
@@ -275,7 +274,6 @@ def clear(dialog) -> None:
     state.refs, state.gauges, state.findings, state.index, state.dirty = [], [], [], {}, {}
     with QSignalBlocker(state.context):
         state.context.clear()
-        state.context.set("resolution", dialog.comboBox_postResolution.currentText().lower())
     dialog.comboBox_postRun.clear()
     dialog.comboBox_postBasin.clear()
     project_tree.outputs_shown(dialog, False)
@@ -398,6 +396,7 @@ def basin_selected(dialog) -> None:
     name = dialog.comboBox_postBasin.currentData()
     context = dialog._post.context
     context.set("basin", name)
+    context.set("cell", None)  # the basin's series again
     if name not in (None, "domain"):
         context.set("gauge", int(name))
 

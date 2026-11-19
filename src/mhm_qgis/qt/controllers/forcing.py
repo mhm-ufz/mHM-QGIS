@@ -13,7 +13,11 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetItem
 
 from ...core import datamodel
-from ...core.meteorology.forcing import inspect_meteo_folder_cached
+from ...core.grid.model import Extent, crs_equal
+from ...core.meteorology.forcing import (
+    inspect_meteo_folder_cached,
+    inspect_meteo_inputs_cached,
+)
 from ...externals.mhm_tools_handler import (
     VARIABLES,
     MeteoFolderSpec,
@@ -228,31 +232,38 @@ def populate_observation_table(dialog):
 
 
 def scan_details(dialog, variable, spec, metadata, level):
-    """Files, Period, Cell Size, nRows, nCols, Extent, Accumulation, Unit Conversion and Regridding
-    of a scanned input onto the `level` grid; "—" before its scan."""
+    """Cell Size, nRows, nCols, Extent, Extent Modification, Unit Conversion and Regridding of a
+    scanned input onto the `level` grid; "—" before its scan."""
     if metadata is None:
-        return ("—",) * 9
+        return ("—",) * 7
     x, y = metadata.x_resolution, metadata.y_resolution
     output_unit = VARIABLES[variable][1]
-    accumulation = (f"{spec.get('cumulative_resolution')}, reset "
-                    f"{'last' if spec.get('cumulative_reset') is None else spec['cumulative_reset']}"
-                    if spec.get("cumulative") else "None")
     if not grid.grid_current(dialog):
-        regrid = "Set the resolutions first (Resolution page)."
+        cropped = regrid = "Set the resolutions first (Resolution page)."
     else:
+        saved, crs = dialog._grid_l2_metadata, dialog.selected_meteo_crs()
+        west, east, south, north = metadata.bounds  # cell centres
+        if metadata.crs and crs_equal(metadata.crs, crs):
+            cropped = " ".join(grid._edges(
+                Extent(west - x / 2, east + x / 2, south - y / 2, north + y / 2),
+                Extent.from_header(saved[f"{level.lower()}_header"]), x, 0.01 * x)) or "None"
+        else:
+            cropped = f"Reprojected and cropped to the {level} extent."
         try:
-            regrid = grid_note(metadata, dialog._grid_l2_metadata, dialog.selected_meteo_crs(), level)
+            regrid = grid_note(metadata, saved, crs, level)
         except ValueError as error:
             regrid = str(error)
-    return (str(len(metadata.files)), f"{metadata.start_time[:10]} to {metadata.end_time[:10]}",
-            f"{x:.6g}" if x == y else f"{x:.6g} x {y:.6g}", str(metadata.shape[0]), str(metadata.shape[1]),
+    return (f"{x:.6g}" if f"{x:.6g}" == f"{y:.6g}" else f"{x:.6g} x {y:.6g}", str(metadata.shape[0]), str(metadata.shape[1]),
             f"{', '.join(f'{value:.6g}' for value in metadata.bounds)} ({metadata.crs or 'no CRS'})",
-            accumulation,
-            "None" if normalize_unit(spec["unit"]) == output_unit else f"{spec['unit']} → {output_unit}",
+            cropped,
+            f"None ({output_unit})" if normalize_unit(spec["unit"]) == output_unit
+            else f"{spec['unit']} → {output_unit}",
             regrid)
 
 
-def _populate_forcing_table(dialog, table, inputs, inspections, level, edit):
+def _populate_forcing_table(dialog, table, inputs, inspections, level, edit, rescan=True):
+    """The table from the saved inputs; one a reopened project has not scanned yet is scanned in
+    the background (cached by its files), then the table is shown again."""
     table.setRowCount(len(inputs))
     for row, (variable, spec) in enumerate(inputs.items()):
         for column, text in enumerate((
@@ -268,6 +279,19 @@ def _populate_forcing_table(dialog, table, inputs, inspections, level, edit):
         # Dynamic Edit button → edit
         button.clicked.connect(lambda _checked=False, key=variable: edit(key))
         table.setCellWidget(row, table.columnCount() - 1, button)
+    missing = {variable: _spec(dialog, spec) for variable, spec in inputs.items() if variable not in inspections}
+    if not (rescan and missing and dialog.setup_folder):
+        return
+
+    def scanned(found):
+        inspections.update({variable: found[spec.kind] for variable, spec in missing.items() if spec.kind in found})
+        _populate_forcing_table(dialog, table, inputs, inspections, level, edit, rescan=False)
+
+    dialog.task_coordinator.submit(
+        f"rescan-{table.objectName()}", "Scan the saved inputs",
+        lambda task: inspect_meteo_inputs_cached(dialog.setup_folder, missing.values(), cancelled=task.isCanceled),
+        on_success=scanned, on_error=lambda error: dialog.log_message(f"WARNING: Could not scan the saved inputs: {error}"),
+        resource="morphology-files")
 
 
 def _spec(dialog, value):

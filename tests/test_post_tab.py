@@ -67,7 +67,8 @@ def _open(dialog):
 
 
 def _row(dialog, text):
-    return next(row for row in project_tree._rows(dialog) if row.text(0) == text)
+    """The analysis row titled `text`: they come last (Domain Setup also has a Processes row)."""
+    return next(row for row in reversed(list(project_tree._rows(dialog))) if row.text(0) == text)
 
 
 def _page(dialog, text):
@@ -131,7 +132,7 @@ def test_the_tab_links_its_views_without_reading_netcdf_on_the_gui_thread(opened
     assert state.context.get("current_time") == 10
     assert dialog._post.ui.horizontalSlider_postTime.value() == 10
     _page(dialog, "Map Explorer")
-    assert input_band(layer.renderer()) == 11  # the hidden map caught up when shown
+    assert input_band(state.widgets["map_layer"].renderer()) == 11  # the hidden map caught up when shown
 
 
 def test_statistic_maps_balance_and_processes(opened):
@@ -156,8 +157,10 @@ def test_statistic_maps_balance_and_processes(opened):
     times.setCurrentIndex(times.findData("month"))
     times.activated.emit(times.currentIndex())
     assert table.rowCount() == 3
-    dialog.comboBox_postResolution.setCurrentText("Month")
     _page(dialog, "Processes")
+    resolution = dialog._post.ui.comboBox_processesResolution  # the dock's own, like the balance's time
+    resolution.setCurrentText("Month")
+    resolution.activated.emit(resolution.currentIndex())
     assert len(state.widgets["processes"].ci.items) >= 3
 
 
@@ -406,7 +409,10 @@ def test_export_writes_the_shown_view(opened, tmp_path):
     assert {"hydrograph_HydrographPlot.png", "hydrograph_HydrographPlot.svg",
             "hydrograph_HydrographPlot.csv"} <= {path.name for path in written}
     _page(dialog, "Map Explorer")
-    _wait(lambda: dialog._post.widgets.get("map_layer") is not None)
+    variable = dialog._post.ui.comboBox_postMapVariable  # the Hydrograph moved the map to its own variables
+    variable.setCurrentText("aET")
+    variable.activated.emit(variable.currentIndex())
+    _wait(lambda: getattr(dialog._post.widgets.get("map_layer"), "name", lambda: "")() == "aET")
     dialog._post.ui.horizontalSlider_postTime.setValue(3)
     _wait(lambda: dialog._post.context.get("current_time") == 3)
     post_export.export_view(dialog, out)
@@ -423,3 +429,41 @@ def test_export_writes_the_shown_view(opened, tmp_path):
     with netCDF4.Dataset(tif.with_suffix(".nc")) as exported:
         assert "CF" in exported.getncattr("Conventions")
         assert any(getattr(var, "grid_mapping_name", None) for var in exported.variables.values())
+
+
+def test_the_map_dock_offers_the_variables_of_the_open_view(opened):
+    dialog, _ = opened
+    _open(dialog)
+    state, combo = dialog._post, None
+    _page(dialog, "Hydrograph")
+    combo = state.ui.comboBox_postMapVariable
+    groups = {v.name: v.group for v in state.run.variables}
+    offered = [combo.itemText(i) for i in range(combo.count())]
+    assert offered
+    assert {groups[name] for name in offered} <= {"runoff", "routing", "snow", "soil"}
+    assert state.context.get("variable") in offered
+    other = offered[-1]
+    combo.setCurrentText(other)
+    combo.activated.emit(combo.currentIndex())
+    assert state.context.get("variable") == other  # the controls tree and the map follow
+    assert state.ui.treeWidget_postVariables.currentItem().text(0) == other
+    _page(dialog, "Map Explorer")
+    assert combo.count() > len(offered)  # every written variable
+
+
+def test_processes_read_a_clicked_cell_without_a_cache_and_the_basin_comes_back(opened):
+    dialog, _ = opened
+    _open(dialog)
+    state = dialog._post
+    _page(dialog, "Processes")
+    notes = state.ui.label_postProcessesNotes
+    assert "basin domain" in notes.text()
+    iy, ix = (int(i) for i in np.argwhere(np.load(state.root / "weights" / "domain.npy") > 0)[0])
+    state.context.set("cell", (iy, ix))
+    _wait(lambda: not dialog.task_coordinator.is_busy() and f"row {iy}, column {ix}" in notes.text()
+          and "Reading" not in notes.text())
+    assert "series cache" not in notes.text()  # the inspector's one pass, no cache to build
+    assert len(state.widgets["processes"].ci.items) >= 1
+    dialog.comboBox_postBasin.activated.emit(dialog.comboBox_postBasin.currentIndex())
+    assert state.context.get("cell") is None
+    assert "basin domain" in notes.text()

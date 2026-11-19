@@ -874,6 +874,8 @@ def _input_fit(dialog, key):
     uri = raster_source(path, variable)
     fit = _fit(dialog, uri, crs or qgis_layers.crs_string(qgis_layers.crs_of(uri)))
     cell = float(dialog._grid_l2_metadata["l0_header"]["cellsize"])
+    if regrid == "Auto (mhm-tools).":  # mhm-tools' "auto": average from finer cells, else bilinear
+        regrid = "Average (finer than L0, mhm-tools)." if fit["cell"] < cell else "Bilinear (coarser than L0, mhm-tools)."
     on_l0 = math.isclose(fit["cell"], cell, rel_tol=1e-9) and not fit["notes"]
     edges = _edges(fit["extent"], Extent.from_header(dialog._grid_l2_metadata["l0_header"]), cell, 0.01 * cell)
     return fit, edges, [] if on_l0 else [regrid]  # edges in L0 cells
@@ -889,8 +891,8 @@ def summary(dialog, node):
 
         spec = dialog._meteo_inputs.get(variable)
         details = scan_details(dialog, variable, spec, dialog._meteo_inspections.get(variable), "L2") \
-            if spec else ("—",) * 9
-        return (*details[2:6], "—", details[8])
+            if spec else ("—",) * 7
+        return (*details[:5], details[6])
     try:
         found = _input_fit(dialog, node["key"])
     except (KeyError, IndexError, OSError, RuntimeError, ValueError) as error:

@@ -276,3 +276,14 @@ def test_a_run_that_wrote_no_output_variable_says_so(tmp_path):
     assert "no time axis" in finding
     with pytest.raises(ValueError, match="Turn on outputs"):
         post_exec.scan_job(ref, run=run)
+
+
+def test_a_run_written_where_its_namelists_say_is_listed(tmp_path):
+    """A setup made outside mhm-qgis may write its outputs into another folder than output/."""
+    make_run(tmp_path)
+    (tmp_path / "output").rename(tmp_path / "results")
+    assert runs.list_runs(tmp_path) == []  # no namelists to say where
+    (tmp_path / "mhm.nml").write_text('&directories_general\n  dirConfigOut = "results/"\n'
+                                      '  dir_Out(1) = "results/"\n/\n')
+    [ref] = runs.list_runs(tmp_path)
+    assert catalog.open_run(ref).files["mhm"].parent.name == "results"

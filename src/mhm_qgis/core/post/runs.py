@@ -72,6 +72,19 @@ def _refs(setup, root, namelists, version, name, domains):
             for index, domain in enumerate(domains, start=1)]
 
 
+def wrote(ref: RunRef) -> bool:
+    """Whether the current run wrote anything: in output/, else the mHM output file where its
+    namelists put it (a setup made outside mhm-qgis may name another folder)."""
+    if any(path.is_file() for path in (ref.root / "output").rglob("*")):
+        return True
+    from .catalog import open_run
+
+    try:
+        return open_run(ref).exists("mhm")
+    except (OSError, ValueError, KeyError):  # namelists missing or unreadable: nothing to show
+        return False
+
+
 def list_runs(folder) -> list[RunRef]:
     """The current run first, then archived runs, newest first."""
     folder = Path(folder)
@@ -81,8 +94,8 @@ def list_runs(folder) -> list[RunRef]:
         domains = _domains(folder)[0]
         if version == "v6":
             return [ref for domain in domains for ref in list_runs(domain)]
-    written = any(path.is_file() for path in (folder / "output").rglob("*"))
-    refs = _refs(folder, folder, folder, version, "", domains) if written else []
+    refs = _refs(folder, folder, folder, version, "", domains)
+    refs = refs if wrote(refs[0]) else []
     metas = []
     for path in (folder / RUNS).glob("*/run.json"):
         try:

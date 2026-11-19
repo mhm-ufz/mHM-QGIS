@@ -50,7 +50,7 @@
         </item>
         <item>
          <property name="text">
-          <string>Settings</string>
+          <string>Processes</string>
          </property>
         </item>
        </item>
@@ -453,6 +453,11 @@
                   <string>mRM: Setup &amp; Run</string>
                  </property>
                 </item>
+                <item>
+                 <property name="text">
+                  <string>mHM: Post Processing Only</string>
+                 </property>
+                </item>
                </widget>
               </item>
               <item>
@@ -561,8 +566,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>307</width>
-                 <height>236</height>
+                 <width>862</width>
+                 <height>607</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -951,6 +956,94 @@
                     </item>
                    </layout>
                   </widget>
+                  <widget class="QWidget" name="page_postProcessingOnly">
+                   <layout class="QVBoxLayout" name="verticalLayout_postProcessingOnly">
+                    <item>
+                     <widget class="QLabel" name="label_postProcessingOnly">
+                      <property name="text">
+                       <string>Post processing only: the project folder is an mHM setup that has run (its namelists and output/). Set the CRS of its grids to open the outputs.</string>
+                      </property>
+                      <property name="wordWrap">
+                       <bool>true</bool>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <layout class="QHBoxLayout" name="horizontalLayout_postCrs" stretch="1,6">
+                      <item>
+                       <widget class="QLabel" name="label_postCrs">
+                        <property name="text">
+                         <string>CRS:</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <widget class="QgsProjectionSelectionWidget" name="mProjectionSelectionWidget_postCrs">
+                        <property name="toolTip">
+                         <string>The CRS of the setup's grids, for the maps of its outputs</string>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                    <item>
+                     <layout class="QHBoxLayout" name="horizontalLayout_setPostCrs">
+                      <item>
+                       <spacer name="horizontalSpacer_setPostCrs">
+                        <property name="orientation">
+                         <enum>Qt::Horizontal</enum>
+                        </property>
+                        <property name="sizeHint" stdset="0">
+                         <size>
+                          <width>40</width>
+                          <height>20</height>
+                         </size>
+                        </property>
+                       </spacer>
+                      </item>
+                      <item>
+                       <widget class="QPushButton" name="pushButton_setPostCrs">
+                        <property name="text">
+                         <string>Set</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <widget class="QLabel" name="label_setPostCrsStatus">
+                        <property name="minimumSize">
+                         <size>
+                          <width>28</width>
+                          <height>0</height>
+                         </size>
+                        </property>
+                        <property name="maximumSize">
+                         <size>
+                          <width>28</width>
+                          <height>16777215</height>
+                         </size>
+                        </property>
+                        <property name="alignment">
+                         <set>Qt::AlignCenter</set>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                    <item>
+                     <spacer name="verticalSpacer_postProcessingOnly">
+                      <property name="orientation">
+                       <enum>Qt::Vertical</enum>
+                      </property>
+                      <property name="sizeHint" stdset="0">
+                       <size>
+                        <width>20</width>
+                        <height>40</height>
+                       </size>
+                      </property>
+                     </spacer>
+                    </item>
+                   </layout>
+                  </widget>
                  </widget>
                 </item>
                 <item>
@@ -999,8 +1092,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>647</width>
-                 <height>556</height>
+                 <width>862</width>
+                 <height>607</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_page_resolution">
@@ -2676,7 +2769,7 @@ CODE,NAME,MHM_CLASS
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="page_settings">
+          <widget class="QWidget" name="page_processes">
            <layout class="QVBoxLayout" name="verticalLayout_page_settings">
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_gaugeOption">
@@ -3480,7 +3573,7 @@ CODE,NAME,MHM_CLASS
                <item>
                 <widget class="QRadioButton" name="radioButton_landUseReady">
                  <property name="text">
-                  <string>mHM ready</string>
+                  <string>Preprocessed mHM Land Use Class Layers</string>
                  </property>
                 </widget>
                </item>
@@ -3973,7 +4066,7 @@ CODE,NAME,MHM_CLASS
                <item>
                 <widget class="QRadioButton" name="radioButton_soilReady">
                  <property name="text">
-                  <string>mHM ready</string>
+                  <string>Preprocessed mHM Soil Class Layers</string>
                  </property>
                 </widget>
                </item>
@@ -4478,7 +4571,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                         </property>
                         <property name="maximumSize">
                          <size>
-                          <width>23</width>
+                          <width>16777215</width>
                           <height>16777215</height>
                          </size>
                         </property>
@@ -4490,15 +4583,11 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                         </property>
                         <property name="styleSheet">
                          <string notr="true">    QPushButton {
-        text-align: left;
+        text-align: center;
     }</string>
                         </property>
                         <property name="text">
-                         <string/>
-                        </property>
-                        <property name="icon">
-                         <iconset>
-                          <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
+                         <string>Set</string>
                         </property>
                        </widget>
                       </item>
@@ -5008,7 +5097,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                <item>
                 <widget class="QRadioButton" name="radioButton_geologyReady">
                  <property name="text">
-                  <string>mHM ready</string>
+                  <string>Preprocessed mHM Geology Class Layer</string>
                  </property>
                 </widget>
                </item>
@@ -5364,14 +5453,14 @@ CODE,NAME,GEO_CLASS,KARSTIC,PARAMETER_VALUE
                <item>
                 <widget class="QRadioButton" name="radioButton_laiReady">
                  <property name="text">
-                  <string>mHM ready (Class Layer)</string>
+                  <string>Preprocessed mHM LAI Class Layer (with Long Term Mean Monthly LAI table)</string>
                  </property>
                 </widget>
                </item>
                <item>
                 <widget class="QRadioButton" name="radioButton_laiNetcdf">
                  <property name="text">
-                  <string>NetCDF File</string>
+                  <string>Gridded NetCDF Time Series LAI file</string>
                  </property>
                 </widget>
                </item>
@@ -6265,16 +6354,6 @@ date,discharge
                  </column>
                  <column>
                   <property name="text">
-                   <string>Files</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
-                   <string>Period</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
                    <string>Cell Size</string>
                   </property>
                  </column>
@@ -6295,7 +6374,7 @@ date,discharge
                  </column>
                  <column>
                   <property name="text">
-                   <string>Accumulation</string>
+                   <string>Extent Modification</string>
                   </property>
                  </column>
                  <column>
@@ -6594,16 +6673,6 @@ date,discharge
                  </column>
                  <column>
                   <property name="text">
-                   <string>Files</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
-                   <string>Period</string>
-                  </property>
-                 </column>
-                 <column>
-                  <property name="text">
                    <string>Cell Size</string>
                   </property>
                  </column>
@@ -6624,7 +6693,7 @@ date,discharge
                  </column>
                  <column>
                   <property name="text">
-                   <string>Accumulation</string>
+                   <string>Extent Modification</string>
                   </property>
                  </column>
                  <column>
@@ -7181,40 +7250,6 @@ date,discharge
                 <property name="calendarPopup">
                  <bool>true</bool>
                 </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="label_postResolution">
-                <property name="text">
-                 <string>Resolution</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QComboBox" name="comboBox_postResolution">
-                <property name="toolTip">
-                 <string>Aggregation of series and balance tables; finer than the output step is refused.</string>
-                </property>
-                <item>
-                 <property name="text">
-                  <string>Native</string>
-                 </property>
-                </item>
-                <item>
-                 <property name="text">
-                  <string>Day</string>
-                 </property>
-                </item>
-                <item>
-                 <property name="text">
-                  <string>Month</string>
-                 </property>
-                </item>
-                <item>
-                 <property name="text">
-                  <string>Year</string>
-                 </property>
-                </item>
                </widget>
               </item>
               <item>

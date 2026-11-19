@@ -19,7 +19,7 @@ from qgis.PyQt.QtWidgets import QHeaderView, QPushButton, QTableWidgetItem
 COLUMNS = ("Project structure", "", "", "")  # name | status or ▶ | view | next step (shown first)
 STATUS_COLUMN, VIEW, NEXT = 1, 2, 3
 SYMBOLS = {"empty": ("⚪", "Empty: no inputs added"),
-           "added": ("🟢", "Inputs added, not processed yet"),
+           "added": ("🟡", "Input set: run ▶ to process it"),
            "processed": ("✅", "Processed")}
 ICONS = Path(__file__).parents[1] / "ui" / "forms" / "Resources"
 
@@ -279,9 +279,10 @@ def select(dialog, row) -> None:
     dialog.tabWidget_steps.setTabText(0, node["title"])
     dialog.stackedWidget_project.setCurrentWidget(getattr(dialog, node["page"]))
     if "analysis" in node:
-        from ..controllers import post_context
+        from ..controllers import post_context, post_map
 
         post_context.view_selected(dialog, node["analysis"])
+        post_map.focus(dialog, node.get("map"))
 
 
 def clicked(dialog, row, column) -> None:

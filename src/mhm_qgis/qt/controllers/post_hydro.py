@@ -18,6 +18,7 @@ SHOWN = ("NSE", "KGE", "KGE'", "logNSE", "r", "alpha", "beta", "PBIAS", "volume 
 
 def bind(dialog) -> None:
     dialog._post.ui.comboBox_postGauge.activated.connect(lambda _index: _gauge_chosen(dialog))
+    dialog._post.ui.comboBox_postResolution.activated.connect(lambda _index: refresh(dialog, {"resolution"}))
     dialog._post.ui.checkBox_postLogY.toggled.connect(
         lambda on: plot_widget(dialog, dialog._post.ui.widget_postHydrographPlot).setLogMode(y=on))
 
@@ -88,7 +89,7 @@ def _load(dialog, gauge) -> None:
     if gauge is None:
         return
     run, root, context = state.run, state.root, state.context
-    period, resolution = context.get("period"), context.get("resolution") or "native"
+    period, resolution = context.get("period"), dialog._post.ui.comboBox_postResolution.currentText().lower()
     basins = next(iter(state.index["variables"].values()), {}).get("basins", [])
     basin = str(gauge) if str(gauge) in basins else "domain"
 

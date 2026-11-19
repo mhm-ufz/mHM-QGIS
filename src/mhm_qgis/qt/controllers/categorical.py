@@ -106,16 +106,13 @@ _TABLES = {
 }
 # a multi-layer switch (off by default) → its table and the labels it enables beside the table's widgets
 _SWITCHES = {
-    "checkBox_multiPeriodCategoricalLandUseInput": ("lc_lookup", ("label_categoricalLandUseCrs",)),
-    "checkBox_multiPeriodmhmReadyLandUseInput": ("lc_ready", ("label_mhmReadyLandUseFrom", "label_mhmReadyLandUseTo",
-                                                               "label_mhmReadyLandUseCrs")),
-    "checkBox_multiClassLayerSoil": ("soil_ready", ("label_mhmReadySoilUpperDepth", "label_mhmReadySoilLowerDepth",
-                                                    "label_mhmReadySoilCrs")),
+    "checkBox_multiPeriodCategoricalLandUseInput": ("lc_lookup", ()),
+    "checkBox_multiPeriodmhmReadyLandUseInput": ("lc_ready", ("label_mhmReadyLandUseFrom", "label_mhmReadyLandUseTo")),
+    "checkBox_multiClassLayerSoil": ("soil_ready", ("label_mhmReadySoilUpperDepth", "label_mhmReadySoilLowerDepth")),
     "checkBox_multiClassLayerCategoricalSoil": ("soil_lookup", ("label_categoricalSoilUpperDepth",
-                                                                "label_categoricalSoilLowerDepth",
-                                                                "label_categoricalSoilCrs")),
+                                                                "label_categoricalSoilLowerDepth")),
 }
-# the CRS of all a table's layers (mHM-tools' input_crs); a row takes no NetCDF
+# the CRS of all a table's layers, or of a single layer (mHM-tools' input_crs); always enabled
 _CRS = {"lc_lookup": "mProjectionSelectionWidget_categoricalLandUseCrs",
         "lc_ready": "mProjectionSelectionWidget_mhmReadyLandUseCrs",
         "soil_ready": "mProjectionSelectionWidget_mhmReadySoilCrs",
@@ -144,7 +141,7 @@ def bind(dialog):
     """Radios show their page; browse buttons fill their combos; Set commits."""
     dialog._lookup_adapters = {}
     for kind in KINDS:
-        main.radios(dialog, PAGES[kind], lambda text, kind=kind: show_type(dialog, kind, text))
+        main.radios(dialog, PAGES[kind], lambda text, kind=kind: show_type(dialog, kind, text), MODES[kind])
         combo, browse, definition, browse_definition = _widgets(dialog, _READY_WIDGETS[kind])
         browse.clicked.connect(lambda _checked=False, combo=combo: _browse_raster_into_combo(
             dialog, combo, "Select mHM-ready input", _RASTER_FILTER))
@@ -183,7 +180,7 @@ def show_type(dialog, kind, text):
 
 def _checked(dialog, kind) -> str:
     button = getattr(dialog, f"buttonGroup_{PAGES[kind]}").checkedButton()
-    return button.text() if button is not None else ""
+    return main.mode_of(button) if button is not None else ""
 
 
 def _refresh_fields(table, mapping, class_field, preferred=("", "")):
@@ -288,7 +285,7 @@ def _ready(dialog, kind):
     if not _ensure_raster_details(dialog, combo):
         return None
     details = _combo_raster_details(combo)
-    return ReadyInputConfig(source, defined, details.get("variable", ""), details.get("source_crs", ""))
+    return ReadyInputConfig(source, defined, details.get("variable", ""), _single_crs(dialog, key, source, details))
 
 
 def _lookup(dialog, kind):
@@ -308,7 +305,7 @@ def _lookup(dialog, kind):
     details = _combo_raster_details(adapter.combo_box)
     return SingleLayerLookupConfig(source, lookup_table, mapping.currentText().strip(),
                                    class_field.currentText().strip(), details.get("variable", ""),
-                                   details.get("source_crs", ""))
+                                   _single_crs(dialog, f"{kind}_lookup", source, details))
 
 
 def _soil_horizon_lookup(dialog):
@@ -347,7 +344,7 @@ def _switched(dialog, checkbox):
     key, labels = _SWITCHES[checkbox]
     on = getattr(dialog, checkbox).isChecked()
     table, _combo, first, second, add = _TABLES[key]
-    for name in (table, first, second, add, _CRS[key], *labels):
+    for name in (table, first, second, add, *labels):
         getattr(dialog, name).setEnabled(on)
     if key.startswith("lc"):
         _next_period(dialog, key)
@@ -403,6 +400,14 @@ def _show_rows(dialog, key):
         table.setCellWidget(index, 3, remove)
     if key.startswith("lc"):
         _next_period(dialog, key)
+
+
+def _single_crs(dialog, key, path, details) -> str:
+    """A single layer's CRS: its page's CRS widget when set (checked against the file's own), else the file's."""
+    widget = getattr(dialog, _CRS[key]) if key in _CRS else None
+    if widget is not None and widget.crs().isValid():
+        return group_crs(widget, [path])
+    return details.get("source_crs", "")
 
 
 def _crs(dialog, key) -> str:
@@ -482,9 +487,10 @@ def fill(dialog):
         "soil_ready": [list(row) for row in (dialog._categorical_ready_configs.get("soil") or {}).get("layers", [])],
         "soil_lookup": [list(row) for row in (dialog._categorical_lookup_configs.get("soil") or {}).get("layers", [])],
     }
-    saved_crs = {  # a layered config's source_crs is its table's CRS
-        "lc_lookup": land_use_input_value(periods).crs if periods else "",
-        **{key: config.get("source_crs", "") if config.get("layers") else "" for key, config in (
+    saved_crs = {  # a table's CRS, or a single layer's
+        "lc_lookup": land_use_input_value(periods).crs if periods else
+        (dialog._categorical_lookup_configs.get("lc") or {}).get("source_crs", ""),
+        **{key: config.get("source_crs", "") for key, config in (
             ("lc_ready", dialog._categorical_ready_configs.get("lc") or {}),
             ("soil_ready", dialog._categorical_ready_configs.get("soil") or {}),
             ("soil_lookup", dialog._categorical_lookup_configs.get("soil") or {}))},

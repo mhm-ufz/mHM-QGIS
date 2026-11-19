@@ -233,9 +233,11 @@ def test_meteo_dialog_cancel_and_edit_do_not_prepare_data(tmp_path, monkeypatch)
         assert prompt.comboBox_unitInput.currentText() == "K"
         return prompt.DialogCode.Rejected
     monkeypatch.setattr(MeteoVarDetailsDialog, "exec", cancel)
-    monkeypatch.setattr(dialog.task_coordinator, "submit", lambda *a, **k: pytest.fail("Cancel started scanning"))
+    submitted = []
+    monkeypatch.setattr(dialog.task_coordinator, "submit", lambda key, *a, **k: submitted.append(key))
     forcing.populate_meteo_table(dialog)
     dialog.tableWidget_meteoInputs.cellWidget(0, dialog.tableWidget_meteoInputs.columnCount() - 1).click()
+    assert submitted == ["rescan-tableWidget_meteoInputs"]  # the saved input's background scan; Cancel starts none
     assert dialog._meteo_inputs["tavg"] == asdict(spec)
     assert not list(Path(dialog.setup_folder).rglob("*.nc"))
     dialog.close()

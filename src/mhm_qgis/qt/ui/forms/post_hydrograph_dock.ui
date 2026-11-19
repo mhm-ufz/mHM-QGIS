@@ -41,6 +41,40 @@
          </widget>
         </item>
         <item>
+         <widget class="QLabel" name="label_postResolution">
+          <property name="text">
+           <string>Resolution</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="comboBox_postResolution">
+          <property name="toolTip">
+           <string>Aggregation of the series; finer than the output step is refused.</string>
+          </property>
+          <item>
+           <property name="text">
+            <string>Native</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Day</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Month</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Year</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+        <item>
          <spacer name="horizontalSpacer_postGauge">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>

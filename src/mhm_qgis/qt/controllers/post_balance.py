@@ -28,6 +28,11 @@ def bind(dialog) -> None:
     dialog._post.ui.comboBox_timeBalance.activated.connect(lambda _index: refresh_balance(dialog, {"balance_time"}))
 
 
+def bind_processes(dialog) -> None:
+    dialog._post.ui.comboBox_processesResolution.activated.connect(
+        lambda _index: refresh_processes(dialog, {"resolution"}))
+
+
 def _basin(dialog):
     return dialog._post.context.get("basin") or "domain"
 
@@ -204,15 +209,18 @@ def refresh_processes(dialog, fields) -> None:
     if not fields & {"run", "basin", "cell", "period", "resolution"}:
         return
     view.clear()
-    from ...core.post import aggregate
+    from ...core.post import aggregate, series
 
     context = state.context
     cell, period = context.get("cell"), context.get("period")
-    resolution = context.get("resolution") or "native"
+    read, pending = post_map._cell_values(dialog) if cell else ({}, False)  # the inspector's one pass
+    resolution = dialog._post.ui.comboBox_processesResolution.currentText().lower()
     scanned = state.index["variables"]
     present = {v.name: v for v in state.run.variables}
     notes, first = [], None
     where = f"cell row {cell[0]}, column {cell[1]}" if cell else f"basin {_basin(dialog)}"
+    if pending:
+        notes.append(f"Reading {where}…")
     for title, outputs in PANELS:
         names = [name for name, info in scanned.items() if info.get("output") in outputs or name in outputs]
         missing = [v for v in present.values() if v.output in outputs and not v.present]
@@ -220,9 +228,14 @@ def refresh_processes(dialog, fields) -> None:
         curves = []
         for name in names:
             how = "sum" if scanned[name].get("kind") == "flux" else "mean"
+            if cell and name not in read:
+                if not pending:
+                    notes.append(f"{title}: {name} has no values in this cell.")
+                continue
+            given = series._select(series.bounds(state.root), read[name], period) if cell else None
             try:
                 values = aggregate.temporal(state.root, name, how, resolution, basin=_basin(dialog),
-                                            cell=cell, period=period)
+                                            cell=cell, period=period, values=given)
             except ValueError as error:
                 notes.append(f"{title}: {error}")
                 continue
@@ -233,7 +246,7 @@ def refresh_processes(dialog, fields) -> None:
         if not curves:
             continue
         plot = view.addPlot(title=title, axisItems={"bottom": pg.DateAxisItem(utcOffset=0)})
-        plot.addLegend(offset=(5, 5))
+        plot.addLegend(offset=(5, 5), colCount=len(curves))  # one row: a short panel clips a column
         plot.showGrid(x=True, y=True, alpha=0.2)
         if first is None:
             first = plot
