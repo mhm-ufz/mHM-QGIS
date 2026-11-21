@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import sys
 import traceback
@@ -122,6 +123,7 @@ def main(argv=None):
         raise SystemExit("Usage: native_worker JOB_JSON RESULT_JSON")
     _prefer_worker_termination()
     os.environ.setdefault("MPLBACKEND", "Agg")  # headless: mhm-tools' evaluations plot to files
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")  # the parent relays WARNING lines
     job_path, result_path = map(Path, argv)
     try:
         payload = {"result": run(json.loads(job_path.read_text(encoding="utf-8")))}

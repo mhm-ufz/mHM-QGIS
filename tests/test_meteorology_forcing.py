@@ -259,8 +259,14 @@ def test_cf_edge_fragments_are_dropped_and_other_variables_share_precipitation_w
         with Dataset(path) as raw:
             assert raw.variables["time"].units.startswith("hours since 1900-01-01")
             assert raw.variables["time_bnds"].units == raw.variables["time"].units
+    # a shorter variable trims every output to the period they all cover
     _write_nc(folder / "tavg.nc", "tavg", times=("2001-01-02",), units="Celsius")
-    with pytest.raises(ValueError, match="cover the precipitation period"):
+    result = process_meteo_inputs(specs, tmp_path / "out", target())
+    for path in result.outputs.values():
+        with xr.open_dataset(path) as output:
+            np.testing.assert_array_equal(output.time, np.array(["2001-01-02"], dtype="datetime64[ns]"))
+    _write_nc(folder / "tavg.nc", "tavg", times=("2002-01-02",), units="Celsius")
+    with pytest.raises(ValueError, match="share no common period"):
         process_meteo_inputs(specs, tmp_path / "out", target())
 
 

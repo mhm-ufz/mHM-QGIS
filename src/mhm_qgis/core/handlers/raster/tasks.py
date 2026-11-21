@@ -583,8 +583,10 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
         source = source.split("|", 1)[0]
     selected_netcdf_variable = source.startswith('NETCDF:"')
     dataset = gdal.Open(source)
-    own_crs = bool(dataset is not None and dataset.GetProjection())  # an ASC without .prj has none
+    projection = dataset.GetProjection() if dataset is not None else ""  # an ASC without .prj has none
     dataset = None
+    own_crs = bool(projection)
+    source_crs = source_crs or projection  # a blank CRS field means the file's own, still reprojected
     if not selected_netcdf_variable and own_crs and (
         not target_crs or source_crs == target_crs
     ):

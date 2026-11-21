@@ -527,6 +527,36 @@ def test_a_dem_without_crs_gets_its_assigned_one_even_in_the_target_crs(tmp_path
     assert _prepared_dem_source(own, "EPSG:32632", "EPSG:32632", str(tmp_path / "x.nc")) == str(own)
 
 
+
+def test_a_blank_source_crs_means_the_dem_files_own_and_is_still_reprojected(tmp_path):
+    from mhm_qgis.core.handlers.raster.tasks import _prepared_dem_source
+
+    own = tmp_path / "own.tif"
+    _dem(own)
+    prepared = _prepared_dem_source(own, "", "EPSG:3035", str(tmp_path / "prepared.nc"))
+    assert osr.SpatialReference(wkt=gdal.Open(prepared).GetProjection()).GetAuthorityCode(None) == "3035"
+
+
+def test_native_worker_relays_the_warnings_of_a_successful_job(tmp_path, monkeypatch):
+    import json
+
+    from mhm_qgis.core.executions.morphology import commands
+
+    class Worker:  # what the child writes: mHM-tools' warnings among other output, then its result
+        returncode = 0
+
+        def __init__(self, args, stdout, **_):
+            stdout.write("noise\nWARNING: 5 cells were not in the lookup table\n")
+            Path(args[-1]).write_text(json.dumps({"result": {"kind": "lc"}}), encoding="utf-8")
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(commands.subprocess, "Popen", Worker)
+    messages = []
+    assert commands.native_worker(None, {"mode": "lookup"}, tmp_path, messages.append) == {"kind": "lc"}
+    assert messages == ["WARNING: 5 cells were not in the lookup table"]
+
 def test_native_worker_runs_the_dem_derivative_job(tmp_path):
     from mhm_qgis.core.native_worker import run
 

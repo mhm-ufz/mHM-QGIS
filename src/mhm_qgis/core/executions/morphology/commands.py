@@ -59,7 +59,7 @@ def gauge_position(task, options):
     return result["output"]
 
 
-def lai(task, options, messages):
+def lai(task, options, log):
     return prepare_lai_file(
         options["source_path"],
         options["filled_dem"],
@@ -71,15 +71,16 @@ def lai(task, options, messages):
         resampling=options.get("method") or "bilinear",
         l0_header=options.get("l0_header"),
         task=task,
-        log=messages.append,
+        log=log,
     )
 
 
-def lookup(task, job):
+def lookup(task, job, log=None):
     result = native_worker(
         task,
         {"mode": "lookup", "kind": job["kind"], "job": job},
         job["geometry"],
+        log,
     )
     return {
         "kind": result["kind"],
@@ -89,10 +90,10 @@ def lookup(task, job):
     }
 
 
-def advanced(task, job):
+def advanced(task, job, log=None):
     payload = dict(job)
     payload["value"] = job["value"].as_dict()
-    result = native_worker(task, payload, temp_morphology_folder(job["setup_folder"]))
+    result = native_worker(task, payload, temp_morphology_folder(job["setup_folder"]), log)
     return {"kind": result["kind"], "outputs": tuple(result["outputs"])}
 
 
@@ -179,8 +180,8 @@ def categorical_outputs(setup_folder, kind):
     return saved_outputs(setup_folder, kind)
 
 
-def native_worker(task, payload, working_folder):
-    """Run one native job without risking the long-lived QGIS process."""
+def native_worker(task, payload, working_folder, log=None):
+    """Run one native job without risking the long-lived QGIS process; its warnings go to `log`."""
     if task is not None and task.isCanceled():
         raise RuntimeError("Task cancelled.")
     if task is not None:
@@ -227,17 +228,20 @@ def native_worker(task, payload, working_folder):
                         with contextlib.suppress(OSError, ValueError):
                             task.setProgress(max(5, min(99, int(progress_file.read_text(encoding="ascii")))))
                     continue
-        log = log_file.read_text(encoding="utf-8", errors="replace").strip()
+        output = log_file.read_text(encoding="utf-8", errors="replace").strip()
         if not result_file.is_file():
             raise RuntimeError(
-                f"Native raster worker failed: {log or f'exit status {process.returncode}'}"
+                f"Native raster worker failed: {output or f'exit status {process.returncode}'}"
             )
         response = json.loads(result_file.read_text(encoding="utf-8"))
         if process.returncode or response.get("error"):
             raise RuntimeError(
-                response.get("traceback") or response.get("error") or log
+                response.get("traceback") or response.get("error") or output
             )
         result = response["result"]
+        for line in output.splitlines() if log else ():
+            if line.startswith("WARNING: "):
+                log(line)
     if task is not None:
         task.setProgress(100)
     return result

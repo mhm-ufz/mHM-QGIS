@@ -71,6 +71,11 @@ def lai(v6, values, mask, monthly) -> list[str]:
     if monthly and len(values) != 12:
         problems.append(f"LAI: monthly LAI needs 12 slices, the file has {len(values)}.")
     problems += classes("LAI", values, mask)
+    # mHM-tools pads cells the LAI file does not reach with 0; mHM runs, without vegetation there
+    uncovered = np.mean((np.asarray(values)[..., mask] == 0).all(axis=0)) if np.any(mask) else 0
+    if uncovered > 0.01:
+        problems.append(f"LAI: {uncovered:.0%} of the domain has LAI 0 in every time step: the LAI file "
+                        "does not cover it. mHM runs, but without vegetation there.")
     if not v6:  # v6 clamps to [1e-10, 30]
         inside = np.asarray(values)[..., mask]
         inside, low = inside[~np.isnan(inside)], 0 if monthly else 1e-10

@@ -265,7 +265,10 @@ def _gauges(setup):
     grid = None if setup.v6 else setup.morph("idgauges.asc")
     domains = setup.settings.get("domains") or [{}]
     ids = domains[0].get("gauge_ids") or setup.get("evaluation_gauges", "gauge_id", [])
-    return rules.gauges([int(gauge) for gauge in ids], read(grid)) if grid else []
+    missing = [f"Gauge {gauge.get('gauge_id')}: {gauge['gauge_path']} is missing; mHM stops ('File does not exist')."
+               for gauge in setup.settings.get("gauges") or []
+               if gauge.get("gauge_path") and not (setup.folder / gauge["gauge_path"]).is_file()]
+    return missing + (rules.gauges([int(gauge) for gauge in ids], read(grid)) if grid else [])
 
 
 def _stale(setup):

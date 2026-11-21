@@ -244,26 +244,22 @@ class MorphologyTaskBridge:
                 "LAI inputs are unchanged. Reusing the staged DEM-grid LAI."
             )
             QtCore.QTimer.singleShot(
-                0, lambda: self._lai_ready(options["output_path"], [], done)
+                0, lambda: self._lai_ready(options["output_path"], done)
             )
             return True
         self.dialog.log_message(
             f"Resampling LAI to the filled DEM grid ({options.get('method') or 'bilinear'})."
         )
-        messages = []
         return self.coordinator.submit(
             key,
             "Resample LAI to the filled DEM grid",
-            partial(commands.lai, options=options, messages=messages),
+            partial(commands.lai, options=options, log=self._worker_log(key)),
             resource="morphology-files",
-            on_success=lambda result: self._lai_ready(
-                result, messages, done, digest=digest),
+            on_success=lambda result: self._lai_ready(result, done, digest=digest),
             on_error=lambda message: lifecycle.fail(self.dialog, "LAI", message, failed),
         )
 
-    def _lai_ready(self, result, messages, done, digest=None):
-        for message in messages:
-            self.dialog.log_message(message)
+    def _lai_ready(self, result, done, digest=None):
         if result:
             lifecycle.register(self.dialog, result)
             if digest:
@@ -414,7 +410,7 @@ class MorphologyTaskBridge:
             )
             return True
         return (
-            partial(commands.advanced, job=job),
+            partial(commands.advanced, job=job, log=self._worker_log(f"categorical-{kind}")),
             lambda result: self._advanced_ready(result, done, digest),
         )
 
@@ -459,7 +455,7 @@ class MorphologyTaskBridge:
                 QtCore.QTimer.singleShot(0, lambda: done({"kind": kind}))
             return True
         return (
-            partial(commands.lookup, job=job),
+            partial(commands.lookup, job=job, log=self._worker_log(f"categorical-{kind}")),
             lambda result: self._lookup_ready(result, done, digest=digest),
         )
 
