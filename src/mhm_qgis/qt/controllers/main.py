@@ -19,9 +19,12 @@ from ..dialogs.file_picker import open_file
 from ..dialogs.input_selection import (
     INPUT_EXTENSIONS,
     InputComboAdapter,
+    _populate_layer_combo,
+    _restore_raster_details,
     is_point_layer,
     loaded_qgis_items,
     raster_details,
+    raster_draft,
 )
 from ..reporting import error_detail
 from ..workflows import hydrology
@@ -57,7 +60,7 @@ def refresh_input_sources(dialog):
             and isinstance(previous, dict)
             and previous.get("origin") == "file"
             and previous.get("manual")
-            and os.path.isfile(previous.get("path", ""))
+            and os.path.isfile(previous.get("path", "").split("|", 1)[0])  # a GeoPackage path names its layer
         ):
             combo.addItem(previous.get("label") or previous["path"], previous)
             index = combo.count() - 1
@@ -65,6 +68,14 @@ def refresh_input_sources(dialog):
         combo.blockSignals(False)
         if isinstance(previous, dict) and index < 0:
             adapter.layerChanged.emit(adapter.currentLayer())
+    for adapter in getattr(dialog, "_lookup_adapters", {}).values():  # the categorical layers keep their choice
+        combo, draft = adapter.combo_box, raster_draft(adapter.combo_box)
+        browsed = (combo.currentData() or {}).get("origin") == "file"
+        combo.blockSignals(True)
+        _populate_layer_combo(adapter, dialog.setup_folder, adapter.kind, draft["input_path"])
+        if browsed:
+            _restore_raster_details(combo, draft)
+        combo.blockSignals(False)
 
 
 def _matching_input_index(combo, previous):
@@ -250,7 +261,7 @@ def update_gauged_outlet_count(dialog, layer=None):
     return count
 
 
-DOMAIN_TYPES = ("Entire DEM extent as Domain", "Delineate Domain")  # the radios' texts
+DOMAIN_TYPES = ("Entire DEM extent as Domain", "Delineate Domain")  # saved for the radios, in order
 
 
 def radios(dialog, name, chosen, modes=()):

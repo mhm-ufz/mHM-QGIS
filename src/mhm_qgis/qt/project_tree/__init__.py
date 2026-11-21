@@ -388,8 +388,8 @@ def _file(dialog, node) -> str:
 
 
 def _summary(dialog, table, top) -> None:
-    """The shown rows under `top` with a status or inputs: status, what needs them, prepared file;
-    a wider table (morphology) also gets each input's grid and how it is fitted to L0."""
+    """The shown rows under `top` with a status or inputs: what needs them, prepared file (the tree
+    shows the status); each input's grid and how it is fitted to L0 between them."""
     from ..controllers.grid import summary
 
     top = top if top.childCount() else top.parent()  # Process lists its group
@@ -400,9 +400,8 @@ def _summary(dialog, table, top) -> None:
         node = _node(row)
         findings = [dialog._input_findings[name] for name in _inputs(node) if name in dialog._input_findings]
         needed = ", ".join(dict.fromkeys(reason for finding in findings for reason in finding.reasons))
-        details = summary(dialog, node)[:table.columnCount() - 4]
-        for column, text in enumerate((row.text(0), " ".join(SYMBOLS[_state(dialog, row)]), needed, *details,
-                                       _file(dialog, node))):
+        details = summary(dialog, node)[:table.columnCount() - 3]
+        for column, text in enumerate((row.text(0), needed, *details, _file(dialog, node))):
             table.setItem(index, column, QTableWidgetItem(text))
     for column in range(table.columnCount() - 1):  # the last one stretches
         table.resizeColumnToContents(column)

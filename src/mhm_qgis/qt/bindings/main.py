@@ -42,11 +42,12 @@ def _bind_input_sources(dialog):
     # Land use, soil, geology and LAI: radios → their stacked page, Set → categorical.set_input
     categorical.bind(dialog)
     # Gauge Point/Raster radios → their page; the raster browse → its combo
-    main.radios(dialog, "gauges", lambda _text: main.show_gauge_type(dialog))
+    main.radios(dialog, "gauges", lambda _text: main.show_gauge_type(dialog), ("Point Input", "Raster Input"))
     dialog.pushButton_browsegaugeRasterInput.clicked.connect(lambda: _browse_raster_into_combo(
         dialog, dialog.comboBox_gaugeRaterInput, "Select gauge-ID raster",
         "Raster files (*.asc *.nc *.tif *.tiff);;All files (*)"))
-    main.radios(dialog, "domainDefinition", lambda text: main.handle_domain_definition_type(dialog, text))
+    main.radios(dialog, "domainDefinition", lambda text: main.handle_domain_definition_type(dialog, text),
+                main.DOMAIN_TYPES)
     # toolButton_*Info → its plain-text toolTip in a message box, as in nml-tools
     for info in dialog.findChildren(QToolButton):
         if info.objectName().endswith("Info"):
@@ -89,11 +90,8 @@ def bind(dialog):
     dialog.pushButton_createOrLoadDomainStructure.clicked.connect(
         lambda: project.create_structure(dialog)
     )
-    dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(
-        lambda: dialog.comboBox_mHMversion.setEnabled(
-            dialog.comboBox_domainFolderSelector.currentData() is None
-        )
-    )
+    # comboBox_domainFolderSelector → project.domain_chosen: New or Open, the version for a new one
+    dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(lambda: project.domain_chosen(dialog))
     # Multi-domain setup
     dialog.comboBox_multiDomainFolderSelector.currentIndexChanged.connect(
         lambda: dialog.comboBox_mHMversion.setEnabled(
@@ -212,10 +210,6 @@ def _bind_grid(dialog):
         for name, _key in (*grid.CORNERS, ("cellSize", "cellsize")):
             getattr(dialog, f"label_{name}{level}Common").linkActivated.connect(
                 lambda href: grid.explain(dialog, href))
-        # toolButton_description{level}File → its toolTip (the file's steps) in a message box
-        button = getattr(dialog, f"toolButton_description{level}File")
-        button.clicked.connect(lambda _checked=False, level=level, button=button: QMessageBox.information(
-            dialog, f"{level} file", button.toolTip()))
     dialog.lineEdit_L0Resolution.editingFinished.connect(lambda: grid.snap_l0(dialog))
     for level in ("L1", "L11", "L2"):
         getattr(dialog, f"lineEdit_{level}Resolution").textChanged.connect(

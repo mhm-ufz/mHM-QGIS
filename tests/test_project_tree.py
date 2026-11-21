@@ -299,7 +299,7 @@ def test_summary_tables_on_the_inputs_morphology_and_dem_derivative_pages(dialog
     table = dialog.tableWidget_inputsSummary
     names = [table.item(row, 0).text() for row in range(table.rowCount())]
     assert {"DEM", "Precipitation"} <= set(names)
-    assert table.item(names.index("Precipitation"), 1).text().startswith("⚪")
+    assert table.item(names.index("Precipitation"), 1).text() == "every run"  # Needed by (the tree has the status)
     tree.setCurrentItem(project_tree.item(dialog, "morphology"))
     table = dialog.tableWidget_morphologySummary
     assert "Precipitation" not in [table.item(row, 0).text() for row in range(table.rowCount())]
@@ -309,8 +309,8 @@ def test_summary_tables_on_the_inputs_morphology_and_dem_derivative_pages(dialog
                                             ("flow_accumulation", "Flow accumulation", "facc"))
              if name in dialog._input_findings]
     assert names[:1 + len(shown)] == ["DEM", *shown]  # the derivatives the process cases need, after DEM
-    assert table.columnCount() == 10
-    assert table.item(0, 7).text() == "Select the DEM."  # Extent Modification
+    assert table.columnCount() == 9
+    assert table.item(0, 6).text() == "Select the DEM."  # Extent Modification
 
 
 def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_path, monkeypatch):

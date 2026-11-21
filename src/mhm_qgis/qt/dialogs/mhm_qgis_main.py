@@ -37,6 +37,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Constructor; `iface` is QGIS Desktop's interface, None when standalone."""
         super().__init__(parent)
         self.setupUi(self)
+        # a window, not a dialog: Windows and some Linux desktops give a parentless dialog no minimize
+        self.setWindowFlags(QtCore.Qt.WindowType.Window)
         elide_named_left(self)  # long paths keep their file name in sight
         self.iface = iface
         self.setup_folder = None  # Active domain root, passed to core APIs.

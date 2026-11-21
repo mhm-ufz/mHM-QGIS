@@ -216,6 +216,7 @@ class MorphologyTaskBridge:
             source_crs=config.get("source_crs", ""),
             target_timestep=config.get("target_timestep") or lai.DEFAULT_TIMESTEP,
             l0_header=(self.dialog._grid_l0_info or {}).get("header"),
+            method=config.get("method") or "bilinear",
         ) if "netcdf" in mode else None
         if options is None:
             self.dialog.log_message("No LAI NetCDF input is selected. Skipping LAI.")
@@ -247,7 +248,7 @@ class MorphologyTaskBridge:
             )
             return True
         self.dialog.log_message(
-            "Resampling LAI to the filled DEM grid with bilinear interpolation."
+            f"Resampling LAI to the filled DEM grid ({options.get('method') or 'bilinear'})."
         )
         messages = []
         return self.coordinator.submit(

@@ -79,6 +79,9 @@ def set_post_crs(dialog):
     if not dialog.project_directory or not crs.isValid():
         QMessageBox.warning(dialog, "Post processing", "Set the project folder first, then choose a valid CRS.")
         return
+    if problem := _not_a_run(dialog.project_directory, selected_version(dialog)):
+        QMessageBox.warning(dialog, "Post processing only", problem)
+        return
     dialog.setup_folder = dialog.project_directory
     dialog._set_crs = crs.authid()
     dialog.comboBox_mHMversion.setEnabled(False)
@@ -164,6 +167,15 @@ def populate_domains(dialog, selected=None):
         combo.addItem("<new>", None)
         index = combo.findData(selected) if selected else 0
         combo.setCurrentIndex(max(0, index))
+    domain_chosen(dialog)
+
+
+def domain_chosen(dialog):
+    """`<new>` creates a domain; a listed one opens. The version is chosen only with no setup open:
+    changing it rewrites the open one."""
+    new = dialog.comboBox_domainFolderSelector.currentData() is None
+    dialog.pushButton_createOrLoadDomainStructure.setText("New" if new else "Open")
+    dialog.comboBox_mHMversion.setEnabled(new and not dialog.setup_folder)
 
 
 def browse_folder(dialog):

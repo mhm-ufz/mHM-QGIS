@@ -181,6 +181,7 @@ def show_l0(dialog):
     l0 = current_l0_resolution(dialog)
     with QSignalBlocker(dialog.lineEdit_L0Resolution):
         dialog.lineEdit_L0Resolution.setText(repr(l0) if l0 else "")
+        dialog.lineEdit_L0Resolution.setCursorPosition(0)  # the leading digits, not the end, in sight
     unit = _domain(dialog)[1]
     for level in LEVELS:
         combo = getattr(dialog, f"comboBox_{level}ResolutionUnit")
@@ -231,11 +232,13 @@ def sync_multiplier(dialog, level, snap=False):
             spin.setValue(max(1, round(value / l0)))
         if snap:
             getattr(dialog, f"lineEdit_{level}Resolution").setText(repr(spin.value() * l0))
+            getattr(dialog, f"lineEdit_{level}Resolution").setCursorPosition(0)
 
 
 def multiplier_changed(dialog, level, n):
     if l0 := current_l0_resolution(dialog):
         getattr(dialog, f"lineEdit_{level}Resolution").setText(repr(n * l0))
+        getattr(dialog, f"lineEdit_{level}Resolution").setCursorPosition(0)
 
 
 def changed(dialog):
@@ -449,24 +452,6 @@ def _edges(source, common, cell, noise, sides=("west", "east", "south", "north")
         [f"Padded with no data: {', '.join(added)}."] if added else [])
 
 
-def _steps(dialog, level, header, file):
-    """What happens to `level`'s file on the common grid, one step a line (its info button)."""
-    info, steps = file["info"], []
-    cell, l0 = float(header["cellsize"]), float(dialog._grid_l2_metadata["l0_resolution"])
-    if not file["same_crs"]:
-        steps.append(f"Warped {dialog._resolution_files[level]['crs']} → {dialog.selected_meteo_crs()}.")
-    if level == "L0" and l0_factor(dialog) > 1:
-        steps.append(f"Upscaled x {l0_factor(dialog)} ({info['resolution']:.6g} → {cell:.6g} cells).")
-    if level != "L0" and not math.isclose(info["resolution"], cell, rel_tol=1e-7):
-        steps.append(f"Cell {info['resolution']:.6g} = {info['resolution'] / l0:.6g} x L0: resampled to "
-                     f"{round(cell / l0)} x L0 ({cell:.6g}).")
-    gap = dialog._grid_l2_metadata.get("alignment_gap")
-    if level == "L2" and gap and any(abs(value) > 1e-9 * cell for value in gap):  # however small: it is real
-        steps.append(f"Shifted by ({gap[0]:.6g}, {gap[1]:.6g}) onto the L0 lattice.")
-    steps += _edges(Extent.from_header(info["header"]), Extent.from_header(header), info["resolution"], 0.01 * l0)
-    return "\n".join(steps) or "Used as is."
-
-
 def show_headers(dialog):
     """The Set grid in Updated Headers: a value that differs from the From File row is blue, with an
     ⓘ giving the reason; each file row's info button lists what happens to its file."""
@@ -491,9 +476,6 @@ def show_headers(dialog):
             else:
                 label.setText(text)
         _eye(dialog, f"grid:{level}")
-        button = getattr(dialog, f"toolButton_description{level}File")
-        button.setToolTip(_steps(dialog, level, header, file) if file else "")
-        button.setEnabled(bool(file))
     for label, value in zip((dialog.label_minimumEasting, dialog.label_maximumEasting, dialog.label_minimumNorthing,
                              dialog.label_maximumNorthing), header_bounds(grid["l0_header"]), strict=True):
         label.setText(format_resolution(value, unit, precision=display_precision_for_unit(unit)))
@@ -598,9 +580,6 @@ def clear_headers(dialog):
             getattr(dialog, f"label_{name}{level}Common").setText("")
         dialog._displayed.pop(f"grid:{level}", None)
         _eye(dialog, f"grid:{level}", shown=False)
-        button = getattr(dialog, f"toolButton_description{level}File")
-        button.setToolTip("")
-        button.setEnabled(False)
     for label in (dialog.label_minimumEasting, dialog.label_maximumEasting, dialog.label_minimumNorthing,
                   dialog.label_maximumNorthing):
         label.setText("")
@@ -626,6 +605,7 @@ def restore(dialog, state):
             value = 0
         with QSignalBlocker(edit):
             edit.setText(repr(value) if value > 0 else "")
+        edit.setCursorPosition(0)  # the leading digits in sight
     reload_files(dialog)
     dialog._grid_l2_metadata = processing.grid_metadata(dialog.setup_folder) if dialog.setup_folder else None
     if grid_current(dialog):
@@ -835,7 +815,8 @@ def _categorical_input(dialog, kind):
 
     if kind == "lai" and dialog._lai_input_config.get("input_path"):
         config = dialog._lai_input_config
-        return config["input_path"], config.get("variable", ""), config.get("source_crs", ""), "Bilinear (mhm-tools)."
+        return (config["input_path"], config.get("variable", ""), config.get("source_crs", ""),
+                f"{(config.get('method') or 'bilinear').title()} (mhm-tools).")
     if uses_advanced_categorical_input(dialog, kind) and kind == "lc":
         value = land_use_input_value(dialog._advanced_inputs["land_cover"])
         return value.as_dict()["periods"][0]["file_path"], "", value.crs, "Mode (mhm-tools)."

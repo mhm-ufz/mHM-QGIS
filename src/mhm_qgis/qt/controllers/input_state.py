@@ -31,6 +31,9 @@ def save(dialog):
     ):
         return
     path = _state_path(dialog)
+    if dialog.setup_folder == dialog.project_directory:  # post processing only: the setup's own inputs stay
+        jsonio.merge_sections(path, {"mhm_version": version.selected(dialog), "crs_authid": dialog._set_crs})
+        return
     if dialog._multi_domains is not None:
         # A combined setup holds no inputs of its own, only its domains.
         jsonio.write(path, {
@@ -151,7 +154,7 @@ def load(dialog):
             project.show_work_type(dialog)
             multi_domain.refresh_table(dialog)
             return
-        dialog._set_crs = dialog.get_crs().authid()
+        dialog._set_crs = crs.authid() if crs.isValid() else ""  # never the previous domain's
         dialog._upscale_factor = max(1, int(state.get("upscale_factor") or 1))
         dialog.groupBox_upscaleTopography.setChecked(dialog._upscale_factor > 1)
         dialog.spinBox_upscaleTopographyFactor.setMaximum(max(dialog.spinBox_upscaleTopographyFactor.maximum(),
@@ -207,7 +210,7 @@ def clear(dialog):
     dialog._advanced_inputs = {}
     dialog._drafts = {}
     dialog._failed_step = None
-    dialog._set_crs = dialog.get_crs().authid()
+    dialog._set_crs = ""
     dialog._upscale_factor = 1
     dialog.groupBox_upscaleTopography.setChecked(False)
     dialog._land_cover_ready_source = ""
