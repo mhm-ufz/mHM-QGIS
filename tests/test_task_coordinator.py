@@ -119,6 +119,35 @@ def test_falsy_and_ambiguous_results_reach_on_success():
     assert not coordinator.is_busy()
 
 
+def test_finished_tasks_release_what_their_callbacks_and_failures_held():
+    """A kept layer keeps its file open, and GDAL in QGIS then reads the old file at that path (khara-murin)."""
+    import gc
+    import weakref
+
+    class Held:
+        pass
+
+    _app()
+    coordinator = TaskCoordinator(max_threads=2)
+    held, refs, done = Held(), [], []
+    refs.append(weakref.ref(held))
+
+    def failing(_task):
+        local = Held()
+        refs.append(weakref.ref(local))
+        raise ValueError("boom")
+
+    gc.disable()  # only the coordinator may release them
+    try:
+        coordinator.submit("ok", "Ok", lambda _task: None, on_success=lambda _result, held=held: done.append(1))
+        coordinator.submit("bad", "Bad", failing, on_error=lambda _message: done.append(1))
+        del held
+        _wait(lambda: len(done) == 2)
+        assert [ref() for ref in refs] == [None, None]
+    finally:
+        gc.enable()
+
+
 def _until_cancelled(task):
     """Block like a long job; give up after 5 s so a failing test cannot hang."""
     import time

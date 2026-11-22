@@ -428,6 +428,9 @@ def set_resolution(dialog):
                              "run_mhm")
     if previous.get("l0_header") not in (None, metadata["l0_header"]):  # the saved watershed lies on the old grid
         invalidate_domains(dialog.setup_folder)
+        from . import main
+
+        main.embed(dialog, "domainDefinition", None)  # its draft would save the old delineations back
         dialog.log_message("The common L0 grid changed: run Set Gauges and save the domain in Domain Delineator again.")
     dialog._grid_l2_metadata = processing.save_grid_metadata(dialog.setup_folder, metadata)
     show_headers(dialog)

@@ -97,7 +97,11 @@ def start_dem_derivatives(dialog, *, key="execute-all-dem-derivatives", controls
     except Exception as error:
         lifecycle.fail(dialog, "DEM derivatives", error, failed)
         return False
-    # the step rewrites these files in place; a layer still holding the old one makes GDAL read it
+    # the step rewrites these files in place; a layer still holding the old one makes GDAL read it,
+    # and the delineator's canvas layers are outside the project
+    from ..controllers import main
+
+    main.embed(dialog, "domainDefinition", None)
     remove_under(temp_morphology_folder(dialog.setup_folder), dialog.log_message)
 
     def ready(result):

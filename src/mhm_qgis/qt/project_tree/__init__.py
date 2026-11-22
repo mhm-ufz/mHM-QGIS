@@ -444,7 +444,9 @@ def _reset(dialog, key) -> None:
         from ...core.handlers.store import layout
         from ...core.handlers.store.paths import temp_morphology_folder
         from ...qgis_bridge.layers.project import remove_under
+        from ..controllers import main
 
+        main.embed(dialog, "domainDefinition", None)  # the delineator's canvas holds the mask
         for folder in (temp_morphology_folder(dialog.setup_folder), layout.morph_folder(dialog.setup_folder),
                        layout.lai_folder(dialog.setup_folder)):
             remove_under(folder, dialog.log_message)

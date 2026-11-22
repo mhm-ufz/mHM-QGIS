@@ -845,6 +845,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 self.canvas.scene().removeItem(self._outlet_marker)
             self._outlet_marker = None
         self.canvas.setLayers([])
+        self._watershed_layer = self._filled_dem_layer = self._flow_accumulation_layer = self._channel_layer = None
 
     def closeEvent(self, event):
         if self._domain_jobs_busy():

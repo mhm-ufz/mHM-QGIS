@@ -682,10 +682,11 @@ def test_forcing_tables_show_how_each_input_reaches_the_grid(dialog):
 
 def test_reset_and_the_dem_step_unload_the_layers_of_the_files_they_replace(dialog, tmp_path, monkeypatch):
     """A layer left on a deleted or rewritten file makes GDAL in QGIS read the old file (south-johnstone-river)."""
-    from qgis.PyQt.QtWidgets import QMessageBox
+    from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
     from mhm_qgis.core.executions import reset
     from mhm_qgis.qgis_bridge.layers import project as layer_project
+    from mhm_qgis.qt.controllers import main
     from mhm_qgis.qt.workflows import hydrology
 
     unloaded = []
@@ -697,10 +698,15 @@ def test_reset_and_the_dem_step_unload_the_layers_of_the_files_they_replace(dial
     monkeypatch.setattr(dialog.task_coordinator, "submit", lambda *_args, **_kwargs: True)
     dialog.setup_folder = str(tmp_path)
 
+    form = dialog.verticalLayout_domainDefinitionForm
+    main.embed(dialog, "domainDefinition", QDialog())  # the delineator: its canvas layers are outside the project
     project_tree._reset(dialog, "morphology")
     assert unloaded == ["Morphology", "morph", "lai"]
+    assert not form.count()
+    main.embed(dialog, "domainDefinition", QDialog())
     assert hydrology.start_dem_derivatives(dialog)
     assert unloaded[-1] == "Morphology"
+    assert not form.count()
 
 
 def test_set_gauges_checks_the_delineator_inputs_against_the_current_grid(dialog, monkeypatch):
