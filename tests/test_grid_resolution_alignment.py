@@ -450,3 +450,18 @@ def test_a_meteo_edge_between_dem_cells_moves_the_meteo_by_the_leftover(n):
     assert (meteo.xmin - raw.xmin) / l2 == pytest.approx(round((meteo.xmin - raw.xmin) / l2))
     assert raw.intersect(meteo) == meteo  # inside the meteo file's cells
     assert (common.xmin, common.ymin) == pytest.approx((meteo.xmin + dx, meteo.ymin + dy))
+
+
+def test_a_header_written_over_a_cloned_domains_link_leaves_the_source_alone(tmp_path):
+    """Clones link data/ file by file: writing through the link would change the source domain."""
+    from mhm_qgis.core.grid.model import write_header_file
+
+    source, link = tmp_path / "source.txt", tmp_path / "clone" / "header.txt"
+    source.write_text("source header\n")
+    link.parent.mkdir()
+    link.symlink_to(source)
+    write_header_file(link, {"ncols": 2, "nrows": 1, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1.0,
+                             "nodata_value": -9999.0})
+    assert source.read_text() == "source header\n"
+    assert not link.is_symlink()
+    assert "ncols" in link.read_text()

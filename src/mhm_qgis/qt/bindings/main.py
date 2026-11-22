@@ -93,10 +93,9 @@ def bind(dialog):
     # comboBox_domainFolderSelector → project.domain_chosen: New or Open, the version for a new one
     dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(lambda: project.domain_chosen(dialog))
     # Multi-domain setup
+    # comboBox_multiDomainFolderSelector → multi_domain.chosen: New or Open, the version for a new one
     dialog.comboBox_multiDomainFolderSelector.currentIndexChanged.connect(
-        lambda: dialog.comboBox_mHMversion.setEnabled(
-            dialog.comboBox_multiDomainFolderSelector.currentData() is None
-        )
+        lambda: dialog.comboBox_mHMversion.setEnabled(multi_domain.chosen(dialog))
     )
     # pushButton_createorLoadMultiDomainStructure → multi_domain.create_or_load
     dialog.pushButton_createorLoadMultiDomainStructure.clicked.connect(

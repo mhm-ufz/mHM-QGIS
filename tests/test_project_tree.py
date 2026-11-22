@@ -5,7 +5,7 @@ import pytest
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.PyQt.QtCore import QCoreApplication, QDateTime, QEvent, Qt
+from qgis.PyQt.QtCore import QCoreApplication, QDateTime, QEvent, QSignalBlocker, Qt
 from qgis.PyQt.QtWidgets import QDialog
 
 from mhm_qgis.qt import project_tree
@@ -223,8 +223,8 @@ def test_domain_setup_pages_reference_buttons_and_combined_domains(dialog):
     assert dialog.page_processes.isAncestorOf(dialog.pushButton_edit_nmls)
     dialog.pushButton_refPageDem.click()
     assert tree.currentItem() is project_tree.item(dialog, "dem")
-    dialog.comboBox_mhmWorkType.setCurrentIndex(1)  # combine existing domains
-    assert [project_tree.item(dialog, key).isHidden() for key in ("resolution", "settings")] == [True, False]
+    dialog.comboBox_mhmWorkType.setCurrentIndex(1)  # combine existing domains: their periods and processes
+    assert [project_tree.item(dialog, key).isHidden() for key in ("resolution", "settings")] == [True, True]
 
 
 def _set_up(dialog, tmp_path):
@@ -744,3 +744,36 @@ def test_a_new_l0_grid_forgets_the_watershed_saved_on_the_old_one(dialog, tmp_pa
             "l2_unit": "m", "l2_ratio_to_l0": 1, "extent_note": "", "configuration_fingerprint": "f"})
         grid.set_resolution(dialog)
         assert (load_state(tmp_path)["merged_mask_path"] == "") is cleared
+
+
+def test_a_form_that_refuses_to_close_stays_and_the_dem_step_waits(dialog, monkeypatch):
+    """The Domain Delineator refuses to close while it saves: deleting it would break that save."""
+    from qgis.PyQt.QtWidgets import QDialog
+
+    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt.workflows import hydrology
+
+    class Busy(QDialog):
+        def closeEvent(self, event):
+            event.ignore()
+
+    busy, failures = Busy(), []
+    main.embed(dialog, "domainDefinition", busy)
+    monkeypatch.setattr(hydrology, "dem_options", lambda _dialog: {})
+    assert not main.embed(dialog, "domainDefinition", None)
+    assert not hydrology.start_dem_derivatives(dialog, failed=failures.append)
+    assert dialog.verticalLayout_domainDefinitionForm.itemAt(0).widget() is busy
+    assert failures
+    busy.closeEvent = lambda event: event.accept()
+    assert main.embed(dialog, "domainDefinition", None)
+
+
+def test_a_combined_run_hides_the_time_period_and_processes_rows(dialog):
+    """A combined run takes each domain's periods and their common process cases."""
+    from mhm_qgis.qt.controllers import project
+
+    for index, hidden in ((1, True), (0, False)):
+        with QSignalBlocker(dialog.comboBox_mhmWorkType):
+            dialog.comboBox_mhmWorkType.setCurrentIndex(index)
+        project.show_work_type(dialog)
+        assert [project_tree.item(dialog, key).isHidden() for key in ("time_period", "settings")] == [hidden] * 2

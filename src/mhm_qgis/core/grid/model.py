@@ -846,6 +846,7 @@ def write_header_file(path, header: Mapping) -> None:
     normalized = standardize_header(header)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    path.unlink(missing_ok=True)  # a cloned domain's link: writing through it would change the source domain
     path.write_text(
         "ncols         {ncols}\n"
         "nrows         {nrows}\n"

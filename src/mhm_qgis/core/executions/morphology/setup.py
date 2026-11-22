@@ -15,6 +15,7 @@ from ...handlers.raster.tasks import (
     write_domain_dem_ascii,
 )
 from ...handlers.state import processing
+from ...handlers.state.cache import outputs_newer_than_inputs
 from ...handlers.state.domain_state import load_state as load_domain_state
 from ...handlers.state.domain_state import resolve_output_path
 from ...handlers.store import registry
@@ -86,6 +87,9 @@ def mask(request: SetupRequest, *, log=None, task=None) -> tuple[Path, ...]:
         raise FileNotFoundError(
             "The saved merged watershed is missing; save Domain Delineator again."
         )
+    if not outputs_newer_than_inputs([filled], [watershed]):  # a new DEM or fdir: the catchment may differ
+        raise FileNotFoundError("The DEM derivatives changed since the domain was saved: "
+                                "Set Gauges and save the domain in Domain Delineator again.")
     derivatives = _derivative_sources(folder)
     if "dem" not in derivatives:
         raise FileNotFoundError("Prepare the NetCDF DEM derivatives before masking.")

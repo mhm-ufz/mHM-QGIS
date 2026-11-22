@@ -527,6 +527,23 @@ def test_a_dem_without_crs_gets_its_assigned_one_even_in_the_target_crs(tmp_path
     assert _prepared_dem_source(own, "EPSG:32632", "EPSG:32632", str(tmp_path / "x.nc")) == str(own)
 
 
+def test_an_assigned_crs_replaces_a_wrong_label_even_when_it_is_the_target(tmp_path):
+    """A DEM labelled 4326 whose coordinates are 32632: assigning 32632 must relabel it, or the gauges
+    are transformed into 4326 and fall outside the grid."""
+    from osgeo import osr
+
+    from mhm_qgis.core.handlers.raster.tasks import _prepared_dem_source
+
+    own, mislabelled = tmp_path / "own.tif", tmp_path / "mislabelled.tif"
+    _dem(own)
+    gdal.Translate(str(mislabelled), str(own), outputSRS="EPSG:4326")
+    prepared = _prepared_dem_source(mislabelled, "EPSG:32632", "EPSG:32632", str(tmp_path / "prepared.nc"))
+    assert prepared != str(mislabelled)
+    label, utm = osr.SpatialReference(gdal.Open(prepared).GetProjection()), osr.SpatialReference()
+    utm.ImportFromEPSG(32632)
+    assert label.IsSame(utm)
+
+
 
 def test_a_blank_source_crs_means_the_dem_files_own_and_is_still_reprojected(tmp_path):
     from mhm_qgis.core.handlers.raster.tasks import _prepared_dem_source
@@ -653,3 +670,24 @@ def test_the_filled_dem_is_not_read_back_from_the_replaced_bundle(tmp_path, monk
     assert filled
     bundle = f'"{folder / "dem_derivatives.nc"}"'  # the staged copy has the same name in its own folder
     assert all(bundle not in str(uri) for sources in filled for uri in sources.values())
+
+
+def test_mapped_soil_horizons_keep_their_own_crs(monkeypatch, tmp_path):
+    """A vector horizon is burnt in the DEM's CRS: the table's source CRS would relabel it (all -9999)."""
+    from mhm_qgis.core.executions.morphology import commands
+    from mhm_qgis.core.morphology.layers import categorical
+
+    seen = {}
+
+    def stack(*_args, **kwargs):
+        seen.update(kwargs)
+        raise RuntimeError("stacked")
+
+    monkeypatch.setattr(categorical, "lookup_soil_layers", lambda *_args, **_kwargs: ([("h.tif", 0, 5)], "d.txt"))
+    monkeypatch.setattr(categorical, "stack_ready_layers", stack)
+    job = {"input_path": "", "source_crs": "EPSG:4326", "layers": [("soil.gpkg", 0, 5)], "setup_folder": str(tmp_path),
+           "lookup": {"lookup_table": "t.csv", "mapping_field": "m", "class_field": "c"}, "kind": "soil",
+           "target_crs": "EPSG:32632", "target_header": {}}
+    with pytest.raises(RuntimeError, match="stacked"):
+        commands.ready(None, job)
+    assert seen["source_crs"] == ""

@@ -304,7 +304,10 @@ class TaskCoordinator(QtCore.QObject):
             else:
                 if not owners:
                     try:
-                        self._control_states[widget_id] = widget.isEnabled()
+                        # its own flag: isEnabled() is also False under a disabled parent, and restoring
+                        # that would leave it disabled after the parent comes back
+                        self._control_states[widget_id] = not widget.testAttribute(
+                            QtCore.Qt.WidgetAttribute.WA_ForceDisabled)
                     except RuntimeError:
                         self._control_states[widget_id] = True
                 owners.add(record.key)

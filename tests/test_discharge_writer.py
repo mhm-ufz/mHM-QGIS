@@ -100,3 +100,29 @@ def test_missing_days_are_written_as_nodata_lines():
                                     DischargeRecord(datetime(2000, 1, 1), 1.0)])
     assert [record.timestamp.day for record in records] == [1, 2, 3, 4]
     assert [record.value == record.value for record in records] == [True, False, False, True]
+
+
+def test_sub_daily_records_become_the_daily_mean():
+    from datetime import datetime
+
+    from mhm_qgis.core.handlers.file.discharge import (
+        DischargeRecord,
+        sort_and_deduplicate,
+    )
+
+    hours = [DischargeRecord(datetime(2000, 1, 1, hour), 100.0 if hour == 23 else 10.0) for hour in range(24)]
+    [day] = sort_and_deduplicate([*hours, DischargeRecord(datetime(2000, 1, 1, 12), float("nan"))])
+    assert day.value == 13.75  # not the day's last value
+
+
+def test_every_day_of_a_gap_in_an_mhm_file_is_a_line(tmp_path):
+    """mHM 5.13 reads (end - start + 1) lines by position: a 3-day gap needs 3 nodata lines."""
+    from types import SimpleNamespace
+
+    from mhm_qgis.core.handlers.file.discharge import records_from_layer
+
+    path = tmp_path / "280.txt"
+    path.write_text("280 Gauge\nnodata -9999\nn 1\nstart 2001 01 01 00 00\nend 2001 01 06 00 00\n"
+                    "2001 01 01 00 00 1.5\n2001 01 02 00 00 2.0\n2001 01 06 00 00 6.0\n", encoding="utf-8")
+    records = records_from_layer(SimpleNamespace(source=lambda: str(path)))
+    assert [record.timestamp.day for record in records] == [1, 2, 3, 4, 5, 6]

@@ -36,10 +36,10 @@ def show_work_type(dialog):
     dialog.stackedWidget_configuration.setCurrentWidget(
         {0: dialog.page_singleDomain, POST_ONLY: dialog.page_postProcessingOnly}.get(index, dialog.page_multiDomain)
     )
-    for key in ("resolution", "inputs"):  # single-domain rows; Settings stays
+    # single-domain rows: a combined run takes each domain's periods and their common process cases
+    for key in ("resolution", "inputs", "time_period", "settings"):
         project_tree.item(dialog, key).setHidden(index != 0)
-    for key in ("time_period", "settings", "execution"):
-        project_tree.item(dialog, key).setHidden(index == POST_ONLY)
+    project_tree.item(dialog, "execution").setHidden(index == POST_ONLY)
 
 
 def work_type_changed(dialog):

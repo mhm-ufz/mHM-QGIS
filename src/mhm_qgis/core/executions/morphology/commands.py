@@ -112,6 +112,7 @@ def ready(task, job):
                 layers, lookup["lookup_table"], lookup["mapping_field"], lookup["class_field"],
                 Path(morph_staging_folder(job["setup_folder"])) / "_soil_horizons",
                 dem_file=job.get("filled_dem"), dem_crs=job["target_crs"], source_crs=source_crs)
+            source_crs = ""  # each mapped horizon carries its own CRS: a burnt vector one is in the DEM's
         from ...morphology.layers.categorical import STACKS, stack_ready_layers
 
         source = stack_ready_layers(job["setup_folder"], job["kind"], layers, source_crs=source_crs,

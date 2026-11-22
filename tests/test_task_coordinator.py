@@ -148,6 +148,20 @@ def test_finished_tasks_release_what_their_callbacks_and_failures_held():
         gc.enable()
 
 
+def test_a_control_disabled_only_by_its_parent_comes_back_enabled():
+    """Its own flag is restored, not isEnabled(), which a disabled parent also makes False."""
+    _app()
+    coordinator = TaskCoordinator(max_threads=1)
+    parent = QtWidgets.QWidget()
+    button = QtWidgets.QPushButton(parent)
+    parent.setEnabled(False)  # e.g. the steps tab during a ▶ workflow
+    done = []
+    coordinator.submit("job", "Job", lambda _task: 1, controls=(button,), on_success=done.append)
+    _wait(lambda: done)
+    parent.setEnabled(True)
+    assert button.isEnabled()
+
+
 def _until_cancelled(task):
     """Block like a long job; give up after 5 s so a failing test cannot hang."""
     import time

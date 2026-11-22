@@ -101,7 +101,9 @@ def start_dem_derivatives(dialog, *, key="execute-all-dem-derivatives", controls
     # and the delineator's canvas layers are outside the project
     from ..controllers import main
 
-    main.embed(dialog, "domainDefinition", None)
+    if not main.embed(dialog, "domainDefinition", None):
+        lifecycle.fail(dialog, "DEM derivatives", "Wait for the Domain Delineator task to finish.", failed)
+        return False
     remove_under(temp_morphology_folder(dialog.setup_folder), dialog.log_message)
 
     def ready(result):

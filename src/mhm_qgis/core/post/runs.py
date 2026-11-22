@@ -95,7 +95,7 @@ def list_runs(folder) -> list[RunRef]:
         if version == "v6":
             return [ref for domain in domains for ref in list_runs(domain)]
     refs = _refs(folder, folder, folder, version, "", domains)
-    refs = refs if wrote(refs[0]) else []
+    refs = refs if refs and wrote(refs[0]) else []  # a combined setup with no domains yet has none
     metas = []
     for path in (folder / RUNS).glob("*/run.json"):
         try:

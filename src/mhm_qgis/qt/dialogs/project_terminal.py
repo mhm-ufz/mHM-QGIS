@@ -5,6 +5,7 @@ import contextlib
 import os
 import shlex
 import signal
+import subprocess
 import uuid
 
 from qgis.PyQt import QtCore, QtGui, QtWidgets
@@ -129,8 +130,9 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         if os.name == "posix":
             with contextlib.suppress(ProcessLookupError):
                 os.killpg(int(self._process.processId()), signal.SIGTERM)
-        else:
-            self._process.kill()
+        else:  # kill() ends cmd.exe alone: its mhm.exe would keep writing output/
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(int(self._process.processId()))],  # the shell this dialog started
+                           capture_output=True, check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         QtCore.QTimer.singleShot(2000, self._kill_if_running)
 
     def _kill_if_running(self):

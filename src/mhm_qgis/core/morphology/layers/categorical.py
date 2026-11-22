@@ -447,6 +447,7 @@ def lookup_soil_layers(layers, lookup_table, mapping_field, class_field, folder,
     with lookup.as_csv(lookup_table, dir=folder) as lookup_csv:
         for index, (path, upper, lower) in enumerate(layers, 1):
             output = folder / f"soil_horizon_{index}.tif"
+            output.unlink(missing_ok=True)  # a cloned domain's link: writing would change the source domain
             source, _, layer = str(path).partition("|layername=")
             if Path(source).suffix.lower() in {".shp", ".gpkg", ".geojson"}:
                 from mhm_tools import pre
@@ -455,6 +456,7 @@ def lookup_soil_layers(layers, lookup_table, mapping_field, class_field, folder,
                     raise ValueError("Vector soil horizons need the filled DEM.")
                 if layer:  # rasterize_map_data reads a whole file: this layer alone
                     single = folder / f"soil_horizon_{index}.gpkg"
+                    single.unlink(missing_ok=True)
                     gdal.VectorTranslate(str(single), source, layers=[layer])
                     source = str(single)
                 pre.rasterize_map_data(source, dem_file, output, class_field, lookup_table=lookup_csv,
@@ -485,6 +487,7 @@ def lookup_soil_layers(layers, lookup_table, mapping_field, class_field, folder,
             mapped.append((str(output), upper, lower))
     classes = table.drop_duplicates(class_field).sort_values(class_field)
     definition = folder / "soil_classdefinition_iFlag_soilDB_1.txt"
+    definition.unlink(missing_ok=True)
     definition.write_text(
         f"nSoil_Types {len(classes)}\nID\tCLAY[%]\tSAND[%]\tBD[gcm-3]\n" + "".join(
             f"{int(row[class_field])}\t{row[clay]:g}\t{row[sand]:g}\t{row[density]:g}\n"

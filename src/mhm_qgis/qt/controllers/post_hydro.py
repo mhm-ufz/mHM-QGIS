@@ -97,8 +97,9 @@ def _load(dialog, gauge) -> None:
         from ...core.post import aggregate, metrics, series
 
         frame = series.gauge(run, gauge, period)
+        paired = frame.dropna()  # scores compare the same days: a few observed days vs a whole simulated month is not
         if resolution in FREQ:
-            frame = frame.resample(FREQ[resolution]).mean()
+            frame, paired = (values.resample(FREQ[resolution]).mean() for values in (frame, paired))
         rain = None
         if "pre" in state.index["variables"]:
             try:
@@ -106,7 +107,7 @@ def _load(dialog, gauge) -> None:
                                           basin=basin, period=period)
             except ValueError:  # finer than the output step: the bars are left out
                 rain = None
-        return frame, rain, metrics.evaluate(frame["sim"], frame["obs"])
+        return frame, rain, metrics.evaluate(paired["sim"], paired["obs"])
 
     work.submit(dialog, "hydrograph", f"Reading gauge {gauge}", read, lambda result: _draw(dialog, gauge, *result))
 

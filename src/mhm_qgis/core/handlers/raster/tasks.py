@@ -587,16 +587,13 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
     dataset = None
     own_crs = bool(projection)
     source_crs = source_crs or projection  # a blank CRS field means the file's own, still reprojected
-    if not selected_netcdf_variable and own_crs and (
-        not target_crs or source_crs == target_crs
-    ):
-        return source
-    source_ref = osr.SpatialReference()
-    target_ref = osr.SpatialReference()
+    source_ref, target_ref, own_ref = osr.SpatialReference(), osr.SpatialReference(), osr.SpatialReference()
     source_valid = source_ref.SetFromUserInput(str(source_crs or "")) == 0
     target_valid = target_ref.SetFromUserInput(str(target_crs or "")) == 0
     reproject = source_valid and target_valid and not source_ref.IsSame(target_ref)
-    if not selected_netcdf_variable and not reproject and own_crs:
+    # an assigned CRS other than the file's own label: the prepared DEM must carry the assigned one
+    relabel = own_crs and source_valid and own_ref.SetFromUserInput(projection) == 0 and not own_ref.IsSame(source_ref)
+    if not selected_netcdf_variable and own_crs and not reproject and not relabel:
         return source
     os.makedirs(os.path.dirname(reprojected_path), exist_ok=True)
     if Path(reprojected_path).is_symlink():

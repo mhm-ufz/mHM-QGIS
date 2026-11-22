@@ -296,20 +296,27 @@ def embed(dialog, name, child):
     """Show the dialog `child` (or nothing) in `widget_<name>Form`.
 
     The form it replaces is closed silently: its own close handling runs, but not the
-    `rejected`/`finished` slots that would show a form again.
+    `rejected`/`finished` slots that would show a form again. False when that form refuses to
+    close (the Domain Delineator while it saves): it stays, and `child` is dropped.
     """
     layout = getattr(dialog, f"verticalLayout_{name}Form")
     while layout.count():
         old = layout.takeAt(0).widget()
         if old is not None:
             old.blockSignals(True)
-            old.close()
+            if not old.close():
+                old.blockSignals(False)
+                layout.insertWidget(0, old)
+                if child is not None:
+                    child.deleteLater()
+                return False
             old.deleteLater()
     if child is not None:
         child.setWindowFlags(Qt.WindowType.Widget)
         child.setMinimumSize(0, 0)  # a window's minimum: embedded, its layout's own minimum decides
         layout.addWidget(child)
         child.show()
+    return True
 
 
 def form_on(dialog, name):

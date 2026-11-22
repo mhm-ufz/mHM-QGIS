@@ -28,6 +28,14 @@ def populate_setups(dialog, selected=None):
                 combo.addItem(path.name, path.name)
         combo.addItem("<new>", None)
         combo.setCurrentIndex(max(0, combo.findData(selected) if selected else 0))
+    chosen(dialog)
+
+
+def chosen(dialog):
+    """`<new>` creates a combined setup, a listed one opens: the button says which."""
+    new = dialog.comboBox_multiDomainFolderSelector.currentData() is None
+    dialog.pushButton_createorLoadMultiDomainStructure.setText("New" if new else "Open")
+    return new
 
 
 def create_or_load(dialog):
@@ -131,6 +139,9 @@ def prepare(dialog):
         return False
     copied = multi_domain.prepare(paths, version, root)
     nml_settings.update_section(root, multi_domain.SECTION, {"domains": list(dialog._multi_domains)})
+    if not version.startswith("6"):
+        for note in multi_domain.combined_inputs(root):
+            dialog.log_message(f"Combined inputs: {note}")
     names = ", ".join(Path(path).name for path in paths)
     dialog.log_message(f"Combined run prepared for {names}. Open Edit Namelists to review it.")
     if copied:

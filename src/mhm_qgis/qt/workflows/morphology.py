@@ -89,6 +89,8 @@ class MorphologyTaskBridge:
             if (stage.condition == "gauged_outlets" and not (
                     gauges and configured_gauged_outlet_ids(self.dialog.setup_folder))) or (
                     stage.condition == "no_gauges" and gauges):
+                if stage.condition == "gauged_outlets":  # else publication exports a stale one
+                    Path(temp_morphology_folder(self.dialog.setup_folder), "idgauges.nc").unlink(missing_ok=True)
                 QtCore.QTimer.singleShot(0, advance)
                 return True
             return starters[stage.command](
@@ -218,6 +220,10 @@ class MorphologyTaskBridge:
             l0_header=(self.dialog._grid_l0_info or {}).get("header"),
             method=config.get("method") or "bilinear",
         ) if "netcdf" in mode else None
+        if options is None and "netcdf" in mode and config.get("input_path"):
+            # chosen but gone (moved, unmounted): never publish the previous LAI as this run's
+            lifecycle.fail(self.dialog, "LAI", f"The LAI NetCDF file is missing: {config['input_path']}", failed)
+            return True  # reported through `failed`; False would report a second, generic failure
         if options is None:
             self.dialog.log_message("No LAI NetCDF input is selected. Skipping LAI.")
             if done is not None:

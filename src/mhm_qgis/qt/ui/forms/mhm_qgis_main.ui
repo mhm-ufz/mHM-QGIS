@@ -558,8 +558,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>307</width>
-                 <height>236</height>
+                 <width>862</width>
+                 <height>607</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -790,7 +790,7 @@
                         </property>
                         <property name="maximumSize">
                          <size>
-                          <width>23</width>
+                          <width>16777215</width>
                           <height>16777215</height>
                          </size>
                         </property>
@@ -802,15 +802,11 @@
                         </property>
                         <property name="styleSheet">
                          <string notr="true">    QPushButton {
-                text-align: left;
+                text-align: center;
             }</string>
                         </property>
                         <property name="text">
-                         <string/>
-                        </property>
-                        <property name="icon">
-                         <iconset>
-                          <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
+                         <string>Open</string>
                         </property>
                        </widget>
                       </item>
@@ -1084,8 +1080,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>647</width>
-                 <height>529</height>
+                 <width>862</width>
+                 <height>607</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_page_resolution">
