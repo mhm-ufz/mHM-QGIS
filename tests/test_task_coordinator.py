@@ -119,6 +119,49 @@ def test_falsy_and_ambiguous_results_reach_on_success():
     assert not coordinator.is_busy()
 
 
+def test_finished_tasks_release_what_their_callbacks_and_failures_held():
+    """A kept layer keeps its file open, and GDAL in QGIS then reads the old file at that path (khara-murin)."""
+    import gc
+    import weakref
+
+    class Held:
+        pass
+
+    _app()
+    coordinator = TaskCoordinator(max_threads=2)
+    held, refs, done = Held(), [], []
+    refs.append(weakref.ref(held))
+
+    def failing(_task):
+        local = Held()
+        refs.append(weakref.ref(local))
+        raise ValueError("boom")
+
+    gc.disable()  # only the coordinator may release them
+    try:
+        coordinator.submit("ok", "Ok", lambda _task: None, on_success=lambda _result, held=held: done.append(1))
+        coordinator.submit("bad", "Bad", failing, on_error=lambda _message: done.append(1))
+        del held
+        _wait(lambda: len(done) == 2)
+        assert [ref() for ref in refs] == [None, None]
+    finally:
+        gc.enable()
+
+
+def test_a_control_disabled_only_by_its_parent_comes_back_enabled():
+    """Its own flag is restored, not isEnabled(), which a disabled parent also makes False."""
+    _app()
+    coordinator = TaskCoordinator(max_threads=1)
+    parent = QtWidgets.QWidget()
+    button = QtWidgets.QPushButton(parent)
+    parent.setEnabled(False)  # e.g. the steps tab during a ▶ workflow
+    done = []
+    coordinator.submit("job", "Job", lambda _task: 1, controls=(button,), on_success=done.append)
+    _wait(lambda: done)
+    parent.setEnabled(True)
+    assert button.isEnabled()
+
+
 def _until_cancelled(task):
     """Block like a long job; give up after 5 s so a failing test cannot hang."""
     import time
@@ -186,20 +229,27 @@ def test_main_dialog_cancel_waits_for_workers_then_closes():
     assert not dialog.isVisible()
 
 
-def test_closing_during_an_mhm_run_warns_instead_of_stopping_it(monkeypatch):
+def test_cancel_stops_a_running_mhm_and_closes(monkeypatch):
+    """Cancel ends mHM (the terminal's command) so the plugin closes and QGIS is free again."""
     from types import SimpleNamespace
 
     from mhm_qgis.qt.controllers import workflow_state
     from mhm_qgis.qt.dialogs import mhm_qgis_main
 
-    warned = []
+    warned, stopped, closed = [], [], []
     monkeypatch.setattr(mhm_qgis_main.QMessageBox, "warning", lambda *args: warned.append(args[1]))
     dialog = mhm_qgis_main.MhmQgisDialog()
-    dialog._terminal_dialog = SimpleNamespace(command_running=lambda: True, is_running=lambda: True)
+    dialog._terminal_dialog = SimpleNamespace(command_running=lambda: not stopped, is_running=lambda: not stopped,
+                                              stop=lambda: stopped.append(True))
     assert workflow_state.running_key(dialog) == "run_mhm"
+    dialog.finished.connect(closed.append)
+    dialog.show()
     dialog.reject()
-    assert not dialog._closing
-    assert warned
+    _wait(lambda: closed)
+    assert dialog._closing
+    assert stopped
+    assert not warned
+    assert not dialog.isVisible()
     dialog._terminal_dialog = None
     dialog.deleteLater()
 
@@ -289,7 +339,7 @@ def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_pat
     failures = []
     monkeypatch.setattr(workflow_state.QMessageBox, "critical",
                         lambda _parent, _title, message: failures.append(message))
-    monkeypatch.setattr(meteo, "prepare_forcing", prepare)
+    monkeypatch.setattr(meteo, "main", prepare)
     monkeypatch.setattr(meteo, "MeteorologyRun", lambda **_kwargs: None)
     monkeypatch.setattr(grid, "require_common_grid", lambda _dialog: {"l2_header": {}})
     monkeypatch.setattr(meteorology, "target_grid_from_header",
@@ -334,7 +384,7 @@ def test_small_negative_forcing_asks_then_reruns_clipped_or_fails(monkeypatch, t
             raise NegativeAmounts("pre", -6.3e-5)
         return True
 
-    monkeypatch.setattr(meteo, "prepare_forcing", prepare)
+    monkeypatch.setattr(meteo, "main", prepare)
     monkeypatch.setattr(grid, "require_common_grid", lambda _dialog: {"l2_header": {}})
     monkeypatch.setattr(meteorology, "target_grid_from_header",
                         lambda *_args: SimpleNamespace(validate=lambda: None))

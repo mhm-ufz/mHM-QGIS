@@ -46,6 +46,7 @@ def task_options(
     source_crs: str = "",
     target_timestep: str = DEFAULT_TIMESTEP,
     l0_header: dict | None = None,
+    method: str = "bilinear",
 ) -> dict | None:
     """Build primitive-only arguments for the LAI resampling command."""
     source_path, source_variable = parse_source(source)
@@ -59,7 +60,7 @@ def task_options(
         "dem_crs": str(crs or ""),
         "source_crs": str(source_crs or ""),
         "target_timestep": target_timestep or DEFAULT_TIMESTEP,
-        "method": "bilinear",
+        "method": method,
         "l0_header": l0_header,
     }
 

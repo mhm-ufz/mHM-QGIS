@@ -1,7 +1,7 @@
 """Observation workflow started by the ▶ of C. Observations in the project tree."""
 from pathlib import Path
 
-from ...core.executions.observations import ObservationRun, prepare
+from ...core.executions.observations import ObservationRun, main
 from ...core.grid import target_grid_from_header
 from ..controllers import forcing, grid
 from . import lifecycle, post
@@ -26,7 +26,7 @@ def start(dialog):
         return dialog.task_coordinator.submit(
             "execute-all-observations",
             "Prepare observations",
-            lambda task: prepare(run, cancelled=task.isCanceled),
+            lambda task: main(run, cancelled=task.isCanceled),
             on_success=lambda _result: finished(True),
             on_error=lambda message: finished(False, message),
             resource=post.RESOURCE,  # libnetcdf is not thread-safe: never beside a post job

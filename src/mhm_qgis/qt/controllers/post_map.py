@@ -33,6 +33,8 @@ def bind(dialog) -> None:
     state = dialog._post
     dialog._post.ui.treeWidget_postVariables.currentItemChanged.connect(lambda item, _old: _variable_chosen(dialog, item))
     dialog._post.ui.comboBox_postStatistic.activated.connect(lambda _index: _statistic_chosen(dialog))
+    dialog._post.ui.comboBox_postMapVariable.activated.connect(
+        lambda _index: _select_variable(dialog, dialog._post.ui.comboBox_postMapVariable.currentText()))
     dialog._post.ui.spinBox_postPercentile.valueChanged.connect(lambda _value: _statistic_chosen(dialog))
     # pushButton_postBuildCacheAll → build_cache
     dialog._post.ui.pushButton_postBuildCacheAll.clicked.connect(lambda: build_cache(dialog))
@@ -60,6 +62,11 @@ def refresh(dialog, fields) -> None:
     if "run" in fields:
         _populate_tree(dialog)
         _overlays(dialog)
+        _fill_map_variables(dialog)
+    if "variable" in fields:
+        combo = dialog._post.ui.comboBox_postMapVariable
+        with QSignalBlocker(combo):
+            combo.setCurrentText(state.context.get("variable") or "")
     if fields & {"run", "variable", "statistic", "period"}:
         show_map(dialog)
     elif "current_time" in fields:
@@ -103,6 +110,31 @@ def _populate_tree(dialog) -> None:
         chosen = next((name for name in ("aET", "Q", *state.index["variables"]) if name in state.index["variables"]),
                       None)
     _select_variable(dialog, chosen)
+
+
+def focus(dialog, groups=None) -> None:
+    """The open analysis view's output groups on the Map dock (tree.yml `map`; None for all)."""
+    dialog._post.map_groups = tuple(groups or ())
+    _fill_map_variables(dialog)
+
+
+def _fill_map_variables(dialog) -> None:
+    """The Map dock's variables: those written in the view's groups; the map moves to the first
+    of them when its variable is not one (the controls dock may be hidden)."""
+    state = dialog._post
+    combo = getattr(state.ui, "comboBox_postMapVariable", None)
+    if combo is None or state.run is None:
+        return
+    groups = state.map_groups
+    names = [v.name for v in state.run.variables if v.file == "mhm" and v.present and (not groups or v.group in groups)]
+    if "pre" in state.index["variables"] and (not groups or "meteorology" in groups):
+        names.append("pre")
+    with QSignalBlocker(combo):
+        combo.clear()
+        combo.addItems(names)
+        combo.setCurrentText(state.context.get("variable") or "")
+    if names and state.context.get("variable") not in names:
+        _select_variable(dialog, names[0])
 
 
 def _select_variable(dialog, name) -> None:
@@ -231,6 +263,8 @@ def view_changed(dialog, view) -> None:
     _main_tool(dialog, view == "map_explorer")
     if view == "map_explorer":
         _sync_main(dialog)
+    if (combo := getattr(state.ui, "comboBox_postMapVariable", None)) is not None:
+        combo.setEnabled(view not in VIEW_MAPS)  # the view's own map: the variable would change nothing
     if "map" in state.docks:
         layers = state.widgets.get("view_layers", {}).get(view) if view in VIEW_MAPS else None
         explorer = state.widgets.get("map_layer")
@@ -439,9 +473,9 @@ def clicked(dialog, x, y, button=None, canvas=None) -> None:
                                        QgsProject.instance()).transform(QgsPointXY(x, y))
         x, y = point.x(), point.y()
     cell = grid.cell_index(state.axes, x, y)
+    state.context.set("cell", cell)  # outside the grid: back to the basin
     if cell is None:
         return
-    state.context.set("cell", cell)
     if button == Qt.MouseButton.RightButton:
         from qgis.PyQt.QtGui import QCursor
         from qgis.PyQt.QtWidgets import QMenu
@@ -487,8 +521,9 @@ def _cell_values(dialog):
         if state.widgets.get("cell_values", (None,))[0] == cell:
             state.widgets["cell_values"] = (cell, values | {n: np.asarray(v, "f8") for n, v in read_values.items()},
                                             False)
-            _inspect(dialog)
-            _cell_plot(dialog)
+            from . import post_context
+
+            post_context.changed(dialog, "cell")  # every cell view: inspector, plot, Processes
 
     work.submit(dialog, "cell", f"Reading row {cell[0]}, column {cell[1]}", read, done,
                 lambda *_: state.widgets.pop("cell_values", None))

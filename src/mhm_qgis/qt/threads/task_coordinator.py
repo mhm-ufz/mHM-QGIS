@@ -241,6 +241,7 @@ class TaskCoordinator(QtCore.QObject):
                         type(exception), exception, exception.__traceback__
                     )
                 )
+                traceback.clear_frames(exception.__traceback__)  # its locals may hold open files
                 self._finish(record.key, False, details)
             elif result is _CANCELLED:
                 self._finish(record.key, False, "Task cancelled.", "cancelled")
@@ -286,6 +287,8 @@ class TaskCoordinator(QtCore.QObject):
                         record.on_error(error_detail(details))
                     except Exception:
                         record.logs.append(traceback.format_exc())
+        # a kept closure keeps its layers' files open, and GDAL in QGIS then reads the old file at that path
+        record.runner = record.on_success = record.on_error = None
         self._start_available()
 
     def _set_controls(self, record, enabled):
@@ -301,7 +304,10 @@ class TaskCoordinator(QtCore.QObject):
             else:
                 if not owners:
                     try:
-                        self._control_states[widget_id] = widget.isEnabled()
+                        # its own flag: isEnabled() is also False under a disabled parent, and restoring
+                        # that would leave it disabled after the parent comes back
+                        self._control_states[widget_id] = not widget.testAttribute(
+                            QtCore.Qt.WidgetAttribute.WA_ForceDisabled)
                     except RuntimeError:
                         self._control_states[widget_id] = True
                 owners.add(record.key)

@@ -10,7 +10,7 @@ import sys
 
 from qgis.core import QgsProject
 from qgis.PyQt import QtCore
-from qgis.PyQt.QtWidgets import QDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QTextBrowser, QVBoxLayout
 
 from ...core.handlers.store.paths import workspace_folder
 from ...qgis_bridge import layers as qgis_layers
@@ -37,6 +37,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Constructor; `iface` is QGIS Desktop's interface, None when standalone."""
         super().__init__(parent)
         self.setupUi(self)
+        # a window, not a dialog: Windows and some Linux desktops give a parentless dialog no minimize
+        self.setWindowFlags(QtCore.Qt.WindowType.Window)
         elide_named_left(self)  # long paths keep their file name in sight
         self.iface = iface
         self.setup_folder = None  # Active domain root, passed to core APIs.
@@ -82,6 +84,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._map_window = None
         self._terminal_dialog = None
         self._thread_display_dialog = None
+        self._log_dialog = None
         self._discharge_plot = None
         self._closing = False
         self._running_workflow = None  # See `controllers/workflow_state.running_key`.
@@ -94,6 +97,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             getattr(self, f"spinBox_{level}ResolutionMultiplier").setRange(1, 1_000_000)
         self.comboBox_mhmWorkType.setCurrentIndex(0)
         self.comboBox_mhmWorkType.model().item(2).setEnabled(False)  # mRM only: not yet
+        self.comboBox_mHMversion.model().item(self.comboBox_mHMversion.findText("6.0")).setEnabled(False)  # mHM 6: not yet
         self.stackedWidget_configuration.setCurrentWidget(self.page_singleDomain)
         self.morphology_tasks = MorphologyTaskBridge(self)
         project_tree.build(self)  # before the styles: its ▶ buttons are workflow buttons
@@ -171,7 +175,9 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         return main_controller.update_gauged_outlet_count(self, layer)
 
     def get_crs(self):
-        return self.mProjectionSelectionWidget_crs.crs()
+        from ..controllers.project import post_only
+
+        return (self.mProjectionSelectionWidget_postCrs if post_only(self) else self.mProjectionSelectionWidget_crs).crs()
 
     def selected_meteo_crs(self):
         """Return the processing CRS in a form accepted by pyproj."""
@@ -248,8 +254,10 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             return
         running_key = workflow_state.running_key(self)
         busy = running_key is not None or self.task_coordinator.is_busy()
-        if int(result) == int(QDialog.DialogCode.Rejected) and busy and running_key != "run_mhm":
-            self.shutdown(result)  # a running mHM is never stopped by closing the window
+        terminal = self._terminal_dialog
+        if int(result) == int(QDialog.DialogCode.Rejected) and (
+                busy or (terminal is not None and terminal.is_running())):
+            self.shutdown(result)  # stops the tasks, mHM and the terminal's command, then closes
             return
         if busy:
             spec = workflow_state.specs(self).get(running_key or "", {})
@@ -308,6 +316,28 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         window.raise_()
         window.activateWindow()
         return window
+
+    def open_python_console(self, checked=False):
+        """Show QGIS Desktop's Python console."""
+        action = self.iface.actionShowPythonDialog()
+        if not action.isChecked():
+            action.trigger()
+
+    def open_log(self, checked=False):
+        """Show the log in a larger window; it views LogText's own document."""
+        if self._log_dialog is None:
+            self._log_dialog = QDialog(self)
+            self._log_dialog.setWindowTitle("mHM QGIS Log")
+            self._log_dialog.resize(900, 600)
+            view = QTextBrowser(self._log_dialog)
+            view.setDocument(self.LogText.document())
+            bar = view.verticalScrollBar()
+            view.textChanged.connect(lambda: bar.setValue(bar.maximum()))
+            QVBoxLayout(self._log_dialog).addWidget(view)
+        self._log_dialog.show()
+        self._log_dialog.raise_()
+        self._log_dialog.activateWindow()
+        return self._log_dialog
 
     def map_displayed(self, when=None):
         """Show the standalone map with the displayed layer's time; Desktop needs nothing."""

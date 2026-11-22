@@ -209,3 +209,16 @@ def test_gauge_series_masks_missing_observations(tmp_path):
     np.testing.assert_allclose(frame["sim"], q)
     with pytest.raises(ValueError, match="not in"):
         series.gauge(run, 7)
+
+
+def test_a_combined_setup_without_domains_lists_no_runs(tmp_path):
+    """A new multi-domain setup has no domains yet: opening it must not crash on the run list."""
+    import json
+    from pathlib import Path
+
+    from mhm_qgis.core.handlers.store import layout
+
+    state = Path(layout.input_state_path(tmp_path))
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(json.dumps({"setup": "multi"}))
+    assert runs.list_runs(tmp_path) == []

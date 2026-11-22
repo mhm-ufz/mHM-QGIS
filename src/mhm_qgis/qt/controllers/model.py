@@ -319,6 +319,9 @@ def run(dialog) -> bool:
         combined = multi_domain.is_multi(setup_folder)
         if combined:
             ensure_multi_structure(setup_folder)
+            if not version.startswith("6"):  # a domain prepared again since Prepare: current inputs
+                for note in multi_domain.combined_inputs(setup_folder):
+                    dialog.log_message(f"Combined inputs: {note}")
         else:
             ensure_project_structure(setup_folder, version)
         if not inputs_ready(dialog, setup_folder) or not outputs_ready(dialog, setup_folder):

@@ -19,24 +19,26 @@ from qgis.PyQt.QtWidgets import QHeaderView, QPushButton, QTableWidgetItem
 COLUMNS = ("Project structure", "", "", "")  # name | status or ▶ | view | next step (shown first)
 STATUS_COLUMN, VIEW, NEXT = 1, 2, 3
 SYMBOLS = {"empty": ("⚪", "Empty: no inputs added"),
-           "added": ("🟢", "Inputs added, not processed yet"),
+           "added": ("🟡", "Input set: run ▶ to process it"),
            "processed": ("✅", "Processed")}
 ICONS = Path(__file__).parents[1] / "ui" / "forms" / "Resources"
 
 
 @cache
 def load() -> dict:
-    """`tree.yml` as {title: node}, nested rows included."""
-    nodes, pending = {}, list(yaml.safe_load(Path(__file__).with_name("tree.yml").read_text(encoding="utf-8"))["nodes"])
+    """`tree.yml` as {(parent title, title): node}, nested rows included."""
+    nodes = {}
+    pending = [(None, node) for node in yaml.safe_load(
+        Path(__file__).with_name("tree.yml").read_text(encoding="utf-8"))["nodes"]]
     while pending:
-        node = pending.pop()
-        nodes[node["title"]] = node
-        pending += node.get("children", [])
+        parent, node = pending.pop()
+        nodes[parent, node["title"]] = node
+        pending += [(node["title"], child) for child in node.get("children", [])]
     return nodes
 
 
 def _node(row) -> dict:
-    return load()[row.text(0)]
+    return load()[row.parent().text(0) if row.parent() else None, row.text(0)]
 
 
 def _inputs(node) -> list:
@@ -233,7 +235,12 @@ def _action(dialog, row, symbol, tip, slot, column=STATUS_COLUMN):
 
 def button(dialog, key):
     """The row's action button (▶ of A. Morphology, B. Meteorology, C. Observations for `workflow_state`)."""
-    return dialog.treeWidget_projectStructure.itemWidget(item(dialog, key), STATUS_COLUMN)
+    return dialog.treeWidget_projectStructure.itemWidget(_run_row(dialog, key), STATUS_COLUMN)
+
+
+def _run_row(dialog, key):
+    """Where a group's ▶ and ↺ sit: its Process row, else the row itself (C. Observations)."""
+    return item(dialog, f"{key}_process") or item(dialog, key)
 
 
 def item(dialog, key):
@@ -264,15 +271,18 @@ def select(dialog, row) -> None:
         grid.show_derivative(dialog, key)
     else:
         hook = {"intro": intro.embed, "settings": process_cases.show,
-                "domain_definition": main.show_domain_definition}
+                "domain_definition": main.show_domain_definition,
+                "meteorology": forcing.populate_meteo_table, "meteorology_process": forcing.populate_meteo_table,
+                "observations": forcing.populate_observation_table}
         if key in hook:
             hook[key](dialog)
     dialog.tabWidget_steps.setTabText(0, node["title"])
     dialog.stackedWidget_project.setCurrentWidget(getattr(dialog, node["page"]))
     if "analysis" in node:
-        from ..controllers import post_context
+        from ..controllers import post_context, post_map
 
         post_context.view_selected(dialog, node["analysis"])
+        post_map.focus(dialog, node.get("map"))
 
 
 def clicked(dialog, row, column) -> None:
@@ -378,10 +388,11 @@ def _file(dialog, node) -> str:
 
 
 def _summary(dialog, table, top) -> None:
-    """The shown rows under `top` with a status or inputs: status, what needs them, prepared file;
-    a wider table (morphology) also gets each input's grid and how it is fitted to L0."""
+    """The shown rows under `top` with a status or inputs: what needs them, prepared file (the tree
+    shows the status); each input's grid and how it is fitted to L0 between them."""
     from ..controllers.grid import summary
 
+    top = top if top.childCount() else top.parent()  # Process lists its group
     rows = [row for row in _rows(dialog, top)
             if row is not top and _shown(row) and {"status", "input"} & _node(row).keys()]
     table.setRowCount(len(rows))
@@ -389,9 +400,8 @@ def _summary(dialog, table, top) -> None:
         node = _node(row)
         findings = [dialog._input_findings[name] for name in _inputs(node) if name in dialog._input_findings]
         needed = ", ".join(dict.fromkeys(reason for finding in findings for reason in finding.reasons))
-        details = summary(dialog, node)[:table.columnCount() - 4]
-        for column, text in enumerate((row.text(0), " ".join(SYMBOLS[_state(dialog, row)]), needed, *details,
-                                       _file(dialog, node))):
+        details = summary(dialog, node)[:table.columnCount() - 3]
+        for column, text in enumerate((row.text(0), needed, *details, _file(dialog, node))):
             table.setItem(index, column, QTableWidgetItem(text))
     for column in range(table.columnCount() - 1):  # the last one stretches
         table.resizeColumnToContents(column)
@@ -430,6 +440,16 @@ def _reset(dialog, key) -> None:
                             f"reuse records, so the next ▶ prepares everything afresh?{again}") \
             != QMessageBox.StandardButton.Yes:
         return
+    if key == "morphology":  # a loaded layer keeps its deleted file open: later reads of a new one see the old
+        from ...core.handlers.store import layout
+        from ...core.handlers.store.paths import temp_morphology_folder
+        from ...qgis_bridge.layers.project import remove_under
+        from ..controllers import main
+
+        main.embed(dialog, "domainDefinition", None)  # the delineator's canvas holds the mask
+        for folder in (temp_morphology_folder(dialog.setup_folder), layout.morph_folder(dialog.setup_folder),
+                       layout.lai_folder(dialog.setup_folder)):
+            remove_under(folder, dialog.log_message)
     deleted = reset.clear(dialog.setup_folder, key, log=dialog.log_message)
     dialog.log_message(f"{title}: reset, {deleted} files deleted.")
     workflow_state.refresh_all(dialog)
@@ -441,7 +461,7 @@ def _waits(dialog, row) -> bool:
     outside a ▶ group (the precipitation scan, latlon). Introduction is optional."""
     node, status = _node(row), row.text(STATUS_COLUMN)
     if node.get("action") == "run":
-        return dialog.treeWidget_projectStructure.itemWidget(row, STATUS_COLUMN).isEnabled() and any(
+        return button(dialog, node["key"]).isEnabled() and any(
             child.text(STATUS_COLUMN) == SYMBOLS["added"][0] for child in _rows(dialog, row) if _shown(child))
     grouped = row.parent() is not None and _node(row.parent()).get("action") == "run"
     return node["key"] != "intro" and (
@@ -483,13 +503,15 @@ def refresh(dialog) -> None:
         key = _node(row)["key"]
         if key == "observations":
             ready = bool(dialog._observation_inputs)
-        _action(dialog, row, "▶", "Run", lambda key=key: _run(dialog, key)).setEnabled(
+        _action(dialog, _run_row(dialog, key), "▶", "Run", lambda key=key: _run(dialog, key)).setEnabled(
             ready and workflow_state.running_key(dialog) is None)
-        _action(dialog, row, "↺", "Reset: delete what ▶ prepared, so it prepares everything afresh",
+        _action(dialog, _run_row(dialog, key), "↺", "Reset: delete what ▶ prepared, so it prepares everything afresh",
                 lambda key=key: _reset(dialog, key), VIEW)
     failed = item(dialog, dialog._failed_step) if dialog._failed_step else None
     pointed = failed if failed is not None and _shown(failed) else next(
         (row for row in _rows(dialog) if _shown(row) and _waits(dialog, row)), item(dialog, "execution"))
+    if _node(pointed).get("action") == "run":
+        pointed = _run_row(dialog, _node(pointed)["key"])
     for row in _rows(dialog):
         row.setText(NEXT, "➤" if row is pointed else "")
     current = tree.currentItem()

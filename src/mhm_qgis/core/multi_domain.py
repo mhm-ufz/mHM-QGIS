@@ -104,9 +104,140 @@ def validate_domain(path, version, root, existing=()) -> str | None:  # noqa: PL
     return None
 
 
-def _geology_definition(path) -> str | None:
-    file = Path(layout.morph_folder(path)) / "geology_classdefinition.txt"
+def _common_table(path, name) -> str | None:
+    file = Path(layout.morph_folder(path)) / name
     return file.read_text(encoding="utf-8").strip() if file.is_file() else None
+
+
+# mHM 5.13 reads these from dirCommonFiles: one copy serves every domain
+SOIL_TABLES = ("soil_classdefinition_iFlag_soilDB_1.txt", "soil_classdefinition.txt")
+COMMON_TABLES = ("geology_classdefinition.txt", "LAI_classdefinition.txt")
+PROCESSES = ("interception", "snow", "soil moisture", "direct runoff", "PET", "interflow", "percolation",
+             "routing", "baseflow", "cosmic-ray neutrons", "river-temperature routing")
+
+
+def _first(value):
+    return value[0] if isinstance(value, list) and value else value
+
+
+def _folders(path, value) -> tuple[Path, Path, Path]:
+    """The morph, land-cover and common-files folders one domain's mhm.nml reads."""
+    general = value.get("directories_general", {})
+    return tuple(Path(path, _first(general.get(key)) or "data/static/morph/")
+                 for key in ("dir_Morpho", "dir_LCover", "dirCommonFiles"))
+
+
+def _soil_table(path, value) -> Path | None:
+    common = _folders(path, value)[2]
+    return next((common / name for name in SOIL_TABLES if (common / name).is_file()), None)
+
+
+def _combination(paths, values) -> dict:
+    """What a v5.13 combined run needs beyond the domains' own files; {} when nothing.
+
+    `offsets`: each domain's soil classes moved up past the domains before it (one soil table
+    serves all domains, but each numbers its classes 1..N). `lcover`: the shared land-cover
+    periods, the first from the earliest domain and the last to the latest (each domain fits them
+    to its own run). `own`: the domains that need a folder of their own in the multi folder.
+    """
+    plan, names = {}, [Path(path).name for path in paths]
+    tables = [_soil_table(path, value) for path, value in zip(paths, values, strict=True)]
+    if all(tables) and len({table.read_bytes() for table in tables}) > 1:
+        counts = [int(table.read_text(encoding="utf-8").split()[1]) for table in tables]
+        plan.update(offsets=[sum(counts[:index]) for index in range(len(counts))], tables=tables)
+    scenes = [value.get("LCover", {}) for value in values]
+    starts, ends, files = ([scene.get(key) or [] for scene in scenes]
+                           for key in ("LCoverYearStart", "LCoverYearEnd", "LCoverfName"))
+    if any((start, end, file) != (starts[0], ends[0], files[0])
+           for start, end, file in zip(starts, ends, files, strict=True)):
+        if len({len(file) for file in files}) > 1 or any(
+                start[1:] != starts[0][1:] or end[:-1] != ends[0][:-1] for start, end in zip(starts, ends, strict=True)):
+            raise ValueError("Land-cover periods differ: " + "; ".join(
+                f"{name} " + ", ".join(f"{a}-{b}" for a, b in zip(start, end, strict=True))
+                for name, start, end in zip(names, starts, ends, strict=True))
+                + ". Give the domains time periods within the same land-cover scenes.")
+        start = [min(start[0] for start in starts), *starts[0][1:]]
+        end = [*ends[0][:-1], max(end[-1] for end in ends)]
+        plan["lcover"] = {"nLCoverScene": len(start), "LCoverYearStart": start, "LCoverYearEnd": end,
+                          "LCoverfName": [f"lc_{a}_{b}.asc" for a, b in zip(start, end, strict=True)]}
+    offsets = plan.get("offsets", [0] * len(paths))
+    plan["own"] = [index for index, file in enumerate(files)
+                   if offsets[index] or ("lcover" in plan and file != plan["lcover"]["LCoverfName"])]
+    return plan if plan["own"] or "offsets" in plan or "lcover" in plan else {}
+
+
+def _link(source, target) -> None:
+    try:
+        os.symlink(source, target)
+    except OSError:  # Windows without the symlink privilege
+        shutil.copy2(source, target)
+
+
+def _shift_classes(source, target, offset) -> None:
+    """An ASCII class grid with every class moved up by `offset`, no data kept."""
+    import numpy as np
+
+    with open(source, encoding="utf-8") as stream:
+        header = [next(stream) for _ in range(6)]
+        classes = np.array(stream.read().split(), dtype=float).astype(np.int64)
+    field = {line.split()[0].lower(): line.split()[1] for line in header}
+    nodata = int(float(field["nodata_value"]))
+    classes = np.where(classes == nodata, nodata, classes + offset).reshape(-1, int(field["ncols"]))
+    with open(target, "w", encoding="utf-8") as stream:
+        stream.writelines(header)
+        np.savetxt(stream, classes, fmt="%d")
+
+
+def combined_inputs(root) -> list[str]:
+    """Write what `_combination` asks for into the multi folder (`common/`, `morph/<domain>/`),
+    skipping a domain whose folder is still current; returns what it did, for the log."""
+    from .handlers.state.nml_settings import load_settings
+
+    root = Path(root)
+    paths = resolve(root, load_settings(root).get(SECTION, {}).get("domains", []))
+    values = [_read(path, "5.13") for path in paths]
+    plan, notes = _combination(paths, values), []
+    if "offsets" in plan:
+        common = root / "common"
+        common.mkdir(exist_ok=True)
+        lines = [table.read_text(encoding="utf-8").splitlines() for table in plan["tables"]]
+        rows = [f"{int(row.split(None, 1)[0]) + offset}\t{row.split(None, 1)[1]}"
+                for offset, table in zip(plan["offsets"], lines, strict=True) for row in table[2:] if row.strip()]
+        total = sum(int(table[0].split()[1]) for table in lines)
+        (common / plan["tables"][0].name).write_text(
+            "\n".join([f"nSoil_Types {total}", lines[0][1], *rows]) + "\n", encoding="utf-8")
+        for name in COMMON_TABLES:
+            source = _folders(paths[0], values[0])[2] / name
+            if source.is_file():
+                shutil.copy2(source, common / name)
+    for index in plan.get("own", []):
+        path, value = paths[index], values[index]
+        morph, lcover, _common = _folders(path, value)
+        offset = plan.get("offsets", [0] * len(paths))[index]
+        scenes = list(zip(value.get("LCover", {}).get("LCoverfName") or [], plan["lcover"]["LCoverfName"],
+                          strict=True)) if "lcover" in plan else []
+        sources = [file for file in morph.iterdir() if file.is_file()] + [lcover / old for old, _new in scenes]
+        stamp = repr((offset, scenes, max(file.stat().st_mtime_ns for file in sources)))
+        target = root / "morph" / Path(path).name
+        if (target / ".combined").is_file() and (target / ".combined").read_text(encoding="utf-8") == stamp:
+            continue
+        if target.exists():
+            shutil.rmtree(target)
+        target.mkdir(parents=True)
+        for file in morph.iterdir():
+            if not file.is_file():
+                continue
+            if offset and file.name.startswith("soil_class") and file.suffix == ".asc":
+                _shift_classes(file, target / file.name, offset)
+            else:
+                _link(file, target / file.name)
+        for old, new in scenes:
+            (target / new).unlink(missing_ok=True)
+            _link(lcover / old, target / new)
+        (target / ".combined").write_text(stamp, encoding="utf-8")
+        notes.append(f"{Path(path).name}: " + ", ".join(
+            ([f"soil classes +{offset}"] if offset else []) + (["land cover renamed"] if scenes else [])))
+    return notes
 
 
 def validate_set(paths, version, root) -> tuple[list[str], list[str]]:
@@ -131,7 +262,7 @@ def validate_set(paths, version, root) -> tuple[list[str], list[str]]:
         if any(item != found[0] for item in found[1:]):
             into.append(f"Different {label}: " + "; ".join(f"{n}: {f}" for n, f in zip(names, found, strict=True)))
 
-    geology = [_geology_definition(path) for path in paths]
+    geology = [_common_table(path, "geology_classdefinition.txt") for path in paths]
     if None not in geology and len(set(geology)) > 1:
         errors.append("Different geology class definitions (geology_classdefinition.txt); "
                       "the shared parameter file needs one classification.")
@@ -146,9 +277,18 @@ def validate_set(paths, version, root) -> tuple[list[str], list[str]]:
         warnings.append("mHM 6 writes each domain's outputs to its own output_path, inside the "
                         "domain folder, replacing that domain's single-run outputs.")
         return errors, warnings
-    compare("process cases (processCase)", lambda v: v.get("processSelection", {}).get("processCase"), errors)
-    compare("land-cover scenes", lambda v: {k: v.get("LCover", {}).get(k) for k in (
-        "nLCoverScene", "LCoverYearStart", "LCoverYearEnd", "LCoverfName")}, errors)
+    cases = [value.get("processSelection", {}).get("processCase") or [] for value in values]
+    for index, process in enumerate(PROCESSES):
+        found = [case[index] if index < len(case) else None for case in cases]
+        if len(set(found)) > 1:  # one processCase serves every domain
+            errors.append(f"{process} (processCase {index + 1}): " + ", ".join(
+                f"{name} {case}" for name, case in zip(names, found, strict=True))
+                + ". Set the same process cases in each domain and prepare its inputs again.")
+    compare("LAI input (timeStep_LAI_input)",
+            lambda v: v.get("LAI_data_information", {}).get("timeStep_LAI_input"), errors)
+    lai = [_common_table(path, "LAI_classdefinition.txt") for path in paths]
+    if None not in lai and len(set(lai)) > 1:
+        errors.append("Different LAI class definitions (LAI_classdefinition.txt); mHM reads one for all domains.")
     compare("soil horizons", lambda v: {k: v.get("soildata", {}).get(k) for k in (
         "nSoilHorizons_mHM", "soil_Depth", "iFlag_soilDB")}, errors)
     compare("time periods", lambda v: v.get("time_periods"), warnings)
@@ -239,6 +379,16 @@ def v5_values(paths, root, values=None) -> tuple[dict, dict]:
                 value = datas[0].get(key)
                 combined[key] = _rebase(value, paths[0], root) if rebase else value
         main[group] = combined
+    plan = _combination(paths, values)  # combined_inputs writes the folders these point at
+    general = main.setdefault("directories_general", {})
+    if "offsets" in plan:
+        general["dirCommonFiles"] = "common/"
+    for index in plan.get("own", []):
+        for key in ("dir_Morpho", "dir_LCover"):
+            if key in general:
+                general[key][index] = f"morph/{names[index]}/"
+    if "lcover" in plan:
+        main.setdefault("LCover", {}).update(plan["lcover"])
     main.setdefault("mainconfig", {}).update(nDomains=count, L0Domain=list(range(1, count + 1)))
     gauges = sum(main.get("evaluation_gauges", {}).get("NoGauges_domain") or [0])
     if "evaluation_gauges" in main:

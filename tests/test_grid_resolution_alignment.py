@@ -415,3 +415,53 @@ def test_a_half_cell_offset_shifts_the_whole_axis_one_way():
     sx, sy = shift_onto_header(x, y, header)
     assert (np.unique(sx).size, np.unique(sy).size) == (40, 40)
     assert (np.allclose(np.diff(sx), 0.1), np.allclose(np.diff(sy), -0.1)) == (True, True)
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 4])
+def test_an_upscaled_l0_starts_its_blocks_on_the_meteo_grid(n):
+    """However many DEM cells (k) the DEM corner lies off the meteo edge, the n x n blocks start on it."""
+    cell, l2 = 10.0, 30.0 * n  # DEM cell, meteo cell (3 L0 cells)
+    for k in range(n):
+        grid = Grid.for_meteorology(
+            {"xllcorner": 100.0 + k * cell, "yllcorner": 200.0 + k * cell, "cellsize": n * cell, "unit": "m",
+             "ncols": 100, "nrows": 100},
+            (100 + 2.2 * l2, 100 + 20.7 * l2, 200 + 2.2 * l2, 200 + 20.7 * l2), 3, crs="EPSG:32632", unit="m",
+            raw_l2_resolution=(l2, l2), raw_l2_extent=Extent(100, 100 + 40 * l2, 200, 200 + 40 * l2),
+            raw_l2_crs="EPSG:32632", lattice_cell=cell)
+        assert grid.alignment_gap == pytest.approx((0, 0))
+        for key, edge in (("xllcorner", 100), ("yllcorner", 200)):
+            assert (grid.l2_header[key] - edge) / l2 == pytest.approx(round((grid.l2_header[key] - edge) / l2))
+
+
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_a_meteo_edge_between_dem_cells_moves_the_meteo_by_the_leftover(n):
+    """Whole DEM cells of padding cannot reach it: the meteo moves under half a DEM cell, and the
+    coverage checks compare the meteo file with the extent in its own cells."""
+    cell, l2 = 10.0, 30.0 * n
+    raw = Extent(100, 100 + 40 * l2, 200, 200 + 40 * l2)
+    grid = Grid.for_meteorology(
+        {"xllcorner": 100.0 + 0.3 * cell, "yllcorner": 200.0 + 0.3 * cell, "cellsize": n * cell, "unit": "m",
+         "ncols": 100, "nrows": 100},
+        (100 + 2.2 * l2, 100 + 20.7 * l2, 200 + 2.2 * l2, 200 + 20.7 * l2), 3, crs="EPSG:32632", unit="m",
+        raw_l2_resolution=(l2, l2), raw_l2_extent=raw, raw_l2_crs="EPSG:32632", lattice_cell=cell)
+    dx, dy = grid.alignment_gap
+    assert (dx, dy) == pytest.approx((0.3 * cell, 0.3 * cell))
+    meteo, common = grid.meteo_extent, grid.common_extent
+    assert (meteo.xmin - raw.xmin) / l2 == pytest.approx(round((meteo.xmin - raw.xmin) / l2))
+    assert raw.intersect(meteo) == meteo  # inside the meteo file's cells
+    assert (common.xmin, common.ymin) == pytest.approx((meteo.xmin + dx, meteo.ymin + dy))
+
+
+def test_a_header_written_over_a_cloned_domains_link_leaves_the_source_alone(tmp_path):
+    """Clones link data/ file by file: writing through the link would change the source domain."""
+    from mhm_qgis.core.grid.model import write_header_file
+
+    source, link = tmp_path / "source.txt", tmp_path / "clone" / "header.txt"
+    source.write_text("source header\n")
+    link.parent.mkdir()
+    link.symlink_to(source)
+    write_header_file(link, {"ncols": 2, "nrows": 1, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1.0,
+                             "nodata_value": -9999.0})
+    assert source.read_text() == "source header\n"
+    assert not link.is_symlink()
+    assert "ncols" in link.read_text()

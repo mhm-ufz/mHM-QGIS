@@ -13,8 +13,18 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QPushButton, QTableWidgetItem
 
 from ...core import datamodel
-from ...core.meteorology.forcing import inspect_meteo_folder_cached
-from ...externals.mhm_tools_handler import MeteoFolderSpec, grid_note, validate_coverage
+from ...core.grid.model import Extent, crs_equal
+from ...core.meteorology.forcing import (
+    inspect_meteo_folder_cached,
+    inspect_meteo_inputs_cached,
+)
+from ...externals.mhm_tools_handler import (
+    VARIABLES,
+    MeteoFolderSpec,
+    grid_note,
+    normalize_unit,
+    validate_coverage,
+)
 from .. import project_tree
 from ..dialogs.meteo_var_details_input import MeteoVarDetailsDialog
 from . import grid, main, process_cases
@@ -210,32 +220,78 @@ def _submit_scan(dialog, key, variable, spec, scanned, failed, controls):
 def populate_meteo_table(dialog):
     """Render one editable row per saved variable without rescanning."""
     _populate_forcing_table(
-        dialog.tableWidget_meteoInputs, dialog._meteo_inputs,
+        dialog, dialog.tableWidget_meteoInputs, dialog._meteo_inputs, dialog._meteo_inspections, "L2",
         lambda key: edit_meteo_input(dialog, key))
 
 
 def populate_observation_table(dialog):
     """Render configured gridded observations without rescanning."""
     _populate_forcing_table(
-        dialog.tableWidget_observationVarInputs, dialog._observation_inputs,
-        lambda key: edit_observation_input(dialog, key))
+        dialog, dialog.tableWidget_observationVarInputs, dialog._observation_inputs,
+        dialog._observation_inspections, "L1", lambda key: edit_observation_input(dialog, key))
 
 
-def _populate_forcing_table(table, inputs, edit):
+def scan_details(dialog, variable, spec, metadata, level):
+    """Cell Size, nRows, nCols, Extent, Extent Modification, Unit Conversion and Regridding of a
+    scanned input onto the `level` grid; "—" before its scan."""
+    if metadata is None:
+        return ("—",) * 7
+    x, y = metadata.x_resolution, metadata.y_resolution
+    output_unit = VARIABLES[variable][1]
+    if not grid.grid_current(dialog):
+        cropped = regrid = "Set the resolutions first (Resolution page)."
+    else:
+        saved, crs = dialog._grid_l2_metadata, dialog.selected_meteo_crs()
+        west, east, south, north = metadata.bounds  # cell centres
+        if metadata.crs and crs_equal(metadata.crs, crs):
+            cropped = " ".join(grid._edges(
+                Extent(west - x / 2, east + x / 2, south - y / 2, north + y / 2),
+                Extent.from_header(saved[f"{level.lower()}_header"]), x, 0.01 * x)) or "None"
+        else:
+            cropped = f"Reprojected and cropped to the {level} extent."
+        try:
+            regrid = grid_note(metadata, saved, crs, level)
+        except ValueError as error:
+            regrid = str(error)
+    return (f"{x:.6g}" if f"{x:.6g}" == f"{y:.6g}" else f"{x:.6g} x {y:.6g}", str(metadata.shape[0]), str(metadata.shape[1]),
+            f"{', '.join(f'{value:.6g}' for value in metadata.bounds)} ({metadata.crs or 'no CRS'})",
+            cropped,
+            f"None ({output_unit})" if normalize_unit(spec["unit"]) == output_unit
+            else f"{spec['unit']} → {output_unit}",
+            regrid)
+
+
+def _populate_forcing_table(dialog, table, inputs, inspections, level, edit, rescan=True):
+    """The table from the saved inputs; one a reopened project has not scanned yet is scanned in
+    the background (cached by its files), then the table is shown again."""
     table.setRowCount(len(inputs))
     for row, (variable, spec) in enumerate(inputs.items()):
         for column, text in enumerate((
                 variable, spec["folder"], spec["pattern"],
                 spec["temporal_resolution"],
                 spec.get("output_temporal_resolution") or spec["temporal_resolution"],
-                spec.get("aggregation") or "<None>", spec["unit"])):
+                spec.get("aggregation") or "<None>", spec["unit"],
+                *scan_details(dialog, variable, spec, inspections.get(variable), level))):
             item = QTableWidgetItem(str(text))
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             table.setItem(row, column, item)
         button = QPushButton("Edit", table)
         # Dynamic Edit button → edit
         button.clicked.connect(lambda _checked=False, key=variable: edit(key))
-        table.setCellWidget(row, 7, button)
+        table.setCellWidget(row, table.columnCount() - 1, button)
+    missing = {variable: _spec(dialog, spec) for variable, spec in inputs.items() if variable not in inspections}
+    if not (rescan and missing and dialog.setup_folder):
+        return
+
+    def scanned(found):
+        inspections.update({variable: found[spec.kind] for variable, spec in missing.items() if spec.kind in found})
+        _populate_forcing_table(dialog, table, inputs, inspections, level, edit, rescan=False)
+
+    dialog.task_coordinator.submit(
+        f"rescan-{table.objectName()}", "Scan the saved inputs",
+        lambda task: inspect_meteo_inputs_cached(dialog.setup_folder, missing.values(), cancelled=task.isCanceled),
+        on_success=scanned, on_error=lambda error: dialog.log_message(f"WARNING: Could not scan the saved inputs: {error}"),
+        resource="morphology-files")
 
 
 def _spec(dialog, value):

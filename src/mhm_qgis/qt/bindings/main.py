@@ -42,11 +42,12 @@ def _bind_input_sources(dialog):
     # Land use, soil, geology and LAI: radios → their stacked page, Set → categorical.set_input
     categorical.bind(dialog)
     # Gauge Point/Raster radios → their page; the raster browse → its combo
-    main.radios(dialog, "gauges", lambda _text: main.show_gauge_type(dialog))
+    main.radios(dialog, "gauges", lambda _text: main.show_gauge_type(dialog), ("Point Input", "Raster Input"))
     dialog.pushButton_browsegaugeRasterInput.clicked.connect(lambda: _browse_raster_into_combo(
         dialog, dialog.comboBox_gaugeRaterInput, "Select gauge-ID raster",
         "Raster files (*.asc *.nc *.tif *.tiff);;All files (*)"))
-    main.radios(dialog, "domainDefinition", lambda text: main.handle_domain_definition_type(dialog, text))
+    main.radios(dialog, "domainDefinition", lambda text: main.handle_domain_definition_type(dialog, text),
+                main.DOMAIN_TYPES)
     # toolButton_*Info → its plain-text toolTip in a message box, as in nml-tools
     for info in dialog.findChildren(QToolButton):
         if info.objectName().endswith("Info"):
@@ -82,20 +83,19 @@ def bind(dialog):
     # pushButton_BrowseProjectFolder → project.browse_folder; pushButton_setProject → project.set_folder
     dialog.pushButton_BrowseProjectFolder.clicked.connect(lambda: project.browse_folder(dialog))
     dialog.pushButton_setProject.clicked.connect(lambda: project.set_folder(dialog))
+    # pushButton_setPostCrs → project.set_post_crs; its label shows Domain Setup's status
+    dialog.pushButton_setPostCrs.clicked.connect(lambda: project.set_post_crs(dialog))
+    project_tree.indicate(dialog, "domain_setup", dialog.label_setPostCrsStatus)
     # pushButton_createOrLoadDomainStructure → project.create_structure
     dialog.pushButton_createOrLoadDomainStructure.clicked.connect(
         lambda: project.create_structure(dialog)
     )
-    dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(
-        lambda: dialog.comboBox_mHMversion.setEnabled(
-            dialog.comboBox_domainFolderSelector.currentData() is None
-        )
-    )
+    # comboBox_domainFolderSelector → project.domain_chosen: New or Open, the version for a new one
+    dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(lambda: project.domain_chosen(dialog))
     # Multi-domain setup
+    # comboBox_multiDomainFolderSelector → multi_domain.chosen: New or Open, the version for a new one
     dialog.comboBox_multiDomainFolderSelector.currentIndexChanged.connect(
-        lambda: dialog.comboBox_mHMversion.setEnabled(
-            dialog.comboBox_multiDomainFolderSelector.currentData() is None
-        )
+        lambda: dialog.comboBox_mHMversion.setEnabled(multi_domain.chosen(dialog))
     )
     # pushButton_createorLoadMultiDomainStructure → multi_domain.create_or_load
     dialog.pushButton_createorLoadMultiDomainStructure.clicked.connect(
@@ -183,6 +183,13 @@ def bind(dialog):
     dialog.pushButton_mapCanvas.clicked.connect(dialog.open_map_canvas)
     # pushButton_terminal → dialog.open_project_terminal
     dialog.pushButton_terminal.clicked.connect(dialog.open_project_terminal)
+    # pushButton_log → dialog.open_log
+    dialog.pushButton_log.clicked.connect(dialog.open_log)
+    # pushButton_pythonConsole → dialog.open_python_console; QGIS Desktop only
+    dialog.pushButton_pythonConsole.clicked.connect(dialog.open_python_console)
+    if dialog.iface is None:
+        dialog.pushButton_pythonConsole.setEnabled(False)
+        dialog.pushButton_pythonConsole.setToolTip("Available in QGIS Desktop")
     dialog.comboBox_mHMversion.currentIndexChanged.connect(
         lambda index=None: model.version_changed(dialog)
     )
@@ -202,10 +209,6 @@ def _bind_grid(dialog):
         for name, _key in (*grid.CORNERS, ("cellSize", "cellsize")):
             getattr(dialog, f"label_{name}{level}Common").linkActivated.connect(
                 lambda href: grid.explain(dialog, href))
-        # toolButton_description{level}File → its toolTip (the file's steps) in a message box
-        button = getattr(dialog, f"toolButton_description{level}File")
-        button.clicked.connect(lambda _checked=False, level=level, button=button: QMessageBox.information(
-            dialog, f"{level} file", button.toolTip()))
     dialog.lineEdit_L0Resolution.editingFinished.connect(lambda: grid.snap_l0(dialog))
     for level in ("L1", "L11", "L2"):
         getattr(dialog, f"lineEdit_{level}Resolution").textChanged.connect(

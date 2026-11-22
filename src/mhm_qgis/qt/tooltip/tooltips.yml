@@ -1,25 +1,37 @@
 # Guided tour for the Help button. `pages` keys are object names: a tabWidget_steps
 # page or a visible stacked page inside it. List order is the tour order. A step
 # without `text` shows the widget's own toolTip; `help` is appended to help_url.
+# Pages follow the project tree (project_tree/tree.yml), steps the page from top to bottom.
 version: 1
 help_url: ""
 
 pages:
+  page_projectIntro:
+    - widget: page_projectIntro
+      title: Introduction
+      text: Optional. A few questions on what you want to model; Finish fills the form defaults and the process and output choices for the namelists.
+
   page_projectSetup:
-    - widget: comboBox_mHMversion
-      title: mHM version
-      text: Choose mHM 5.13 or 6 before creating a setup. The version decides the input layout and the namelists, and is fixed once a setup exists.
-    - widget: comboBox_mhmWorkType
-      title: Work type
-      text: Prepare and run a single domain, or combine domains that are already prepared into one multi-domain run.
     - widget: lineEdit_ProjectFolder
       title: Project folder
       text: The outer project folder. Setups live inside it under <code>mhm-qgis/&lt;name&gt;</code>.
+    - widget: comboBox_mHMversion
+      title: mHM version
+      text: mHM 5.13 (mHM 6 is not available yet). The version decides the input layout and the namelists, and is fixed once a setup exists.
+    - widget: comboBox_mhmWorkType
+      title: Work type
+      text: Prepare and run a single domain, combine domains that are already prepared into one run, or only post-process the outputs of a setup mHM has already run.
+    - widget: pushButton_setProject
+      title: Set the project
+      text: Opens the project folder and lists its setups.
 
   page_setup:
-    - widget: mProjectionSelectionWidget_crs
-      title: Model CRS
-      text: All grids are prepared in this CRS. EPSG:4326 or a projected CRS in metres (e.g. UTM) both work; L1 and L11 resolutions are entered in its unit.
+    - widget: mProjectionSelectionWidget_postCrs
+      title: CRS of the outputs
+      text: Post processing only. The CRS of the setup's grids, for the maps of its outputs.
+    - widget: pushButton_setPostCrs
+      title: Open the outputs
+      text: Opens the project folder as the setup and loads its outputs.
 
   page_singleDomain:
     - widget: comboBox_domainFolderSelector
@@ -28,75 +40,12 @@ pages:
     - widget: pushButton_createOrLoadDomainStructure
       title: Create or open the setup
       text: Opens the selected setup, or asks for a name and creates its folders and state files.
-
-  page_dem:
-    - widget: comboBox_demInput
-      title: DEM
-      text: The elevation model. Its cell times the upscale factor must equal L0; off the L0 lattice it is shifted onto it (under half a cell), then cropped or padded with no data to the common extent of the Resolution page, which it must overlap.
-    - widget: pushButton_setDEM
-      title: Set the DEM
-      text: Checks the DEM against the common L0 grid; the note below says how it is placed on it.
-
-  page_dem_derivatives_var:
-    - widget: checkBox_isDerivedFromDemGrid
-      title: Derived from the DEM
-      text: The ▶ of A. Morphology derives this variable from the DEM (mhm-tools). Untick it to replace it with your own raster.
-    - widget: groupBox_replaceDemDerivativesVar
-      title: Replacement raster
-      text: In the domain CRS with L0's cells, covering the whole DEM. It is shifted onto the L0 lattice (under half a cell, never resampled), then cropped or padded with no data to the common extent.
-    - widget: pushButton_setDemDerivativesVar
-      title: Set
-      text: Checks the replacement raster (or takes the DEM's again when ticked); the ▶ of A. Morphology then writes it into dem_derivatives.nc.
-
-  page_precipitation:
-    - widget: widget_hostPrecipitationMeteoVarInput
-      title: Precipitation input
-      text: A precipitation file and the glob of its record; Scan Files checks every matching file (one grid, unit and time step, no gap). Set checks they cover the Time Period and the common extent; the note says whether they are copied, shifted or resampled onto L2.
-
-  page_resolution:
-    - widget: pushButton_browseL0File
-      title: L0 reference file
-      text: A raster (ASC, GeoTIFF or NetCDF with a grid) whose lattice and cell size, optionally upscaled, define L0.
-    - widget: lineEdit_L1Resolution
-      title: L1 (hydrology) resolution
-      text: Cell size mHM runs its hydrology on, a whole multiple of L0; type it, set the multiplier, or browse a file.
-    - widget: lineEdit_L11Resolution
-      title: L11 (routing) resolution
-      text: Cell size of the river routing grid. mHM 5.13 takes it equal to L1 or an even multiple of it.
-    - widget: pushButton_browseL2File
-      title: L2 reference file
-      text: Usually a precipitation file. Its cell sets the L2 multiplier, and its lattice anchors L2 so the forcing is shifted rather than resampled.
-    - widget: checkBox_extentL0enforce
-      title: Extents
-      text: The common extent lies inside every ticked file's extent, snapped inward to whole blocks of all levels, so the DEM and the forcing need no padding.
-    - widget: pushButton_setLatLon
-      title: Set the grid
-      text: Checks the four levels against mHM's rules, shows the updated headers (blue with ⓘ where they differ from a file) and writes <code>data/latlon.nc</code>.
-
-  page_timePeriod:
-    - widget: pushButton_dialogTimePeriodNetcdfFile
-      title: Period from NetCDF files
-      text: Scans the time axis of a NetCDF glob (start, end, time step) and proposes the simulation period from it.
-    - widget: dateTimeEdit_simulationStartTimeInput
-      title: Simulation start
-      text: First model time step, including the warm-up. mHM 5.13 needs whole days, mHM 6 whole hours.
-    - widget: dateTimeEdit_evaluationStartTimeInput
-      title: Evaluation start
-      text: End of the warm-up; results are evaluated from here on. Must lie between the start and the end.
-    - widget: dateTimeEdit_simulationEndTimeInput
-      title: Simulation end
-      text: Last model time step. The meteorology must cover the whole simulation period.
-    - widget: spinBox_warmingDays
-      title: Warming days
-      text: Days between the simulation start and the evaluation start; either one updates the other.
-    - widget: pushButton_setTimePeriod
-      title: Set the period
-      text: Saves the simulation period. Every meteorology Set needs it first and checks its files cover it.
-
-  page_settings:
-    - widget: pushButton_edit_nmls
-      title: Edit namelists
-      text: Opens the namelist editor for the combined run.
+    - widget: mProjectionSelectionWidget_crs
+      title: Model CRS
+      text: All grids are prepared in this CRS. EPSG:4326 or a projected CRS in metres (e.g. UTM) both work; the resolutions are entered in its unit.
+    - widget: pushButton_setCRS
+      title: Set the CRS
+      text: Applies the CRS; choosing it in the widget alone changes nothing.
 
   page_multiDomain:
     - widget: comboBox_multiDomainFolderSelector
@@ -121,33 +70,142 @@ pages:
       title: Prepare the combined run
       text: Checks that the domains agree on processes, land-cover scenes, soil horizons and geology, copies the first domain's parameter and output namelists if this setup has none, then writes the namelist handoff.
 
+  page_resolution:
+    - widget: pushButton_browseL0File
+      title: L0 reference file
+      text: A raster (ASC, GeoTIFF or NetCDF with a grid) whose lattice and cell size, optionally upscaled, define L0.
+    - widget: comboBox_L0ResolutionUnit
+      title: L0 unit
+    - widget: pushButton_browseL2File
+      title: L2 reference file
+      text: Usually a precipitation file. Its cell sets the L2 multiplier, and its lattice anchors the grid so the forcing is copied rather than resampled.
+    - widget: spinBox_L2ResolutionMultiplier
+      title: L2 multiplier
+      text: L2 as a whole number of L0 cells.
+    - widget: comboBox_L2ResolutionUnit
+      title: L2 unit
+    - widget: lineEdit_L1Resolution
+      title: L1 (hydrology) resolution
+      text: Cell size mHM runs its hydrology on, a whole multiple of L0; type it, set the multiplier, or browse a file.
+    - widget: comboBox_L1ResolutionUnit
+      title: L1 unit
+    - widget: lineEdit_L11Resolution
+      title: L11 (routing) resolution
+      text: Cell size of the river routing grid. mHM 5.13 takes it equal to L1 or an even multiple of it.
+    - widget: comboBox_L11ResolutionUnit
+      title: L11 unit
+    - widget: checkBox_extentL0enforce
+      title: Extents
+      text: The common extent lies inside every ticked file's extent, snapped to whole blocks of all levels; the meteo is never padded, so it must cover it.
+    - widget: pushButton_setLatLon
+      title: Set the grid
+      text: Checks the four levels against mHM's rules, shows the updated headers (blue with ⓘ where they differ from a file) and writes <code>data/latlon.nc</code>. A new L0 grid forgets the saved watershed.
+
+  page_timePeriod:
+    - widget: pushButton_dialogTimePeriodNetcdfFile
+      title: Period from NetCDF files
+      text: Scans the time axis of a NetCDF glob (start, end, time step) and proposes the simulation period from it.
+    - widget: dateTimeEdit_simulationStartTimeInput
+      title: Simulation start
+      text: First model time step, including the warm-up. mHM 5.13 needs whole days.
+    - widget: dateTimeEdit_evaluationStartTimeInput
+      title: Evaluation start
+      text: End of the warm-up; results are evaluated from here on. Must lie between the start and the end.
+    - widget: dateTimeEdit_simulationEndTimeInput
+      title: Simulation end
+      text: Last model time step. The meteorology must cover the whole simulation period.
+    - widget: spinBox_warmingDays
+      title: Warming days
+      text: Days between the simulation start and the evaluation start; either one updates the other.
+    - widget: pushButton_setTimePeriod
+      title: Set the period
+      text: Saves the simulation period. Land-use periods are fitted to it, and every meteorology Set checks its files cover it.
+
+  page_processes:
+    - widget: checkBox_gaugeOption
+      title: Gauges and observations
+      text: Tick to use gauges (outlets with observed discharge) and hydrological observations in the setup.
+    - widget: pushButton_edit_nmls
+      title: Edit namelists
+      text: Opens the namelist editor to choose the process cases; they decide which inputs the setup needs.
+
+  page_inputs:
+    - widget: tableWidget_inputsSummary
+      title: Inputs
+      text: The inputs the chosen processes need, with their status.
+
+  page_morphology:
+    - widget: tableWidget_morphologySummary
+      title: Morphology summary
+      text: Each morphology input with its own grid (cell size, rows, columns, extent) and how it reaches L0. The ▶ of A. Morphology in the project tree prepares them all.
+
+  page_dem:
+    - widget: comboBox_demInput
+      title: DEM
+      text: The elevation model. Its cell times the upscale factor must equal L0; off the L0 lattice it is shifted onto it (under half a cell), then cropped or padded with no data to the common extent of the Resolution page, which it must overlap.
+    - widget: groupBox_upscaleTopography
+      title: Upscale topography
+      text: Makes each L0 cell n × n DEM cells. The blocks start on the meteo grid's edge, so the DEM border may get up to n−1 no-data cells.
+    - widget: pushButton_setDEM
+      title: Set the DEM
+      text: Checks the DEM against the common L0 grid; the note below says how it is placed on it.
+
+  page_dem_derivatives_var:
+    - widget: checkBox_isDerivedFromDemGrid
+      title: Derived from the DEM
+      text: The ▶ of A. Morphology derives this variable from the DEM (mhm-tools). Untick it to replace it with your own raster.
+    - widget: groupBox_replaceDemDerivativesVar
+      title: Replacement raster
+      text: In the domain CRS with L0's cells, covering the whole DEM. It is shifted onto the L0 lattice (under half a cell, never resampled), then cropped or padded with no data to the common extent.
+    - widget: pushButton_setDemDerivativesVar
+      title: Set
+      text: Checks the replacement raster (or takes the DEM's again when ticked); the ▶ of A. Morphology then writes it into dem_derivatives.nc.
+
+  page_landUse:
+    - widget: groupBox_landUseInputType
+      title: Land cover
+      text: Land cover as mHM-ready rasters or as a dataset with a lookup table, one scene per period. The chosen type's inputs show below.
+    - widget: pushButton_setLandUse
+      title: Set land use
+      text: Fits the periods to the Time Period and keeps the inputs; codes missing from the lookup table are reported in the log.
+
+  page_soil:
+    - widget: groupBox_soilInputType
+      title: Soil
+      text: Soil classes as an mHM-ready raster, through a lookup table, or from clay, sand, silt and bulk-density layers per horizon.
+    - widget: pushButton_setSoil
+      title: Set soil
+      text: Checks the horizons and their layers and keeps them; the ▶ of A. Morphology writes the soil classes and their class definition.
+
+  page_geology:
+    - widget: groupBox_geologyInputType
+      title: Geology
+      text: Geology classes as an mHM-ready raster or through a lookup table. mHM needs one parameter row per class.
+    - widget: pushButton_setGeology
+      title: Set geology
+      text: Keeps the inputs; a code missing from the lookup table stops the ▶ with its value.
+
+  page_lai:
+    - widget: groupBox_laiInputType
+      title: LAI
+      text: Leaf-area index, e.g. a long-term monthly NetCDF. Needed by interception and by PET cases -1, 2 and 3.
+    - widget: pushButton_setLai
+      title: Set LAI
+      text: Keeps the inputs; the ▶ of A. Morphology resamples the LAI onto the filled DEM's grid, with its progress in the log.
+
   page_gauges:
+    - widget: groupBox_gaugesInputType
+      title: Gauges
+      text: Outlets as a point layer or as a raster.
     - widget: comboBox_pourPointInput
       title: Outlets
       text: Point layer with the catchment outlets or gauges.
     - widget: comboBox_pourPointOutletID
       title: Outlet ID
       text: Attribute holding each outlet's unique ID; gauges keep it in the model.
-
-  page_landUse:
-    - widget: groupBox_landUseInputType
-      title: Land cover
-      text: Land cover as an mHM-ready raster or as a dataset with a lookup table. The chosen type's inputs show below; Set keeps them.
-
-  page_soil:
-    - widget: groupBox_soilInputType
-      title: Soil
-      text: Soil classes as an mHM-ready raster or through a lookup table, with one or several horizons.
-
-  page_geology:
-    - widget: groupBox_geologyInputType
-      title: Geology
-      text: Geology classes as an mHM-ready raster or through a lookup table.
-
-  page_lai:
-    - widget: groupBox_laiInputType
-      title: LAI
-      text: Leaf-area index, e.g. a long-term monthly NetCDF. Needed by interception and by PET cases -1, 2 and 3.
+    - widget: pushButton_setGauges
+      title: Set Gauges
+      text: Keeps the gauges, prepares the filled DEM, flow directions and accumulation, and draws the channel network the Domain Delineator opens on. Later runs reuse them unless the DEM or the grid changed.
 
   page_domainDefinition:
     - widget: label_domainDefinitionType
@@ -163,7 +221,17 @@ pages:
       text: Opens the details for its files, unit and time step; OK inspects the files.
     - widget: tableWidget_meteoInputs
       title: Forcing inputs
-      text: The variables that will be prepared, with their source and time step.
+      text: The variables the ▶ of B. Meteorology prepares on the L2 grid, with their source and time step.
+
+  page_precipitation:
+    - widget: widget_hostPrecipitationMeteoVarInput
+      title: Precipitation input
+      text: A precipitation file and the glob of its record; Scan Files checks every matching file (one grid, unit and time step, no gap). Set checks they cover the Time Period and the common extent; the note says whether they are copied, shifted or resampled onto L2.
+
+  page_meteoVar:
+    - widget: widget_meteoVarForm
+      title: Forcing input
+      text: This variable's files and the glob of its record, its unit and time step; Scan Files checks them. Set checks they cover the Time Period and the common extent; the note says how they reach L2.
 
   page_hydro:
     - widget: comboBox_observationVar
@@ -177,41 +245,47 @@ pages:
       text: The observations the ▶ of C. Observations in the project tree prepares on the L2 grid.
     - widget: comboBox_displayOutletStation
       title: Gauge discharge
-      text: Plots the observed discharge of a saved gauge.
+      text: Pick a saved gauge; ➤ plots its observed discharge.
 
   page_execution:
     - widget: pushButton_editNmlsFinal
       title: Edit namelists
       text: Opens the namelist editor with everything the plugin prepared filled in; review process cases and outputs before running.
-    - widget: pushButton_editParameterOptions
-      title: Parameters
-      text: Edits the calibration parameters and their ranges.
     - widget: pushButton_editOptimizationOptions
       title: Optimization
       text: Edits the calibration settings.
+    - widget: pushButton_editParameterOptions
+      title: Parameters
+      text: Edits the calibration parameters and their ranges.
     - widget: comboBox_runName
       title: Run name
-      text: Optional. A named run writes its outputs to runs/<name>/ in the setup (the namelists point there) and the Outputs tab lists it by name; without a name, mHM writes to output/.
+      text: Optional. Backs up the namelists in runs/&lt;name&gt;/ before the run; mHM writes to output/, which the Outputs page reads.
+    - widget: checkBox_enableParameterArgument
+      title: Parameter namelist
+      text: Tick to pass another parameter namelist to mHM with -p.
     - widget: pushButton_execute_mHM
       title: Run mHM
-      text: Runs mHM in the setup folder and shows its output in the terminal.
+      text: Runs mHM in the setup folder (the multi-domain folder for a combined run), whatever folder the terminal is in, and shows its output there.
 
   page_outputs:
     - widget: comboBox_postRun
       title: Run
-      text: The current output/ or an archived run. Opening a run scans its output once in the background; right-click to archive the current run before the next one overwrites it.
+      text: The run whose outputs are shown. Opening it scans its output once in the background.
     - widget: comboBox_postBasin
       title: Basin
       text: The domain or a gauge catchment; basin series and the water balance use it.
     - widget: dateEdit_postStart
       title: Period
       text: Restricts every page to whole output intervals inside these dates.
-    - widget: comboBox_postResolution
-      title: Resolution
-      text: Aggregates series and balance tables; fluxes are summed, states averaged.
+    - widget: pushButton_quickReviewHydrograph
+      title: Quick hydrograph
+      text: Runs the mhm-tools hydrograph of output/ in the terminal and opens it in its own window, with precipitation when the prepared pre.nc exists.
     - widget: textBrowser_postOverview
       title: Overview
-      text: The selected run at a glance (water balance, ratios, the main gauge's scores) and what to check.
+      text: The selected run at a glance (water balance, ratios, the main gauge's scores) and the outputs it did not write.
+    - widget: pushButton_postRefresh
+      title: Refresh
+      text: Re-reads the runs and rescans what changed.
     - widget: toolButton_postExport
       title: Export
       text: Writes the shown view's tables (CSV), plots (PNG, SVG and their data as CSV) and maps (GeoTIFF and CF netCDF) to a folder; or archives the current run.

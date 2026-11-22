@@ -22,7 +22,8 @@ class ObservationRun:
     inspections: Mapping[str, SpatialMetadata] | None = None
 
 
-def prepare(run: ObservationRun, *, log=None, cancelled=None) -> bool:
+def main(run: ObservationRun, *, log=None, cancelled=None) -> bool:
+    """Entry point: prepare every configured gridded observation and register it."""
     inspections = run.inspections or inspect_meteo_inputs_cached(
         run.setup_folder, run.inputs, log=log, cancelled=cancelled)
     output_root = Path(data_folder(run.setup_folder)) / "observation"
@@ -37,4 +38,4 @@ def prepare(run: ObservationRun, *, log=None, cancelled=None) -> bool:
     return True
 
 
-__all__ = ["ObservationRun", "prepare"]
+__all__ = ["ObservationRun", "main"]

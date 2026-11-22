@@ -49,7 +49,7 @@ def records_from_mhm_file(path: Path) -> list[DischargeRecord]:
         raise ValueError(f"No observations in {path}")
     result = []
     for timestamp, value in sorted(records.items()):
-        if result and timestamp - result[-1].timestamp > step:
+        while result and timestamp - result[-1].timestamp > step:  # every omitted step: mHM reads by position
             result.append(DischargeRecord(result[-1].timestamp + step, math.nan))
         result.append(DischargeRecord(timestamp, value))
     return result
@@ -389,18 +389,19 @@ def parse_discharge_value(value) -> float:
 
 
 def sort_and_deduplicate(records: list[DischargeRecord]) -> list[DischargeRecord]:
-    """One record per day from the first to the last, the last value of a duplicated date and NaN
-    (written as -9999) for a missing one: mHM 5.13 reads (end - start + 1) lines by position."""
+    """One record per day from the first to the last: the mean of that day's values (sub-daily or
+    duplicated records) and NaN (written as -9999) for a day without one: mHM 5.13 reads
+    (end - start + 1) lines by position."""
     by_day = {}
     for record in records:
-        key = datetime(
-            record.timestamp.year,
-            record.timestamp.month,
-            record.timestamp.day,
-        )
-        by_day[key] = DischargeRecord(timestamp=key, value=record.value)
+        key = datetime(record.timestamp.year, record.timestamp.month, record.timestamp.day)
+        by_day.setdefault(key, []).append(record.value)
     if not by_day:
         return []
     first, last = min(by_day), max(by_day)
-    days = (first + timedelta(days=offset) for offset in range((last - first).days + 1))
-    return [by_day.get(day, DischargeRecord(timestamp=day, value=math.nan)) for day in days]
+    result = []
+    for offset in range((last - first).days + 1):
+        day = first + timedelta(days=offset)
+        valid = [value for value in by_day.get(day, ()) if math.isfinite(value)]
+        result.append(DischargeRecord(timestamp=day, value=sum(valid) / len(valid) if valid else math.nan))
+    return result

@@ -19,6 +19,24 @@
     <number>2</number>
    </property>
    <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_postMapVariable" stretch="0,1">
+     <item>
+      <widget class="QLabel" name="label_postMapVariable">
+       <property name="text">
+        <string>Variable</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="comboBox_postMapVariable">
+       <property name="toolTip">
+        <string>The variable on the map: those relevant to the open view (all in Map Explorer)</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QgsMapCanvas" name="mapCanvas_post">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">

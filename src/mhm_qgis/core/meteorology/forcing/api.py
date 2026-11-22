@@ -61,12 +61,15 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
                 spec.output_temporal_resolution))[1],
         ) for spec in specs
     }
-    common = windows.get("pre")
-    if common:
-        for kind, (start, end) in windows.items():
-            if start > common[0] or end < common[1]:
-                raise ValueError(f"{VARIABLE_LABELS.get(kind, kind)}: the complete data do not cover "
-                                 "the precipitation period.")
+    # every variable is written for the period they all cover; verify checks it spans the simulation
+    common = (max(start for start, _ in windows.values()), min(end for _, end in windows.values()))
+    if common[0] >= common[1]:
+        raise ValueError("The meteorology variables share no common period: "
+                         + ", ".join(f"{VARIABLE_LABELS.get(k, k)} {str(s)[:16]} to {str(e)[:16]}"
+                                     for k, (s, e) in windows.items()))
+    if log and len(set(windows.values())) > 1:
+        log(f"Meteorology is written for the period all variables cover: {str(common[0])[:16]} to "
+            f"{str(common[1])[:16]}.")
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
     outputs, headers, files_used = {}, {}, {}
@@ -81,7 +84,7 @@ def process_meteo_inputs(inputs, output_root, target_grid, *, flat_layout=False,
                 metadata = inspected[spec.kind]
                 output = stage / meteo_file(spec.kind, flat_layout)
                 count = format_meteo(spec, output, grid_file, target_grid.crs,
-                                     window=common or windows[spec.kind], metadata=metadata,
+                                     window=common, metadata=metadata,
                                      progress=tick, cancelled=cancelled, log=log)
             outputs[spec.kind] = output
             files_used[spec.kind] = len(metadata.files)

@@ -106,3 +106,16 @@ def test_a_period_set_after_the_namelist_was_saved_is_reported(tmp_path):
     assert verify._stale(setup) == []
     setup.settings["time"]["sim_end"] = "2003-01-01T00:00"
     assert "Edit Namelists" in verify._stale(setup)[0]
+
+
+def test_lai_the_file_does_not_cover_and_missing_gauge_files_are_reported(tmp_path):
+    values = np.ones((12, 2, 2))
+    values[:, :, 0] = 0  # what mHM-tools pads where the LAI file ends
+    assert any("50% of the domain has LAI 0" in p for p in rules.lai(False, values, np.ones((2, 2), bool), True))
+    setup = SimpleNamespace(v6=True, folder=tmp_path, get=lambda *_args: [],
+                            settings={"domains": [{"gauge_ids": [7]}],
+                                      "gauges": [{"gauge_id": 7, "gauge_path": "data/obs/7.txt"}]})
+    assert verify._gauges(setup) == ["Gauge 7: data/obs/7.txt is missing; mHM stops ('File does not exist')."]
+    (tmp_path / "data/obs").mkdir(parents=True)
+    (tmp_path / "data/obs/7.txt").write_text("")
+    assert verify._gauges(setup) == []

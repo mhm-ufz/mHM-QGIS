@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from qgis.core import QgsCoordinateReferenceSystem
 from qgis.PyQt.QtCore import QSignalBlocker
 from qgis.PyQt.QtWidgets import QDialog, QMessageBox
 
@@ -21,30 +22,72 @@ from . import (
 from .version import selected as selected_version
 from .workflow_state import set_status, switch_busy
 
+POST_ONLY = 3  # comboBox_mhmWorkType: an mHM setup that has run; only its outputs are analysed
+
+
+def post_only(dialog) -> bool:
+    return dialog.comboBox_mhmWorkType.currentIndex() == POST_ONLY
+
 
 def show_work_type(dialog):
-    """Show the page of the selected work type; a combined setup prepares no inputs."""
-    single = dialog.comboBox_mhmWorkType.currentIndex() == 0
+    """Show the page of the selected work type; a combined setup prepares no inputs, and post
+    processing only keeps the configuration rows and the outputs."""
+    index = dialog.comboBox_mhmWorkType.currentIndex()
     dialog.stackedWidget_configuration.setCurrentWidget(
-        dialog.page_singleDomain if single else dialog.page_multiDomain
+        {0: dialog.page_singleDomain, POST_ONLY: dialog.page_postProcessingOnly}.get(index, dialog.page_multiDomain)
     )
-    for key in ("resolution", "inputs"):  # single-domain rows; Settings stays
-        project_tree.item(dialog, key).setHidden(not single)
+    # single-domain rows: a combined run takes each domain's periods and their common process cases
+    for key in ("resolution", "inputs", "time_period", "settings"):
+        project_tree.item(dialog, key).setHidden(index != 0)
+    project_tree.item(dialog, "execution").setHidden(index == POST_ONLY)
 
 
 def work_type_changed(dialog):
     show_work_type(dialog)
-    single = dialog.comboBox_mhmWorkType.currentIndex() == 0
-    if dialog.setup_folder and single == (dialog._multi_domains is not None):
-        # The open setup is of the other kind: save and close it.
+    index = dialog.comboBox_mhmWorkType.currentIndex()
+    opened = POST_ONLY if dialog.setup_folder == dialog.project_directory else int(dialog._multi_domains is not None)
+    if dialog.setup_folder and opened != index:
+        # The open setup is of another kind: save and close it.
         dialog.save_input_state()
         dialog.setup_folder = None
         dialog._multi_domains = None
+        post_context.clear(dialog)
         dialog.comboBox_mHMversion.setEnabled(True)
-        dialog.log_message(
-            "Open a " + ("domain" if single else "multi-domain") + " setup to continue."
-        )
+        dialog.log_message({0: "Open a domain setup to continue.", POST_ONLY: "Press Set to open the folder "
+                            "for post processing."}.get(index, "Open a multi-domain setup to continue."))
     dialog.save_input_state()
+
+
+def _not_a_run(directory, version) -> str:
+    """Why `directory` is not an mHM setup that has run (its namelists and outputs), or ""."""
+    from ...core.handlers.store.paths import version_key
+    from ...core.post.runs import RunRef, wrote
+
+    folder = Path(directory)
+    needed = ("mhm.nml", "parameters.nml" if version.startswith("6") else "mhm_parameter.nml")
+    missing = [name for name in needed if not (folder / name).is_file()]
+    if missing:
+        return f"{folder} holds no {' or '.join(missing)}: post processing needs the setup's mHM {version} namelists."
+    if not wrote(RunRef(folder, folder, folder, folder, version_key(version))):
+        return f"{folder} holds no mHM output where its namelists put it: run mHM first."
+    return ""
+
+
+def set_post_crs(dialog):
+    """The post-processing page's Set: the project folder opens as the setup and its outputs load."""
+    crs = dialog.mProjectionSelectionWidget_postCrs.crs()
+    if not dialog.project_directory or not crs.isValid():
+        QMessageBox.warning(dialog, "Post processing", "Set the project folder first, then choose a valid CRS.")
+        return
+    if problem := _not_a_run(dialog.project_directory, selected_version(dialog)):
+        QMessageBox.warning(dialog, "Post processing only", problem)
+        return
+    dialog.setup_folder = dialog.project_directory
+    dialog._set_crs = crs.authid()
+    dialog.comboBox_mHMversion.setEnabled(False)
+    dialog.save_input_state()  # its version tells the run listing how to read the namelists
+    post_context.populate(dialog, rescan=True)
+    project_tree.refresh(dialog)
 
 
 def create_structure(dialog):
@@ -124,6 +167,15 @@ def populate_domains(dialog, selected=None):
         combo.addItem("<new>", None)
         index = combo.findData(selected) if selected else 0
         combo.setCurrentIndex(max(0, index))
+    domain_chosen(dialog)
+
+
+def domain_chosen(dialog):
+    """`<new>` creates a domain; a listed one opens. The version is chosen only with no setup open:
+    changing it rewrites the open one."""
+    new = dialog.comboBox_domainFolderSelector.currentData() is None
+    dialog.pushButton_createOrLoadDomainStructure.setText("New" if new else "Open")
+    dialog.comboBox_mHMversion.setEnabled(new and not dialog.setup_folder)
 
 
 def browse_folder(dialog):
@@ -138,6 +190,9 @@ def set_folder(dialog):
     directory = dialog.lineEdit_ProjectFolder.text().strip()
     if not directory or not Path(directory).is_dir():
         QMessageBox.warning(dialog, "Project folder", "Browse to an existing project folder first.")
+        return
+    if post_only(dialog) and (problem := _not_a_run(directory, selected_version(dialog))):
+        QMessageBox.warning(dialog, "Post processing only", problem)
         return
     if switch_busy(dialog):
         return
@@ -156,7 +211,13 @@ def set_folder(dialog):
     populate_domains(dialog)
     multi_domain.populate_setups(dialog)
     post_context.clear(dialog)
-    dialog.log_message(
-        "Select a domain and press Create Project Structure to open it."
-    )
+    if post_only(dialog):
+        from ...core.handlers.file import json as jsonio
+        from ...core.handlers.store.layout import input_state_path
+
+        saved = jsonio.read(input_state_path(directory), {}) or {}
+        dialog.mProjectionSelectionWidget_postCrs.setCrs(QgsCoordinateReferenceSystem(saved.get("crs_authid") or ""))
+        dialog.log_message("Set the CRS of the setup's grids on Domain Setup to open its outputs.")
+    else:
+        dialog.log_message("Select a domain and press Create Project Structure to open it.")
     project_tree.refresh(dialog)

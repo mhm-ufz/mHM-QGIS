@@ -75,12 +75,12 @@ def test_reference_files_set_the_common_grid_the_dem_and_precipitation_cover(tmp
     folder = tmp_path / "precipitation"
     _precipitation(folder, [51., 50.], [10., 11.])
     dialog = _open(tmp_path)
+    dialog.comboBox_mHMversion.setCurrentText("6.0")  # its periods end exclusive (disabled in the UI, not in code)
 
     _browse(dialog, monkeypatch, "L0", dem)
     assert dialog.lineEdit_L0Resolution.text() == repr(0.5)
     assert dialog.pushButton_browseL0File.toolTip() == str(dem)
     assert dialog.label_nColsL0File.text() == "4"
-    assert not dialog.toolButton_descriptionL0File.isEnabled()  # nothing to describe before Set
     assert "eye-off.svg" in dialog.label_displayL0File.text()  # a loaded file can be shown
     assert dialog.label_displayL1File.text() == ""
     _browse(dialog, monkeypatch, "L2", folder / "wanted.nc", "pre")
@@ -92,8 +92,6 @@ def test_reference_files_set_the_common_grid_the_dem_and_precipitation_cover(tmp
     dialog.pushButton_setLatLon.click()
     assert not warnings
     assert (dialog.label_nColsL0Common.text(), dialog.label_nColsL2Common.text()) == ("4", "2")
-    assert dialog.toolButton_descriptionL2File.isEnabled()
-    assert dialog.toolButton_descriptionL2File.toolTip() == "Used as is."
     from mhm_qgis.qgis_bridge.display import grid as grid_display
 
     drawn = []
@@ -180,16 +178,12 @@ def test_a_value_changed_from_its_file_is_blue_with_the_reason(tmp_path, monkeyp
     assert "intersection of the ticked extents (L0), snapped outward" in note
     assert note.endswith("6 columns of 0.5 instead of the L0 file's 4 of 0.5.\n"
                          "Padded with no data: 1 column west, 1 column east.")
-    description = dialog.toolButton_descriptionL0File.toolTip()
-    assert description == "Padded with no data: 1 column west, 1 column east, 1 row south, 1 row north."
-    assert dialog.toolButton_descriptionL2File.toolTip() == "Used as is."
     shown = []
     monkeypatch.setattr(grid.QMessageBox, "information", lambda _parent, _title, text: shown.append(text))
     dialog.label_nColsL0Common.linkActivated.emit("L0:ncols")  # the ⓘ
-    dialog.toolButton_descriptionL0File.click()
-    assert shown == [note, description]
+    assert shown == [note]
     dialog.checkBox_extentL0enforce.setChecked(False)
-    assert not dialog.toolButton_descriptionL0File.isEnabled()  # an input changed: Set again
+    assert dialog.label_nColsL0Common.text() == ""  # an input changed: Set again
     warnings = []
     monkeypatch.setattr(grid.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
     dialog.pushButton_setLatLon.click()
@@ -267,7 +261,7 @@ def test_a_replacement_derivative_must_have_l0_cells_and_cover_the_dem(tmp_path,
     replace("slope.tif", 8, 6, (-70, 100, 0, 530, 0, -100))  # 0.3 cell off L0, larger than the DEM
     assert len(warnings) == 3
     assert dialog._dem_replacements["slope"]["path"] == str(tmp_path / "slope.tif")
-    assert project_tree.item(dialog, "slope").text(project_tree.STATUS_COLUMN) == "🟢"
+    assert project_tree.item(dialog, "slope").text(project_tree.STATUS_COLUMN) == "🟡"
     assert grid.summary(dialog, {"key": "slope"}) == (
         "100", "6", "8", "-70, 730, -70, 530",
         "Shifted by (-30, -30) onto the L0 lattice. Cropped: 1 column west, 1 column east, 1 row south, 1 row north.",
@@ -308,7 +302,7 @@ def test_create_structure_opens_lazy_tree(tmp_path, monkeypatch):
     dialog.comboBox_domainFolderSelector.setCurrentIndex(
         dialog.comboBox_domainFolderSelector.count() - 1
     )
-    assert dialog.comboBox_mHMversion.isEnabled()
+    assert not dialog.comboBox_mHMversion.isEnabled()  # <new> must not change the open domain's version
     assert not (tmp_path / "settings.yaml").exists()
     dialog.close()
 
@@ -373,3 +367,97 @@ def test_the_snapped_extent_must_stay_inside_the_meteo_grid(tmp_path, monkeypatc
     dialog.pushButton_setLatLon.click()
     assert grid.require_common_grid(dialog)["study_bounds"] == [10.0, 11.0, 50.0, 51.0]
     dialog.close()
+
+
+def test_post_processing_only_opens_a_run_setup_without_a_structure(tmp_path, monkeypatch):
+    import json
+
+    from qgis.PyQt.QtWidgets import QMessageBox
+
+    from mhm_qgis.qt import project_tree
+    from mhm_qgis.qt.controllers import post_context
+
+    warned, populated = [], []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warned.append(args[2]))
+    monkeypatch.setattr(post_context, "populate", lambda _dialog, rescan=False: populated.append(rescan))
+    dialog = MhmQgisDialog()
+    dialog.comboBox_mhmWorkType.setCurrentIndex(project.POST_ONLY)
+    dialog.comboBox_mHMversion.setCurrentText("5.13")
+    dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
+    dialog.pushButton_setProject.click()
+    assert "mhm.nml" in warned[-1]  # not a setup that ran
+    assert dialog.project_directory != str(tmp_path)
+    for name in ("mhm.nml", "mhm_parameter.nml", "output/discharge.nc"):
+        (tmp_path / name).parent.mkdir(exist_ok=True)
+        (tmp_path / name).write_text("")
+    state_file = tmp_path / ".temp/mhm_qgis_input_state.json"
+    state_file.parent.mkdir()
+    state_file.write_text(json.dumps({"layers": {"dem": {"source": "dem.asc"}}}))  # a plugin domain's own inputs
+    dialog.pushButton_setProject.click()
+    dialog.mProjectionSelectionWidget_postCrs.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
+    dialog.pushButton_setPostCrs.click()
+    assert dialog.setup_folder == str(tmp_path)
+    assert not (tmp_path / "mhm-qgis").exists()
+    state = json.loads(state_file.read_text())
+    assert state["mhm_version"].startswith("5")
+    assert state["crs_authid"] == "EPSG:4326"
+    assert state["layers"] == {"dem": {"source": "dem.asc"}}  # kept: only the version and CRS are written
+    assert dialog.get_crs().authid() == "EPSG:4326"
+    assert populated == [True]
+    keys = ("intro", "project_configuration", "domain_setup", "resolution", "time_period", "settings",
+            "inputs", "execution", "outputs")
+    assert [key for key in keys if not project_tree.item(dialog, key).isHidden()] == [
+        "intro", "project_configuration", "domain_setup", "outputs"]
+    dialog.close()
+
+
+def test_the_domain_button_says_new_or_open_and_the_lai_method_is_kept(tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import categorical
+    from mhm_qgis.qt.dialogs.input_selection import LaiNetcdfConfig
+
+    dialog = MhmQgisDialog()
+    dialog.project_directory = str(tmp_path)
+    (tmp_path / "mhm-qgis" / "Alpine" / "data").mkdir(parents=True)
+    project.populate_domains(dialog)
+    combo, button = dialog.comboBox_domainFolderSelector, dialog.pushButton_createOrLoadDomainStructure
+    assert (combo.currentText(), button.text()) == ("Alpine", "Open")
+    combo.setCurrentIndex(combo.findData(None))
+    assert button.text() == "New"
+    dialog.setup_folder = str(tmp_path / "mhm-qgis" / "Alpine")
+    dialog.comboBox_resamplingMethod.setCurrentIndex(categorical.LAI_METHODS.index("nearest"))
+    categorical._configure_lai_netcdf(dialog, "lai", LaiNetcdfConfig("lai.nc", "Monthly", "lai", "",
+                                                                     categorical.LAI_METHODS[0]))
+    assert dialog._lai_input_config["method"] == "nearest"
+    dialog._lai_input_config = {}  # saved before the choice existed: bilinear
+    assert categorical._lai_method(dialog._lai_input_config) == "bilinear"
+    from mhm_qgis.core.morphology.layers import lai
+
+    (tmp_path / "lai.nc").touch()
+    assert lai.task_options(str(tmp_path), str(tmp_path / "lai.nc"), "dem.nc", method="nearest")["method"] == "nearest"
+    dialog.close()
+
+
+def test_l1_shows_its_first_digits_the_window_minimizes_and_categorical_combos_follow_qgis(tmp_path):
+    from qgis.core import QgsProject
+    from qgis.PyQt.QtCore import Qt
+
+    dialog = MhmQgisDialog()
+    assert dialog.windowFlags() & Qt.WindowType.WindowMinimizeButtonHint
+    grid.restore(dialog, {"grid_resolutions": {"l1": 0.0123456789012345}})
+    assert dialog.lineEdit_L1Resolution.cursorPosition() == 0
+
+    combo = dialog.comboBox_inputGeologyCategoricalLayer
+    browsed = tmp_path / "browsed.tif"
+    browsed.touch()
+    combo.addItem(str(browsed), {"origin": "file", "path": str(browsed), "variable": "", "source_crs": "EPSG:4326"})
+    combo.setCurrentIndex(combo.count() - 1)
+    _geotiff(tmp_path / "geology.tif", 2, 2, (0, 1, 0, 2, 0, -1), 4326)
+    layer = QgsRasterLayer(str(tmp_path / "geology.tif"), "geology")
+    QgsProject.instance().addMapLayer(layer)  # loaded after the dialog opened
+    try:
+        assert combo.findText("geology [EPSG:4326]") >= 0
+        assert combo.currentData()["path"] == str(browsed)
+        assert combo.currentData()["source_crs"] == "EPSG:4326"
+    finally:
+        QgsProject.instance().removeMapLayer(layer.id())
+        dialog.close()

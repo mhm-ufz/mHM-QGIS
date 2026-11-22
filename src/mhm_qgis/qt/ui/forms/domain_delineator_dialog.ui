@@ -347,9 +347,9 @@
           </spacer>
          </item>
          <item>
-          <widget class="QPushButton" name="pushButton_nextPourPoint">
+          <widget class="QPushButton" name="pushButton_nextGaugePoint">
            <property name="text">
-            <string>Next</string>
+            <string>Next Gauge</string>
            </property>
           </widget>
          </item>
@@ -375,9 +375,31 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="pushButton_save">
+      <widget class="QPushButton" name="pushButton_setDomainDefinition">
        <property name="text">
-        <string>Save</string>
+        <string>Set</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_setStatusDomainDefinition">
+       <property name="minimumSize">
+        <size>
+         <width>28</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>28</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
        </property>
       </widget>
      </item>

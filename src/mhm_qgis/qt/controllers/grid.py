@@ -16,6 +16,7 @@ from qgis.PyQt.QtCore import QSignalBlocker
 from qgis.PyQt.QtWidgets import QMessageBox
 
 from ...core.executions.morphology import setup as morphology_setup
+from ...core.executions.reset import invalidate_domains
 from ...core.grid import (
     Extent,
     Grid,
@@ -181,11 +182,13 @@ def show_l0(dialog):
     l0 = current_l0_resolution(dialog)
     with QSignalBlocker(dialog.lineEdit_L0Resolution):
         dialog.lineEdit_L0Resolution.setText(repr(l0) if l0 else "")
+        dialog.lineEdit_L0Resolution.setCursorPosition(0)  # the leading digits, not the end, in sight
     unit = _domain(dialog)[1]
     for level in LEVELS:
         combo = getattr(dialog, f"comboBox_{level}ResolutionUnit")
         combo.clear()
         combo.addItem(unit)
+        combo.setToolTip(unit or f"Unit of the {level} resolution")
         combo.setEnabled(False)  # grid units belong to the domain CRS
         if level != "L0":
             sync_multiplier(dialog, level)
@@ -231,11 +234,13 @@ def sync_multiplier(dialog, level, snap=False):
             spin.setValue(max(1, round(value / l0)))
         if snap:
             getattr(dialog, f"lineEdit_{level}Resolution").setText(repr(spin.value() * l0))
+            getattr(dialog, f"lineEdit_{level}Resolution").setCursorPosition(0)
 
 
 def multiplier_changed(dialog, level, n):
     if l0 := current_l0_resolution(dialog):
         getattr(dialog, f"lineEdit_{level}Resolution").setText(repr(n * l0))
+        getattr(dialog, f"lineEdit_{level}Resolution").setCursorPosition(0)
 
 
 def changed(dialog):
@@ -354,7 +359,7 @@ def build_grid(dialog):
         raw = {"raw_l2_resolution": (info["x_resolution"], info["y_resolution"]),
                "raw_l2_extent": Extent.from_header(info["header"]), "raw_l2_crs": crs}
     grid = Grid.for_meteorology(l0_info["header"], box.bounds, factors["L2"], block=block, crs=crs, unit=unit,
-                                **raw)
+                                lattice_cell=l0 / l0_factor(dialog), **raw)
     if not grid.requires_l2_resampling:
         anchor = "the L2 file's lattice"
     if l2_file:
@@ -369,7 +374,7 @@ def build_grid(dialog):
     target = target_grid_from_header(headers["L2"], crs or None)
     metadata.update(
         {f"{level.lower()}_header": headers[level] for level in LEVELS},
-        study_bounds=list(Extent.from_header(headers["L0"]).bounds),
+        study_bounds=list(grid.meteo_extent.bounds),  # what the meteo must cover, in its own cells
         extent_note=(f"Common extent: the intersection of the ticked extents ({', '.join(names)}), snapped outward "
                      f"to whole blocks of lcm({factors['L1']}, {factors['L11']}, {factors['L2']}) = {block} L0 "
                      f"cells ({format_resolution(block * l0, unit)} {unit}) on {anchor}."),
@@ -403,6 +408,7 @@ def set_resolution(dialog):
     """The Resolution page's Set: the common grid, its Updated Headers and latlon.nc."""
     if not _require_crs(dialog):
         return False
+    reload_files(dialog)  # a file changed on disk since it was read: the grid is built from it as it is now
     dialog.log_selected_input_paths("Set resolutions")
     try:
         metadata = build_grid(dialog)
@@ -421,6 +427,12 @@ def set_resolution(dialog):
     if previous.get("configuration_fingerprint") != metadata["configuration_fingerprint"]:
         invalidate_workflows(dialog, "execute_all_morphology", "execute_all_meteo", "execute_all_observations",
                              "run_mhm")
+    if previous.get("l0_header") not in (None, metadata["l0_header"]):  # the saved watershed lies on the old grid
+        invalidate_domains(dialog.setup_folder)
+        from . import main
+
+        main.embed(dialog, "domainDefinition", None)  # its draft would save the old delineations back
+        dialog.log_message("The common L0 grid changed: run Set Gauges and save the domain in Domain Delineator again.")
     dialog._grid_l2_metadata = processing.save_grid_metadata(dialog.setup_folder, metadata)
     show_headers(dialog)
     check_dem(dialog)
@@ -449,24 +461,6 @@ def _edges(source, common, cell, noise, sides=("west", "east", "south", "north")
         [f"Padded with no data: {', '.join(added)}."] if added else [])
 
 
-def _steps(dialog, level, header, file):
-    """What happens to `level`'s file on the common grid, one step a line (its info button)."""
-    info, steps = file["info"], []
-    cell, l0 = float(header["cellsize"]), float(dialog._grid_l2_metadata["l0_resolution"])
-    if not file["same_crs"]:
-        steps.append(f"Warped {dialog._resolution_files[level]['crs']} → {dialog.selected_meteo_crs()}.")
-    if level == "L0" and l0_factor(dialog) > 1:
-        steps.append(f"Upscaled x {l0_factor(dialog)} ({info['resolution']:.6g} → {cell:.6g} cells).")
-    if level != "L0" and not math.isclose(info["resolution"], cell, rel_tol=1e-7):
-        steps.append(f"Cell {info['resolution']:.6g} = {info['resolution'] / l0:.6g} x L0: resampled to "
-                     f"{round(cell / l0)} x L0 ({cell:.6g}).")
-    gap = dialog._grid_l2_metadata.get("alignment_gap")
-    if level == "L2" and gap and any(abs(value) > 1e-9 * cell for value in gap):  # however small: it is real
-        steps.append(f"Shifted by ({gap[0]:.6g}, {gap[1]:.6g}) onto the L0 lattice.")
-    steps += _edges(Extent.from_header(info["header"]), Extent.from_header(header), info["resolution"], 0.01 * l0)
-    return "\n".join(steps) or "Used as is."
-
-
 def show_headers(dialog):
     """The Set grid in Updated Headers: a value that differs from the From File row is blue, with an
     ⓘ giving the reason; each file row's info button lists what happens to its file."""
@@ -491,9 +485,6 @@ def show_headers(dialog):
             else:
                 label.setText(text)
         _eye(dialog, f"grid:{level}")
-        button = getattr(dialog, f"toolButton_description{level}File")
-        button.setToolTip(_steps(dialog, level, header, file) if file else "")
-        button.setEnabled(bool(file))
     for label, value in zip((dialog.label_minimumEasting, dialog.label_maximumEasting, dialog.label_minimumNorthing,
                              dialog.label_maximumNorthing), header_bounds(grid["l0_header"]), strict=True):
         label.setText(format_resolution(value, unit, precision=display_precision_for_unit(unit)))
@@ -598,9 +589,6 @@ def clear_headers(dialog):
             getattr(dialog, f"label_{name}{level}Common").setText("")
         dialog._displayed.pop(f"grid:{level}", None)
         _eye(dialog, f"grid:{level}", shown=False)
-        button = getattr(dialog, f"toolButton_description{level}File")
-        button.setToolTip("")
-        button.setEnabled(False)
     for label in (dialog.label_minimumEasting, dialog.label_maximumEasting, dialog.label_minimumNorthing,
                   dialog.label_maximumNorthing):
         label.setText("")
@@ -626,6 +614,7 @@ def restore(dialog, state):
             value = 0
         with QSignalBlocker(edit):
             edit.setText(repr(value) if value > 0 else "")
+        edit.setCursorPosition(0)  # the leading digits in sight
     reload_files(dialog)
     dialog._grid_l2_metadata = processing.grid_metadata(dialog.setup_folder) if dialog.setup_folder else None
     if grid_current(dialog):
@@ -689,7 +678,8 @@ def _fit(dialog, source, crs, factor=1):
     extent = Extent.from_bounds(bounds if crs_equal(crs, domain) else inner_bounds(bounds, crs, domain))
     cell, notes = float(l0["cellsize"]), []
     if math.isclose(float(placed["cellsize"]), cell, rel_tol=1e-9):
-        shift = [(round(value) - value) * cell for value in ((float(placed[key]) - float(l0[key])) / cell
+        fine = cell / factor  # the DEM step pads whole DEM cells: only a residue below one is a shift
+        shift = [(round(value) - value) * fine for value in ((float(placed[key]) - float(l0[key])) / fine
                                                               for key in ("xllcorner", "yllcorner"))]
         if any(abs(value) > 1e-6 * cell for value in shift):  # copy_rasters(shift=True) moves it
             notes.append(f"Shifted by ({shift[0]:.6g}, {shift[1]:.6g}) onto the L0 lattice.")
@@ -835,7 +825,8 @@ def _categorical_input(dialog, kind):
 
     if kind == "lai" and dialog._lai_input_config.get("input_path"):
         config = dialog._lai_input_config
-        return config["input_path"], config.get("variable", ""), config.get("source_crs", ""), "Bilinear (mhm-tools)."
+        return (config["input_path"], config.get("variable", ""), config.get("source_crs", ""),
+                f"{(config.get('method') or 'bilinear').title()} (mhm-tools).")
     if uses_advanced_categorical_input(dialog, kind) and kind == "lc":
         value = land_use_input_value(dialog._advanced_inputs["land_cover"])
         return value.as_dict()["periods"][0]["file_path"], "", value.crs, "Mode (mhm-tools)."
@@ -874,6 +865,8 @@ def _input_fit(dialog, key):
     uri = raster_source(path, variable)
     fit = _fit(dialog, uri, crs or qgis_layers.crs_string(qgis_layers.crs_of(uri)))
     cell = float(dialog._grid_l2_metadata["l0_header"]["cellsize"])
+    if regrid == "Auto (mhm-tools).":  # mhm-tools' "auto": average from finer cells, else bilinear
+        regrid = "Average (finer than L0, mhm-tools)." if fit["cell"] < cell else "Bilinear (coarser than L0, mhm-tools)."
     on_l0 = math.isclose(fit["cell"], cell, rel_tol=1e-9) and not fit["notes"]
     edges = _edges(fit["extent"], Extent.from_header(dialog._grid_l2_metadata["l0_header"]), cell, 0.01 * cell)
     return fit, edges, [] if on_l0 else [regrid]  # edges in L0 cells
@@ -881,7 +874,16 @@ def _input_fit(dialog, key):
 
 def summary(dialog, node):
     """The morphology summary's Cell Size, nRows, nCols, Extent (the input's own grid), Extent
-    Modification and Regridding for a row; "—" where it has no raster input."""
+    Modification and Regridding for a row; "—" where it has no raster input. A meteorology row
+    gives its scan's grid and how it reaches L2."""
+    variable = node["key"].removeprefix("meteo_")
+    if variable != node["key"]:
+        from .forcing import scan_details
+
+        spec = dialog._meteo_inputs.get(variable)
+        details = scan_details(dialog, variable, spec, dialog._meteo_inspections.get(variable), "L2") \
+            if spec else ("—",) * 7
+        return (*details[:5], details[6])
     try:
         found = _input_fit(dialog, node["key"])
     except (KeyError, IndexError, OSError, RuntimeError, ValueError) as error:

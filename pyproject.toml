@@ -16,7 +16,7 @@ maintainers = [
 ]
 keywords = ["hydrology", "modeling", "mesoscale", "water", "environment", "qgis", "plugin"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Hydrology",
     "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
@@ -102,7 +102,7 @@ mhm_qgis = [
     "**/*.qm",
     "**/*.ui",
 ]
-mhm_qgis_runtime = ["*.json", "locks/*.lock"]
+mhm_qgis_runtime = ["pixi.toml"]
 
 [tool.setuptools.exclude-package-data]
 mhm_qgis = ["**/*.ipynb", "**/*.qrc"]

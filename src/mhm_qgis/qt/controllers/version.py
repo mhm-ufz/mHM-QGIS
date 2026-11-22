@@ -3,5 +3,5 @@
 
 def selected(dialog) -> str:
     combo = getattr(dialog, "comboBox_mHMversion", None)
-    return (combo.currentText().strip() if combo is not None else "") or "6.0"
+    return (combo.currentText().strip() if combo is not None else "") or "5.13"
 

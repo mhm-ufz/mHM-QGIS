@@ -151,7 +151,7 @@ def test_a_layer_table_has_one_crs_for_all_its_layers(tmp_path, monkeypatch):
     monkeypatch.setattr(categorical, "require_common_grid", lambda _dialog: None)
     monkeypatch.setattr(dialog.morphology_tasks, "start_ready_input", lambda kind, failed: started.append(kind))
     dialog.radioButton_landUseReady.click()
-    assert not widget.isEnabled()
+    assert widget.isEnabled()  # a single layer's CRS too
     dialog.checkBox_multiPeriodmhmReadyLandUseInput.setChecked(True)
     assert widget.isEnabled()
     combo = dialog.comboBox_demInput_mhmReadyLandUseInput

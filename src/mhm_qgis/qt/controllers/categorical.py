@@ -7,11 +7,13 @@ commits the type.
 """
 from __future__ import annotations
 
+import math
 import os
+from itertools import pairwise
 from pathlib import Path
 
 from qgis.core import QgsCoordinateReferenceSystem
-from qgis.PyQt.QtCore import QDateTime, Qt
+from qgis.PyQt.QtCore import QDate, QDateTime, Qt, QTime
 from qgis.PyQt.QtWidgets import (
     QDateTimeEdit,
     QMessageBox,
@@ -106,24 +108,29 @@ _TABLES = {
 }
 # a multi-layer switch (off by default) → its table and the labels it enables beside the table's widgets
 _SWITCHES = {
-    "checkBox_multiPeriodCategoricalLandUseInput": ("lc_lookup", ("label_categoricalLandUseCrs",)),
-    "checkBox_multiPeriodmhmReadyLandUseInput": ("lc_ready", ("label_mhmReadyLandUseFrom", "label_mhmReadyLandUseTo",
-                                                               "label_mhmReadyLandUseCrs")),
-    "checkBox_multiClassLayerSoil": ("soil_ready", ("label_mhmReadySoilUpperDepth", "label_mhmReadySoilLowerDepth",
-                                                    "label_mhmReadySoilCrs")),
+    "checkBox_multiPeriodCategoricalLandUseInput": ("lc_lookup", ()),
+    "checkBox_multiPeriodmhmReadyLandUseInput": ("lc_ready", ("label_mhmReadyLandUseFrom", "label_mhmReadyLandUseTo")),
+    "checkBox_multiClassLayerSoil": ("soil_ready", ("label_mhmReadySoilUpperDepth", "label_mhmReadySoilLowerDepth")),
     "checkBox_multiClassLayerCategoricalSoil": ("soil_lookup", ("label_categoricalSoilUpperDepth",
-                                                                "label_categoricalSoilLowerDepth",
-                                                                "label_categoricalSoilCrs")),
+                                                                "label_categoricalSoilLowerDepth")),
 }
-# the CRS of all a table's layers (mHM-tools' input_crs); a row takes no NetCDF
+# the CRS of all a table's layers, or of a single layer (mHM-tools' input_crs); always enabled
 _CRS = {"lc_lookup": "mProjectionSelectionWidget_categoricalLandUseCrs",
         "lc_ready": "mProjectionSelectionWidget_mhmReadyLandUseCrs",
         "soil_ready": "mProjectionSelectionWidget_mhmReadySoilCrs",
         "soil_lookup": "mProjectionSelectionWidget_categoricalSoilCrs"}
 _SWITCH = {key: checkbox for checkbox, (key, _labels) in _SWITCHES.items()}
+LAI_METHODS = ("nearest", "bilinear")  # comboBox_resamplingMethod's items, in order
+LAI_TIMESTEPS = ("daily", "monthly", "annual", "long-term-mean-monthly")  # mHM-tools' names of comboBox_timestepLAIInput's
 _RASTER_FILTER = "Raster files (*.asc *.nc *.tif *.tiff);;All files (*)"
 _LAYER_FILTER = "Input layers (*.asc *.nc *.gpkg *.shp *.tif *.tiff);;All files (*)"
 _TABLE_FILTER = "Tables (*.csv *.txt);;All files (*)"
+
+
+def _lai_method(config) -> str:
+    """A saved LAI config's resampling; bilinear before the choice existed."""
+    method = (config or {}).get("method")
+    return method if method in LAI_METHODS else "bilinear"
 
 
 def is_ready(text) -> bool:
@@ -144,7 +151,7 @@ def bind(dialog):
     """Radios show their page; browse buttons fill their combos; Set commits."""
     dialog._lookup_adapters = {}
     for kind in KINDS:
-        main.radios(dialog, PAGES[kind], lambda text, kind=kind: show_type(dialog, kind, text))
+        main.radios(dialog, PAGES[kind], lambda text, kind=kind: show_type(dialog, kind, text), MODES[kind])
         combo, browse, definition, browse_definition = _widgets(dialog, _READY_WIDGETS[kind])
         browse.clicked.connect(lambda _checked=False, combo=combo: _browse_raster_into_combo(
             dialog, combo, "Select mHM-ready input", _RASTER_FILTER))
@@ -183,7 +190,7 @@ def show_type(dialog, kind, text):
 
 def _checked(dialog, kind) -> str:
     button = getattr(dialog, f"buttonGroup_{PAGES[kind]}").checkedButton()
-    return button.text() if button is not None else ""
+    return main.mode_of(button) if button is not None else ""
 
 
 def _refresh_fields(table, mapping, class_field, preferred=("", "")):
@@ -288,7 +295,7 @@ def _ready(dialog, kind):
     if not _ensure_raster_details(dialog, combo):
         return None
     details = _combo_raster_details(combo)
-    return ReadyInputConfig(source, defined, details.get("variable", ""), details.get("source_crs", ""))
+    return ReadyInputConfig(source, defined, details.get("variable", ""), _single_crs(dialog, key, source, details))
 
 
 def _lookup(dialog, kind):
@@ -308,7 +315,7 @@ def _lookup(dialog, kind):
     details = _combo_raster_details(adapter.combo_box)
     return SingleLayerLookupConfig(source, lookup_table, mapping.currentText().strip(),
                                    class_field.currentText().strip(), details.get("variable", ""),
-                                   details.get("source_crs", ""))
+                                   _single_crs(dialog, f"{kind}_lookup", source, details))
 
 
 def _soil_horizon_lookup(dialog):
@@ -326,14 +333,15 @@ def _soil_horizon_lookup(dialog):
 
 
 def _lai_netcdf(dialog):
-    combo, target = dialog.comboBox_laiNetCDFInput, dialog.comboBox_timestepLAIInput.currentText().strip()
+    combo, target = dialog.comboBox_laiNetCDFInput, LAI_TIMESTEPS[dialog.comboBox_timestepLAIInput.currentIndex()]
     source = _combo_path(combo)
-    if not source or Path(source).suffix.lower() != ".nc" or not Path(source).is_file() or not target:
+    if not source or Path(source).suffix.lower() != ".nc" or not Path(source).is_file():
         raise ValueError("Select a NetCDF file and an output temporal resolution.")
     if not _ensure_raster_details(dialog, combo):
         return None
     details = _combo_raster_details(combo)
-    return LaiNetcdfConfig(source, target, details.get("variable", ""), details.get("source_crs", ""))
+    return LaiNetcdfConfig(source, target, details.get("variable", ""), details.get("source_crs", ""),
+                           LAI_METHODS[dialog.comboBox_resamplingMethod.currentIndex()])
 
 
 # --- Layer tables (periods, horizons) --------------------------------------
@@ -347,19 +355,21 @@ def _switched(dialog, checkbox):
     key, labels = _SWITCHES[checkbox]
     on = getattr(dialog, checkbox).isChecked()
     table, _combo, first, second, add = _TABLES[key]
-    for name in (table, first, second, add, _CRS[key], *labels):
+    for name in (table, first, second, add, *labels):
         getattr(dialog, name).setEnabled(on)
     if key.startswith("lc"):
         _next_period(dialog, key)
 
 
 def _next_period(dialog, key):
-    """From: the latest period's end, else the simulation start; To: the simulation end."""
+    """From: the latest period's end, else Jan 1 of the simulation start's year; To: Dec 31 of the
+    simulation end's year (land use lasts years; periods are fitted to the simulation later)."""
     _table, _combo, first, second, _add = _widgets(dialog, _TABLES[key])
-    start, end = (getattr(dialog, TIME_WIDGETS[name]).dateTime() for name in ("sim_start", "sim_end"))
+    start, end = (getattr(dialog, TIME_WIDGETS[name]).date().year() for name in ("sim_start", "sim_end"))
     latest = max((str(row[2]) for row in dialog._layer_rows[key]), default="")  # ISO texts sort by time
-    first.setDateTime(QDateTime.fromString(latest, Qt.DateFormat.ISODate) if latest else start)
-    second.setDateTime(end)
+    first.setDateTime(QDateTime.fromString(latest, Qt.DateFormat.ISODate) if latest
+                      else QDateTime(QDate(start, 1, 1), QTime(0, 0)))
+    second.setDateTime(QDateTime(QDate(end, 12, 31), QTime(0, 0)))
 
 
 def _value(widget) -> str:
@@ -405,22 +415,38 @@ def _show_rows(dialog, key):
         _next_period(dialog, key)
 
 
+def _single_crs(dialog, key, path, details) -> str:
+    """A single layer's CRS: its page's CRS widget when set (checked against the file's own), else the file's."""
+    widget = getattr(dialog, _CRS[key]) if key in _CRS else None
+    if widget is not None and widget.crs().isValid():
+        return group_crs(widget, [path])
+    return details.get("source_crs", "")
+
+
 def _crs(dialog, key) -> str:
     return group_crs(getattr(dialog, _CRS[key]), (row[0] for row in dialog._layer_rows[key]))
 
 
 def _rows(dialog, key) -> tuple:
-    """The table's rows as (path, a, b), checked: several, each from a to b (depths as numbers)."""
+    """The table's rows as (path, a, b) in order, checked: several, each from a to b, each starting where
+    the one before ends (horizon depths: finite mm from 0)."""
     rows = dialog._layer_rows[key]
     if len(rows) < 2:
         raise ValueError("Add at least two rows, or uncheck the box to Set one file.")
     if key.startswith("soil"):
         try:
             rows = [[path, float(upper), float(lower)] for path, upper, lower in rows]
+            if not all(math.isfinite(value) for row in rows for value in row[1:]):
+                raise ValueError
         except ValueError as error:
             raise ValueError("Enter the horizon depths in mm as numbers.") from error
+    rows = sorted(rows, key=lambda row: row[1])  # ISO dates sort by time
     if any(a >= b for _path, a, b in rows):
         raise ValueError("Each row must end after it starts (a period, or an upper above a lower depth).")
+    if any(row[1] != before[2] for before, row in pairwise(rows)):
+        raise ValueError("Each row must start where the one before ends: no gaps or overlaps.")
+    if key.startswith("soil") and rows[0][1] != 0:
+        raise ValueError("The first horizon must start at 0 mm.")
     return tuple(tuple(row) for row in rows)
 
 
@@ -433,14 +459,17 @@ def _land_use_periods(dialog):
     from ...core.handlers.state.nml_settings import load_settings
     from ...core.handlers.store.layout import project_version
 
+    times = load_settings(dialog.setup_folder).get("time", {})
+    if not times.get("sim_start") or not times.get("sim_end"):
+        raise ValueError("Set the Time Period first: the land-use periods are fitted to the simulation.")
+    rows = [list(row) for row in _rows(dialog, "lc_lookup")]
+    rows[0][1], rows[-1][2] = times["sim_start"], times["sim_end"]  # the outer periods span the simulation
     _, _, table, _, mapping, class_field = _widgets(dialog, _LOOKUP_WIDGETS["lc"])
     value = LandUseInput(
-        tuple(LandUsePeriod(start, end, Path(path)) for path, start, end in _rows(dialog, "lc_lookup")),
+        tuple(LandUsePeriod(start, end, Path(path)) for path, start, end in rows),
         Path(_combo_path(table)), mapping.currentText().strip(), class_field.currentText().strip(),
         _crs(dialog, "lc_lookup"))
-    times = load_settings(dialog.setup_folder).get("time", {})
-    validate_land_use_input(value, simulation_start=times.get("sim_start", "1900-01-01T00:00:00"),
-                            simulation_end=times.get("sim_end", "2101-01-01T00:00:00"),
+    validate_land_use_input(value, simulation_start=times["sim_start"], simulation_end=times["sim_end"],
                             version=project_version(dialog.setup_folder))
     return value
 
@@ -471,9 +500,11 @@ def fill(dialog):
         show_type(dialog, kind, text)
     _populate_file_combo(dialog.comboBox_laiNetCDFInput, folder, "lai", dialog._lai_input_config.get("input_path", ""))
     _restore_raster_details(dialog.comboBox_laiNetCDFInput, dialog._lai_input_config)
-    timestep = dialog.comboBox_timestepLAIInput.findText(str(dialog._lai_input_config.get("target_timestep", "")))
+    target = str(dialog._lai_input_config.get("target_timestep", ""))
+    timestep = LAI_TIMESTEPS.index(target) if target in LAI_TIMESTEPS else dialog.comboBox_timestepLAIInput.findText(target)
     if timestep >= 0:
         dialog.comboBox_timestepLAIInput.setCurrentIndex(timestep)
+    dialog.comboBox_resamplingMethod.setCurrentIndex(LAI_METHODS.index(_lai_method(dialog._lai_input_config)))
     periods = dialog._advanced_inputs.get("land_cover")
     dialog._layer_rows = {
         "lc_lookup": [[item["file_path"], item["start_time"], item["end_time"]]
@@ -482,7 +513,7 @@ def fill(dialog):
         "soil_ready": [list(row) for row in (dialog._categorical_ready_configs.get("soil") or {}).get("layers", [])],
         "soil_lookup": [list(row) for row in (dialog._categorical_lookup_configs.get("soil") or {}).get("layers", [])],
     }
-    saved_crs = {  # a layered config's source_crs is its table's CRS
+    saved_crs = {  # a table's CRS; a single file's own stays in its details, the widget is not its choice
         "lc_lookup": land_use_input_value(periods).crs if periods else "",
         **{key: config.get("source_crs", "") if config.get("layers") else "" for key, config in (
             ("lc_ready", dialog._categorical_ready_configs.get("lc") or {}),
@@ -507,10 +538,10 @@ def _configure_ready(dialog, kind, config):
         return False
     if kind == "lai" and ready_layers(config.input_path, getattr(config, "variable", "")) > 1:
         # A LAI series, not the class grid: the NetCDF File input takes it (with its time step).
-        dialog._lai_input_config = {"input_path": config.input_path, "variable": config.variable,
-                                    "source_crs": getattr(config, "source_crs", "")}
         _populate_file_combo(dialog.comboBox_laiNetCDFInput, dialog.setup_folder, "lai", config.input_path)
-        _restore_raster_details(dialog.comboBox_laiNetCDFInput, dialog._lai_input_config)
+        _restore_raster_details(dialog.comboBox_laiNetCDFInput, {
+            "input_path": config.input_path, "variable": config.variable,
+            "source_crs": getattr(config, "source_crs", "")})
         main.check(dialog, "lai", "NetCDF File")
         show_type(dialog, "lai", "NetCDF File")
         QMessageBox.information(dialog, "LAI input", "This file is a LAI series: choose its time step "
@@ -568,6 +599,7 @@ def _configure_lai_netcdf(dialog, _kind, config):
         "target_timestep": config.target_timestep,
         "variable": getattr(config, "variable", ""),
         "source_crs": getattr(config, "source_crs", ""),
+        "method": config.method,
     }
     dialog._categorical_lookup_configs.pop("lai", None)
     save_lai_nml_input(dialog.setup_folder, dialog._lai_input_config)
@@ -576,7 +608,7 @@ def _configure_lai_netcdf(dialog, _kind, config):
 
 def save_lai_nml_input(setup_folder, config):
     """The LAI NetCDF handoff from the dialog's choice: comboBox_timestepLAIInput's
-    text becomes `time_step` (mHM `lai_time_step`). Execute All writes it again from
+    step becomes `time_step` (mHM `lai_time_step`). Execute All writes it again from
     the saved choice, so a lost section comes back."""
     from ...externals.mhm_tools_handler import lai_time_step
 
@@ -594,15 +626,19 @@ def save_lai_nml_input(setup_folder, config):
     })
 
 
-def _configure_historical_land_use(dialog, _kind, value):
+def _configure_historical_land_use(dialog, kind, value):
     dialog._advanced_inputs["land_cover"] = value
+    dialog._categorical_lookup_configs.pop(kind, None)
+    dialog._categorical_ready_configs.pop(kind, None)
     dialog._land_cover_ready_source = ""
     save_land_cover_nml_input(dialog, value)
     return True
 
 
-def _configure_multi_horizon_soil(dialog, _kind, value):
+def _configure_multi_horizon_soil(dialog, kind, value):
     dialog._advanced_inputs["soil"] = value
+    dialog._categorical_lookup_configs.pop(kind, None)
+    dialog._categorical_ready_configs.pop(kind, None)
     save_soil_nml_input(dialog, value)
     return True
 

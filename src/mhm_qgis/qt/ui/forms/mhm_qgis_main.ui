@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>mHM QGIS</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_15" stretch="0,0,0,0,0">
+  <layout class="QVBoxLayout" name="verticalLayout_15" stretch="1,0,0,0,0">
    <item>
     <widget class="QSplitter" name="splitter">
      <property name="orientation">
@@ -50,7 +50,7 @@
         </item>
         <item>
          <property name="text">
-          <string>Settings</string>
+          <string>Processes</string>
          </property>
         </item>
        </item>
@@ -118,6 +118,11 @@
           <string>Domain Definition</string>
          </property>
         </item>
+        <item>
+         <property name="text">
+          <string>Process</string>
+         </property>
+        </item>
        </item>
        <item>
         <property name="text">
@@ -178,6 +183,11 @@
           <string>Annual mean air temperature</string>
          </property>
         </item>
+        <item>
+         <property name="text">
+          <string>Process</string>
+         </property>
+        </item>
        </item>
        <item>
         <property name="text">
@@ -235,11 +245,6 @@
         </item>
         <item>
          <property name="text">
-          <string>Validation</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
           <string>Climatology</string>
          </property>
         </item>
@@ -293,7 +298,7 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>20</number>
+           <number>0</number>
           </property>
           <widget class="QWidget" name="page_projectIntro">
            <layout class="QVBoxLayout" name="verticalLayout_projectIntro"/>
@@ -372,11 +377,8 @@
                 <property name="toolTip">
                  <string>Select the mHM version</string>
                 </property>
-                <property name="currentText">
-                 <string/>
-                </property>
                 <property name="currentIndex">
-                 <number>-1</number>
+                 <number>0</number>
                 </property>
                 <item>
                  <property name="text">
@@ -441,6 +443,11 @@
                 <item>
                  <property name="text">
                   <string>mRM: Setup &amp; Run</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>mHM: Post Processing Only</string>
                  </property>
                 </item>
                </widget>
@@ -551,8 +558,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>808</width>
-                 <height>592</height>
+                 <width>862</width>
+                 <height>607</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -783,7 +790,7 @@
                         </property>
                         <property name="maximumSize">
                          <size>
-                          <width>23</width>
+                          <width>16777215</width>
                           <height>16777215</height>
                          </size>
                         </property>
@@ -795,15 +802,11 @@
                         </property>
                         <property name="styleSheet">
                          <string notr="true">    QPushButton {
-                text-align: left;
+                text-align: center;
             }</string>
                         </property>
                         <property name="text">
-                         <string/>
-                        </property>
-                        <property name="icon">
-                         <iconset>
-                          <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
+                         <string>Open</string>
                         </property>
                        </widget>
                       </item>
@@ -941,6 +944,94 @@
                     </item>
                    </layout>
                   </widget>
+                  <widget class="QWidget" name="page_postProcessingOnly">
+                   <layout class="QVBoxLayout" name="verticalLayout_postProcessingOnly">
+                    <item>
+                     <widget class="QLabel" name="label_postProcessingOnly">
+                      <property name="text">
+                       <string>Post processing only: the project folder is an mHM setup that has run (its namelists and output/). Set the CRS of its grids to open the outputs.</string>
+                      </property>
+                      <property name="wordWrap">
+                       <bool>true</bool>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <layout class="QHBoxLayout" name="horizontalLayout_postCrs" stretch="1,6">
+                      <item>
+                       <widget class="QLabel" name="label_postCrs">
+                        <property name="text">
+                         <string>CRS:</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <widget class="QgsProjectionSelectionWidget" name="mProjectionSelectionWidget_postCrs">
+                        <property name="toolTip">
+                         <string>The CRS of the setup's grids, for the maps of its outputs</string>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                    <item>
+                     <layout class="QHBoxLayout" name="horizontalLayout_setPostCrs">
+                      <item>
+                       <spacer name="horizontalSpacer_setPostCrs">
+                        <property name="orientation">
+                         <enum>Qt::Horizontal</enum>
+                        </property>
+                        <property name="sizeHint" stdset="0">
+                         <size>
+                          <width>40</width>
+                          <height>20</height>
+                         </size>
+                        </property>
+                       </spacer>
+                      </item>
+                      <item>
+                       <widget class="QPushButton" name="pushButton_setPostCrs">
+                        <property name="text">
+                         <string>Set</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <widget class="QLabel" name="label_setPostCrsStatus">
+                        <property name="minimumSize">
+                         <size>
+                          <width>28</width>
+                          <height>0</height>
+                         </size>
+                        </property>
+                        <property name="maximumSize">
+                         <size>
+                          <width>28</width>
+                          <height>16777215</height>
+                         </size>
+                        </property>
+                        <property name="alignment">
+                         <set>Qt::AlignCenter</set>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                    <item>
+                     <spacer name="verticalSpacer_postProcessingOnly">
+                      <property name="orientation">
+                       <enum>Qt::Vertical</enum>
+                      </property>
+                      <property name="sizeHint" stdset="0">
+                       <size>
+                        <width>20</width>
+                        <height>40</height>
+                       </size>
+                      </property>
+                     </spacer>
+                    </item>
+                   </layout>
+                  </widget>
                  </widget>
                 </item>
                 <item>
@@ -989,8 +1080,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>808</width>
-                 <height>592</height>
+                 <width>862</width>
+                 <height>607</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_page_resolution">
@@ -1002,7 +1093,7 @@
                   <property name="spacing">
                    <number>2</number>
                   </property>
-                  <item row="9" column="3">
+                  <item row="9" column="2">
                    <widget class="QPushButton" name="pushButton_browseL2File">
                     <property name="text">
                      <string>Browse...</string>
@@ -1016,14 +1107,14 @@
                     </property>
                    </widget>
                   </item>
-                  <item row="7" column="3">
+                  <item row="7" column="2">
                    <widget class="QLabel" name="label_yLowerLeftL2File">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="3">
+                  <item row="2" column="2">
                    <layout class="QHBoxLayout" name="horizontalLayout_L2Multiplier">
                     <item>
                      <widget class="QSpinBox" name="spinBox_L2ResolutionMultiplier"/>
@@ -1063,6 +1154,9 @@
                         <height>16777215</height>
                        </size>
                       </property>
+                      <property name="toolTip">
+                       <string>Unit of the L0 resolution</string>
+                      </property>
                       <property name="currentIndex">
                        <number>-1</number>
                       </property>
@@ -1087,7 +1181,7 @@
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="3">
+                  <item row="1" column="2">
                    <layout class="QHBoxLayout" name="horizontalLayout_L2Resolution">
                     <item>
                      <widget class="QLineEdit" name="lineEdit_L2Resolution">
@@ -1113,6 +1207,9 @@
                         <height>16777215</height>
                        </size>
                       </property>
+                      <property name="toolTip">
+                       <string>Unit of the L2 resolution</string>
+                      </property>
                       <property name="currentIndex">
                        <number>-1</number>
                       </property>
@@ -1130,21 +1227,21 @@
                     </item>
                    </layout>
                   </item>
-                  <item row="6" column="5">
+                  <item row="6" column="4">
                    <widget class="QLabel" name="label_xLowerLeftL11File">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="3" column="3">
+                  <item row="3" column="2">
                    <widget class="QCheckBox" name="checkBox_extentL2enforce">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="4">
+                  <item row="1" column="3">
                    <layout class="QHBoxLayout" name="horizontalLayout_L1Resolution">
                     <item>
                      <widget class="QLineEdit" name="lineEdit_L1Resolution">
@@ -1169,6 +1266,9 @@
                         <width>60</width>
                         <height>16777215</height>
                        </size>
+                      </property>
+                      <property name="toolTip">
+                       <string>Unit of the L1 resolution</string>
                       </property>
                       <property name="currentIndex">
                        <number>-1</number>
@@ -1201,40 +1301,7 @@
                     </property>
                    </widget>
                   </item>
-                  <item row="10" column="4">
-                   <widget class="QToolButton" name="toolButton_descriptionL1File">
-                    <property name="enabled">
-                     <bool>false</bool>
-                    </property>
-                    <property name="font">
-                     <font>
-                      <bold>true</bold>
-                     </font>
-                    </property>
-                    <property name="toolTip">
-                     <string>Lookup table (CSV or TXT), one row per category of the input layer:
-- Mapping field: the column whose values match the categories of the input layer.
-- Class field: the mHM land cover class: 1 forest, 2 impervious (sealed), 3 pervious.
-Columns starting with * are ignored; a [unit] suffix in a column name is allowed.
-
-Example:
-CODE,NAME,MHM_CLASS
-311,Broad-leaved forest,1
-111,Continuous urban fabric,2
-211,Non-irrigated arable land,3</string>
-                    </property>
-                    <property name="accessibleName">
-                     <string>Land use lookup table</string>
-                    </property>
-                    <property name="styleSheet">
-                     <string notr="true">QToolButton { color: palette(link); }</string>
-                    </property>
-                    <property name="text">
-                     <string>i</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="8" column="5">
+                  <item row="8" column="4">
                    <layout class="QHBoxLayout" name="horizontalLayout_fileL11Resolution">
                     <item>
                      <widget class="QLabel" name="label_fileL11ResolutionValue">
@@ -1315,7 +1382,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="4" column="5">
+                  <item row="4" column="4">
                    <widget class="QLabel" name="label_nColsL11File">
                     <property name="text">
                      <string/>
@@ -1332,7 +1399,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="8" column="3">
+                  <item row="8" column="2">
                    <layout class="QHBoxLayout" name="horizontalLayout_fileL2Resolution">
                     <item>
                      <widget class="QLabel" name="label_fileL2ResolutionValue">
@@ -1392,14 +1459,14 @@ CODE,NAME,MHM_CLASS
                     </item>
                    </layout>
                   </item>
-                  <item row="4" column="3">
+                  <item row="4" column="2">
                    <widget class="QLabel" name="label_nColsL2File">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="0" column="5">
+                  <item row="0" column="4">
                    <widget class="QLabel" name="label_L11">
                     <property name="font">
                      <font>
@@ -1418,13 +1485,6 @@ CODE,NAME,MHM_CLASS
                    <widget class="QLabel" name="label_yLowerLeftL0File">
                     <property name="text">
                      <string/>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="10" column="0">
-                   <widget class="QLabel" name="label_descriptionFile">
-                    <property name="text">
-                     <string>Description</string>
                     </property>
                    </widget>
                   </item>
@@ -1449,43 +1509,10 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="5" column="4">
+                  <item row="5" column="3">
                    <widget class="QLabel" name="label_nRowsL1File">
                     <property name="text">
                      <string/>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="10" column="5">
-                   <widget class="QToolButton" name="toolButton_descriptionL11File">
-                    <property name="enabled">
-                     <bool>false</bool>
-                    </property>
-                    <property name="font">
-                     <font>
-                      <bold>true</bold>
-                     </font>
-                    </property>
-                    <property name="toolTip">
-                     <string>Lookup table (CSV or TXT), one row per category of the input layer:
-- Mapping field: the column whose values match the categories of the input layer.
-- Class field: the mHM land cover class: 1 forest, 2 impervious (sealed), 3 pervious.
-Columns starting with * are ignored; a [unit] suffix in a column name is allowed.
-
-Example:
-CODE,NAME,MHM_CLASS
-311,Broad-leaved forest,1
-111,Continuous urban fabric,2
-211,Non-irrigated arable land,3</string>
-                    </property>
-                    <property name="accessibleName">
-                     <string>Land use lookup table</string>
-                    </property>
-                    <property name="styleSheet">
-                     <string notr="true">QToolButton { color: palette(link); }</string>
-                    </property>
-                    <property name="text">
-                     <string>i</string>
                     </property>
                    </widget>
                   </item>
@@ -1496,76 +1523,10 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="10" column="3">
-                   <widget class="QToolButton" name="toolButton_descriptionL2File">
-                    <property name="enabled">
-                     <bool>false</bool>
-                    </property>
-                    <property name="font">
-                     <font>
-                      <bold>true</bold>
-                     </font>
-                    </property>
-                    <property name="toolTip">
-                     <string>Lookup table (CSV or TXT), one row per category of the input layer:
-- Mapping field: the column whose values match the categories of the input layer.
-- Class field: the mHM land cover class: 1 forest, 2 impervious (sealed), 3 pervious.
-Columns starting with * are ignored; a [unit] suffix in a column name is allowed.
-
-Example:
-CODE,NAME,MHM_CLASS
-311,Broad-leaved forest,1
-111,Continuous urban fabric,2
-211,Non-irrigated arable land,3</string>
-                    </property>
-                    <property name="accessibleName">
-                     <string>Land use lookup table</string>
-                    </property>
-                    <property name="styleSheet">
-                     <string notr="true">QToolButton { color: palette(link); }</string>
-                    </property>
-                    <property name="text">
-                     <string>i</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="5">
+                  <item row="3" column="4">
                    <widget class="QCheckBox" name="checkBox_extentL11enforce">
                     <property name="text">
                      <string/>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="10" column="1">
-                   <widget class="QToolButton" name="toolButton_descriptionL0File">
-                    <property name="enabled">
-                     <bool>false</bool>
-                    </property>
-                    <property name="font">
-                     <font>
-                      <bold>true</bold>
-                     </font>
-                    </property>
-                    <property name="toolTip">
-                     <string>Lookup table (CSV or TXT), one row per category of the input layer:
-- Mapping field: the column whose values match the categories of the input layer.
-- Class field: the mHM land cover class: 1 forest, 2 impervious (sealed), 3 pervious.
-Columns starting with * are ignored; a [unit] suffix in a column name is allowed.
-
-Example:
-CODE,NAME,MHM_CLASS
-311,Broad-leaved forest,1
-111,Continuous urban fabric,2
-211,Non-irrigated arable land,3</string>
-                    </property>
-                    <property name="accessibleName">
-                     <string>Land use lookup table</string>
-                    </property>
-                    <property name="styleSheet">
-                     <string notr="true">QToolButton { color: palette(link); }</string>
-                    </property>
-                    <property name="text">
-                     <string>i</string>
                     </property>
                    </widget>
                   </item>
@@ -1576,21 +1537,21 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="9" column="5">
+                  <item row="9" column="4">
                    <widget class="QPushButton" name="pushButton_browseL11File">
                     <property name="text">
                      <string>Browse...</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="5" column="5">
+                  <item row="5" column="4">
                    <widget class="QLabel" name="label_nRowsL11File">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="4">
+                  <item row="2" column="3">
                    <layout class="QHBoxLayout" name="horizontalLayout_L1Multiplier">
                     <item>
                      <widget class="QSpinBox" name="spinBox_L1ResolutionMultiplier"/>
@@ -1614,14 +1575,14 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="9" column="4">
+                  <item row="9" column="3">
                    <widget class="QPushButton" name="pushButton_browseL1File">
                     <property name="text">
                      <string>Browse...</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="8" column="4">
+                  <item row="8" column="3">
                    <layout class="QHBoxLayout" name="horizontalLayout_fileL1Resolution">
                     <item>
                      <widget class="QLabel" name="label_fileL1ResolutionValue">
@@ -1681,7 +1642,7 @@ CODE,NAME,MHM_CLASS
                     </item>
                    </layout>
                   </item>
-                  <item row="1" column="5">
+                  <item row="1" column="4">
                    <layout class="QHBoxLayout" name="horizontalLayout_L11Resolution">
                     <item>
                      <widget class="QLineEdit" name="lineEdit_L11Resolution">
@@ -1707,6 +1668,9 @@ CODE,NAME,MHM_CLASS
                         <height>16777215</height>
                        </size>
                       </property>
+                      <property name="toolTip">
+                       <string>Unit of the L11 resolution</string>
+                      </property>
                       <property name="currentIndex">
                        <number>-1</number>
                       </property>
@@ -1724,14 +1688,14 @@ CODE,NAME,MHM_CLASS
                     </item>
                    </layout>
                   </item>
-                  <item row="6" column="4">
+                  <item row="6" column="3">
                    <widget class="QLabel" name="label_xLowerLeftL1File">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="4" column="4">
+                  <item row="4" column="3">
                    <widget class="QLabel" name="label_nColsL1File">
                     <property name="text">
                      <string/>
@@ -1745,7 +1709,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="7" column="4">
+                  <item row="7" column="3">
                    <widget class="QLabel" name="label_yLowerLeftL1File">
                     <property name="text">
                      <string/>
@@ -1782,7 +1746,7 @@ CODE,NAME,MHM_CLASS
                     </item>
                    </layout>
                   </item>
-                  <item row="5" column="3">
+                  <item row="5" column="2">
                    <widget class="QLabel" name="label_nRowsL2File">
                     <property name="text">
                      <string/>
@@ -1796,14 +1760,14 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="6" column="3">
+                  <item row="6" column="2">
                    <widget class="QLabel" name="label_xLowerLeftL2File">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="7" column="5">
+                  <item row="7" column="4">
                    <widget class="QLabel" name="label_yLowerLeftL11File">
                     <property name="text">
                      <string/>
@@ -1828,7 +1792,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="0" column="4">
+                  <item row="0" column="3">
                    <widget class="QLabel" name="label_L1">
                     <property name="font">
                      <font>
@@ -1843,7 +1807,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="5">
+                  <item row="2" column="4">
                    <layout class="QHBoxLayout" name="horizontalLayout_L11Multiplier">
                     <item>
                      <widget class="QSpinBox" name="spinBox_L11ResolutionMultiplier"/>
@@ -1860,7 +1824,7 @@ CODE,NAME,MHM_CLASS
                     </item>
                    </layout>
                   </item>
-                  <item row="0" column="3">
+                  <item row="0" column="2">
                    <widget class="QLabel" name="label_L2">
                     <property name="font">
                      <font>
@@ -1875,42 +1839,42 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="3" column="4">
+                  <item row="3" column="3">
                    <widget class="QCheckBox" name="checkBox_extentL1enforce">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="11" column="0">
+                  <item row="10" column="0">
                    <widget class="QLabel" name="label_displayFile">
                     <property name="text">
                      <string>Display</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="11" column="1">
+                  <item row="10" column="1">
                    <widget class="QLabel" name="label_displayL0File">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="11" column="3">
+                  <item row="10" column="2">
                    <widget class="QLabel" name="label_displayL2File">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="11" column="4">
+                  <item row="10" column="3">
                    <widget class="QLabel" name="label_displayL1File">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="11" column="5">
+                  <item row="10" column="4">
                    <widget class="QLabel" name="label_displayL11File">
                     <property name="text">
                      <string/>
@@ -2093,7 +2057,7 @@ CODE,NAME,MHM_CLASS
                   <property name="spacing">
                    <number>1</number>
                   </property>
-                  <item row="0" column="3">
+                  <item row="0" column="2">
                    <widget class="QLabel" name="label_L2HeaderCommon">
                     <property name="font">
                      <font>
@@ -2134,7 +2098,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="0" column="4">
+                  <item row="0" column="3">
                    <widget class="QLabel" name="label_L1HeaderCommon">
                     <property name="font">
                      <font>
@@ -2171,7 +2135,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="0" column="5">
+                  <item row="0" column="4">
                    <widget class="QLabel" name="label_L11HeaderCommon">
                     <property name="font">
                      <font>
@@ -2217,7 +2181,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="5" column="3">
+                  <item row="5" column="2">
                    <widget class="QLabel" name="label_cellSizeL2Common">
                     <property name="text">
                      <string/>
@@ -2227,7 +2191,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="5" column="4">
+                  <item row="5" column="3">
                    <widget class="QLabel" name="label_cellSizeL1Common">
                     <property name="text">
                      <string/>
@@ -2237,7 +2201,7 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="5" column="5">
+                  <item row="5" column="4">
                    <widget class="QLabel" name="label_cellSizeL11Common">
                     <property name="text">
                      <string/>
@@ -2254,21 +2218,21 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="3">
+                  <item row="1" column="2">
                    <widget class="QLabel" name="label_nColsL2Common">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="4">
+                  <item row="1" column="3">
                    <widget class="QLabel" name="label_nColsL1Common">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="5">
+                  <item row="1" column="4">
                    <widget class="QLabel" name="label_nColsL11Common">
                     <property name="text">
                      <string/>
@@ -2282,21 +2246,21 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="3">
+                  <item row="2" column="2">
                    <widget class="QLabel" name="label_nRowsL2Common">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="4">
+                  <item row="2" column="3">
                    <widget class="QLabel" name="label_nRowsL1Common">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="5">
+                  <item row="2" column="4">
                    <widget class="QLabel" name="label_nRowsL11Common">
                     <property name="text">
                      <string/>
@@ -2310,21 +2274,21 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="3" column="3">
+                  <item row="3" column="2">
                    <widget class="QLabel" name="label_xLowerLeftL2Common">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="3" column="4">
+                  <item row="3" column="3">
                    <widget class="QLabel" name="label_xLowerLeftL1Common">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="3" column="5">
+                  <item row="3" column="4">
                    <widget class="QLabel" name="label_xLowerLeftL11Common">
                     <property name="text">
                      <string/>
@@ -2338,21 +2302,21 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="4" column="3">
+                  <item row="4" column="2">
                    <widget class="QLabel" name="label_yLowerLeftL2Common">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="4" column="4">
+                  <item row="4" column="3">
                    <widget class="QLabel" name="label_yLowerLeftL1Common">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="4" column="5">
+                  <item row="4" column="4">
                    <widget class="QLabel" name="label_yLowerLeftL11Common">
                     <property name="text">
                      <string/>
@@ -2366,21 +2330,21 @@ CODE,NAME,MHM_CLASS
                     </property>
                    </widget>
                   </item>
-                  <item row="6" column="3">
+                  <item row="6" column="2">
                    <widget class="QLabel" name="label_displayL2GridCommon">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="6" column="4">
+                  <item row="6" column="3">
                    <widget class="QLabel" name="label_displayL1GridCommon">
                     <property name="text">
                      <string/>
                     </property>
                    </widget>
                   </item>
-                  <item row="6" column="5">
+                  <item row="6" column="4">
                    <widget class="QLabel" name="label_displayL11GridCommon">
                     <property name="text">
                      <string/>
@@ -2429,7 +2393,7 @@ CODE,NAME,MHM_CLASS
                    <set>Qt::AlignCenter</set>
                   </property>
                   <property name="displayFormat">
-                   <string>MM/dd/yyyy HH:mm</string>
+                   <string>yyyy/MM/dd HH:mm</string>
                   </property>
                   <property name="calendarPopup">
                    <bool>true</bool>
@@ -2448,7 +2412,7 @@ CODE,NAME,MHM_CLASS
                    <set>Qt::AlignCenter</set>
                   </property>
                   <property name="displayFormat">
-                   <string>MM/dd/yyyy HH:mm</string>
+                   <string>yyyy/MM/dd HH:mm</string>
                   </property>
                   <property name="calendarPopup">
                    <bool>true</bool>
@@ -2477,7 +2441,7 @@ CODE,NAME,MHM_CLASS
                    <set>Qt::AlignCenter</set>
                   </property>
                   <property name="displayFormat">
-                   <string>MM/dd/yyyy HH:mm</string>
+                   <string>yyyy/MM/dd HH:mm</string>
                   </property>
                   <property name="calendarPopup">
                    <bool>true</bool>
@@ -2666,7 +2630,7 @@ CODE,NAME,MHM_CLASS
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="page_settings">
+          <widget class="QWidget" name="page_processes">
            <layout class="QVBoxLayout" name="verticalLayout_page_settings">
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_gaugeOption">
@@ -2733,7 +2697,7 @@ CODE,NAME,MHM_CLASS
               <item>
                <widget class="QLabel" name="label_nml">
                 <property name="text">
-                 <string>Setup Namelists:</string>
+                 <string>Edit Namelists:</string>
                 </property>
                </widget>
               </item>
@@ -2741,7 +2705,7 @@ CODE,NAME,MHM_CLASS
                <widget class="QPushButton" name="pushButton_edit_nmls">
                 <property name="maximumSize">
                  <size>
-                  <width>23</width>
+                  <width>16777215</width>
                   <height>23</height>
                  </size>
                 </property>
@@ -2749,11 +2713,7 @@ CODE,NAME,MHM_CLASS
                  <string>Write all morphological layers</string>
                 </property>
                 <property name="text">
-                 <string/>
-                </property>
-                <property name="icon">
-                 <iconset>
-                  <normaloff>Resources/write.png</normaloff>Resources/write.png</iconset>
+                 <string>Edit</string>
                 </property>
                </widget>
               </item>
@@ -2810,12 +2770,37 @@ CODE,NAME,MHM_CLASS
               </column>
               <column>
                <property name="text">
-                <string>Status</string>
+                <string>Needed by</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>Needed by</string>
+                <string>Cell Size</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>nRows</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>nCols</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Extent</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Extent Modification</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Regridding</string>
                </property>
               </column>
               <column>
@@ -2849,11 +2834,6 @@ CODE,NAME,MHM_CLASS
               <column>
                <property name="text">
                 <string>Item</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>Status</string>
                </property>
               </column>
               <column>
@@ -3440,7 +3420,7 @@ CODE,NAME,MHM_CLASS
                <item>
                 <widget class="QRadioButton" name="radioButton_landUseReady">
                  <property name="text">
-                  <string>mHM ready</string>
+                  <string>Preprocessed mHM Land Use Class Layers</string>
                  </property>
                 </widget>
                </item>
@@ -3556,7 +3536,10 @@ CODE,NAME,MHM_CLASS
                   <item>
                    <widget class="QDateTimeEdit" name="dateTimeEdit_mhmReadyLandUseInputStart">
                     <property name="displayFormat">
-                     <string>MM/dd/yyyy h:mm Ap</string>
+                     <string>yyyy/MM/dd HH:mm</string>
+                    </property>
+                    <property name="calendarPopup">
+                     <bool>true</bool>
                     </property>
                    </widget>
                   </item>
@@ -3570,7 +3553,10 @@ CODE,NAME,MHM_CLASS
                   <item>
                    <widget class="QDateTimeEdit" name="dateTimeEdit_mhmReadyLandUseInputEnd">
                     <property name="displayFormat">
-                     <string>MM/dd/yyyy h:mm Ap</string>
+                     <string>yyyy/MM/dd HH:mm</string>
+                    </property>
+                    <property name="calendarPopup">
+                     <bool>true</bool>
                     </property>
                    </widget>
                   </item>
@@ -3692,7 +3678,10 @@ CODE,NAME,MHM_CLASS
                   <item>
                    <widget class="QDateTimeEdit" name="dateTimeEdit_categoricalLandUseInputStart">
                     <property name="displayFormat">
-                     <string>MM/dd/yyyy h:mm Ap</string>
+                     <string>yyyy/MM/dd HH:mm</string>
+                    </property>
+                    <property name="calendarPopup">
+                     <bool>true</bool>
                     </property>
                    </widget>
                   </item>
@@ -3706,7 +3695,10 @@ CODE,NAME,MHM_CLASS
                   <item>
                    <widget class="QDateTimeEdit" name="dateTimeEdit_categoricalLandUseInputEnd">
                     <property name="displayFormat">
-                     <string>MM/dd/yyyy h:mm Ap</string>
+                     <string>yyyy/MM/dd HH:mm</string>
+                    </property>
+                    <property name="calendarPopup">
+                     <bool>true</bool>
                     </property>
                    </widget>
                   </item>
@@ -3933,7 +3925,7 @@ CODE,NAME,MHM_CLASS
                <item>
                 <widget class="QRadioButton" name="radioButton_soilReady">
                  <property name="text">
-                  <string>mHM ready</string>
+                  <string>Preprocessed mHM Soil Class Layers</string>
                  </property>
                 </widget>
                </item>
@@ -4438,7 +4430,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                         </property>
                         <property name="maximumSize">
                          <size>
-                          <width>23</width>
+                          <width>16777215</width>
                           <height>16777215</height>
                          </size>
                         </property>
@@ -4450,15 +4442,11 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                         </property>
                         <property name="styleSheet">
                          <string notr="true">    QPushButton {
-        text-align: left;
+        text-align: center;
     }</string>
                         </property>
                         <property name="text">
-                         <string/>
-                        </property>
-                        <property name="icon">
-                         <iconset>
-                          <normaloff>Resources/run.png</normaloff>Resources/run.png</iconset>
+                         <string>Set</string>
                         </property>
                        </widget>
                       </item>
@@ -4968,7 +4956,7 @@ CODE,SOIL_ID,HORIZON,UPPER_DEPTH,LOWER_DEPTH,CLAY,SAND,SILT,BULK_DENSITY
                <item>
                 <widget class="QRadioButton" name="radioButton_geologyReady">
                  <property name="text">
-                  <string>mHM ready</string>
+                  <string>Preprocessed mHM Geology Class Layer</string>
                  </property>
                 </widget>
                </item>
@@ -5324,14 +5312,14 @@ CODE,NAME,GEO_CLASS,KARSTIC,PARAMETER_VALUE
                <item>
                 <widget class="QRadioButton" name="radioButton_laiReady">
                  <property name="text">
-                  <string>mHM ready (Class Layer)</string>
+                  <string>Preprocessed mHM LAI Class Layer (with Long Term Mean Monthly LAI table)</string>
                  </property>
                 </widget>
                </item>
                <item>
                 <widget class="QRadioButton" name="radioButton_laiNetcdf">
                  <property name="text">
-                  <string>NetCDF File</string>
+                  <string>Gridded NetCDF Time Series LAI file</string>
                  </property>
                 </widget>
                </item>
@@ -5396,7 +5384,7 @@ ID,LAND-USE,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,LAI_CLASS
             <item>
              <widget class="QStackedWidget" name="stackedWidget_lai">
               <property name="currentIndex">
-               <number>0</number>
+               <number>1</number>
               </property>
               <widget class="QWidget" name="page_mhmReadyLaiInput">
                <layout class="QVBoxLayout" name="verticalLayout_36">
@@ -5557,6 +5545,43 @@ ID,LAND-USE,Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec,LAI_CLASS
                     <item>
                      <property name="text">
                       <string>Long Term Mean Monthly Gridded Data</string>
+                     </property>
+                    </item>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout_resamplingMethod" stretch="1,1">
+                  <property name="topMargin">
+                   <number>0</number>
+                  </property>
+                  <item>
+                   <widget class="QLabel" name="label_resamplingMethod">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="text">
+                     <string>Resampling Method:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QComboBox" name="comboBox_resamplingMethod">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
+                    <property name="currentIndex">
+                     <number>-1</number>
+                    </property>
+                    <item>
+                     <property name="text">
+                      <string>Nearest Neighbour</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>Bilinear Interpolation</string>
                      </property>
                     </item>
                    </widget>
@@ -6225,6 +6250,41 @@ date,discharge
                  </column>
                  <column>
                   <property name="text">
+                   <string>Cell Size</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>nRows</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>nCols</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Extent</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Extent Modification</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Unit Conversion</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Regridding</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
                    <string>Edit</string>
                   </property>
                  </column>
@@ -6505,6 +6565,41 @@ date,discharge
                  <column>
                   <property name="text">
                    <string>Unit</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Cell Size</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>nRows</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>nCols</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Extent</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Extent Modification</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Unit Conversion</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Regridding</string>
                   </property>
                  </column>
                  <column>
@@ -7036,7 +7131,7 @@ date,discharge
               <item>
                <widget class="QDateEdit" name="dateEdit_postStart">
                 <property name="displayFormat">
-                 <string>yyyy-MM-dd</string>
+                 <string>yyyy/MM/dd</string>
                 </property>
                 <property name="calendarPopup">
                  <bool>true</bool>
@@ -7046,45 +7141,11 @@ date,discharge
               <item>
                <widget class="QDateEdit" name="dateEdit_postEnd">
                 <property name="displayFormat">
-                 <string>yyyy-MM-dd</string>
+                 <string>yyyy/MM/dd</string>
                 </property>
                 <property name="calendarPopup">
                  <bool>true</bool>
                 </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="label_postResolution">
-                <property name="text">
-                 <string>Resolution</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QComboBox" name="comboBox_postResolution">
-                <property name="toolTip">
-                 <string>Aggregation of series and balance tables; finer than the output step is refused.</string>
-                </property>
-                <item>
-                 <property name="text">
-                  <string>Native</string>
-                 </property>
-                </item>
-                <item>
-                 <property name="text">
-                  <string>Day</string>
-                 </property>
-                </item>
-                <item>
-                 <property name="text">
-                  <string>Month</string>
-                 </property>
-                </item>
-                <item>
-                 <property name="text">
-                  <string>Year</string>
-                 </property>
-                </item>
                </widget>
               </item>
               <item>
@@ -7095,6 +7156,40 @@ date,discharge
                 <property name="sizeHint" stdset="0">
                  <size>
                   <width>20</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_quickReview">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="label_quickReview">
+                <property name="text">
+                 <string>Quick Review:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_quickReviewHydrograph">
+                <property name="text">
+                 <string>Hydrograph</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_quickReview">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
                   <height>20</height>
                  </size>
                 </property>
@@ -7204,6 +7299,12 @@ date,discharge
       <string/>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <property name="topMargin">
+       <number>2</number>
+      </property>
+      <property name="bottomMargin">
+       <number>2</number>
+      </property>
       <item>
        <widget class="QPushButton" name="pushButton_mapCanvas">
         <property name="text">
@@ -7219,9 +7320,9 @@ date,discharge
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="pushButton_python">
+       <widget class="QPushButton" name="pushButton_pythonConsole">
         <property name="text">
-         <string>Python</string>
+         <string>Python Console</string>
         </property>
        </widget>
       </item>
@@ -7261,7 +7362,7 @@ date,discharge
       <enum>Qt::Horizontal</enum>
      </property>
      <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Help|QDialogButtonBox::Ok|QDialogButtonBox::Reset</set>
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Help|QDialogButtonBox::Ok</set>
      </property>
     </widget>
    </item>

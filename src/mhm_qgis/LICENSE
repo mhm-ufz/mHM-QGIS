@@ -56,7 +56,7 @@ application, in a private runtime from conda-forge and PyPI. Each of them is dis
 under its own license. Please refer to the license files in their respective repositories
 or distributions. These include, among others: QGIS, mHM (the `mhm` package and any mHM
 executable you select), mhm-tools, nml-tools, GDAL, PROJ, NumPy, SciPy, pandas, xarray,
-rioxarray, netCDF4, pyproj, pyflwdir, pyqtgraph, QtPy, guidata, PyYAML, micromamba, and
+rioxarray, netCDF4, pyproj, pyflwdir, pyqtgraph, QtPy, guidata, PyYAML, pixi, and
 the conda-forge packages of the private runtime.
 
 The namelist schemas in `nml-schemas/` are derived from the namelist definitions of mHM

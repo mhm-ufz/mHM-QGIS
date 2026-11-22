@@ -20,10 +20,10 @@ def bind(dialog) -> None:
     dialog.pushButton_pickLocation.clicked.connect(dialog._start_picking)
     # pushButton_showDelineation → dialog._show_delineation
     dialog.pushButton_showDelineation.clicked.connect(dialog._show_delineation)
-    # pushButton_nextPourPoint → dialog._next_outlet
-    dialog.pushButton_nextPourPoint.clicked.connect(dialog._next_outlet)
-    # pushButton_save → dialog._save_outlet
-    dialog.pushButton_save.clicked.connect(dialog._save_outlet)
+    # pushButton_nextGaugePoint → dialog._next_outlet
+    dialog.pushButton_nextGaugePoint.clicked.connect(dialog._next_outlet)
+    # pushButton_setDomainDefinition → dialog._save_outlet
+    dialog.pushButton_setDomainDefinition.clicked.connect(dialog._save_outlet)
 
 
 __all__ = ["bind"]

@@ -89,6 +89,8 @@ class MorphologyTaskBridge:
             if (stage.condition == "gauged_outlets" and not (
                     gauges and configured_gauged_outlet_ids(self.dialog.setup_folder))) or (
                     stage.condition == "no_gauges" and gauges):
+                if stage.condition == "gauged_outlets":  # else publication exports a stale one
+                    Path(temp_morphology_folder(self.dialog.setup_folder), "idgauges.nc").unlink(missing_ok=True)
                 QtCore.QTimer.singleShot(0, advance)
                 return True
             return starters[stage.command](
@@ -98,8 +100,7 @@ class MorphologyTaskBridge:
                 **stage.options,
             )
 
-        return morphology.run_stages(
-            morphology.EXECUTE_ALL_STAGES,
+        return morphology.main(
             start,
             on_done=lambda: finished(True),
             on_fail=lambda message: finished(False, message),
@@ -217,7 +218,12 @@ class MorphologyTaskBridge:
             source_crs=config.get("source_crs", ""),
             target_timestep=config.get("target_timestep") or lai.DEFAULT_TIMESTEP,
             l0_header=(self.dialog._grid_l0_info or {}).get("header"),
+            method=config.get("method") or "bilinear",
         ) if "netcdf" in mode else None
+        if options is None and "netcdf" in mode and config.get("input_path"):
+            # chosen but gone (moved, unmounted): never publish the previous LAI as this run's
+            lifecycle.fail(self.dialog, "LAI", f"The LAI NetCDF file is missing: {config['input_path']}", failed)
+            return True  # reported through `failed`; False would report a second, generic failure
         if options is None:
             self.dialog.log_message("No LAI NetCDF input is selected. Skipping LAI.")
             if done is not None:
@@ -244,26 +250,22 @@ class MorphologyTaskBridge:
                 "LAI inputs are unchanged. Reusing the staged DEM-grid LAI."
             )
             QtCore.QTimer.singleShot(
-                0, lambda: self._lai_ready(options["output_path"], [], done)
+                0, lambda: self._lai_ready(options["output_path"], done)
             )
             return True
         self.dialog.log_message(
-            "Resampling LAI to the filled DEM grid with bilinear interpolation."
+            f"Resampling LAI to the filled DEM grid ({options.get('method') or 'bilinear'})."
         )
-        messages = []
         return self.coordinator.submit(
             key,
             "Resample LAI to the filled DEM grid",
-            partial(commands.lai, options=options, messages=messages),
+            partial(commands.lai, options=options, log=self._worker_log(key)),
             resource="morphology-files",
-            on_success=lambda result: self._lai_ready(
-                result, messages, done, digest=digest),
+            on_success=lambda result: self._lai_ready(result, done, digest=digest),
             on_error=lambda message: lifecycle.fail(self.dialog, "LAI", message, failed),
         )
 
-    def _lai_ready(self, result, messages, done, digest=None):
-        for message in messages:
-            self.dialog.log_message(message)
+    def _lai_ready(self, result, done, digest=None):
         if result:
             lifecycle.register(self.dialog, result)
             if digest:
@@ -414,7 +416,7 @@ class MorphologyTaskBridge:
             )
             return True
         return (
-            partial(commands.advanced, job=job),
+            partial(commands.advanced, job=job, log=self._worker_log(f"categorical-{kind}")),
             lambda result: self._advanced_ready(result, done, digest),
         )
 
@@ -459,7 +461,7 @@ class MorphologyTaskBridge:
                 QtCore.QTimer.singleShot(0, lambda: done({"kind": kind}))
             return True
         return (
-            partial(commands.lookup, job=job),
+            partial(commands.lookup, job=job, log=self._worker_log(f"categorical-{kind}")),
             lambda result: self._lookup_ready(result, done, digest=digest),
         )
 

@@ -11,12 +11,11 @@ import os
 from functools import partial
 from pathlib import Path
 
-from qgis.PyQt import QtCore
-
 from ...core.executions.morphology import commands
 from ...core.handlers.file.netcdf.raster import source as raster_source
 from ...core.handlers.store.paths import temp_morphology_folder
 from ...qgis_bridge import layers
+from ...qgis_bridge.layers.project import remove_under
 from ..controllers import grid
 from . import lifecycle
 
@@ -98,6 +97,14 @@ def start_dem_derivatives(dialog, *, key="execute-all-dem-derivatives", controls
     except Exception as error:
         lifecycle.fail(dialog, "DEM derivatives", error, failed)
         return False
+    # the step rewrites these files in place; a layer still holding the old one makes GDAL read it,
+    # and the delineator's canvas layers are outside the project
+    from ..controllers import main
+
+    if not main.embed(dialog, "domainDefinition", None):
+        lifecycle.fail(dialog, "DEM derivatives", "Wait for the Domain Delineator task to finish.", failed)
+        return False
+    remove_under(temp_morphology_folder(dialog.setup_folder), dialog.log_message)
 
     def ready(result):
         lifecycle.register(dialog, result["filled_dem"], "1_DEM_Filled")
@@ -169,9 +176,6 @@ def start_domain_preflight(dialog, controls, done, failed=None):
     except Exception as error:
         lifecycle.fail(dialog, "Domain Delineator", error, failed)
         return False
-    if domain_prepared(dialog):
-        QtCore.QTimer.singleShot(0, lambda: done({"prepared": True}))
-        return True
 
     def channels(_result=None):
         return start_hydrology(

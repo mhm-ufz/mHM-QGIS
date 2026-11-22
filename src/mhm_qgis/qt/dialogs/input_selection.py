@@ -66,6 +66,7 @@ class LaiNetcdfConfig:
     target_timestep: str
     variable: str = ""
     source_crs: str = ""
+    method: str = "bilinear"  # mhm-tools' LAI resampling: bilinear or nearest
 
 
 @dataclass(frozen=True)
@@ -257,7 +258,7 @@ class InputComboAdapter(QtCore.QObject):
         data = self.combo_box.currentData()
         if isinstance(data, dict) and data.get("origin") == "file":
             path = data.get("path")
-            return str(Path(path).expanduser().resolve()) if path else ""
+            return os.path.abspath(os.path.expanduser(path)) if path else ""
         layer = self.currentLayer()
         return str(layer.source() or "") if layer is not None else ""
 
@@ -323,7 +324,7 @@ def _populate_file_combo(combo_box, setup_folder, kind, initial=""):
     combo_box.addItem("", "")
     selected = 0
     if initial and Path(initial).is_file():
-        combo_box.addItem(str(Path(initial).resolve()), str(Path(initial).resolve()))
+        combo_box.addItem(os.path.abspath(initial), os.path.abspath(initial))
         selected = combo_box.count() - 1
     combo_box.setCurrentIndex(selected)
 
@@ -340,10 +341,10 @@ def _populate_layer_combo(adapter, setup_folder, kind, initial=""):
         source = str(item.data.get("source") or item.data.get("path") or "")
         if initial and source == initial:
             selected = combo_box.count() - 1
-    if initial and selected == 0 and Path(initial).is_file():
+    if initial and selected == 0 and Path(initial.split("|", 1)[0]).is_file():  # a GeoPackage names its layer
         adapter.addItem(
-            str(Path(initial).resolve()),
-            {"origin": "file", "kind": kind, "path": str(Path(initial).resolve())},
+            os.path.abspath(initial),
+            {"origin": "file", "kind": kind, "path": os.path.abspath(initial)},
         )
         selected = combo_box.count() - 1
     combo_box.setCurrentIndex(selected)
@@ -449,7 +450,7 @@ def group_crs(widget, paths) -> str:
 
 def raster_details(parent, path):
     """Return file metadata, prompting for NetCDF and ASCII rasters and any raster without a CRS."""
-    path = str(Path(path).resolve())
+    path = os.path.abspath(path)
     if Path(path).suffix.lower() in VECTOR_EXTENSIONS:
         path = _vector_layer(parent, path)
         crs = layers.crs_of(path, is_raster=False) if path else None
@@ -533,7 +534,7 @@ def _browse_into_combo(parent, combo_box, title, file_filter):
     path, _ = open_file(parent, title, file_filter)
     if not path:
         return
-    path = str(Path(path).resolve())
+    path = os.path.abspath(path)
     for index in range(combo_box.count()):
         if _combo_path_at(combo_box, index) == path:
             combo_box.setCurrentIndex(index)

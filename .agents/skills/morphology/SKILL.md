@@ -29,6 +29,10 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   `page_singleDomain` (work type 0) and `page_multiDomain` (work type 1, combine
   domains); the mRM-only type 2 stays disabled. Do not restore the removed steps
   stacked widget.
+- **Post processing only** (work type 3, `page_postProcessingOnly`): the project folder is an
+  mHM setup that has run. Set checks its namelists and `output/`; the page's CRS Set makes the
+  folder itself `setup_folder` and loads `output/`. No mhm-qgis structure is created; only the
+  input state (version, CRS) is written. The tree keeps Introduction, Domain Setup and Outputs.
 - **Multi-domain setups** live at `<project>/mhm-qgis-multi/<name>/` (`.temp/`, `output/`,
   `restart/` and the combined namelists only). They prepare nothing: they combine
   single-domain setups that already run on their own, and **domains are read, never
@@ -110,12 +114,14 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
 - The Resolution page's Set establishes the common grid before either execution.
   `core/grid/raster.raster_grid` reads a reference file's or the DEM's grid only (a warped VRT
   when CRS conversion is necessary).
-- The ▶ of A. Morphology schedules `EXECUTE_ALL_STAGES`: NetCDF DEM
+- The ▶ of A. Morphology (on its `Process` row, as is the ↺) enters `core/executions/morphology.main`,
+  which schedules `EXECUTE_ALL_STAGES`: NetCDF DEM
   derivatives, saved gauge positions, morphology mask, categorical inputs, LAI,
   then one version-aware publication stage. Snapping and delineation must already
   be saved by Domain Delineator. There are no late crop, per-outlet link or
   per-outlet DEM stages.
-- The ▶ of B. Meteorology runs only `core/executions/meteo`, never morphology.
+- The ▶ of B. Meteorology (on its `Process` row) runs only `core/executions/meteo.main`, never
+  morphology; C. Observations' enters `core/executions/observations.main`.
 - The derivatives the process cases need (slope, aspect, fdir, facc) have their own tree rows
   after DEM, all on `page_dem_derivatives_var`. Unticking "Derived from the DEM grid" takes a
   replacement raster: its Set (`grid.set_derivative`) wants the domain CRS (derivatives are never
@@ -441,7 +447,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   - Do not look up lat/lon by variable name here; mhm-tools owns that detection.
 - **Execute All has one plan.** The ▶ of A. Morphology goes to
   `MorphologyTaskBridge.start_execute_all()`, which schedules
-  `core/executions/morphology.EXECUTE_ALL_STAGES`. Every user-visible execution command,
+  `core/executions/morphology.EXECUTE_ALL_STAGES` through its `main`. Every user-visible execution command,
   including snapping and gauge-position creation, must be represented in that API plan;
   do not create a synchronous twin.
 - The Execute All Rasterio warp fills cells the source cannot supply with **0**: a

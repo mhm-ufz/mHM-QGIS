@@ -448,6 +448,8 @@ def prepare_lai_file(
         try:
             locate_lai_cube(dataset, source_variable)
         except ValueError as error:  # no grid mHM-tools can read: it must already be the L0 grid
+            if any(dim in dataset.coords for dim in _lai_variable(dataset, source_variable).dims[-2:]):
+                raise  # it has grid coordinates, which mHM-tools rejected for the reason it gives
             return _lai_on_l0(dataset, source_variable, output, l0_header, dem_crs, output_temporal_resolution,
                               dem_file, reason=error)
     with capture_messages(log):

@@ -90,7 +90,7 @@ def test_meteo_combo_offers_every_prepared_forcing():
 
 
 @pytest.mark.parametrize("key", ["lc_ready", "lc_lookup"])
-def test_the_next_land_use_period_runs_from_the_latest_end_to_the_simulation_end(key):
+def test_the_next_land_use_period_runs_from_the_latest_end_to_the_end_of_the_simulation_year(key):
     from qgis.PyQt.QtCore import QDateTime, Qt
 
     from mhm_qgis.qt.controllers import categorical
@@ -101,16 +101,16 @@ def test_the_next_land_use_period_runs_from_the_latest_end_to_the_simulation_end
     dialog.dateTimeEdit_simulationEndTimeInput.setDateTime(day("2010-01-01T00:00:00"))
     _table, _combo, first, second, _add = categorical._TABLES[key]
     dates = lambda: (getattr(dialog, first).dateTime(), getattr(dialog, second).dateTime())  # noqa: E731
-    assert dates() == (day("1990-01-01T00:00:00"), day("2010-01-01T00:00:00"))
+    assert dates() == (day("1990-01-01T00:00:00"), day("2010-12-31T00:00:00"))  # whole years
 
     dialog._layer_rows[key].append(["a.tif", "1990-01-01T00:00:00", "2005-01-01T00:00:00"])
     categorical._show_rows(dialog, key)
-    assert dates() == (day("2005-01-01T00:00:00"), day("2010-01-01T00:00:00"))
+    assert dates() == (day("2005-01-01T00:00:00"), day("2010-12-31T00:00:00"))
     dialog.dateTimeEdit_simulationEndTimeInput.setDateTime(day("2012-01-01T00:00:00"))
-    assert dates() == (day("2005-01-01T00:00:00"), day("2012-01-01T00:00:00"))
+    assert dates() == (day("2005-01-01T00:00:00"), day("2012-12-31T00:00:00"))
 
     end = getattr(dialog, _table).cellWidget(0, 2)  # the row's period is a date edit like From
-    assert end.displayFormat() == "MM/dd/yyyy h:mm Ap"
+    assert end.displayFormat() == "yyyy/MM/dd HH:mm"
     end.setDateTime(day("2007-01-01T00:00:00"))
     assert dialog._layer_rows[key][0][2] == "2007-01-01T00:00:00"
     assert dates()[0] == day("2007-01-01T00:00:00")
@@ -118,4 +118,39 @@ def test_the_next_land_use_period_runs_from_the_latest_end_to_the_simulation_end
     dialog._layer_rows[key].clear()
     categorical._show_rows(dialog, key)
     assert dates()[0] == day("1990-01-01T00:00:00")
-    assert getattr(dialog, first).displayFormat() == "MM/dd/yyyy h:mm Ap"
+    assert getattr(dialog, first).displayFormat() == "yyyy/MM/dd HH:mm"
+
+
+def test_layer_rows_are_checked_in_order_and_land_use_is_fitted_to_the_simulation(tmp_path, monkeypatch):
+    from mhm_qgis.core.handlers.state.nml_settings import update_section
+    from mhm_qgis.qt.controllers import categorical
+    from mhm_qgis.qt.dialogs.input_selection import _populate_file_combo
+
+    dialog = MhmQgisDialog()
+    rows = dialog._layer_rows
+    rows["soil_ready"] = [["b.tif", "300", "1000"], ["a.tif", "0", "300"]]
+    assert [row[1] for row in categorical._rows(dialog, "soil_ready")] == [0.0, 300.0]  # in depth order
+    for bad, message in ((["a.tif", "0", "200"], "gaps"), (["a.tif", "100", "300"], "0 mm"),
+                         (["a.tif", "nan", "300"], "numbers")):
+        rows["soil_ready"][1] = bad
+        with pytest.raises(ValueError, match=message):
+            categorical._rows(dialog, "soil_ready")
+
+    dialog.setup_folder = str(tmp_path)
+    for name in ("a.tif", "b.tif"):
+        (tmp_path / name).touch()
+    (tmp_path / "lut.csv").write_text("id,class\n1,2\n")
+    _populate_file_combo(dialog.comboBox_lookupTableLandUse, dialog.setup_folder, "lookup", str(tmp_path / "lut.csv"))
+    dialog.comboBox_mappingFieldLandUse.setCurrentText("id")
+    dialog.comboBox_classFieldLandUse.setCurrentText("class")
+    monkeypatch.setattr(categorical, "_crs", lambda _dialog, _key: "")
+    rows["lc_lookup"] = [[str(tmp_path / "b.tif"), "1985-01-01T00:00:00", "1987-12-31T00:00:00"],
+                         [str(tmp_path / "a.tif"), "1980-01-01T00:00:00", "1985-01-01T00:00:00"]]
+    with pytest.raises(ValueError, match="Time Period"):
+        categorical._land_use_periods(dialog)
+    update_section(tmp_path, "time", {"sim_start": "1981-01-01T00:00", "eval_start": "1982-01-01T00:00",
+                                      "sim_end": "1987-12-01T00:00"})
+    value = categorical._land_use_periods(dialog)
+    assert [(period.file_path.name, str(period.start_time), str(period.end_time)) for period in value.periods] == [
+        ("a.tif", "1981-01-01 00:00:00", "1985-01-01 00:00:00"), ("b.tif", "1985-01-01 00:00:00", "1987-12-01 00:00:00")]
+    dialog.close()

@@ -73,4 +73,4 @@ properties:
       soil-moisture, neutron, evapotranspiration, total-water-storage, snow-presence,
       and multi-variable objectives numbered 1 through 49; some reserved identifiers are retained for compatibility.
     type: integer
-    default: 10
+    default: 1

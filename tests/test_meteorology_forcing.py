@@ -259,8 +259,14 @@ def test_cf_edge_fragments_are_dropped_and_other_variables_share_precipitation_w
         with Dataset(path) as raw:
             assert raw.variables["time"].units.startswith("hours since 1900-01-01")
             assert raw.variables["time_bnds"].units == raw.variables["time"].units
+    # a shorter variable trims every output to the period they all cover
     _write_nc(folder / "tavg.nc", "tavg", times=("2001-01-02",), units="Celsius")
-    with pytest.raises(ValueError, match="cover the precipitation period"):
+    result = process_meteo_inputs(specs, tmp_path / "out", target())
+    for path in result.outputs.values():
+        with xr.open_dataset(path) as output:
+            np.testing.assert_array_equal(output.time, np.array(["2001-01-02"], dtype="datetime64[ns]"))
+    _write_nc(folder / "tavg.nc", "tavg", times=("2002-01-02",), units="Celsius")
+    with pytest.raises(ValueError, match="share no common period"):
         process_meteo_inputs(specs, tmp_path / "out", target())
 
 
@@ -447,7 +453,7 @@ def test_execute_meteo_prepares_and_reuses_the_configured_collection(tmp_path, m
                                      pattern=f"{variable}.nc", temporal_resolution="Hourly"))
     run = meteo.MeteorologyRun(root, tuple(inputs), target(), {"l2_header": target().header})
     state = MeteorologyOutputState(root)
-    assert meteo.prepare_forcing(run, state)
+    assert meteo.main(run, state)
     assert (root / "data/meteo/pre.nc").is_file()
     assert (root / "data/meteo/tavg.nc").is_file()
     assert (root / "data/meteo/mask.nc").is_file()
@@ -455,7 +461,7 @@ def test_execute_meteo_prepares_and_reuses_the_configured_collection(tmp_path, m
     assert meteo.covers_period(root, {"sim_start": "2001-01-01T00:00", "sim_end": "2001-01-01T01:00"})
     assert not meteo.covers_period(root, {"sim_start": "2001-01-01T00:00", "sim_end": "2001-01-01T03:00"})
     monkeypatch.setattr(meteo, "process_meteo_inputs", lambda **kwargs: pytest.fail("reused forcing was rebuilt"))
-    assert meteo.prepare_forcing(run, state)
+    assert meteo.main(run, state)
 
 
 def test_interval_batching_does_not_change_the_written_values(tmp_path, monkeypatch):

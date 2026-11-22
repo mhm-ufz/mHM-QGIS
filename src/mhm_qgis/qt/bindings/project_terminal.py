@@ -9,8 +9,6 @@ def bind(dialog) -> None:
     not to the form.
     """
     dialog.command_edit.returnPressed.connect(dialog.send_current_command)
-    # send_button → dialog.send_current_command
-    dialog.send_button.clicked.connect(dialog.send_current_command)
     # clear_button → output.clear
     dialog.clear_button.clicked.connect(dialog.output.clear)
     # close_button → dialog.hide

@@ -274,6 +274,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         self._stage_current_outlet()
         self._stop_picking()
         self.current_outlet_id = str(outlet_id or "")
+        self.pushButton_nextGaugePoint.setEnabled(
+            self.listWidget_outlets.currentRow() + 1 < self.listWidget_outlets.count())
         if not self.current_outlet_id:
             self._outlet_marker.hide()
             return
@@ -515,8 +517,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 self.pushButton_showDelineation,
                 self.pushButton_pickLocation,
                 self.pushButton_generateChannelNetwork,
-                self.pushButton_nextPourPoint,
-                self.pushButton_save,
+                self.pushButton_nextGaugePoint,
+                self.pushButton_setDomainDefinition,
                 self.listWidget_outlets,
             ),
             on_success=lambda result: self._watershed_preview_ready(
@@ -642,8 +644,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 partial(delineation.save, **options),
                 controls=(
                     self.pushButton_showDelineation,
-                    self.pushButton_nextPourPoint,
-                    self.pushButton_save,
+                    self.pushButton_nextGaugePoint,
+                    self.pushButton_setDomainDefinition,
                     self.pushButton_pickLocation,
                     self.pushButton_generateChannelNetwork,
                     self.listWidget_outlets,
@@ -843,6 +845,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 self.canvas.scene().removeItem(self._outlet_marker)
             self._outlet_marker = None
         self.canvas.setLayers([])
+        self._watershed_layer = self._filled_dem_layer = self._flow_accumulation_layer = self._channel_layer = None
 
     def closeEvent(self, event):
         if self._domain_jobs_busy():
