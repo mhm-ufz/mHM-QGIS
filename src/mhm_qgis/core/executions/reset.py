@@ -30,7 +30,7 @@ def clear(setup_folder, group, *, log=None) -> int:
         folders = {temp_morphology_folder(setup_folder), layout.morph_folder(setup_folder),
                    layout.lai_folder(setup_folder)}
         paths = [path for folder in folders for path in Path(folder).rglob("*")]
-        _invalidate_domains(setup_folder)
+        invalidate_domains(setup_folder)
         nml_outputs.register_values(setup_folder, "main", "config_input", {},
                                     managed=nml_outputs.MORPHOLOGY_FIELDS, v6=v6)
         sections = {"stages": {}, "exports": {}, "domains": []}
@@ -71,7 +71,7 @@ def _delete(paths, log) -> int:
     return deleted
 
 
-def _invalidate_domains(setup_folder) -> None:
+def invalidate_domains(setup_folder) -> None:
     """Forget the masks and outlet results the deleted geometry gave; gauges and choices stay."""
     if not state_path(setup_folder).is_file():
         return

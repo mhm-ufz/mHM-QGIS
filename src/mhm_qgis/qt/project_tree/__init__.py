@@ -440,6 +440,14 @@ def _reset(dialog, key) -> None:
                             f"reuse records, so the next ▶ prepares everything afresh?{again}") \
             != QMessageBox.StandardButton.Yes:
         return
+    if key == "morphology":  # a loaded layer keeps its deleted file open: later reads of a new one see the old
+        from ...core.handlers.store import layout
+        from ...core.handlers.store.paths import temp_morphology_folder
+        from ...qgis_bridge.layers.project import remove_under
+
+        for folder in (temp_morphology_folder(dialog.setup_folder), layout.morph_folder(dialog.setup_folder),
+                       layout.lai_folder(dialog.setup_folder)):
+            remove_under(folder, dialog.log_message)
     deleted = reset.clear(dialog.setup_folder, key, log=dialog.log_message)
     dialog.log_message(f"{title}: reset, {deleted} files deleted.")
     workflow_state.refresh_all(dialog)

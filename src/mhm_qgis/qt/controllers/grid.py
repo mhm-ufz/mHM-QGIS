@@ -16,6 +16,7 @@ from qgis.PyQt.QtCore import QSignalBlocker
 from qgis.PyQt.QtWidgets import QMessageBox
 
 from ...core.executions.morphology import setup as morphology_setup
+from ...core.executions.reset import invalidate_domains
 from ...core.grid import (
     Extent,
     Grid,
@@ -357,7 +358,7 @@ def build_grid(dialog):
         raw = {"raw_l2_resolution": (info["x_resolution"], info["y_resolution"]),
                "raw_l2_extent": Extent.from_header(info["header"]), "raw_l2_crs": crs}
     grid = Grid.for_meteorology(l0_info["header"], box.bounds, factors["L2"], block=block, crs=crs, unit=unit,
-                                **raw)
+                                lattice_cell=l0 / l0_factor(dialog), **raw)
     if not grid.requires_l2_resampling:
         anchor = "the L2 file's lattice"
     if l2_file:
@@ -372,7 +373,7 @@ def build_grid(dialog):
     target = target_grid_from_header(headers["L2"], crs or None)
     metadata.update(
         {f"{level.lower()}_header": headers[level] for level in LEVELS},
-        study_bounds=list(Extent.from_header(headers["L0"]).bounds),
+        study_bounds=list(grid.meteo_extent.bounds),  # what the meteo must cover, in its own cells
         extent_note=(f"Common extent: the intersection of the ticked extents ({', '.join(names)}), snapped outward "
                      f"to whole blocks of lcm({factors['L1']}, {factors['L11']}, {factors['L2']}) = {block} L0 "
                      f"cells ({format_resolution(block * l0, unit)} {unit}) on {anchor}."),
@@ -406,6 +407,7 @@ def set_resolution(dialog):
     """The Resolution page's Set: the common grid, its Updated Headers and latlon.nc."""
     if not _require_crs(dialog):
         return False
+    reload_files(dialog)  # a file changed on disk since it was read: the grid is built from it as it is now
     dialog.log_selected_input_paths("Set resolutions")
     try:
         metadata = build_grid(dialog)
@@ -424,6 +426,9 @@ def set_resolution(dialog):
     if previous.get("configuration_fingerprint") != metadata["configuration_fingerprint"]:
         invalidate_workflows(dialog, "execute_all_morphology", "execute_all_meteo", "execute_all_observations",
                              "run_mhm")
+    if previous.get("l0_header") not in (None, metadata["l0_header"]):  # the saved watershed lies on the old grid
+        invalidate_domains(dialog.setup_folder)
+        dialog.log_message("The common L0 grid changed: run Set Gauges and save the domain in Domain Delineator again.")
     dialog._grid_l2_metadata = processing.save_grid_metadata(dialog.setup_folder, metadata)
     show_headers(dialog)
     check_dem(dialog)
@@ -669,7 +674,8 @@ def _fit(dialog, source, crs, factor=1):
     extent = Extent.from_bounds(bounds if crs_equal(crs, domain) else inner_bounds(bounds, crs, domain))
     cell, notes = float(l0["cellsize"]), []
     if math.isclose(float(placed["cellsize"]), cell, rel_tol=1e-9):
-        shift = [(round(value) - value) * cell for value in ((float(placed[key]) - float(l0[key])) / cell
+        fine = cell / factor  # the DEM step pads whole DEM cells: only a residue below one is a shift
+        shift = [(round(value) - value) * fine for value in ((float(placed[key]) - float(l0[key])) / fine
                                                               for key in ("xllcorner", "yllcorner"))]
         if any(abs(value) > 1e-6 * cell for value in shift):  # copy_rasters(shift=True) moves it
             notes.append(f"Shifted by ({shift[0]:.6g}, {shift[1]:.6g}) onto the L0 lattice.")

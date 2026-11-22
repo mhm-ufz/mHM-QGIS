@@ -217,10 +217,12 @@ class Grid(Resolution):
         raw_l2_resolution: Sequence[float] | None = None,
         raw_l2_extent: Extent | None = None,
         raw_l2_crs: str | None = None,
+        lattice_cell: float | None = None,
     ) -> Grid:
         """The common L0/L2 grid: `bounds` snapped outward to whole blocks of `block` L0 cells
         (a multiple of the L2 `multiplier`), on the L2 lattice when the raw L2 grid anchors it, so
-        every level nests exactly."""
+        every level nests exactly. `lattice_cell`, the DEM's cell of an upscaled L0, measures the gap
+        to that lattice: its L0 blocks start wherever the DEM is padded to."""
         ratio = _positive_integer(multiplier)
         block = _positive_integer(block or ratio)
         if block % ratio:
@@ -246,7 +248,7 @@ class Grid(Resolution):
             and crs_equal(raw_l2_crs, crs)
         )
         if comparable:
-            gap = alignment_gap(source_l0_extent, raw_l2_extent, l0_resolution)
+            gap = alignment_gap(source_l0_extent, raw_l2_extent, lattice_cell or l0_resolution)
             anchor = (
                 raw_l2_extent.xmin + gap[0],
                 raw_l2_extent.ymin + gap[1],
@@ -282,6 +284,13 @@ class Grid(Resolution):
         if factor is None:
             raise ValueError("L2 resolution is not an integer multiple of L0.")
         return factor
+
+    @property
+    def meteo_extent(self) -> Extent:
+        """The common extent where the meteo file holds it, before its shift onto the L0 lattice."""
+        dx, dy = (0.0, 0.0) if self.requires_l2_resampling or not self.alignment_gap else self.alignment_gap
+        extent = self.common_extent
+        return Extent(extent.xmin - dx, extent.xmax - dx, extent.ymin - dy, extent.ymax - dy)
 
     def metadata(self, *, extent_source: str = "", source_file: str = "") -> dict:
         """Return the JSON-safe processing metadata for this grid."""

@@ -1,4 +1,6 @@
 """The project tree: Designer rows with tree.yml keys, pages in the Project tab, statuses."""
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
@@ -676,3 +678,63 @@ def test_forcing_tables_show_how_each_input_reaches_the_grid(dialog):
         assert headers[7:] == ["Cell Size", "nRows", "nCols", "Extent", "Extent Modification",
                                "Unit Conversion", "Regridding", "Edit"]
         assert len(forcing.scan_details(dialog, "pre", {}, None, "L2")) == len(headers) - 8
+
+
+def test_reset_and_the_dem_step_unload_the_layers_of_the_files_they_replace(dialog, tmp_path, monkeypatch):
+    """A layer left on a deleted or rewritten file makes GDAL in QGIS read the old file (south-johnstone-river)."""
+    from qgis.PyQt.QtWidgets import QMessageBox
+
+    from mhm_qgis.core.executions import reset
+    from mhm_qgis.qgis_bridge.layers import project as layer_project
+    from mhm_qgis.qt.workflows import hydrology
+
+    unloaded = []
+    monkeypatch.setattr(layer_project, "remove_under", lambda folder, log=None: unloaded.append(Path(folder).name))
+    monkeypatch.setattr(hydrology, "remove_under", lambda folder, log=None: unloaded.append(Path(folder).name))
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *_args: QMessageBox.StandardButton.Yes))
+    monkeypatch.setattr(reset, "clear", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(hydrology, "dem_options", lambda _dialog: {})
+    monkeypatch.setattr(dialog.task_coordinator, "submit", lambda *_args, **_kwargs: True)
+    dialog.setup_folder = str(tmp_path)
+
+    project_tree._reset(dialog, "morphology")
+    assert unloaded == ["Morphology", "morph", "lai"]
+    assert hydrology.start_dem_derivatives(dialog)
+    assert unloaded[-1] == "Morphology"
+
+
+def test_set_gauges_checks_the_delineator_inputs_against_the_current_grid(dialog, monkeypatch):
+    """Existing files may lie on the previous common grid: the DEM step reuses or rebuilds them."""
+    from mhm_qgis.qt.workflows import hydrology
+
+    started = []
+    monkeypatch.setattr(hydrology, "dem_options", lambda _dialog: {})
+    monkeypatch.setattr(hydrology, "domain_prepared", lambda _dialog: True)
+    monkeypatch.setattr(hydrology, "start_dem_derivatives", lambda *_args, **kwargs: started.append(kwargs) or True)
+    assert hydrology.start_domain_preflight(dialog, (), lambda _result: None)
+    assert started
+
+
+def test_a_new_l0_grid_forgets_the_watershed_saved_on_the_old_one(dialog, tmp_path, monkeypatch):
+    from mhm_qgis.core.handlers.state import processing
+    from mhm_qgis.core.handlers.state.domain_state import load_state, save_state
+    from mhm_qgis.qt.controllers import grid
+
+    def header(xll):
+        return {"ncols": 2, "nrows": 2, "xllcorner": xll, "yllcorner": 0.0, "cellsize": 1.0}
+
+    for name, value in {"_require_crs": True, "reload_files": None, "current_l0_resolution": 1.0,
+                        "resolution": 1.0, "grid_fingerprint": "f", "show_headers": None, "check_dem": None}.items():
+        monkeypatch.setattr(grid, name, lambda *_args, value=value, **_kwargs: value)
+    monkeypatch.setattr(grid.rules, "resolutions", lambda *_args: [])
+    monkeypatch.setattr(grid.morphology_setup, "latlon", lambda *_args, **_kwargs: ())
+    dialog.setup_folder = str(tmp_path)
+    for xll, cleared in ((0.0, False), (0.5, True)):
+        save_state(tmp_path, {"merged_mask_path": "mask.tif", "outlets": {}})
+        processing.save_grid_metadata(tmp_path, {"l0_header": header(0.0), "configuration_fingerprint": "f"})
+        new = header(xll)
+        monkeypatch.setattr(grid, "build_grid", lambda _dialog, new=new: {
+            "l0_header": new, "l1_header": new, "l11_header": new, "l2_header": new, "l2_resolution": 1.0,
+            "l2_unit": "m", "l2_ratio_to_l0": 1, "extent_note": "", "configuration_fingerprint": "f"})
+        grid.set_resolution(dialog)
+        assert (load_state(tmp_path)["merged_mask_path"] == "") is cleared
