@@ -79,6 +79,9 @@ def _page(dialog, text):
 def test_closing_the_dialog_takes_its_docks_out_of_the_host_window(opened):
     dialog, _ = opened
     _open(dialog)
+    from mhm_qgis.qt.ui import CHECKBOX_STYLE
+
+    assert CHECKBOX_STYLE in dialog.styleSheet()  # every form's checkboxes
     _page(dialog, "Map Explorer")
     _wait(lambda: dialog._post.widgets.get("map_layer") is not None)
     dialog.shutdown()  # a close while busy; reopening the plugin then deletes this dialog
@@ -188,11 +191,10 @@ def opened_long(tmp_path, monkeypatch):
 
 
 def test_tier_b_pages(opened_long, monkeypatch):
-    from post_fixtures import write_observation
+    """Signatures, Events, Climatology (Validation is hidden for now)."""
+    import pyqtgraph as pg
 
-    from mhm_qgis.qt.controllers import post_validation
-
-    dialog, truth, folder = opened_long
+    dialog, _truth, _folder = opened_long
     real = netCDF4.Dataset
 
     def guarded(*args, **kwargs):
@@ -205,26 +207,25 @@ def test_tier_b_pages(opened_long, monkeypatch):
     _page(dialog, "Signatures")
     _wait(lambda: dialog._post.ui.tableWidget_postSignatures.rowCount() > 0)
     assert dialog._post.ui.label_postSignaturesNotes.text() == ""
+    curves = state.widgets["widget_postSignaturesFdc"].listDataItems()
+    assert curves
+    for item in curves:  # discharge on x, exceedance probability on y
+        flows, probability = item.getOriginalDataset()
+        assert flows.max() > 1
+        assert probability.min() >= 0
+        assert probability.max() <= 1
     _page(dialog, "Events")
     _wait(lambda: dialog._post.ui.tableWidget_postEvents.rowCount() > 0)
     assert state.widgets["widget_postEventsPlot"].listDataItems()
     _page(dialog, "Climatology")
-    assert len(state.widgets["climatology"].ci.items) >= 3
-    _page(dialog, "Validation")
-    combo = dialog._post.ui.comboBox_postAdapter
-    combo.setCurrentIndex(combo.findData("discharge"))
-    dialog._post.ui.pushButton_postCompare.click()
-    _wait(lambda: dialog._post.ui.tableWidget_postValidation.rowCount() == len(post_validation.GAUGE_SCORES))
-    monkeypatch.setattr(netCDF4, "Dataset", real)  # the test writes its observation here
-    write_observation(truth, folder / "et.nc")
-    monkeypatch.setattr(netCDF4, "Dataset", guarded)
-    combo.setCurrentIndex(combo.findData("et"))
-    post_validation._observation_chosen(dialog, str(folder / "et.nc"))
-    _wait(lambda: dialog._post.ui.comboBox_postObservationVariable.count() == 1)
-    dialog._post.ui.pushButton_postCompare.click()
-    _wait(lambda: dialog._post.ui.comboBox_postValidationMap.count() > 3 and not dialog.task_coordinator.is_busy())
-    assert dialog._post.ui.mapCanvas_post.layers()  # on the shared Map dock
-    assert "complete windows" in dialog._post.ui.label_postValidationNotes.text()
+    plots = list(state.widgets["climatology"].ci.items)
+    assert len(plots) >= 3
+    band = next(item for item in plots[0].items if isinstance(item, pg.FillBetweenItem))
+    assert not band.path().isEmpty()  # the ± one standard deviation band is drawn
+    legend = plots[-1].legend  # the annual totals
+    assert legend.items
+    assert legend.columnCount == len(legend.items)  # in one row
+    assert "Validation" not in [row.text(0) for row in project_tree._rows(dialog)]
 
 
 def test_each_view_arranges_the_window_and_the_workspace_restores_it(opened):
@@ -371,6 +372,13 @@ def test_tier_c_views(opened_long, monkeypatch):
     _wait(lambda: "ten or more years" in ui.label_postExtremesNotes.text())  # 2 full years in 800 days
     assert state.widgets["widget_postExtremesAnnual"].listDataItems()
     assert "Q maximum" in ui.mapCanvas_post.layers()[-2].name()
+    assert not ui.comboBox_postMapVariable.isEnabled()  # the view's own map
+    assert ui.tableWidget_postReturnLevels.horizontalHeader().defaultAlignment() & Qt.AlignmentFlag.AlignLeft
+    kind = ui.comboBox_postExtremeKind
+    kind.setCurrentIndex(kind.findData("min"))
+    kind.activated.emit(kind.currentIndex())
+    _wait(lambda: not dialog.task_coordinator.is_busy())
+    assert state.widgets["widget_postExtremesReturn"].listDataItems()  # minima too, by negation
 
     _page(dialog, "Drought")
     _wait(lambda: state.widgets.get("smi") is not None and not dialog.task_coordinator.is_busy())
@@ -447,6 +455,7 @@ def test_the_map_dock_offers_the_variables_of_the_open_view(opened):
     combo.activated.emit(combo.currentIndex())
     assert state.context.get("variable") == other  # the controls tree and the map follow
     assert state.ui.treeWidget_postVariables.currentItem().text(0) == other
+    assert combo.isEnabled()
     _page(dialog, "Map Explorer")
     assert combo.count() > len(offered)  # every written variable
 
@@ -467,3 +476,21 @@ def test_processes_read_a_clicked_cell_without_a_cache_and_the_basin_comes_back(
     dialog.comboBox_postBasin.activated.emit(dialog.comboBox_postBasin.currentIndex())
     assert state.context.get("cell") is None
     assert "basin domain" in notes.text()
+
+
+def test_quick_hydrograph_runs_mhm_tools_in_the_setup_folder(tmp_path):
+    """The precipitation panel is added only when the prepared pre.nc exists."""
+    from types import SimpleNamespace
+
+    sent = []
+    terminal = SimpleNamespace(run_command=lambda command, cwd: sent.append((command, cwd)))
+    dialog = SimpleNamespace(setup_folder=str(tmp_path), open_project_terminal=lambda: terminal)
+    post_context.quick_hydrograph(dialog)
+    pre = tmp_path / "data" / "meteo" / "pre" / "pre.nc"
+    pre.parent.mkdir(parents=True)
+    pre.touch()
+    post_context.quick_hydrograph(dialog)
+    (without, cwd), (with_pre, _cwd) = sent
+    assert cwd == str(tmp_path)
+    assert f"-m mhm_tools hydrograph -i {tmp_path / 'output'} -o {tmp_path / 'eval'} --show &" in without
+    assert f"--precipitation-file {pre} --show &" in with_pre

@@ -98,7 +98,7 @@
         <item>
          <widget class="QLabel" name="label_varName">
           <property name="text">
-           <string>Variable Name:</string>
+           <string>Input Variable Name:</string>
           </property>
          </widget>
         </item>
@@ -212,7 +212,7 @@
         <item>
          <widget class="QLabel" name="label_unit">
           <property name="text">
-           <string>Unit:</string>
+           <string>Input Unit:</string>
           </property>
          </widget>
         </item>
@@ -229,7 +229,7 @@
         <item>
          <widget class="QLabel" name="label_crs">
           <property name="text">
-           <string>Coordinate CRS:</string>
+           <string>Input CRS:</string>
           </property>
          </widget>
         </item>

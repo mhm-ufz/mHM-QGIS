@@ -65,8 +65,11 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         """Run a command in the persistent shell session."""
         if on_finished is not None and self._command_marker:
             return False
-        if cwd is not None and not self.ensure_session(cwd):
-            return False
+        if cwd is not None:
+            if not self.ensure_session(cwd):
+                return False
+            # one line: a `cd` typed in the terminal since is invisible to `_cwd`
+            command = f"{self._cd_command(os.path.abspath(cwd))} && {command}"
         if cwd is None and not self.is_running():
             start_cwd = self._cwd or os.getcwd()
             if not self.ensure_session(start_cwd):

@@ -224,14 +224,14 @@ def refresh_signatures(dialog, fields) -> None:
         if compared is None:
             table.setRowCount(0)
             return
-        plot.setLogMode(y=True)
-        plot.setLabel("bottom", "Exceedance probability")
-        plot.setLabel("left", "Discharge (m³/s)")
+        plot.setLogMode(x=True, y=False)
+        plot.setLabel("bottom", "Discharge (m³/s)")
+        plot.setLabel("left", "Exceedance probability")
         for name, colour in (("obs", "k"), ("sim", "#e6550d")):
             if name in curves:
                 p, flows = curves[name]
                 keep = flows > 0
-                plot.plot(p[keep], flows[keep], pen=pg.mkPen(colour, width=1.5),
+                plot.plot(flows[keep], p[keep], pen=pg.mkPen(colour, width=1.5),
                           name="Observed" if name == "obs" else "Simulated")
         table.setRowCount(len(compared))
         table.setVerticalHeaderLabels(list(compared.index))
@@ -381,9 +381,9 @@ def refresh_climatology(dialog, fields) -> None:
         plot = view.addPlot(title=f"{label} by calendar month ({'mm' if how == 'sum' else 'mean'})")
         plot.showGrid(x=True, y=True, alpha=0.2)
         mean, spread = stats["mean"].to_numpy(), np.nan_to_num(stats["std"].to_numpy())
-        upper = plot.plot(months, mean + spread, pen=None)
-        lower = plot.plot(months, mean - spread, pen=None)
-        plot.addItem(pg.FillBetweenItem(lower, upper, brush=pg.mkBrush(31, 120, 180, 50)))
+        # PlotCurveItems: a pen=None PlotDataItem gives the fill no path
+        edges = (pg.PlotCurveItem(months, mean - spread), pg.PlotCurveItem(months, mean + spread))
+        plot.addItem(pg.FillBetweenItem(*edges, brush=pg.mkBrush(31, 120, 180, 50)))
         plot.plot(months, mean, pen=pg.mkPen("#1f78b4", width=2), symbol="o", symbolSize=5)
         plot.getAxis("bottom").setTicks([[(m, "JFMAMJJASOND"[m - 1]) for m in months]])
         view.nextRow()
@@ -391,7 +391,7 @@ def refresh_climatology(dialog, fields) -> None:
             annual[label] = aggregate.temporal(state.root, name, "sum", "year", basin=basin, period=period)
     if annual:
         plot = view.addPlot(title="Annual totals (mm), interannual variability")
-        plot.addLegend(offset=(5, 5))
+        plot.addLegend(offset=(5, 5), labelTextColor="k", brush=(255, 255, 255, 200), colCount=len(annual))  # one row
         width = 0.8 / len(annual)
         for offset, ((label, values), colour) in enumerate(zip(annual.items(), ("#1f78b4", "#66a61e", "#e6550d"),
                                                                strict=False)):

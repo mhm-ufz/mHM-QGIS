@@ -245,11 +245,6 @@
         </item>
         <item>
          <property name="text">
-          <string>Validation</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
           <string>Climatology</string>
          </property>
         </item>
@@ -382,11 +377,8 @@
                 <property name="toolTip">
                  <string>Select the mHM version</string>
                 </property>
-                <property name="currentText">
-                 <string/>
-                </property>
                 <property name="currentIndex">
-                 <number>-1</number>
+                 <number>0</number>
                 </property>
                 <item>
                  <property name="text">
@@ -566,8 +558,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>862</width>
-                 <height>607</height>
+                 <width>307</width>
+                 <height>236</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -1092,8 +1084,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>862</width>
-                 <height>607</height>
+                 <width>647</width>
+                 <height>529</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_page_resolution">
@@ -1166,6 +1158,9 @@
                         <height>16777215</height>
                        </size>
                       </property>
+                      <property name="toolTip">
+                       <string>Unit of the L0 resolution</string>
+                      </property>
                       <property name="currentIndex">
                        <number>-1</number>
                       </property>
@@ -1215,6 +1210,9 @@
                         <width>60</width>
                         <height>16777215</height>
                        </size>
+                      </property>
+                      <property name="toolTip">
+                       <string>Unit of the L2 resolution</string>
                       </property>
                       <property name="currentIndex">
                        <number>-1</number>
@@ -1273,6 +1271,9 @@
                         <height>16777215</height>
                        </size>
                       </property>
+                      <property name="toolTip">
+                       <string>Unit of the L1 resolution</string>
+                      </property>
                       <property name="currentIndex">
                        <number>-1</number>
                       </property>
@@ -1304,7 +1305,6 @@
                     </property>
                    </widget>
                   </item>
-                  
                   <item row="8" column="4">
                    <layout class="QHBoxLayout" name="horizontalLayout_fileL11Resolution">
                     <item>
@@ -1492,7 +1492,6 @@
                     </property>
                    </widget>
                   </item>
-                  
                   <item row="3" column="1">
                    <widget class="QCheckBox" name="checkBox_extentL0enforce">
                     <property name="text">
@@ -1521,7 +1520,6 @@
                     </property>
                    </widget>
                   </item>
-                  
                   <item row="1" column="0">
                    <widget class="QLabel" name="label_Resolution">
                     <property name="text">
@@ -1529,7 +1527,6 @@
                     </property>
                    </widget>
                   </item>
-                  
                   <item row="3" column="4">
                    <widget class="QCheckBox" name="checkBox_extentL11enforce">
                     <property name="text">
@@ -1537,7 +1534,6 @@
                     </property>
                    </widget>
                   </item>
-                  
                   <item row="8" column="0">
                    <widget class="QLabel" name="label_cellSizeFile">
                     <property name="text">
@@ -1675,6 +1671,9 @@
                         <width>60</width>
                         <height>16777215</height>
                        </size>
+                      </property>
+                      <property name="toolTip">
+                       <string>Unit of the L11 resolution</string>
                       </property>
                       <property name="currentIndex">
                        <number>-1</number>
@@ -7169,6 +7168,40 @@ date,discharge
              </layout>
             </item>
             <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_quickReview">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="label_quickReview">
+                <property name="text">
+                 <string>Quick Review:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="pushButton_quickReviewHydrograph">
+                <property name="text">
+                 <string>Hydrograph</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_quickReview">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </item>
+            <item>
              <layout class="QHBoxLayout" name="horizontalLayout_postNavigation">
               <item>
                <widget class="QTextBrowser" name="textBrowser_postOverview">
@@ -7333,7 +7366,7 @@ date,discharge
       <enum>Qt::Horizontal</enum>
      </property>
      <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Help|QDialogButtonBox::Ok|QDialogButtonBox::Reset</set>
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Help|QDialogButtonBox::Ok</set>
      </property>
     </widget>
    </item>

@@ -215,20 +215,27 @@ def test_main_dialog_cancel_waits_for_workers_then_closes():
     assert not dialog.isVisible()
 
 
-def test_closing_during_an_mhm_run_warns_instead_of_stopping_it(monkeypatch):
+def test_cancel_stops_a_running_mhm_and_closes(monkeypatch):
+    """Cancel ends mHM (the terminal's command) so the plugin closes and QGIS is free again."""
     from types import SimpleNamespace
 
     from mhm_qgis.qt.controllers import workflow_state
     from mhm_qgis.qt.dialogs import mhm_qgis_main
 
-    warned = []
+    warned, stopped, closed = [], [], []
     monkeypatch.setattr(mhm_qgis_main.QMessageBox, "warning", lambda *args: warned.append(args[1]))
     dialog = mhm_qgis_main.MhmQgisDialog()
-    dialog._terminal_dialog = SimpleNamespace(command_running=lambda: True, is_running=lambda: True)
+    dialog._terminal_dialog = SimpleNamespace(command_running=lambda: not stopped, is_running=lambda: not stopped,
+                                              stop=lambda: stopped.append(True))
     assert workflow_state.running_key(dialog) == "run_mhm"
+    dialog.finished.connect(closed.append)
+    dialog.show()
     dialog.reject()
-    assert not dialog._closing
-    assert warned
+    _wait(lambda: closed)
+    assert dialog._closing
+    assert stopped
+    assert not warned
+    assert not dialog.isVisible()
     dialog._terminal_dialog = None
     dialog.deleteLater()
 

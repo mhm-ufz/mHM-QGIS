@@ -188,6 +188,7 @@ def show_l0(dialog):
         combo = getattr(dialog, f"comboBox_{level}ResolutionUnit")
         combo.clear()
         combo.addItem(unit)
+        combo.setToolTip(unit or f"Unit of the {level} resolution")
         combo.setEnabled(False)  # grid units belong to the domain CRS
         if level != "L0":
             sync_multiplier(dialog, level)

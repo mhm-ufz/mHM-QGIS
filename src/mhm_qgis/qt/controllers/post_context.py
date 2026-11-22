@@ -114,6 +114,9 @@ def bind(dialog) -> None:
     dialog.dateEdit_postEnd.dateChanged.connect(lambda _date: period_changed(dialog))
     # pushButton_postRefresh → populate (rescan)
     dialog.pushButton_postRefresh.clicked.connect(lambda: populate(dialog, rescan=True))
+    # pushButton_quickReviewHydrograph → quick_hydrograph; enabled while a run is shown
+    dialog.pushButton_quickReviewHydrograph.setEnabled(False)
+    dialog.pushButton_quickReviewHydrograph.clicked.connect(lambda: quick_hydrograph(dialog))
     # The analysis rows, the eye and the ↺ of "4. Outputs" are in the project tree (project_tree.clicked).
     # toolButton_postExport → its menu: export the shown view, archive the current run
     from . import post_export
@@ -277,6 +280,7 @@ def clear(dialog) -> None:
     dialog.comboBox_postRun.clear()
     dialog.comboBox_postBasin.clear()
     project_tree.outputs_shown(dialog, False)
+    dialog.pushButton_quickReviewHydrograph.setEnabled(False)
     from . import post_balance
 
     post_balance.refresh_overview(dialog, {"run"})
@@ -388,8 +392,31 @@ def _ready(dialog, ref, run, findings, gauges, exact) -> None:
         context.set("cell", None)
     _sync_time_bar(dialog)
     project_tree.outputs_shown(dialog, True)
+    dialog.pushButton_quickReviewHydrograph.setEnabled(True)
     if not context.set("run", ref):
         changed(dialog, "run")  # the same run, rescanned
+
+
+def quick_hydrograph(dialog) -> None:
+    """mhm-tools' hydrograph of output/ in its own window, run from the project terminal."""
+    import os
+    import shlex
+    import subprocess
+
+    from ...core.handlers.store.paths import meteo_folder, workspace_folder
+    from ...dependency_bootstrap import python_executable
+
+    folder = Path(workspace_folder(dialog.setup_folder))
+    arguments = [python_executable(), "-m", "mhm_tools", "hydrograph",
+                 "-i", str(folder / "output"), "-o", str(folder / "eval")]
+    pre = Path(meteo_folder(dialog.setup_folder)) / "pre" / "pre.nc"
+    if pre.is_file():
+        arguments += ["--precipitation-file", str(pre)]
+    arguments.append("--show")
+    command = subprocess.list2cmdline(arguments) if os.name == "nt" else f"{shlex.join(arguments)} &"
+    terminal = dialog.open_project_terminal()
+    if terminal is not None:
+        terminal.run_command(command, cwd=str(folder))
 
 
 def basin_selected(dialog) -> None:

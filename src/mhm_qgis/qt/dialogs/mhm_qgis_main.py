@@ -254,8 +254,10 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             return
         running_key = workflow_state.running_key(self)
         busy = running_key is not None or self.task_coordinator.is_busy()
-        if int(result) == int(QDialog.DialogCode.Rejected) and busy and running_key != "run_mhm":
-            self.shutdown(result)  # a running mHM is never stopped by closing the window
+        terminal = self._terminal_dialog
+        if int(result) == int(QDialog.DialogCode.Rejected) and (
+                busy or (terminal is not None and terminal.is_running())):
+            self.shutdown(result)  # stops the tasks, mHM and the terminal's command, then closes
             return
         if busy:
             spec = workflow_state.specs(self).get(running_key or "", {})

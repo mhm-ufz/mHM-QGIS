@@ -86,7 +86,7 @@ nodes:
         children:
           - {key: signatures, title: Signatures, page: page_outputs, analysis: signatures, map: [runoff, routing, snow]}
           - {key: events, title: Events, page: page_outputs, analysis: events, map: [runoff, routing, snow]}
-          - {key: validation, title: Validation, page: page_outputs, analysis: validation, map: [soil, evapotranspiration]}
+          # - {key: validation, title: Validation, page: page_outputs, analysis: validation, map: [soil, evapotranspiration]}
           - {key: climatology, title: Climatology, page: page_outputs, analysis: climatology}
       - key: advanced
         title: C. Advanced

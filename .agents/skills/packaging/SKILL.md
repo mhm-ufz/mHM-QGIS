@@ -1,6 +1,6 @@
 ---
 name: mhm-qgis-packaging
-description: "The PyPI wheel, the QGIS plugin ZIP, the private micromamba runtime and its locks, CI and releases. Read before changing packaging, dependencies, the standalone runtime, CI or a release."
+description: "The PyPI wheel, the QGIS plugin ZIP, the private pixi runtime and its manifest, CI and releases. Read before changing packaging, dependencies, the standalone runtime, CI or a release."
 ---
 
 # Packaging and releases
@@ -10,7 +10,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
 ## Packaging Rules
 
 - `.publish/plan.md` is the canonical plan for the PyPI package, QGIS repository ZIP,
-  private micromamba QGIS runtime, and standalone/Desktop map-canvas routing. Read it
+  private pixi QGIS runtime, and standalone/Desktop map-canvas routing. Read it
   before changing publication, runtime bootstrap, entry points, or map-host code.
 - `src/mhm_qgis/_version.py` is the single release version source. PyPI reads it
   dynamically; `tools/build_qgis_plugin.py` writes it into the staged QGIS metadata.
@@ -41,7 +41,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
 - `.gitlab-ci.yml` runs on every push to `upstream` (`git.ufz.de/mhm/mhm-qgis`), shaped
   like mhm-tools' pipeline: `isort --check`, `ruff check src tests tools`, the plain test
   suite on Python 3.10 and 3.13 with coverage, and `build` (wheel, sdist, `twine check`,
-  plugin ZIP). `test-qgis` runs the whole suite inside the private QGIS 3.44 runtime
+  plugin ZIP). `test-qgis` runs the whole suite inside the private QGIS 4.2 runtime
   through `tools/run_in_runtime.py`; it downloads a conda QGIS, so it runs on a
   schedule, on tags or by hand. The local QGIS suite stays the gate for a change.
 - `.github/workflows/release-check.yml` runs on the GitHub `origin` (tags, manual,
@@ -54,13 +54,13 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   per-package `SETUPTOOLS_SCM_PRETEND_VERSION_FOR_*` variables (measured: they installed
   as `0.2.4.dev57` and `0.1.dev285`). Move a pin when the local checkout the
   suites ran against moves; delete the block at the PyPI release.
-- The private runtime is `src/mhm_qgis_runtime/locks/<platform>.lock`, generated from
-  `tools/runtime/environment.yml` with `uvx conda-lock lock -f tools/runtime/environment.yml
-  --virtual-package-spec tools/runtime/virtual-packages.yml --kind explicit
-  --filename-template 'src/mhm_qgis_runtime/locks/{platform}.lock' -p <platform>`.
-  Lock one platform per run: a failing platform makes conda-lock write nothing, and a
-  solve needs ~4 GB RAM and ~10 min. Every compiled dependency of mhm-qgis, mhm-tools
-  and nml-tools belongs in `environment.yml`; pip may add only the pure/self-contained
+- The private runtime is `src/mhm_qgis_runtime/pixi.toml` (QGIS 4.2, Python 3.13, PyQt6),
+  self-sufficient: no lock is shipped. `mhm-qgis-runtime install` copies it to the runtime
+  root, where `pixi install` solves it and writes the local `pixi.lock` that `pixi run
+  --frozen` then uses. pixi is the one on PATH or in `~/.pixi`, else the official installer
+  (`PIXI_NO_PATH_UPDATE=1`). Check a manifest change solves on every platform with
+  `pixi lock` on a scratch copy. Every compiled dependency of mhm-qgis, mhm-tools
+  and nml-tools belongs in `pixi.toml`; pip may add only the pure/self-contained
   `mhm`, `mhm-tools`, `nml-tools`, `easy_mpl` and `cdo` wheels. Otherwise PyPI wheels
   bring their own GDAL/PROJ into the QGIS process. conda-forge `mhm` and `python-cdo`
   are deliberately absent: the first pins an older libnetcdf than QGIS, the second

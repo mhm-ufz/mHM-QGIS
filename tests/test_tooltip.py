@@ -39,12 +39,12 @@ def test_help_walks_the_visible_page_and_esc_only_ends_the_tour():
     dialog.Closure.helpRequested.emit()
     tour = dialog.findChild(tooltip.Tour)
     assert tour.isVisible()
-    assert pages["page_setup"][0]["title"] in tour.title.text()
+    assert pages["page_singleDomain"][0]["title"] in tour.title.text()
     assert not tour.back.isEnabled()
     assert not tour.help.isEnabled()  # no help_url yet
     steps = [step["widget"] for _widget, step in tour.steps]
-    assert steps[:len(pages["page_setup"])] == [step["widget"] for step in pages["page_setup"]]
-    assert pages["page_singleDomain"][0]["widget"] in steps  # the visible stacked page follows
+    # page_setup's own steps are for post processing only: hidden, so the visible stacked page's follow
+    assert steps == [step["widget"] for step in pages["page_singleDomain"]]
     tour.next.click()
     assert tour.index == 1
     assert tour.back.isEnabled()

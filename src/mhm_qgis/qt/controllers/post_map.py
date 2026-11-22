@@ -263,6 +263,8 @@ def view_changed(dialog, view) -> None:
     _main_tool(dialog, view == "map_explorer")
     if view == "map_explorer":
         _sync_main(dialog)
+    if (combo := getattr(state.ui, "comboBox_postMapVariable", None)) is not None:
+        combo.setEnabled(view not in VIEW_MAPS)  # the view's own map: the variable would change nothing
     if "map" in state.docks:
         layers = state.widgets.get("view_layers", {}).get(view) if view in VIEW_MAPS else None
         explorer = state.widgets.get("map_layer")

@@ -65,6 +65,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       QT_QPA_PLATFORM: offscreen
+      PIXI_CACHE_DIR: ${{ github.workspace }}/.pixi-cache
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -75,12 +76,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install dist/*.whl
-      - id: root
-        run: echo "path=$(python -c 'from mhm_qgis_runtime import runtime_root; print(runtime_root())')" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
-          path: ${{ steps.root.outputs.path }}/mamba/pkgs
-          key: runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/mhm_qgis_runtime/locks/*.lock') }}
+          path: .pixi-cache
+          key: runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/mhm_qgis_runtime/pixi.toml') }}
       - run: mhm-qgis-runtime install --yes
       - run: mhm-qgis-runtime status
       - run: mhm-qgis --help
@@ -93,7 +92,7 @@ jobs:
             from mhm_qgis_runtime.app import main
             show_ = MhmQgisDialog.show
             def show_once(self):
-                assert self.tabWidget_steps.count() == 6
+                assert self.tabWidget_steps.count() == 1  # tab_project
                 self.open_map_canvas()
                 QTimer.singleShot(0, self.reject)
                 return show_(self)

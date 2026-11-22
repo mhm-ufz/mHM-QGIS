@@ -93,16 +93,9 @@ def _overview(dialog, table, gauge, gauge_scores) -> None:
     cells = "".join(f"<td style='padding:6px 14px;border:1px solid #ccc'><small>{escape(name)}</small><br>"
                     f"<b>{escape(value)}</b></td>" + ("</tr><tr>" if index % 4 == 3 else "")
                     for index, (name, value) in enumerate(tiles))
-    notes = [*state.findings, *state.index.get("problems", []), *table.attrs.get("notes", [])]
-    if not state.exact:
-        notes.append("Output intervals are longer than the model step: storage changes use interval means "
-                     "(the ± bound). Model-step outputs make the balance exact.")
-    if state.index.get("domain_source") != "restart":
-        notes.append("Set write_restart = .true. to use mHM's own cell areas and sealed fraction.")
     missing = [f"{v.name}: {v.message}" for v in state.run.variables if not v.present]
     dialog.textBrowser_postOverview.setHtml(
         f"<table style='border-collapse:collapse'><tr>{cells}</tr></table>"
-        + ("<h4>Findings</h4><ul>" + "".join(f"<li>{escape(n)}</li>" for n in notes) + "</ul>" if notes else "")
         + ("<h4>Not written by this run</h4><ul>" + "".join(f"<li>{escape(m)}</li>" for m in missing) + "</ul>"
            if missing else ""))
 
@@ -259,7 +252,7 @@ def refresh_processes(dialog, fields) -> None:
             if stacked:
                 top = y if base is None else base + y
                 upper = plot.plot(x, top, pen=pg.mkPen(colour), name=name)
-                lower = plot.plot(x, base if base is not None else np.zeros_like(y), pen=None)
+                lower = pg.PlotCurveItem(x, base if base is not None else np.zeros_like(y))  # pen=None: no path
                 plot.addItem(pg.FillBetweenItem(lower, upper, brush=pg.mkBrush(colour + "80")))
                 base = top
             else:
