@@ -23,7 +23,7 @@ whether hosted by QGIS Desktop or launched directly.
   plugin ZIP; it imports `mhm_qgis`, never the reverse). `mhm-qgis` and
   `mhm-qgis-runtime` console entry points. With an importable QGIS it runs `app.main`
   (`python -m mhm_qgis_runtime.app`: a real `QgsApplication` without Desktop) there;
-  otherwise it installs a private micromamba QGIS runtime (`envs/mhm-qgis-<version>`)
+  otherwise it installs a private pixi QGIS 4.2 runtime (`<runtime root>/.pixi/envs/default`)
   and relaunches inside it. The runtime gets `mhm-qgis[full]` with this install's
   mhm-qgis and pure-Python dependencies repacked as wheels (`_local_wheels`), so a
   TestPyPI, local-wheel, editable or unreleased-dependency install needs no index for
@@ -55,7 +55,7 @@ binding as this file: read the matching guide before working in its area.
 | [`morphology`](.agents/skills/morphology/SKILL.md): The Configuration tab and input preparation: grids and the common L0/L2 extent, the v6 input layout, staging and publication, fingerprinted reuse, categorical inputs and LAI. | changing configuration, grids or any morphology/LAI preparation step |
 | [`display`](.agents/skills/display/SKILL.md): Showing layers and results in QGIS Desktop or the standalone map window, and the post-processing views. | changing map display, the map window or the Outputs tab |
 | [`namelists`](.agents/skills/namelists/SKILL.md): nml-tools schemas, the namelist editor hand-over, registered values and v5.13/v6 differences. | touching namelists, schemas or the namelist editor |
-| [`packaging`](.agents/skills/packaging/SKILL.md): The PyPI wheel, the QGIS plugin ZIP, the private micromamba runtime and its locks, CI and releases. | changing packaging, dependencies, the standalone runtime, CI or a release |
+| [`packaging`](.agents/skills/packaging/SKILL.md): The PyPI wheel, the QGIS plugin ZIP, the private pixi runtime and its manifest, CI and releases. | changing packaging, dependencies, the standalone runtime, CI or a release |
 
 ## Current Conventions
 

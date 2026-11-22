@@ -59,4 +59,4 @@ def fail(dialog, label, message, failed=None):
 def register(dialog, path, name=None):
     """Record a prepared output in the project registry."""
     path = file_path(path)
-    return registry.register(dialog.project_folder, path, name=name or Path(path).name)
+    return registry.register(dialog.setup_folder, path, name=name or Path(path).name)

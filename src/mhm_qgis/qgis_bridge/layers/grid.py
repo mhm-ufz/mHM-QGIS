@@ -57,13 +57,13 @@ def raster_resolution_info(layer) -> dict | None:
     )
 
 
-def merged_domain_bounds(project_folder, target_crs):
+def merged_domain_bounds(setup_folder, target_crs):
     """Return merged active-domain bounds in ``target_crs`` and their source path."""
     from qgis.core import QgsCoordinateReferenceSystem, QgsRectangle, QgsVectorLayer
 
     from ...core.handlers.raster.tasks import domain_mask_bounds
 
-    folder = Path(temp_morphology_folder(project_folder))
+    folder = Path(temp_morphology_folder(setup_folder))
     candidates = (
         folder / "Watersheds" / MERGED_MASK_NAME,
         folder / "Watersheds" / "4_watershed_merged_vector.shp",

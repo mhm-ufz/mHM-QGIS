@@ -17,8 +17,8 @@ from mhm_qgis.vSpecific import build_initial_values
 
 
 class Dialog:
-    def __init__(self, project_folder):
-        self.project_folder = str(project_folder)
+    def __init__(self, setup_folder):
+        self.setup_folder = str(setup_folder)
 
     def current_l1_resolution(self):
         return 1000
@@ -150,7 +150,7 @@ def test_soil_processing_saves_v6_schema_values_and_units(tmp_path, monkeypatch)
         )
 
     monkeypatch.setattr(processing, "prepare_soil_horizons", fake_formatter)
-    result = run({"kind": "soil", "project_folder": str(tmp_path),
+    result = run({"kind": "soil", "setup_folder": str(tmp_path),
                   "version": "6.0", "value": value.as_dict(), "filled_dem": str(dem)})
     data, definition = map(Path, result["outputs"])
 

@@ -59,7 +59,7 @@ def gauge_position(task, options):
     return result["output"]
 
 
-def lai(task, options, messages):
+def lai(task, options, log):
     return prepare_lai_file(
         options["source_path"],
         options["filled_dem"],
@@ -71,15 +71,16 @@ def lai(task, options, messages):
         resampling=options.get("method") or "bilinear",
         l0_header=options.get("l0_header"),
         task=task,
-        log=messages.append,
+        log=log,
     )
 
 
-def lookup(task, job):
+def lookup(task, job, log=None):
     result = native_worker(
         task,
         {"mode": "lookup", "kind": job["kind"], "job": job},
         job["geometry"],
+        log,
     )
     return {
         "kind": result["kind"],
@@ -89,10 +90,10 @@ def lookup(task, job):
     }
 
 
-def advanced(task, job):
+def advanced(task, job, log=None):
     payload = dict(job)
     payload["value"] = job["value"].as_dict()
-    result = native_worker(task, payload, temp_morphology_folder(job["project_folder"]))
+    result = native_worker(task, payload, temp_morphology_folder(job["setup_folder"]), log)
     return {"kind": result["kind"], "outputs": tuple(result["outputs"])}
 
 
@@ -109,15 +110,16 @@ def ready(task, job):
             lookup = job["lookup"]
             layers, definition = lookup_soil_layers(
                 layers, lookup["lookup_table"], lookup["mapping_field"], lookup["class_field"],
-                Path(morph_staging_folder(job["project_folder"])) / "_soil_horizons",
+                Path(morph_staging_folder(job["setup_folder"])) / "_soil_horizons",
                 dem_file=job.get("filled_dem"), dem_crs=job["target_crs"], source_crs=source_crs)
+            source_crs = ""  # each mapped horizon carries its own CRS: a burnt vector one is in the DEM's
         from ...morphology.layers.categorical import STACKS, stack_ready_layers
 
-        source = stack_ready_layers(job["project_folder"], job["kind"], layers, source_crs=source_crs,
+        source = stack_ready_layers(job["setup_folder"], job["kind"], layers, source_crs=source_crs,
                                     target_crs=job["target_crs"], target_header=job["target_header"], task=task)
         variable, source_crs = STACKS[job["kind"]][1], ""  # already on L0
     staged = copy_ready(
-        job["project_folder"],
+        job["setup_folder"],
         job["kind"],
         source,
         definition_source=definition,
@@ -128,7 +130,7 @@ def ready(task, job):
         task=task,
     )
     published = (
-        publish_model_inputs(job["project_folder"], job["target_header"])
+        publish_model_inputs(job["setup_folder"], job["target_header"])
         if job.get("publish")
         else ()
     )
@@ -143,14 +145,14 @@ def stage_digest(inputs, config):
     return fingerprint(inputs, config)
 
 
-def reusable_stage(project_folder, stage, digest, *, inputs=(), outputs=()):
+def reusable_stage(setup_folder, stage, digest, *, inputs=(), outputs=()):
     """Return reusable output metadata, adopting safe existing outputs."""
-    if not project_folder:
+    if not setup_folder:
         return None
-    payload = cached_payload(project_folder, "stages", stage, digest)
+    payload = cached_payload(setup_folder, "stages", stage, digest)
     if outputs_present(payload):
         return payload
-    if stage in load_state(project_folder).get("stages", {}):
+    if stage in load_state(setup_folder).get("stages", {}):
         return None  # A changed configuration cannot adopt its own stale outputs.
     candidates = [str(path) for path in outputs if path]
     if (
@@ -159,15 +161,15 @@ def reusable_stage(project_folder, stage, digest, *, inputs=(), outputs=()):
         or not outputs_newer_than_inputs(inputs, candidates)
     ):
         return None
-    record_stage(project_folder, stage, digest, candidates)
+    record_stage(setup_folder, stage, digest, candidates)
     return {"outputs": candidates, "adopted": True}
 
 
-def record_stage(project_folder, stage, digest, outputs):
+def record_stage(setup_folder, stage, digest, outputs):
     paths = [str(path) for path in outputs if path and Path(path).is_file()]
-    if project_folder and paths:
+    if setup_folder and paths:
         store_payload(
-            project_folder,
+            setup_folder,
             "stages",
             stage,
             digest,
@@ -175,12 +177,12 @@ def record_stage(project_folder, stage, digest, outputs):
         )
 
 
-def categorical_outputs(project_folder, kind):
-    return saved_outputs(project_folder, kind)
+def categorical_outputs(setup_folder, kind):
+    return saved_outputs(setup_folder, kind)
 
 
-def native_worker(task, payload, working_folder):
-    """Run one native job without risking the long-lived QGIS process."""
+def native_worker(task, payload, working_folder, log=None):
+    """Run one native job without risking the long-lived QGIS process; its warnings go to `log`."""
     if task is not None and task.isCanceled():
         raise RuntimeError("Task cancelled.")
     if task is not None:
@@ -227,17 +229,20 @@ def native_worker(task, payload, working_folder):
                         with contextlib.suppress(OSError, ValueError):
                             task.setProgress(max(5, min(99, int(progress_file.read_text(encoding="ascii")))))
                     continue
-        log = log_file.read_text(encoding="utf-8", errors="replace").strip()
+        output = log_file.read_text(encoding="utf-8", errors="replace").strip()
         if not result_file.is_file():
             raise RuntimeError(
-                f"Native raster worker failed: {log or f'exit status {process.returncode}'}"
+                f"Native raster worker failed: {output or f'exit status {process.returncode}'}"
             )
         response = json.loads(result_file.read_text(encoding="utf-8"))
         if process.returncode or response.get("error"):
             raise RuntimeError(
-                response.get("traceback") or response.get("error") or log
+                response.get("traceback") or response.get("error") or output
             )
         result = response["result"]
+        for line in output.splitlines() if log else ():
+            if line.startswith("WARNING: "):
+                log(line)
     if task is not None:
         task.setProgress(100)
     return result

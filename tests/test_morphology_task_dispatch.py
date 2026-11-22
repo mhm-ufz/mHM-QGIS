@@ -51,7 +51,7 @@ def test_an_unrecordable_completion_fails_and_unlocks_the_controls(tmp_path, mon
 
     _app()
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.check_prerequisites = lambda: True
     boxes = []
     monkeypatch.setattr(workflow_state.QMessageBox, "critical",
@@ -151,7 +151,7 @@ def test_lai_stage_submits_a_background_task_when_selected(tmp_path, monkeypatch
 
     _app()
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     bridge = dialog.morphology_tasks
     _filled_dem(bridge)
     submitted = []
@@ -192,7 +192,7 @@ def test_unchanged_lai_inputs_reuse_the_staged_file(tmp_path, monkeypatch):
 
     _app()
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     bridge = dialog.morphology_tasks
     _filled_dem(bridge)
     submitted = []
@@ -252,7 +252,7 @@ def test_a_missing_staged_file_forces_the_lai_resample(tmp_path, monkeypatch):
 
     _app()
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     bridge = dialog.morphology_tasks
     _filled_dem(bridge)
     submitted = []
@@ -297,7 +297,7 @@ def test_geology_outputs_already_on_disk_are_adopted_not_rebuilt(tmp_path):
     """A project prepared before the cache existed must not rebuild geology."""
     _app()
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     bridge = dialog.morphology_tasks
     submitted = []
     bridge.coordinator.submit = lambda *a, **k: submitted.append(a) or True
@@ -368,7 +368,7 @@ def test_prerequisites_run_dem_first_then_their_own_stage(tmp_path):
     raster.GetRasterBand(1).Fill(1)
     raster = None
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     main.add_file_input(dialog, "dem", str(dem), manual=True, variable="dem", source_crs="EPSG:32632")  # its CRS asked
     submitted = []
     dialog.task_coordinator.submit = (
@@ -400,7 +400,7 @@ def test_prerequisites_run_dem_first_then_their_own_stage(tmp_path):
     dialog.close()
 
 
-def test_without_gauges_execute_all_skips_them_and_takes_the_whole_dem(monkeypatch):
+def test_execute_all_places_the_required_gauges_before_the_mask(monkeypatch):
     from mhm_qgis.qt.workflows import morphology as workflow
 
     _app()
@@ -410,13 +410,9 @@ def test_without_gauges_execute_all_skips_them_and_takes_the_whole_dem(monkeypat
     monkeypatch.setattr(bridge, "start_morph_mask", lambda **_k: calls.append("mask") or True)
     monkeypatch.setattr(bridge, "start_whole_dem_domain", lambda **_k: calls.append("whole DEM") or True)
     monkeypatch.setattr(workflow, "configured_gauged_outlet_ids", lambda _folder: ["1"])
-    monkeypatch.setattr(workflow.morphology, "run_stages", lambda stages, start, **_k: [
-        start(stage, lambda: None) for stage in stages
+    monkeypatch.setattr(workflow.morphology, "main", lambda start, **_k: [
+        start(stage, lambda: None) for stage in workflow.morphology.EXECUTE_ALL_STAGES
         if stage.command in ("gauge_position", "whole_dem_domain", "morph_mask")])
     bridge._run_execute_all(None, lambda *_args: None)
-    assert calls == ["whole DEM", "mask"]
-    calls.clear()
-    dialog.checkBox_gaugeOption.setChecked(True)
-    bridge._run_execute_all(None, lambda *_args: None)
-    assert calls == ["gauges", "mask"]
+    assert calls == ["gauges", "mask"]  # gauges are required: never the whole DEM
     dialog.close()

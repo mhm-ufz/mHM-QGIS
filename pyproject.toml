@@ -16,7 +16,7 @@ maintainers = [
 ]
 keywords = ["hydrology", "modeling", "mesoscale", "water", "environment", "qgis", "plugin"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Hydrology",
     "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
@@ -44,7 +44,7 @@ full = [
     'pyflwdir>=0.5.12; python_version >= "3.11"',
     'pyflwdir>=0.5.11; python_version < "3.11"',
     "mhm>=5.13.4,<5.14",  # the latest mHM 5.13 executable, as the `mhm` command
-    "mhm-tools>=0.3.0,<0.4",
+    "mhm-tools>=0.3.2,<0.4",
     "nml-tools[gui]>=0.6.0,<0.7",
     "qtpy>=2.0",
     "guidata>=3.6",
@@ -102,7 +102,7 @@ mhm_qgis = [
     "**/*.qm",
     "**/*.ui",
 ]
-mhm_qgis_runtime = ["*.json", "locks/*.lock"]
+mhm_qgis_runtime = ["pixi.toml"]
 
 [tool.setuptools.exclude-package-data]
 mhm_qgis = ["**/*.ipynb", "**/*.qrc"]

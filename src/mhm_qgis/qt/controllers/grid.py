@@ -1,822 +1,897 @@
-"""The common L0/L1/L11/L2 grid on the main form.
+"""The Resolution page: the L0, L1, L11/L3 and L2 grids from reference files or typed resolutions.
 
-The DEM, upscaled by the factor Set on its page, fixes L0, the precipitation reference folder and the multiplier fix L2,
-and L1/L11 are chosen between them. A precipitation scan establishes the grid;
-changing any input it depends on invalidates it.
+The L0 reference file fixes the L0 lattice; every other level is a whole multiple of L0. Set
+intersects the ticked file extents, snaps that box outward to whole blocks of lcm(level factors)
+L0 cells on the L2 lattice, checks the four headers against mHM's rules and saves them as the
+common grid. The meteorology must cover it (its cells are never padded); the DEM is shifted onto
+the L0 lattice (under half a cell), then cropped or padded with no data to it.
 """
 from __future__ import annotations
 
 import math
-import os
 from pathlib import Path
 
-from qgis.PyQt.QtCore import QDateTime, QSignalBlocker
+from qgis.core import QgsCoordinateReferenceSystem
+from qgis.PyQt.QtCore import QSignalBlocker
 from qgis.PyQt.QtWidgets import QMessageBox
 
 from ...core.executions.morphology import setup as morphology_setup
+from ...core.executions.reset import invalidate_domains
 from ...core.grid import (
     Extent,
     Grid,
-    ceil_cellsize,
     crs_equal,
     display_precision_for_unit,
     format_resolution,
     header_bounds,
     header_for_model_level,
+    inner_bounds,
     integer_resolution_factor,
     is_geographic_unit,
-    l0_header_from_l2,
-    possible_resolutions,
-    read_header_file,
-    resolution_in_crs,
     target_grid_from_header,
     validate_grid_headers,
+    validate_mhm_grid,
 )
+from ...core.grid.raster import raster_grid
+from ...core.handlers.file.netcdf.raster import source as raster_source
 from ...core.handlers.state import processing
-from ...core.handlers.store.paths import data_folder, temp_morphology_folder
-from ...core.meteorology.forcing import MeteoFolderSpec, validate_coverage
+from ...core.handlers.store.paths import temp_morphology_folder
+from ...core.verify import rules
 from ...qgis_bridge import layers as qgis_layers
-from ..dialogs.file_picker import open_directory
-from . import time
+from ...vSpecific.common import resolution
+from ..project_tree import ICONS
 from .version import selected as selected_version
 from .workflow_state import invalidate as invalidate_workflows
 from .workflow_state import invalidate_meteo
-from .workflow_state import set_status as set_workflow_status
 
-# --- Precipitation reference folder ---------------------------------------
-
-def selected_folder_path(combo):
-    data = combo.currentData()
-    if isinstance(data, dict):
-        path = data.get("path", "")
-    else:
-        path = data if isinstance(data, str) else ""
-    return os.path.abspath(path) if path else ""
+LEVELS = ("L0", "L1", "L11", "L2")
+CORNERS = (("nCols", "ncols"), ("nRows", "nrows"), ("xLowerLeft", "xllcorner"), ("yLowerLeft", "yllcorner"))
+CHANGED = "#1565c0"
+DERIVATIVES = {"slope": "slope", "aspect": "aspect", "flow_direction": "fdir", "flow_accumulation": "facc"}
 
 
-def precipitation_folder(dialog):
-    return selected_folder_path(dialog.comboBox_precipitationFile)
-
-
-def folder_combo_index(combo, path):
-    if not path:
-        return -1
-    normalized = os.path.normcase(os.path.abspath(path))
-    for index in range(combo.count()):
-        data = combo.itemData(index)
-        candidate = data.get("path", "") if isinstance(data, dict) else data
-        if candidate and os.path.normcase(os.path.abspath(candidate)) == normalized:
-            return index
-    return -1
-
-
-def select_precipitation_folder(dialog, folder):
-    """Select `folder` in the reference combo, adding it when it is new."""
-    combo = dialog.comboBox_precipitationFile
-    index = folder_combo_index(combo, folder)
-    if index < 0:
-        folder = os.path.abspath(folder)
-        combo.addItem(
-            folder,
-            {"origin": "folder", "path": folder, "manual": True},
-        )
-        index = combo.count() - 1
-    combo.setCurrentIndex(index)
-
-
-def refresh_precipitation_folder(dialog):
-    """Reset the folder box to a blank entry plus the browsed folder."""
-    combo = dialog.comboBox_precipitationFile
-    previous = selected_folder_path(combo)
-    with QSignalBlocker(combo):
-        combo.clear()
-        combo.addItem("", None)
-        if previous and os.path.isdir(previous):
-            select_precipitation_folder(dialog, previous)
-        else:
-            combo.setCurrentIndex(0)
-
-
-def browse_precipitation_folder(dialog):
-    folder = open_directory(dialog, "Select Precipitation Data Folder")
-    if folder:
-        select_precipitation_folder(dialog, folder)
-        dialog.log_message(
-            f"Precipitation data folder selected: {os.path.abspath(folder)}"
-        )
-
-
-def precipitation_changed(dialog):
-    """Persist a changed reference folder or pattern and drop the old grid."""
-    if dialog._loading_input_state:
-        return
-    dialog.save_input_state()
-    invalidate_meteo(dialog)
-    dialog._meteo_inspections.pop("pre", None)
-    invalidate_grid(dialog)
-    clear_precipitation_resolution_labels(dialog)
-
-
-def precipitation_spec(dialog):
-    """Snapshot the accepted precipitation metadata with the current folder."""
-    data = dict(dialog._meteo_inputs.get("pre", {}))
-    if not data:
-        raise ValueError("Configure and scan pre first.")
-    data.update(
-        folder=precipitation_folder(dialog),
-        pattern=dialog.lineEdit_precipitationGlobDefinition.text().strip(),
-        crs=data.get("crs") or dialog.selected_meteo_crs() or None,
-    )
-    return MeteoFolderSpec(**data).normalized()
-
-
-def clear_precipitation_resolution_labels(dialog):
-    for label in (
-        dialog.label_precipitationResolutionValue,
-        dialog.label_precipitationResolutionUnit,
-        dialog.label_precipitationResolutionMultiplier,
-    ):
-        label.setText("")
-
-
-# --- The common grid ------------------------------------------------------
-
-def invalidate_grid(dialog):
-    if dialog._loading_input_state or dialog._preserve_missing_layer_state:  # not a user change
-        return
-    dialog._grid_l2_metadata = None
-    dialog._grid_l2_header = None
-    if dialog.project_folder:
-        processing.overlay(dialog.project_folder, {"grid": {}})
-        invalidate_workflows(
-            dialog,
-            "scan_precipitation",
-            "execute_all_morphology",
-            "execute_all_meteo",
-            "execute_all_observations",
-            "run_mhm",
-        )
-    update_extent_labels(dialog)
-
-
-def crs_changed(dialog):
-    """A new domain CRS: L0 again now; L2, and so L1/L11, after a new precipitation scan."""
-    if dialog._loading_input_state or dialog._preserve_missing_layer_state:
-        return
-    dialog._preferred_l1_resolution = dialog._preferred_l11_resolution = None
-    dialog._l2_multiplier_user_selected = False
-    with QSignalBlocker(dialog.spinBox_L2ResolutionMultiplier):
-        dialog.spinBox_L2ResolutionMultiplier.setValue(1)
-    dialog.lineEdit_L1Resolution.clear()
-    dialog.lineEdit_L11Resolution.clear()
-    clear_precipitation_resolution_labels(dialog)
-    invalidate_grid(dialog)  # before L0, which would rebuild L1 from the old L2
-    update_l0_resolution_from_dem(dialog)
-
-
-def set_crs(dialog):
-    """Apply a changed domain CRS: L0 again, and the morphology and meteorology runs are due."""
-    authid = dialog.get_crs().authid()
-    if authid == dialog._set_crs:
-        return
-    dialog._set_crs = authid
-    if dialog._study_extent:
-        dialog._study_extent = read_study_extent(dialog)  # the same box in the new CRS
-    crs_changed(dialog)
-    invalidate_workflows(dialog, "execute_all_morphology")
-    invalidate_meteo(dialog)
-    dialog.save_input_state()
-    from .. import project_tree
-
-    project_tree.refresh(dialog)
-
-
-def show_dem_extent(dialog, layer=None):
-    """The DEM is the Custom L0 Extent box's reference; an unset box starts from it."""
-    box = dialog.mExtentGroupBox_customExtent
-    box.setOutputCrs(dialog.get_crs())
-    if layer is not None:
-        box.setOriginalExtent(layer.extent(), layer.crs())
-        box.setCurrentExtent(layer.extent(), layer.crs())
-        if not dialog._study_extent:
-            box.setOutputExtentFromOriginal()
-
-
-def read_study_extent(dialog):
-    """The ticked Custom L0 Extent in the processing CRS, or None for the whole DEM."""
-    if not dialog.groupBox_customExtent.isChecked():
-        return None
-    box = dialog.mExtentGroupBox_customExtent
-    box.setOutputCrs(dialog.get_crs())
-    rect = box.outputExtent()
-    return [rect.xMinimum(), rect.xMaximum(), rect.yMinimum(), rect.yMaximum()]
-
-
-def study_bounds(dialog):
-    """The Set custom extent, which must lie inside the DEM, else the DEM's bounds."""
-    if not dialog._grid_l0_info:
-        raise ValueError("Select the DEM first.")
-    dem = header_bounds(dialog._grid_l0_info["header"])
-    extent = dialog._study_extent
-    if not extent:
-        return tuple(dem)
-    tolerance = float(dialog._grid_l0_info["exact_x_resolution"]) * 1e-6
-    if not (extent[0] < extent[1] and extent[2] < extent[3]
-            and dem[0] - tolerance <= extent[0] and extent[1] <= dem[1] + tolerance
-            and dem[2] - tolerance <= extent[2] and extent[3] <= dem[3] + tolerance):
-        raise ValueError("The custom L0 extent must be a non-empty box inside the DEM.")
-    return tuple(extent)
-
-
-def set_dem(dialog):
-    """The DEM page's Set: the ticked upscaling factor makes L0 (DEM x factor, else the DEM), and the
-    ticked Custom L0 Extent the study extent, else the whole DEM."""
-    factor = dialog.spinBox_upscaleTopographyFactor.value() if dialog.groupBox_upscaleTopography.isChecked() else 1
-    previous = (dialog._study_extent, dialog._upscale_factor)
-    dialog._study_extent, dialog._upscale_factor = read_study_extent(dialog), factor
-    if factor != previous[1]:
-        update_l0_resolution_from_dem(dialog)
-    try:
-        study_bounds(dialog)
-    except ValueError as error:
-        dialog._study_extent, dialog._upscale_factor = previous
-        if factor != previous[1]:
-            update_l0_resolution_from_dem(dialog)
-        QMessageBox.warning(dialog, "Custom L0 Extent", str(error))
-        return
-    if (dialog._study_extent, factor) != previous:
-        invalidate_grid(dialog)
-    if factor != previous[1] and dialog.project_folder:
-        for path in Path(temp_morphology_folder(dialog.project_folder)).glob("2_channel_network.*"):
-            path.unlink()  # drawn on the old L0: Set Gauges again
-    dialog.save_input_state()
-    from .. import project_tree
-
-    project_tree.refresh(dialog)
-
-
-def grid_fingerprint(dialog):
-    from ...core.handlers.file.netcdf.raster import file_path
-    from ...core.handlers.state.cache import fingerprint
-    from ...core.meteorology.forcing import inspection_fingerprint
-    layer = dialog.input_combo("dem").currentLayer()
-    return fingerprint([file_path(layer.source())] if layer else [], {
-        "crs": dialog.selected_meteo_crs(),
-        "precipitation": inspection_fingerprint(precipitation_spec(dialog))[0],
-        "study_extent": dialog._study_extent, "upscale_factor": dialog._upscale_factor,
-        "multiplier": dialog.spinBox_L2ResolutionMultiplier.value(), "grid_version": 3})
-
-
-def common_l0_header(dialog):
-    """The L0 header of the established common grid, or None before a scan."""
-    return (dialog._grid_l2_metadata or {}).get("l0_header")
-
-
-def require_common_grid(dialog):
-    grid = dialog._grid_l2_metadata or {}
-    if not grid or grid.get("configuration_fingerprint") != grid_fingerprint(dialog):
-        raise ValueError("Scan precipitation to establish the common DEM/L2 grid first.")
-    grid_level_headers(dialog)  # Validate all model resolution levels.
-    return grid
-
-
-def precipitation_scanned(dialog, metadata):
-    from ...core.handlers.state.nml_settings import load_settings
-    try:
-        dialog._meteo_inspections["pre"] = metadata
-        update_l0_resolution_from_dem(dialog)
-        converted = resolution_in_crs(metadata, dialog.selected_meteo_crs())
-        _set_default_l2_multiplier(dialog, metadata, converted, current_l0_resolution(dialog))
-        _, _, grid = prepare_meteo_l2_grid(dialog, metadata)
-        grid["configuration_fingerprint"] = grid_fingerprint(dialog)
-        previous = dialog._grid_l2_metadata or {}
-        if previous.get("configuration_fingerprint") != grid["configuration_fingerprint"]:
-            processing.mark_workflow(dialog.project_folder, "execute_all_morphology", "pending")
-            processing.mark_workflow(dialog.project_folder, "execute_all_meteo", "pending")
-        processing.save_grid_metadata(dialog.project_folder, grid)
-        update_l2_resolution_from_metadata(dialog, grid)
-        dialog.save_input_state()
-        dialog.label_precipitationResolutionValue.setText(format_resolution(converted.resolution, converted.unit))
-        dialog.label_precipitationResolutionUnit.setText(converted.unit)
-        dialog.label_precipitationResolutionMultiplier.setText(str(converted.resolution / current_l0_resolution(dialog)))
-        dialog.label_precipitationStartTimeValue.setText(metadata.start_time[:16])
-        dialog.label_precipitationEndTimeValue.setText(metadata.end_time[:16])
-        if not load_settings(dialog.project_folder).get("time"):
-            for key, name in time.TIME_WIDGETS.items():
-                text = metadata.end_time if key == "sim_end" else metadata.start_time
-                value = QDateTime.fromString(text[:16] if selected_version(dialog).startswith("6") else text[:10] + "T00:00", "yyyy-MM-ddTHH:mm")
-                with QSignalBlocker(getattr(dialog, name)):
-                    getattr(dialog, name).setDateTime(value)
-            time.save(dialog)
-        dialog.log_message(f"Scanned {len(metadata.files)} precipitation files ({metadata.source}); common grid saved.")
-        set_workflow_status(dialog, "scan_precipitation", "completed")
-        return True
-    except (OSError, ValueError) as error:
-        invalidate_grid(dialog)
-        set_workflow_status(
-            dialog, "scan_precipitation", "failed", str(error)
-        )
-        QMessageBox.warning(dialog, "Common grid", str(error))
-        return False
-
-
-def handle_l2_multiplier_changed(dialog, value=None):
-    """Invalidate prepared setup state when the requested L2 grid changes."""
-    if dialog._loading_input_state:
-        return
-    dialog._l2_multiplier_user_selected = True
-    dialog.save_input_state()
-    invalidate_meteo(dialog)
-    metadata = dialog._meteo_inspections.get("pre")
-    invalidate_grid(dialog)
-    if metadata:
-        precipitation_scanned(dialog, metadata)
-    elif precipitation_folder(dialog) and "pre" in dialog._meteo_inputs:
-        from . import forcing
-
-        forcing.submit_meteo_input(dialog, "pre", precipitation_spec(dialog))  # a reopened setup: its cached scan
-
-
-def set_precipitation_input(dialog):
-    """The L2 page's Set: a changed multiplier rebuilds the common grid; the period is saved."""
-    value = dialog.spinBox_L2ResolutionMultiplier.value()
-    if value != (dialog._grid_l2_metadata or {}).get("l2_ratio_to_l0"):
-        handle_l2_multiplier_changed(dialog, value)
-    time.save(dialog)
-    dialog.save_input_state()
-
-
-def _set_default_l2_multiplier(dialog, metadata, converted, l0_resolution):
-    """Propose an exact raw factor until the user has chosen a multiplier."""
-    if dialog._l2_multiplier_user_selected or not l0_resolution:
-        return
-    if not crs_equal(metadata.crs, dialog.selected_meteo_crs() or None):
-        return
-    x_factor = integer_resolution_factor(converted.x_resolution, l0_resolution)
-    y_factor = integer_resolution_factor(converted.y_resolution, l0_resolution)
-    if x_factor is None or x_factor != y_factor:
-        return
-    with QSignalBlocker(dialog.spinBox_L2ResolutionMultiplier):
-        dialog.spinBox_L2ResolutionMultiplier.setValue(x_factor)
-
-
-def filled_dem_resolution_info(dialog, factor=1):
-    """Read the effective DEM header, upscaled by `factor`; never start terrain processing here."""
-    from ...core.grid.raster import dem_grid
-    layer = dialog.input_combo("dem").currentLayer()
+def _domain(dialog):
     crs = dialog.get_crs()
-    if not layer or not crs or not crs.isValid():
-        return None
-    return dem_grid(layer.source(), qgis_layers.crs_string(layer.crs()),
-                    qgis_layers.crs_string(crs), qgis_layers.crs_unit(crs), factor)
+    return qgis_layers.crs_string(crs), qgis_layers.crs_unit(crs)
 
 
-def prepare_meteo_l2_grid(dialog, precipitation_metadata=None):
-    """Build the requested L2 grid from the L0 info read by the caller."""
-    if not dialog._grid_l0_info:
-        raise ValueError("Filled DEM is required before preparing meteorology data.")
-    x_resolution = float(dialog._grid_l0_info["exact_x_resolution"])
-    y_resolution = float(dialog._grid_l0_info["exact_y_resolution"])
-    if abs(x_resolution - y_resolution) > max(x_resolution, y_resolution, 1.0) * 1e-6:
-        raise ValueError(
-            "The filled DEM must have square L0 cells before preparing "
-            f"meteorology data (x={x_resolution}, y={y_resolution})."
-        )
-    target_crs = dialog.get_crs()
-    if target_crs is None or not target_crs.isValid():
-        raise ValueError("Please set a valid processing CRS before preparing meteorology data.")
-    domain_bounds = study_bounds(dialog)
-    extent_source = dialog.input_combo("dem").currentLayer().source()
-
-    crs_text = qgis_layers.crs_string(target_crs)
-    unit = qgis_layers.crs_unit(target_crs)
-    raw_resolution = None
-    raw_extent = None
-    raw_crs = None
-    source_file = ""
-    if precipitation_metadata is not None:
-        converted = resolution_in_crs(precipitation_metadata, crs_text or None)
-        raw_resolution = (converted.x_resolution, converted.y_resolution)
-        raw_extent = Extent.from_centres(
-            precipitation_metadata.bounds,
-            precipitation_metadata.x_resolution,
-            precipitation_metadata.y_resolution,
-        )
-        raw_crs = precipitation_metadata.crs
-        source_file = str(precipitation_metadata.files[0])
-        validate_coverage(precipitation_metadata, domain_bounds, crs_text, x_resolution)
-    grid = Grid.for_meteorology(
-        dialog._grid_l0_info["header"],
-        (domain_bounds,),
-        dialog.spinBox_L2ResolutionMultiplier.value(),
-        crs=crs_text,
-        unit=unit,
-        raw_l2_resolution=raw_resolution,
-        raw_l2_extent=raw_extent,
-        raw_l2_crs=raw_crs,
-    )
-    target = target_grid_from_header(grid.l2_header, crs_text or None)
-    metadata = grid.metadata(
-        extent_source=os.path.basename(str(extent_source).split("|", 1)[0]),
-        source_file=source_file,
-    )
-    metadata["study_bounds"] = list(domain_bounds)
-    if target.sample_lon is not None:
-        metadata["wgs84_bounds"] = (
-            float(target.sample_lon.min()),
-            float(target.sample_lon.max()),
-            float(target.sample_lat.min()),
-            float(target.sample_lat.max()),
-        )
-    if raw_resolution:
-        metadata.update({
-            "raw_meteo_resolution": sum(raw_resolution) / 2,
-            "raw_meteo_x_resolution": raw_resolution[0],
-            "raw_meteo_y_resolution": raw_resolution[1],
-        })
-    dialog.log_message(
-        "Meteo L2 grid: "
-        f"{format_resolution(metadata.get('l2_resolution'), metadata.get('l2_unit', ''))} "
-        f"{metadata.get('l2_unit', '')} "
-        f"({metadata.get('l2_ratio_to_l0')} x L0)."
-    )
-    if precipitation_metadata is not None and grid.requires_l2_resampling:
-        dialog.log_message("Meteo will be resampled to L2: its spacing or CRS differs from the L2 grid.")
-    elif grid.alignment_gap and any(grid.alignment_gap):
-        dialog.log_message(
-            f"Meteo is shifted by x={grid.alignment_gap[0]:g}, y={grid.alignment_gap[1]:g} "
-            "onto the L0 lattice, not resampled.")
-    return grid, target, metadata
-
-
-def grid_level_headers(dialog):
-    """Return compatible L0, L1, L11, and L2 headers for latlon.nc."""
-    if not dialog._grid_l2_header:
-        update_l2_resolution_from_metadata(dialog)
-    if not dialog._grid_l2_header:
-        raise ValueError("L2 grid is not available. Run and save meteorology data first.")
-
-    l0_resolution = current_l0_resolution(dialog)
-    l1_resolution = current_l1_resolution(dialog)
-    l11_resolution = current_l11_resolution(dialog)
-    if not l0_resolution or not l1_resolution or not l11_resolution:
-        raise ValueError("L0, L1, and L11 resolutions must be available.")
-
-    l2_header = dict(dialog._grid_l2_header)
-    l2_header["unit"] = current_grid_unit(dialog)
-    ratio = int(
-        (dialog._grid_l2_metadata or {}).get("l2_ratio_to_l0")
-        or round(float(l2_header["cellsize"]) / float(l0_resolution))
-    )
-    headers = {
-        "L0": l0_header_from_l2(l2_header, l0_resolution, ratio),
-        "L1": header_for_model_level(l2_header, l1_resolution, l0_resolution, "L1"),
-        "L11": header_for_model_level(l2_header, l11_resolution, l0_resolution, "L11"),
-        "L2": l2_header,
-    }
-    return validate_grid_headers(headers)[0]
-
-
-def resolution_error(dialog):
-    """Why L0, L1, L11 and L2 do not nest by whole factors, or None."""
-    try:
-        grid_level_headers(dialog)
-    except ValueError as error:
-        return str(error)
-    return None
-
-
-def process_lat_lon(dialog):
-    """Create the v5 coordinate input through the core setup API."""
-    dialog.log_selected_input_paths("Create LatLon")
-    dialog.save_input_state()
-    if error := resolution_error(dialog):
-        QMessageBox.warning(dialog, "Create LatLon", error)
+def _require_crs(dialog):
+    if not dialog.setup_folder:
+        QMessageBox.warning(dialog, "Domain setup", "Create a new domain setup or open an existing "
+                            "one (Open) first.")
         return False
-    request = morphology_setup.SetupRequest(
-        project_folder=dialog.project_folder,
-        headers=grid_level_headers(dialog),
-        crs=dialog.selected_meteo_crs(),
-    )
-    outputs = morphology_setup.latlon(request, log=dialog.log_message)
-    if outputs:
-        from . import process_cases
-
-        dialog.log_message(f"latlon.nc created successfully: {outputs[0]}")
-        process_cases.inputs(dialog)  # the latlon finding, so Resolution's status
-    return bool(outputs)
+    if not dialog._set_crs or not dialog.get_crs().isValid():
+        QMessageBox.warning(dialog, "Domain setup", "Set the domain CRS first.")
+        return False
+    return True
 
 
-# --- Resolution controls --------------------------------------------------
+# --- Reference files --------------------------------------------------------
 
-def refresh_grid_resolution_controls(dialog):
-    """Refresh L0, L2, L1, and L11 controls from current project state."""
-    update_l0_resolution_from_dem(dialog, refresh=False)
-    update_l2_resolution_from_metadata(dialog)
-
-
-def update_l0_resolution_from_dem(dialog, layer=None, *, refresh=True):
-    """Show the DEM's resolution, and L0's: the DEM upscaled by the factor last Set."""
-    dem = filled_dem_resolution_info(dialog)
-    info = filled_dem_resolution_info(dialog, dialog._upscale_factor) if dem and dialog._upscale_factor > 1 else dem
-    dialog._grid_l0_info = info
-    dialog.label_demResolutionValue.setText(format_resolution(dem["resolution"], dem["unit"]) if dem else "")
-    dialog.label_demResolutionUnit.setText(dem["unit"] if dem else "")
-    if not info:
-        _set_resolution_labels(dialog, "L0", "", "")
-    else:
-        dialog.spinBox_upscaleTopographyFactor.setRange(1, max(1, min(dem["header"]["ncols"], dem["header"]["nrows"])))
-        _set_resolution_labels(
-            dialog, "L0", format_resolution(info["resolution"], info["unit"]), info["unit"]
-        )
-        if abs(dem["x_resolution"] - dem["y_resolution"]) > max(dem["resolution"], 1.0) * 1e-6:
-            dialog.log_message(
-                "WARNING: DEM pixels are not square. L0 uses the average of "
-                f"x={dem['x_resolution']} and y={dem['y_resolution']}.")
-    if refresh:
-        refresh_l1_l11_resolution_options(dialog)
+def _read(dialog, selection):
+    """The file's grid in the domain CRS, and the extent its data cover there: the grid itself,
+    or, from another CRS, the inner box of the transformed footprint."""
+    domain, unit = _domain(dialog)
+    path, crs = raster_source(selection["path"], selection.get("variable")), selection["crs"]
+    info = raster_grid(path, crs, domain, unit)
+    same = crs_equal(crs, domain)
+    bounds = header_bounds(info["header"]) if same else inner_bounds(
+        header_bounds(raster_grid(path, crs, crs)["header"]), crs, domain)
+    return {"info": info, "extent": Extent.from_bounds(bounds), "same_crs": same}
 
 
-def update_l2_resolution_from_metadata(dialog, metadata=None):
-    """Show L2 resolution from saved meteo grid metadata or existing headers."""
-    if metadata is None and dialog.project_folder:
-        metadata = processing.grid_metadata(dialog.project_folder)
-
-    header = None
-    unit = ""
-    if metadata:
-        header = metadata.get("l2_header")
-        unit = metadata.get("l2_unit", "")
-        if not unit and dialog._grid_l0_info:
-            unit = dialog._grid_l0_info.get("unit", "")
-        if header:
-            # Keep the exact L2 cell size. It is n x the filled DEM cell
-            # size by construction, and re-rounding it here breaks that
-            # relationship for repeating values such as 120 x 1/1200 deg.
-            header = dict(header)
-            header["unit"] = unit
-            metadata["l2_header"] = header
-            metadata["l2_resolution"] = header["cellsize"]
-            metadata["l2_unit"] = unit
-    elif dialog.project_folder:
-        unit = dialog._grid_l0_info.get("unit", "") if dialog._grid_l0_info else ""
-        header = read_header_file(
-            os.path.join(data_folder(dialog.project_folder), "meteo", "pre", "header.txt"),
-            unit=unit,
-        )
-        if header:
-            metadata = {
-                "l2_resolution": header["cellsize"],
-                "l2_unit": unit,
-                "l2_header": header,
-            }
-
-    dialog._grid_l2_metadata = metadata
-    dialog._grid_l2_header = header
-    update_extent_labels(dialog, metadata)
-    refresh_l1_l11_resolution_options(dialog)
+def l0_factor(dialog):
+    return int((dialog._resolution_files.get("L0") or {}).get("factor") or 1)
 
 
-def refresh_l1_l11_resolution_options(dialog):
-    """Populate L1 and L11 resolution choices from L0/L2 compatibility."""
-    l0_resolution = current_l0_resolution(dialog)
-    l2_resolution = current_l2_resolution(dialog)
-    unit = current_grid_unit(dialog)
+def _l0_info(dialog):
+    """The L0 grid: the L0 file in the domain CRS, upscaled by its factor."""
+    selection, (domain, unit) = dialog._resolution_files["L0"], _domain(dialog)
+    return raster_grid(raster_source(selection["path"], selection.get("variable")), selection["crs"],
+                       domain, unit, l0_factor(dialog))
 
-    if not dialog._grid_l2_header or not l2_resolution:
-        _populate_resolution_input(dialog, "L1", [])
-        disable_l11_resolution_options(dialog)
-        update_l1_resolution_label(dialog)
+
+def load_file(dialog, level):
+    """Read `level`'s saved reference file into the From File row; False when it is unreadable."""
+    selection = dialog._resolution_files[level]
+    try:
+        dialog._level_file_info[level] = _read(dialog, selection)
+        if level == "L0":
+            dialog._grid_l0_info = _l0_info(dialog)
+    except (OSError, RuntimeError, ValueError) as error:
+        dialog._level_file_info.pop(level, None)
+        if level == "L0":
+            dialog._grid_l0_info = None
+        dialog.log_message(f"WARNING: {level} reference file {selection['path']}: {error}")
+        show_file_row(dialog, level)
+        return False
+    dialog._displayed.pop(level, None)  # a new file: its own layer when shown
+    show_file_row(dialog, level)
+    return True
+
+
+def reload_files(dialog):
+    """Re-read every saved reference file (headers only), e.g. in a new domain CRS."""
+    dialog._level_file_info, dialog._grid_l0_info = {}, None
+    for level in LEVELS:
+        if level in dialog._resolution_files:
+            load_file(dialog, level)
+        else:
+            show_file_row(dialog, level)
+    show_l0(dialog)
+
+
+def show_file_row(dialog, level):
+    """The From File row: the file's grid in the domain CRS, as read; its Browse… names the file."""
+    selection = dialog._resolution_files.get(level)
+    file = dialog._level_file_info.get(level)
+    getattr(dialog, f"pushButton_browse{level}File").setToolTip(
+        "" if not selection else selection["path"] if file else f"Missing: {selection['path']}")
+    _eye(dialog, level, shown=bool(file))
+    header = file["info"]["header"] if file else {}
+    unit = file["info"]["unit"] if file else ""
+    for name, key in CORNERS:
+        value = header.get(key)
+        text = "" if value is None else str(value) if key in ("ncols", "nrows") else format_resolution(
+            value, unit, precision=display_precision_for_unit(unit))
+        getattr(dialog, f"label_{name}{level}File").setText(text)
+    cell = file["info"]["resolution"] if file else None
+    getattr(dialog, f"label_file{level}ResolutionValue").setText(format_resolution(cell, unit) if cell else "")
+    getattr(dialog, f"label_file{level}ResolutionUnit").setText(unit if cell else "")
+    if level != "L0":
+        l0 = current_l0_resolution(dialog)
+        getattr(dialog, f"label_file{level}ResolutionMultiplier").setText(f"{cell / l0:.6g}" if cell and l0 else "")
+    getattr(dialog, f"checkBox_extent{level}enforce").setEnabled(bool(file))
+
+
+def browse_file(dialog, level):
+    """A Browse… of the Resolution page: the level's reference file, its grid and resolution."""
+    if not _require_crs(dialog):
         return
-
-    l1_values = possible_resolutions(l0_resolution, l2_resolution, unit) if l0_resolution else []
-    preferred_l1 = dialog._preferred_l1_resolution
-    matched_l1 = _populate_resolution_input(dialog, "L1", l1_values, preferred_l1, unit)
-    if preferred_l1 is not None and l1_values and l0_resolution:
-        if not matched_l1:
-            log_resolution_preference_warning(dialog, "L1", preferred_l1, l1_values[0], unit)
-        dialog._preferred_l1_resolution = None
-
-    handle_l1_resolution_changed(dialog)
-
-
-def handle_l1_resolution_changed(dialog):
-    """Refresh L1 label and rebuild L11 choices for the selected L1."""
-    update_l1_resolution_label(dialog)
-    l1_resolution = current_l1_resolution(dialog)
-    l2_resolution = current_l2_resolution(dialog)
-    unit = current_grid_unit(dialog)
-
-    if not dialog._grid_l2_header or not l2_resolution or not l1_resolution:
-        disable_l11_resolution_options(dialog)
+    l0 = current_l0_resolution(dialog)
+    if level != "L0" and not l0:
+        QMessageBox.warning(dialog, "Resolution", "Browse the L0 reference file first.")
         return
+    from ..dialogs.browse_resolution_L0_file import L0FileDialog
+    from ..dialogs.browse_resolution_L2_L1_L11_file import LevelFileDialog
 
-    l11_values = possible_resolutions(l1_resolution, l2_resolution, unit)
-    preferred_l11 = dialog._preferred_l11_resolution
-    matched_l11 = _populate_resolution_input(dialog, "L11", l11_values, preferred_l11, unit)
-    if preferred_l11 is not None and l11_values:
-        if not matched_l11:
-            log_resolution_preference_warning(dialog, "L11", preferred_l11, l11_values[0], unit)
-        dialog._preferred_l11_resolution = None
-    update_l11_resolution_label(dialog)
+    kind = L0FileDialog if level == "L0" else LevelFileDialog
+    prompt = kind(level, dialog.get_crs(), dialog._resolution_files.get(level), dialog)
+    if not prompt.exec():
+        return
+    dialog._resolution_files[level] = prompt.selection()
+    if load_file(dialog, level):
+        if level == "L0":
+            show_l0(dialog)
+            rescale(dialog)
+        else:
+            cell = dialog._level_file_info[level]["info"]["resolution"]
+            ratio = cell / l0
+            n = max(1, round(ratio))
+            if abs(ratio - n) > 1e-7 * ratio:
+                dialog.log_message(f"WARNING: The {level} file's cell ({cell:.10g}) is {ratio:.6g} x L0; "
+                                   f"{level} uses {n} x L0, so its data are resampled.")
+            set_multiplier(dialog, level, n)
+    changed(dialog)
 
 
-def disable_l11_resolution_options(dialog):
-    """Disable L11 controls and clear its labels."""
-    _populate_resolution_input(dialog, "L11", [])
-    update_l11_resolution_label(dialog)
+# --- Resolutions -------------------------------------------------------------
+
+def show_l0(dialog):
+    """The L0 line edit: the L0 file's cell x its factor; the units of the domain CRS."""
+    l0 = current_l0_resolution(dialog)
+    with QSignalBlocker(dialog.lineEdit_L0Resolution):
+        dialog.lineEdit_L0Resolution.setText(repr(l0) if l0 else "")
+        dialog.lineEdit_L0Resolution.setCursorPosition(0)  # the leading digits, not the end, in sight
+    unit = _domain(dialog)[1]
+    for level in LEVELS:
+        combo = getattr(dialog, f"comboBox_{level}ResolutionUnit")
+        combo.clear()
+        combo.addItem(unit)
+        combo.setToolTip(unit or f"Unit of the {level} resolution")
+        combo.setEnabled(False)  # grid units belong to the domain CRS
+        if level != "L0":
+            sync_multiplier(dialog, level)
+            show_file_row(dialog, level)  # its x L0 ratio
 
 
-def update_l1_resolution_label(dialog):
-    """Show the selected L1 relation to L0."""
-    value = current_l1_resolution(dialog)
-    l0_resolution = current_l0_resolution(dialog)
-    dialog.label_L1Resolution.setToolTip(
-        f"{value / l0_resolution:g} x L0" if value and l0_resolution else ""
-    )
+def rescale(dialog):
+    """A new L0: every level keeps its multiplier, so its resolution follows."""
+    for level in ("L1", "L11", "L2"):
+        if entered(dialog, level):
+            multiplier_changed(dialog, level, getattr(dialog, f"spinBox_{level}ResolutionMultiplier").value())
+
+
+def snap_l0(dialog):
+    """A typed L0 becomes the nearest whole multiple of the L0 file's cell, its new factor."""
+    file, value = dialog._level_file_info.get("L0"), entered(dialog, "L0")
+    if file and value:
+        header = file["info"]["header"]
+        factor = min(max(1, round(value / file["info"]["resolution"])), header["ncols"], header["nrows"])
+        if factor != l0_factor(dialog):
+            dialog._resolution_files["L0"]["factor"] = factor
+            dialog._grid_l0_info = _l0_info(dialog)
+            show_l0(dialog)
+            rescale(dialog)
+            changed(dialog)
+    show_l0(dialog)
+
+
+def set_multiplier(dialog, level, n):
+    spin = getattr(dialog, f"spinBox_{level}ResolutionMultiplier")
+    with QSignalBlocker(spin):
+        spin.setValue(n)
+    multiplier_changed(dialog, level, n)
 
 
 def sync_multiplier(dialog, level, snap=False):
     """Show the line edit's cell size as n x L0; `snap` rewrites the text to exactly n x L0."""
-    l0, value = current_l0_resolution(dialog), _current_resolution_input(dialog, level)
+    l0, value = current_l0_resolution(dialog), entered(dialog, level)
     spin = getattr(dialog, f"spinBox_{level}ResolutionMultiplier")
-    spin.setEnabled(bool(l0 and value))
+    spin.setEnabled(bool(l0))
     if l0 and value:
         with QSignalBlocker(spin):
             spin.setValue(max(1, round(value / l0)))
         if snap:
             getattr(dialog, f"lineEdit_{level}Resolution").setText(repr(spin.value() * l0))
+            getattr(dialog, f"lineEdit_{level}Resolution").setCursorPosition(0)
 
 
 def multiplier_changed(dialog, level, n):
     if l0 := current_l0_resolution(dialog):
         getattr(dialog, f"lineEdit_{level}Resolution").setText(repr(n * l0))
+        getattr(dialog, f"lineEdit_{level}Resolution").setCursorPosition(0)
 
 
-def update_l11_resolution_label(dialog):
-    """Show the selected L11 relation to L1."""
-    value = current_l11_resolution(dialog)
-    l1_resolution = current_l1_resolution(dialog)
-    dialog.label_L11Resolution.setToolTip(
-        f"{value / l1_resolution:g} x L1" if value and l1_resolution else ""
-    )
-    update_latlon_button_state(dialog)
-
-
-def show_resolution_summary(dialog):
-    """The Resolution page's L0 and L2 rows: L2 is L0 times the L2 multiplier."""
-    l0, factor = current_l0_resolution(dialog), dialog.spinBox_L2ResolutionMultiplier.value()
-    dialog.spinBox_resL2Multiplier.setValue(factor)
-    dialog.label_resL0Value.setText(f"{l0:g}" if l0 else "-")
-    dialog.label_resL2Value.setText(f"{l0 * factor:g}" if l0 else "-")
-    for label in (dialog.label_resL0Unit, dialog.label_resL2Unit):
-        label.setText(dialog.label_L0ResolutionUnit.text() if l0 else "")
+def changed(dialog):
+    """A grid input changed: the Set headers no longer apply."""
+    if dialog._loading_input_state:
+        return
+    clear_headers(dialog)
+    dialog.save_input_state()
 
 
 def current_l0_resolution(dialog):
-    """Return the current L0 cell size, unrounded when it is known."""
-    if dialog._grid_l0_info:
-        return float(
-            dialog._grid_l0_info.get("exact_resolution")
-            or dialog._grid_l0_info["resolution"]
-        )
-    return None
-
-
-def current_l2_resolution(dialog):
-    if dialog._grid_l2_metadata and dialog._grid_l2_metadata.get("l2_resolution"):
-        return float(dialog._grid_l2_metadata["l2_resolution"])
-    if dialog._grid_l2_header:
-        return float(dialog._grid_l2_header["cellsize"])
-    return None
+    info = dialog._grid_l0_info
+    return float(info["resolution"]) if info else None
 
 
 def current_l1_resolution(dialog):
-    return _current_resolution_input(dialog, "L1")
+    return entered(dialog, "L1")
 
 
 def current_l11_resolution(dialog):
-    return _current_resolution_input(dialog, "L11")
+    return entered(dialog, "L11")
 
 
 def current_grid_unit(dialog):
-    """Return the unit shared by the derived grid-resolution controls."""
-    if dialog._grid_l2_metadata and dialog._grid_l2_metadata.get("l2_unit"):
-        return dialog._grid_l2_metadata["l2_unit"]
-    if dialog._grid_l0_info:
-        return dialog._grid_l0_info.get("unit", "")
-    return ""
+    return (dialog._grid_l0_info or {}).get("unit", "")
 
 
-def update_extent_labels(dialog, metadata=None):
-    """Show the final model extent from the prepared L2 grid header."""
-    labels = (
-        dialog.label_minimumEasting,
-        dialog.label_maximumEasting,
-        dialog.label_minimumNorthing,
-        dialog.label_maximumNorthing,
-    )
-    header = (metadata or {}).get("l2_header") or dialog._grid_l2_header
-    if not header:
-        for label in labels:
-            label.setText("")
-        return
-    unit = (
-        (metadata or {}).get("l2_unit")
-        or (dialog._grid_l2_metadata or {}).get("l2_unit")
-        or current_grid_unit(dialog)
-    )
-    precision = display_precision_for_unit(unit)
-    for label, value in zip(labels, header_bounds(header), strict=True):
-        label.setText(format_resolution(value, unit, precision=precision))
-
-
-def update_latlon_button_state(dialog):
-    """Enable latlon creation once all derived grid levels are available."""
-    dialog.pushButton_createLatLon.setEnabled(bool(
-        current_l0_resolution(dialog)
-        and current_l1_resolution(dialog)
-        and current_l11_resolution(dialog)
-        and dialog._grid_l2_header
-    ))
-    from .. import project_tree
-
-    project_tree.refresh(dialog)  # Resolution's status shows whether the levels nest
-
-
-def _set_resolution_labels(dialog, level, value_text, unit_text):
-    getattr(dialog, f"label_{level}Resolution").setText(value_text or "")
-    getattr(dialog, f"label_{level}ResolutionUnit").setText(unit_text or "")
-
-
-def resolution_state_precision(unit):
-    """Return precision used when restoring saved grid-resolution choices."""
-    return 8 if is_geographic_unit(unit) else 6
-
-
-def resolution_values_match(available_value, preferred_value, unit):
-    """Return True when two resolutions are equivalent for state restore."""
-    precision = resolution_state_precision(unit)
-    try:
-        available = ceil_cellsize(available_value, unit, precision=precision)
-        preferred = ceil_cellsize(preferred_value, unit, precision=precision)
-    except (TypeError, ValueError):
-        return False
-    return abs(available - preferred) <= 10 ** (-precision)
-
-
-def _populate_resolution_input(dialog, level, values, preferred_value=None, unit=None):
-    """Keep exact compatible grid values behind the form's numeric text field."""
-    field = getattr(dialog, f"lineEdit_{level}Resolution")
-    preferred = preferred_value or _current_resolution_input(dialog, level)
-    selected = next(
-        (
-            value
-            for value in values
-            if preferred and resolution_values_match(value, preferred, unit)
-        ),
-        None,
-    )
-    if selected is None and preferred is not None:
-        try:
-            candidate = float(preferred)
-            selected = candidate if math.isfinite(candidate) and candidate > 0 else None
-        except (TypeError, ValueError):
-            selected = None
-    matched = preferred is None or selected is not None
-    selected = selected if selected is not None else (values[0] if values else None)
-    field.setProperty("resolutions", values)
-    with QSignalBlocker(field):
-        field.setText(repr(float(selected)) if selected is not None else "")
-    field.setEnabled(bool(values) or selected is not None)
-    field.setToolTip(
-        "Suggested resolutions: "
-        + ", ".join(format_resolution(value, unit) for value in values)
-    )
-    units = getattr(dialog, f"comboBox_{level}ResolutionUnit")
-    units.clear()
-    units.addItem(unit or "")
-    # Grid units belong to the selected CRS, not a display override.
-    units.setEnabled(False)
-    sync_multiplier(dialog, level)
-    return matched
-
-
-def log_resolution_preference_warning(dialog, level, saved_value, fallback_value, unit):
-    """Log when a saved L1/L11 choice is no longer selectable."""
-    precision = resolution_state_precision(unit)
-    dialog.log_message(
-        "WARNING: Saved "
-        f"{level} resolution {format_resolution(saved_value, unit, precision)} "
-        f"{unit or ''} is not compatible with the current grid. "
-        f"Using {format_resolution(fallback_value, unit)} {unit or ''}."
-    )
-
-
-def _current_resolution_input(dialog, level):
-    """Return a positive entered cell size; execution checks compatibility."""
+def entered(dialog, level):
+    """A positive typed cell size, or None."""
     try:
         entered = float(getattr(dialog, f"lineEdit_{level}Resolution").text())
     except (TypeError, ValueError):
         return None
     return entered if math.isfinite(entered) and entered > 0 else None
+
+
+def ticked(dialog):
+    return [level for level in LEVELS if getattr(dialog, f"checkBox_extent{level}enforce").isChecked()]
+
+
+# --- The common grid ---------------------------------------------------------
+
+def grid_fingerprint(dialog):
+    from ...core.handlers.state.cache import fingerprint
+
+    files = dialog._resolution_files
+    return fingerprint([files[level]["path"] for level in LEVELS if level in files], {
+        "crs": dialog.selected_meteo_crs(), "files": files, "extent": ticked(dialog),
+        "resolutions": [entered(dialog, level) for level in ("L1", "L11", "L2")], "grid_version": 4})
+
+
+def grid_current(dialog):
+    """Whether the saved common grid still matches the page's inputs."""
+    grid = dialog._grid_l2_metadata or {}
+    try:
+        return bool(grid.get("l1_header")) and grid.get("configuration_fingerprint") == grid_fingerprint(dialog)
+    except (OSError, ValueError):
+        return False
+
+
+def require_common_grid(dialog):
+    if not grid_current(dialog):
+        raise ValueError("Set the resolutions (Resolution page) to establish the common grid first.")
+    return dialog._grid_l2_metadata
+
+
+def common_l0_header(dialog):
+    """The L0 header of the last Set common grid, or None; Execute All refuses a stale one."""
+    return (dialog._grid_l2_metadata or {}).get("l0_header")
+
+
+def grid_level_headers(dialog):
+    """The L0, L1, L11 and L2 headers of the Set common grid."""
+    grid = require_common_grid(dialog)
+    return {level: dict(grid[f"{level.lower()}_header"]) for level in LEVELS}
+
+
+def build_grid(dialog):
+    """The common grid's processing metadata, with all four headers; ValueError says what to fix."""
+    l0_info = dialog._grid_l0_info
+    if not l0_info:
+        raise ValueError("Browse the L0 reference file (Browse… in the L0 row).")
+    crs, unit = _domain(dialog)
+    if not (is_geographic_unit(unit) or unit == "m"):
+        raise ValueError(f"The domain CRS must be in metres or degrees: mHM computes cell areas from them "
+                         f"(this CRS is in {unit or 'an unknown unit'}).")
+    l0 = float(l0_info["resolution"])
+    factors = {}
+    for level in ("L1", "L11", "L2"):
+        value = entered(dialog, level)
+        if not value:
+            raise ValueError(f"Enter the {level} resolution, or browse its file.")
+        factors[level] = integer_resolution_factor(value, l0)
+        if factors[level] is None:
+            raise ValueError(f"{level} ({value:.10g}) must be a whole multiple of L0 ({l0:.10g}), not finer.")
+    levels = ticked(dialog)
+    if not levels:
+        raise ValueError("Tick at least one extent in the Extent row: the common extent lies inside "
+                         "every ticked file.")
+    box, names, margin = None, [], 0.01 * l0  # 1% of an L0 cell absorbs lat/lon rounding, as coverage does
+    for level in levels:
+        if level not in dialog._level_file_info:
+            raise ValueError(f"The {level} extent is ticked, but {level} has no readable file.")
+        extent = dialog._level_file_info[level]["extent"]  # shrunk: a rounded edge does not snap a block out
+        extent = Extent(extent.xmin + margin, extent.xmax - margin, extent.ymin + margin, extent.ymax - margin)
+        joined = extent if box is None else box.intersect(extent)
+        if joined is None:
+            raise ValueError(f"The {level} file does not overlap the {' and '.join(names)} extent: "
+                             "the ticked extents must share an area.")
+        box, names = joined, [*names, level]
+    block = math.lcm(factors["L1"], factors["L11"], factors["L2"])
+    anchor, raw = "the L0 file's lattice", {}
+    l2_file = dialog._level_file_info.get("L2")
+    if l2_file and l2_file["same_crs"]:
+        info = l2_file["info"]
+        raw = {"raw_l2_resolution": (info["x_resolution"], info["y_resolution"]),
+               "raw_l2_extent": Extent.from_header(info["header"]), "raw_l2_crs": crs}
+    grid = Grid.for_meteorology(l0_info["header"], box.bounds, factors["L2"], block=block, crs=crs, unit=unit,
+                                lattice_cell=l0 / l0_factor(dialog), **raw)
+    if not grid.requires_l2_resampling:
+        anchor = "the L2 file's lattice"
+    if l2_file:
+        _inside_meteo(grid, l2_file, f"snapped outward to blocks of lcm({factors['L1']}, {factors['L11']}, "
+                      f"{factors['L2']}) = {block} L0 cells", margin)
+    headers = {"L0": grid.l0_header, "L2": grid.l2_header, **{
+        level: header_for_model_level(grid.l2_header, factors[level] * l0, l0, level) for level in ("L1", "L11")}}
+    headers = validate_grid_headers(headers)[0]
+    validate_mhm_grid(headers, selected_version(dialog))
+    metadata = grid.metadata(extent_source=", ".join(names), source_file=(dialog._resolution_files.get("L2") or {}).get(
+        "path", ""))
+    target = target_grid_from_header(headers["L2"], crs or None)
+    metadata.update(
+        {f"{level.lower()}_header": headers[level] for level in LEVELS},
+        study_bounds=list(grid.meteo_extent.bounds),  # what the meteo must cover, in its own cells
+        extent_note=(f"Common extent: the intersection of the ticked extents ({', '.join(names)}), snapped outward "
+                     f"to whole blocks of lcm({factors['L1']}, {factors['L11']}, {factors['L2']}) = {block} L0 "
+                     f"cells ({format_resolution(block * l0, unit)} {unit}) on {anchor}."),
+        configuration_fingerprint=grid_fingerprint(dialog),
+    )
+    if target.sample_lon is not None:
+        metadata["wgs84_bounds"] = (float(target.sample_lon.min()), float(target.sample_lon.max()),
+                                    float(target.sample_lat.min()), float(target.sample_lat.max()))
+    return metadata
+
+
+def _inside_meteo(grid, l2_file, how, margin):
+    """The meteo cells are never padded: the common extent must lie inside the L2 file's cells (where
+    its lattice anchors the grid, as shifted onto L0)."""
+    extent, cell = l2_file["extent"], float(l2_file["info"]["resolution"])
+    if not grid.requires_l2_resampling and grid.alignment_gap:
+        dx, dy = grid.alignment_gap
+        extent = Extent(extent.xmin + dx, extent.xmax + dx, extent.ymin + dy, extent.ymax + dy)
+    common = grid.common_extent
+    beyond = {"west": extent.xmin - common.xmin, "east": common.xmax - extent.xmax,
+              "south": extent.ymin - common.ymin, "north": common.ymax - extent.ymax}
+    short = [f"{value / cell:.4g} cell{'' if round(value / cell, 4) == 1 else 's'} {side}"
+             for side, value in beyond.items() if value > margin]
+    if short:
+        raise ValueError(f"The common extent ({how}) reaches beyond the L2 (meteo) grid: {', '.join(short)}. "
+                         "The meteo cells are never padded: tick the L2 extent, use meteo covering more, or "
+                         "L1/L11 factors that divide the L2 factor.")
+
+
+def set_resolution(dialog):
+    """The Resolution page's Set: the common grid, its Updated Headers and latlon.nc."""
+    if not _require_crs(dialog):
+        return False
+    reload_files(dialog)  # a file changed on disk since it was read: the grid is built from it as it is now
+    dialog.log_selected_input_paths("Set resolutions")
+    try:
+        metadata = build_grid(dialog)
+        # the cell sizes as the namelist will hold them
+        problems = rules.resolutions(selected_version(dialog).startswith("6"), current_l0_resolution(dialog),
+                                     resolution(dialog, "current_l1_resolution"),
+                                     resolution(dialog, "current_l11_resolution"), metadata["l2_resolution"])
+        if problems:
+            raise ValueError("\n".join(problems))
+    except ValueError as error:
+        clear_headers(dialog)
+        QMessageBox.warning(dialog, "Resolution", str(error))
+        dialog.save_input_state()
+        return False
+    previous = processing.grid_metadata(dialog.setup_folder) or {}
+    if previous.get("configuration_fingerprint") != metadata["configuration_fingerprint"]:
+        invalidate_workflows(dialog, "execute_all_morphology", "execute_all_meteo", "execute_all_observations",
+                             "run_mhm")
+    if previous.get("l0_header") not in (None, metadata["l0_header"]):  # the saved watershed lies on the old grid
+        invalidate_domains(dialog.setup_folder)
+        from . import main
+
+        main.embed(dialog, "domainDefinition", None)  # its draft would save the old delineations back
+        dialog.log_message("The common L0 grid changed: run Set Gauges and save the domain in Domain Delineator again.")
+    dialog._grid_l2_metadata = processing.save_grid_metadata(dialog.setup_folder, metadata)
+    show_headers(dialog)
+    check_dem(dialog)
+    dialog.log_message(f"Common grid set: L2 {format_resolution(metadata['l2_resolution'], metadata['l2_unit'])} "
+                       f"{metadata['l2_unit']} ({metadata['l2_ratio_to_l0']} x L0). {metadata['extent_note']}")
+    outputs = morphology_setup.latlon(morphology_setup.SetupRequest(
+        setup_folder=dialog.setup_folder, headers=grid_level_headers(dialog), crs=dialog.selected_meteo_crs(),
+    ), log=dialog.log_message)
+    if outputs:
+        dialog.log_message(f"latlon.nc created successfully: {outputs[0]}")
+    dialog.save_input_state()  # the latlon finding, so Resolution's status
+    return bool(outputs)
+
+
+def _edges(source, common, cell, noise, sides=("west", "east", "south", "north")):
+    """What the common extent crops from or adds to `source` on each side, in its `cell`s."""
+    moves = {"west": (common.xmin - source.xmin, "column"), "east": (source.xmax - common.xmax, "column"),
+             "south": (common.ymin - source.ymin, "row"), "north": (source.ymax - common.ymax, "row")}
+    cropped, added = [], []
+    for side in sides:
+        value, unit = moves[side]
+        if abs(value) > noise:
+            count = round(abs(value) / cell, 2)
+            (cropped if value > 0 else added).append(f"{count:g} {unit}{'' if count == 1 else 's'} {side}")
+    return ([f"Cropped: {', '.join(cropped)}."] if cropped else []) + (
+        [f"Padded with no data: {', '.join(added)}."] if added else [])
+
+
+def show_headers(dialog):
+    """The Set grid in Updated Headers: a value that differs from the From File row is blue, with an
+    ⓘ giving the reason; each file row's info button lists what happens to its file."""
+    grid = dialog._grid_l2_metadata
+    unit, noise = grid.get("l0_unit", ""), 0.01 * float(grid["l0_resolution"])  # lat/lon rounding
+    dialog._header_notes = {}
+    for level in LEVELS:
+        header, file = grid[f"{level.lower()}_header"], dialog._level_file_info.get(level)
+        source = file["info"]["header"] if file else None
+        for name, key in (*CORNERS, ("cellSize", "cellsize")):
+            value = header[key]
+            text = str(int(value)) if key in ("ncols", "nrows") else format_resolution(
+                value, unit, precision=None if key == "cellsize" else display_precision_for_unit(unit))
+            label = getattr(dialog, f"label_{name}{level}Common")
+            reason = source and not math.isclose(float(source[key]), float(value), rel_tol=1e-9,
+                                                 abs_tol=noise if key in ("xllcorner", "yllcorner") else 0) and (
+                _cell_reason(dialog, level, file, header) if key == "cellsize" else _extent_reason(
+                    level, key, file, header, grid))
+            if reason:
+                dialog._header_notes[f"{level}:{key}"] = reason
+                label.setText(f'<span style="color:{CHANGED}">{text}</span> <a href="{level}:{key}">ⓘ</a>')
+            else:
+                label.setText(text)
+        _eye(dialog, f"grid:{level}")
+    for label, value in zip((dialog.label_minimumEasting, dialog.label_maximumEasting, dialog.label_minimumNorthing,
+                             dialog.label_maximumNorthing), header_bounds(grid["l0_header"]), strict=True):
+        label.setText(format_resolution(value, unit, precision=display_precision_for_unit(unit)))
+
+
+def _cell_reason(dialog, level, file, header):
+    cell, l0 = float(header["cellsize"]), float(dialog._grid_l2_metadata["l0_resolution"])
+    if level == "L0":
+        return (f"The L0 file's cell ({file['info']['resolution']:.10g}) x the upscale factor "
+                f"{l0_factor(dialog)} = {cell:.10g}.")
+    return (f"The file's cell ({file['info']['resolution']:.10g}) is {file['info']['resolution'] / l0:.6g} x L0; "
+            f"{level} is {round(cell / l0)} x L0 = {cell:.10g}, so its data are resampled.")
+
+
+def _extent_reason(level, key, file, header, grid):
+    """Why a corner or count of the common grid differs from the file's, side by side."""
+    source, common = Extent.from_header(file["info"]["header"]), Extent.from_header(header)
+    cell, unit = file["info"]["resolution"], grid.get("l0_unit", "")
+    precision = display_precision_for_unit(unit)
+    if key in ("xllcorner", "yllcorner"):
+        edge, sides = ("West", ("west",)) if key == "xllcorner" else ("South", ("south",))
+        what = (f"{edge} edge at {format_resolution(header[key], unit, precision=precision)} instead of the "
+                f"{level} file's {format_resolution(file['info']['header'][key], unit, precision=precision)}.")
+    else:
+        kind, sides = ("columns", ("west", "east")) if key == "ncols" else ("rows", ("south", "north"))
+        what = (f"{header[key]} {kind} of {float(header['cellsize']):.6g} instead of the {level} file's "
+                f"{file['info']['header'][key]} of {cell:.6g}.")
+    edges = _edges(source, common, cell, 0.01 * float(grid["l0_resolution"]), sides)
+    return "\n".join([grid.get("extent_note", ""), what, *edges])
+
+
+def _eye(dialog, key, shown=True):
+    """A Display label (`L2`: the level's file, `grid:L2`: its Set grid): the project tree's eye when
+    on the map, crossed out when hidden; empty when there is nothing to show."""
+    level = key.removeprefix("grid:")
+    label = getattr(dialog, f"label_display{level}GridCommon" if key.startswith("grid:") else f"label_display{level}File")
+    on = key in dialog._displayed
+    icon = ICONS / ("eye.svg" if on else "eye-off.svg")
+    label.setText(f'<a href="{key}"><img src="{icon}" width="16" height="16"></a>' if shown else "")
+    label.setToolTip(("Shown on the map" if on else "Hidden") if shown else "")
+
+
+def toggle_display(dialog, key):
+    """A Display eye clicked: its file or Set grid shown on the map, or hidden again."""
+    from qgis.core import QgsProject
+
+    from ...qgis_bridge.display.grid import display_grids
+    from ...qgis_bridge.layers.project import find_by_name
+
+    name, on = dialog._displayed.pop(key, None), False
+    if name is None:
+        level = key.removeprefix("grid:")
+        name = (display_grids(dialog, [level]) or [None])[0] if key.startswith("grid:") else _show_file(dialog, level)
+        on = bool(name)
+        if on:
+            dialog._displayed[key] = name
+    layer = find_by_name(name) if name else None
+    node = layer and QgsProject.instance().layerTreeRoot().findLayer(layer.id())
+    if node:
+        node.setItemVisibilityChecked(on)
+    _eye(dialog, key)
+
+
+def _show_file(dialog, level):
+    """The level's reference file on the map, its layer name (None when it cannot be shown). A NetCDF
+    shows its first time step, read from its axes: through GDAL a long series takes minutes."""
+    from qgis.core import QgsCoordinateReferenceSystem
+
+    from ...qgis_bridge.display import canvas
+
+    selection = dialog._resolution_files[level]
+    name = f"{level} reference: {Path(selection['path']).name}"
+    if Path(selection["path"]).suffix.lower() != ".nc":
+        layer = canvas.show_raster(dialog, selection["path"], name)
+        if layer is not None and not layer.crs().isValid():
+            layer.setCrs(QgsCoordinateReferenceSystem(selection["crs"]))
+        return name if layer is not None else None
+    import numpy as np
+    import rioxarray  # noqa: F401  (the .rio accessor)
+    import xarray as xr
+
+    from ...externals.mhm_tools_handler import read_netcdf_first_slice
+
+    header = raster_grid(raster_source(selection["path"], selection["variable"]), selection["crs"],
+                         selection["crs"])["header"]
+    cell, (xmin, _xmax, _ymin, ymax) = float(header["cellsize"]), header_bounds(header)
+    data = xr.DataArray(read_netcdf_first_slice(selection["path"], selection["variable"]), dims=("y", "x"), coords={
+        "y": ymax - (np.arange(header["nrows"]) + 0.5) * cell, "x": xmin + (np.arange(header["ncols"]) + 0.5) * cell})
+    return name if canvas.show_dataarray(dialog, data.rio.write_crs(selection["crs"]), name) is not None else None
+
+
+def explain(dialog, href):
+    """An ⓘ of Updated Headers: why that value differs from the file's, in a box like every info button."""
+    QMessageBox.information(dialog, f"Updated header {href}", dialog._header_notes.get(href, ""))
+
+
+def clear_headers(dialog):
+    """Empty Updated Headers and the common extent; the file rows' info buttons go off."""
+    dialog._header_notes = {}
+    for level in LEVELS:
+        for name, _key in (*CORNERS, ("cellSize", "cellsize")):
+            getattr(dialog, f"label_{name}{level}Common").setText("")
+        dialog._displayed.pop(f"grid:{level}", None)
+        _eye(dialog, f"grid:{level}", shown=False)
+    for label in (dialog.label_minimumEasting, dialog.label_maximumEasting, dialog.label_minimumNorthing,
+                  dialog.label_maximumNorthing):
+        label.setText("")
+
+
+def restore(dialog, state):
+    """The saved files, ticks and resolutions, and the Set headers while they still apply. Reads the
+    files' headers only, never meteorology."""
+    files = state.get("resolution_files") or {}
+    dialog._resolution_files = {level: dict(value) for level, value in files.items()
+                                if level in LEVELS and isinstance(value, dict) and value.get("path")}
+    extent = state.get("extent_levels", ["L0"])
+    for level in LEVELS:
+        box = getattr(dialog, f"checkBox_extent{level}enforce")
+        with QSignalBlocker(box):
+            box.setChecked(level in extent)
+    saved = state.get("grid_resolutions") or {}
+    for level in ("L1", "L11", "L2"):
+        edit = getattr(dialog, f"lineEdit_{level}Resolution")
+        try:
+            value = float(saved.get(level.lower()) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        with QSignalBlocker(edit):
+            edit.setText(repr(value) if value > 0 else "")
+        edit.setCursorPosition(0)  # the leading digits in sight
+    reload_files(dialog)
+    dialog._grid_l2_metadata = processing.grid_metadata(dialog.setup_folder) if dialog.setup_folder else None
+    if grid_current(dialog):
+        show_headers(dialog)
+    else:
+        clear_headers(dialog)
+    dialog._dem_replacements = {key: dict(value) for key, value in (state.get("dem_replacements") or {}).items()
+                                if key in DERIVATIVES and isinstance(value, dict) and value.get("path")}
+    check_dem(dialog)
+
+
+def clear(dialog):
+    """No setup open: no files, resolutions or grid; L0's extent ticked."""
+    dialog._resolution_files, dialog._level_file_info, dialog._displayed = {}, {}, {}
+    dialog._grid_l0_info = dialog._grid_l2_metadata = None
+    for level in LEVELS:
+        box = getattr(dialog, f"checkBox_extent{level}enforce")
+        with QSignalBlocker(box):
+            box.setChecked(level == "L0")
+        edit = getattr(dialog, f"lineEdit_{level}Resolution")
+        with QSignalBlocker(edit):
+            edit.clear()
+        if level != "L0":
+            set_multiplier(dialog, level, 1)
+            edit.clear()
+        show_file_row(dialog, level)
+    clear_headers(dialog)
+    show_l0(dialog)
+    dialog._dem_error, dialog._dem_replacements = None, {}
+    dialog.label_demDescription.setText("")
+
+
+def set_crs(dialog):
+    """Apply a changed domain CRS: the files are read in it again, and every run is due."""
+    if not dialog.setup_folder:
+        QMessageBox.warning(dialog, "Domain setup", "Create a new domain setup or open an existing "
+                            "one (Open) before setting the CRS.")
+        return
+    authid = dialog.get_crs().authid()
+    if authid == dialog._set_crs:
+        return
+    dialog._set_crs = authid
+    reload_files(dialog)
+    rescale(dialog)
+    invalidate_workflows(dialog, "execute_all_morphology")
+    invalidate_meteo(dialog)
+    changed(dialog)
+    check_dem(dialog)
+
+
+# --- DEM ---------------------------------------------------------------------
+
+def _fit(dialog, source, crs, factor=1):
+    """`source` (in `crs`, its cells x `factor`) against the common L0 grid: its own header, its cell
+    and extent in the domain CRS, the extent moved onto the L0 lattice when its cells are L0's (under
+    half a cell, never resampled) and a note on that shift."""
+    l0, (domain, unit) = dialog._grid_l2_metadata["l0_header"], _domain(dialog)
+    own = raster_grid(source, crs, crs)["header"]
+    placed = raster_grid(source, crs, domain, unit, factor)["header"]
+    bounds = header_bounds(own)
+    extent = Extent.from_bounds(bounds if crs_equal(crs, domain) else inner_bounds(bounds, crs, domain))
+    cell, notes = float(l0["cellsize"]), []
+    if math.isclose(float(placed["cellsize"]), cell, rel_tol=1e-9):
+        fine = cell / factor  # the DEM step pads whole DEM cells: only a residue below one is a shift
+        shift = [(round(value) - value) * fine for value in ((float(placed[key]) - float(l0[key])) / fine
+                                                              for key in ("xllcorner", "yllcorner"))]
+        if any(abs(value) > 1e-6 * cell for value in shift):  # copy_rasters(shift=True) moves it
+            notes.append(f"Shifted by ({shift[0]:.6g}, {shift[1]:.6g}) onto the L0 lattice.")
+            extent = Extent(extent.xmin + shift[0], extent.xmax + shift[0],
+                            extent.ymin + shift[1], extent.ymax + shift[1])
+    return {"header": own, "cell": float(placed["cellsize"]), "extent": extent, "notes": notes}
+
+
+def _dem_fit(dialog):
+    """The DEM's fit, its extent notes (in DEM cells) and regridding; ValueError when it cannot fill
+    the common L0 grid."""
+    layer = dialog.input_combo("dem").currentLayer()
+    if layer is None:
+        raise ValueError("Select the DEM.")
+    if not grid_current(dialog):
+        raise ValueError("Set the resolutions first (Resolution page): the DEM must lie on the common L0 grid.")
+    l0, (domain, unit) = dialog._grid_l2_metadata["l0_header"], _domain(dialog)
+    data = dialog.input_combo("dem").currentData()
+    crs = (data.get("source_crs", "") if isinstance(data, dict) else "") or qgis_layers.crs_string(layer.crs())
+    factor = dialog._upscale_factor
+    fit = _fit(dialog, dialog.input_combo("dem").source_uri() or layer.source(), crs, factor)
+    cell = float(l0["cellsize"])
+    if not math.isclose(fit["cell"], cell, rel_tol=1e-9):
+        raise ValueError(f"The DEM x {factor} has cells of {fit['cell']:.10g} {unit}, but L0 is "
+                         f"{cell:.10g} {unit}: set the upscale factor to L0 / DEM cell, or choose another L0.")
+    common = Extent.from_header(l0)
+    if common.intersect(fit["extent"]) is None:
+        raise ValueError(f"The DEM ({', '.join(f'{v:.10g}' for v in fit['extent'].bounds)}) does not overlap "
+                         f"the common extent ({', '.join(f'{v:.10g}' for v in common.bounds)}).")
+    regrid = ([] if crs_equal(crs, domain) else [f"Warped {crs} → {domain}."]) + (
+        [f"Topography upscaled x {factor} (mhm-tools)."] if factor > 1 else [])
+    return fit, fit["notes"] + _edges(fit["extent"], common, cell / factor, 0.01 * cell), regrid
+
+
+def _dem_note(dialog):
+    """What happens to the DEM on the common L0 grid; ValueError when it cannot fill it."""
+    edges, regrid = _dem_fit(dialog)[1:]
+    return "\n".join(regrid + edges or ["Used as is."])
+
+
+def check_dem(dialog):
+    """Cache why the DEM cannot fill the common L0 grid (None when it can) and show it as the DEM note."""
+    try:
+        note, dialog._dem_error = _dem_note(dialog), None
+    except (OSError, RuntimeError, ValueError) as error:
+        note = dialog._dem_error = str(error)
+    dialog.label_demDescription.setText(note)
+    return dialog._dem_error
+
+
+def set_dem(dialog):
+    """The DEM page's Set: its upscale factor, checked against the common L0 grid."""
+    factor = dialog.spinBox_upscaleTopographyFactor.value() if dialog.groupBox_upscaleTopography.isChecked() else 1
+    previous, dialog._upscale_factor = dialog._upscale_factor, factor
+    if factor != previous and dialog.setup_folder:
+        invalidate_workflows(dialog, "execute_all_morphology")
+        for path in Path(temp_morphology_folder(dialog.setup_folder)).glob("2_channel_network.*"):
+            path.unlink()  # drawn on the old L0: Set Gauges again
+    if error := check_dem(dialog):
+        QMessageBox.warning(dialog, "DEM", error)
+    dialog.save_input_state()
+
+
+# --- DEM derivatives -----------------------------------------------------------
+
+def show_derivative(dialog, key):
+    """The derivative page for row `key`: derived from the DEM, or the Set replacement raster."""
+    from ..project_tree import indicate, item
+
+    dialog._derivative = key
+    saved, box = dialog._dem_replacements.get(key, {}), dialog._replace_box
+    dialog.groupBox_replaceDemDerivativesVar.setTitle(f"Replace {item(dialog, key).text(0)}")
+    with QSignalBlocker(dialog.checkBox_isDerivedFromDemGrid):
+        dialog.checkBox_isDerivedFromDemGrid.setChecked(not saved)
+    dialog.groupBox_replaceDemDerivativesVar.setEnabled(bool(saved))
+    box.domain_crs = dialog.get_crs()
+    with QSignalBlocker(box.comboBox_rasterInput):
+        box.comboBox_rasterInput.setCurrentText(saved.get("path", ""))
+    box.read(saved.get("path", ""))
+    box.comboBox_varName.setCurrentText(saved.get("variable", ""))
+    if saved.get("crs") and box.mProjectionSelectionWidget_crsFileInput.isEnabled():
+        box.mProjectionSelectionWidget_crsFileInput.setCrs(QgsCoordinateReferenceSystem(saved["crs"]))
+    indicate(dialog, key, dialog.label_setDemDerivativesVarStatus)
+
+
+def _derivative_fit(dialog, key, selection):
+    """A replacement raster for `key` on the common L0 grid, its extent notes and regridding;
+    ValueError when it cannot replace the DEM's: another CRS, another cell or short of the DEM."""
+    fit = _dem_fit(dialog)[0]
+    l0, (domain, unit) = dialog._grid_l2_metadata["l0_header"], _domain(dialog)
+    name, cell = Path(selection["path"]).name, float(l0["cellsize"])
+    if not crs_equal(selection["crs"], domain):
+        raise ValueError(f"{name} is in {selection['crs'] or 'no CRS'}, not the domain CRS {domain}: "
+                         f"reproject it first ({key.replace('_', ' ')} cannot be resampled).")
+    raster = _fit(dialog, raster_source(selection["path"], selection["variable"]), selection["crs"])
+    if not math.isclose(raster["cell"], cell, rel_tol=1e-9):
+        raise ValueError(f"{name} has cells of {raster['cell']:.10g} {unit}, but L0 is {cell:.10g} {unit}: "
+                         "it must have L0's cells.")
+    common = Extent.from_header(l0)
+    dem = fit["extent"].intersect(common)
+    short = [line for line in _edges(raster["extent"], dem, cell, 0.01 * cell) if line.startswith("Padded")]
+    if short:
+        raise ValueError(f"{name} does not cover the DEM: it misses "
+                         f"{short[0].removeprefix('Padded with no data: ')}")
+    return raster, raster["notes"] + _edges(raster["extent"], common, cell, 0.01 * cell), []
+
+
+def set_derivative(dialog):
+    """The derivative page's Set: derived from the DEM (ticked), or the checked replacement raster."""
+    key, box = dialog._derivative, dialog._replace_box
+    previous = dialog._dem_replacements.pop(key, None)
+    if not dialog.checkBox_isDerivedFromDemGrid.isChecked():
+        selection = box.selection()
+        try:
+            if box.error:
+                raise ValueError(box.error)
+            _derivative_fit(dialog, key, selection)
+        except (OSError, RuntimeError, ValueError) as error:
+            if previous:
+                dialog._dem_replacements[key] = previous
+            QMessageBox.warning(dialog, "Replace DEM derivative", str(error))
+            return
+        dialog._dem_replacements[key] = selection
+    if dialog._dem_replacements.get(key) != previous and dialog.setup_folder:
+        invalidate_workflows(dialog, "execute_all_morphology")
+    if "flow_direction" in dialog._dem_replacements and "flow_accumulation" not in dialog._dem_replacements:
+        dialog.log_message("WARNING: Flow direction is replaced, but flow accumulation is still derived from "
+                           "the DEM's flow directions: replace it too if routing needs both.")
+    dialog.save_input_state()
+    from .. import project_tree
+
+    project_tree.refresh(dialog)
+
+
+def _categorical_input(dialog, kind):
+    """The first file of a categorical row's Set input, its variable and CRS, and how it is regridded
+    onto L0 (mhm-tools, or a GDAL warp for an mHM-ready raster); None without one."""
+    from .categorical import (
+        categorical_source_config,
+        land_use_input_value,
+        uses_advanced_categorical_input,
+    )
+
+    if kind == "lai" and dialog._lai_input_config.get("input_path"):
+        config = dialog._lai_input_config
+        return (config["input_path"], config.get("variable", ""), config.get("source_crs", ""),
+                f"{(config.get('method') or 'bilinear').title()} (mhm-tools).")
+    if uses_advanced_categorical_input(dialog, kind) and kind == "lc":
+        value = land_use_input_value(dialog._advanced_inputs["land_cover"])
+        return value.as_dict()["periods"][0]["file_path"], "", value.crs, "Mode (mhm-tools)."
+    if uses_advanced_categorical_input(dialog, kind):
+        value = dialog._advanced_inputs["soil"]
+        data = value.as_dict() if hasattr(value, "as_dict") else value
+        horizon = data["horizons"][0]
+        return next(path for name, path in horizon.items() if name.endswith("_layer")), "", data.get("crs", ""), \
+            "Auto (mhm-tools)."
+    config = categorical_source_config(dialog, kind)
+    if not config:
+        return None
+    path = config["layers"][0][0] if config.get("layers") else config["input_path"]
+    regrid = "Nearest (GDAL warp)." if "lookup_table" not in config else (
+        "Mode (mhm-tools)." if kind == "lc" else "Nearest (mhm-tools).")
+    return path, config.get("variable", ""), config.get("source_crs", ""), regrid
+
+
+def _input_fit(dialog, key):
+    """A morphology row's input: its fit, extent notes and regridding; None without a raster input."""
+    if key == "dem":
+        return _dem_fit(dialog)
+    if key in dialog._dem_replacements:
+        return _derivative_fit(dialog, key, dialog._dem_replacements[key])
+    if key in DERIVATIVES:
+        fit, edges, regrid = _dem_fit(dialog)
+        return fit, edges, [*regrid, "Derived from the DEM (mhm-tools)."]
+    found = _categorical_input(dialog, key) if key in ("lc", "soil", "geology", "lai") else None
+    if not found:
+        return None
+    path, variable, crs, regrid = found
+    if Path(str(path).split("|", 1)[0]).suffix.lower() not in (".tif", ".tiff", ".asc", ".nc"):
+        return None, ["Rasterized onto the L0 grid (mhm-tools)."], ["Rasterized (mhm-tools)."]
+    if not grid_current(dialog):
+        raise ValueError("Set the resolutions first (Resolution page).")
+    uri = raster_source(path, variable)
+    fit = _fit(dialog, uri, crs or qgis_layers.crs_string(qgis_layers.crs_of(uri)))
+    cell = float(dialog._grid_l2_metadata["l0_header"]["cellsize"])
+    if regrid == "Auto (mhm-tools).":  # mhm-tools' "auto": average from finer cells, else bilinear
+        regrid = "Average (finer than L0, mhm-tools)." if fit["cell"] < cell else "Bilinear (coarser than L0, mhm-tools)."
+    on_l0 = math.isclose(fit["cell"], cell, rel_tol=1e-9) and not fit["notes"]
+    edges = _edges(fit["extent"], Extent.from_header(dialog._grid_l2_metadata["l0_header"]), cell, 0.01 * cell)
+    return fit, edges, [] if on_l0 else [regrid]  # edges in L0 cells
+
+
+def summary(dialog, node):
+    """The morphology summary's Cell Size, nRows, nCols, Extent (the input's own grid), Extent
+    Modification and Regridding for a row; "—" where it has no raster input. A meteorology row
+    gives its scan's grid and how it reaches L2."""
+    variable = node["key"].removeprefix("meteo_")
+    if variable != node["key"]:
+        from .forcing import scan_details
+
+        spec = dialog._meteo_inputs.get(variable)
+        details = scan_details(dialog, variable, spec, dialog._meteo_inspections.get(variable), "L2") \
+            if spec else ("—",) * 7
+        return (*details[:5], details[6])
+    try:
+        found = _input_fit(dialog, node["key"])
+    except (KeyError, IndexError, OSError, RuntimeError, ValueError) as error:
+        return ("—", "—", "—", "—", str(error), "—")
+    if found is None:
+        return ("—",) * 6
+    fit, edges, regrid = found
+    header = fit["header"] if fit else None
+    grid = (f"{float(header['cellsize']):.10g}", str(header["nrows"]), str(header["ncols"]),
+            ", ".join(f"{value:.10g}" for value in header_bounds(header))) if header else ("—",) * 4
+    return (*grid, " ".join(edges) or "None", " ".join(regrid) or "None")

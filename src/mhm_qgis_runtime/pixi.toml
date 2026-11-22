@@ -1,0 +1,58 @@
+# The private QGIS runtime of the `mhm-qgis` launcher, solved by pixi at install time.
+# Every compiled dependency of mhm-qgis, mhm-tools and nml-tools belongs here: pip then adds
+# only the pure mhm-qgis, mhm, mhm-tools, nml-tools, easy_mpl and cdo wheels, so no PyPI
+# wheel brings its own GDAL/PROJ into the QGIS process.
+[workspace]
+name = "mhm-qgis-runtime"
+channels = ["conda-forge"]
+platforms = [
+  "linux-64",
+  "win-64",
+  { name = "mhm-osx-arm64", platform = "osx-arm64", macos = "14.0" },
+  { name = "mhm-osx-64", platform = "osx-64", macos = "14.0" },
+]
+
+[dependencies]
+python = "3.13.*"
+qgis = "4.2.*"
+pyqt6 = "*"   # QGIS's conda-forge Qt, not PyPI's bundled one
+pip = "*"
+numpy = ">=2,<2.4"
+scipy = ">=1.7"
+pandas = ">=1.3"
+pyproj = ">=3"
+pyqtgraph = ">=0.13.3"
+pyflwdir = ">=0.5.12"
+qtpy = ">=2.4.3,<3"
+guidata = ">=3.17.1,<4"
+netcdf4 = ">=1.5"
+xarray = ">=0.19"
+rioxarray = ">=0.13"
+# Requirements of the pip-only mhm, mhm-tools, nml-tools, easy_mpl and cdo wheels.
+cartopy = "*"
+click = ">=8.1"
+crick = "*"
+distributed = "*"
+geopandas = ">=1.1.3,<2"
+h5netcdf = "*"
+h5py = "*"
+jinja2 = "*"
+joblib = "*"
+jsonschema = "*"
+matplotlib-base = ">=3.6.1,<3.11"
+packaging = "*"
+pypdf = ">=3,<6"
+pyyaml = "*"
+rasterio = "*"
+seaborn-base = "*"
+six = "*"
+trogon = ">=0.6.0"
+
+[target.win-64.dependencies]
+# QGIS build _1 imports Protobuf symbols using Abseil's lts_20260526 ABI.
+# Protobuf build _4 uses lts_20260817 despite the unchanged version number.
+qgis = { version = "==4.2.3", build = "py313h07e87ee_1" }
+libprotobuf = { version = "==7.35.1", build = "h1a71995_3" }
+
+[activation.env]
+PYTHONNOUSERSITE = "1"   # ignore ~/.local packages

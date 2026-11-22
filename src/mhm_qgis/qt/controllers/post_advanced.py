@@ -152,6 +152,8 @@ def _compare(dialog) -> None:
         return "", (maps, pair, scores)
 
     def done(result):
+        if not state.workspace:  # its panel went with the analysis layout
+            return
         reason, found = result
         ui.label_postCompareNotes.setText(reason or f"A: {state.run.ref.label}; B: {ref_b.label}; {basin}.")
         if found is None:
@@ -222,6 +224,8 @@ def bind_extremes(dialog) -> None:
     for combo in (ui.comboBox_postExtremeKind, ui.comboBox_postYearStart):
         combo.activated.connect(lambda _index: refresh_extremes(dialog, {"extremes"}))
     ui.comboBox_postExtremesMap.activated.connect(lambda _index: _extremes_map(dialog))
+    ui.tableWidget_postReturnLevels.horizontalHeader().setDefaultAlignment(
+        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)  # like the data
 
 
 def refresh_extremes(dialog, fields) -> None:
@@ -277,31 +281,28 @@ def _draw_extremes(dialog, gauge, kind, reason, found) -> None:
     notes = [reason] if reason else []
     colours, names = {"obs": "k", "sim": "#e6550d"}, {"obs": "Observed", "sim": "Simulated"}
     levels = {}
+    sign = 1 if kind == "max" else -1  # minima by negation: the return period of falling below
     for name, values in found.items():
         annual.plot(values.index.to_numpy(float), values.to_numpy(), pen=pg.mkPen(colours[name], width=1.2),
                     symbol="o", symbolSize=5, symbolBrush=colours[name], name=names[name])
-        if kind != "max":
-            continue
-        x, period = extremes.plotting_positions(values.to_numpy())
-        returns.plot(period, x, pen=None, symbol="o", symbolSize=6, symbolBrush=colours[name], name=names[name])
-        table = extremes.return_levels(values)
+        x, period = extremes.plotting_positions(sign * values.to_numpy())
+        returns.plot(period, sign * x, pen=None, symbol="o", symbolSize=6, symbolBrush=colours[name],
+                     name=names[name])
+        table = extremes.return_levels(sign * values)
         if len(table):
             span = np.geomspace(1.05, 200, 80)
-            returns.plot(span, extremes.gev_quantile(extremes.gev_fit(values.to_numpy()), span),
+            returns.plot(span, sign * extremes.gev_quantile(extremes.gev_fit(sign * values.to_numpy()), span),
                          pen=pg.mkPen(colours[name], width=1.2, style=Qt.PenStyle.DashLine))
-            levels[f"{names[name]} (m³/s)"] = table.set_index("return period (years)")["flow"]
+            levels[f"{names[name]} (m³/s)"] = sign * table.set_index("return period (years)")["flow"]
     years = sorted({int(year) for values in found.values() for year in values.index})
     annual.getAxis("bottom").setTicks([[(year, str(year)) for year in years]])
     annual.setTitle(f"Gauge {gauge}: {ui.comboBox_postExtremeKind.currentText().lower()} per year")
     annual.setLabel("left", "m³/s")
-    if kind == "max":
-        returns.setLogMode(x=True)
-        returns.setLabel("bottom", "Return period (years), Gringorten; dashed: GEV")
-        returns.setLabel("left", "m³/s")
-        if found and not levels:
-            notes.append("The GEV needs ten or more years: empirical return periods only.")
-    elif found:
-        notes.append("Return periods are fitted to annual maxima.")
+    returns.setLogMode(x=True)
+    returns.setLabel("bottom", "Return period (years), Gringorten; dashed: GEV")
+    returns.setLabel("left", "m³/s")
+    if found and not levels:
+        notes.append("The GEV needs ten or more years: empirical return periods only.")
     if levels:
         _fill(ui.tableWidget_postReturnLevels, pd.DataFrame(levels).rename_axis("T (years)"))
     ui.label_postExtremesNotes.setText(" ".join(notes))

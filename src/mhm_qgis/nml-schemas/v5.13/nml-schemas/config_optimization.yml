@@ -7,7 +7,7 @@ properties:
   seed: {type: integer, default: -9, description: "Random-number-generator seed; -9 obtains the seed from the system clock."}
   dds_r: {type: number, default: 0.2, description: Perturbation rate used by Dynamically Dimensioned Search.}
   sa_temp: {type: number, default: -9.0, description: "Initial temperature for simulated annealing; -9 lets the Ben-Ameur (2004) algorithm determine it."}
-  sce_ngs: {type: integer, default: -9, description: "Number of SCE complexes; -9 uses two complexes."}
+  sce_ngs: {type: integer, default: 2, description: "Number of SCE complexes; -9 uses two complexes."}
   sce_npg: {type: integer, default: -9, description: "Points per SCE complex; -9 uses 2n+1 points."}
   sce_nps: {type: integer, default: -9, description: "Points per SCE sub-complex; -9 uses n+1 points."}
   mcmc_opti: {type: boolean, default: false, description: Use MCMC for optimization as well as parameter-uncertainty estimation.}

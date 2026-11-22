@@ -5,6 +5,7 @@ import contextlib
 import os
 import shlex
 import signal
+import subprocess
 import uuid
 
 from qgis.PyQt import QtCore, QtGui, QtWidgets
@@ -38,7 +39,8 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
 
         font = QtGui.QFont("Monospace")
         font.setStyleHint(QtGui.QFont.StyleHint.TypeWriter)
-        self.output.setFont(font)
+        for widget in (self.output, self.prompt_label, self.command_edit):
+            widget.setFont(font)
         self.command_edit.installEventFilter(self)
         bind_terminal(self)
 
@@ -64,8 +66,11 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         """Run a command in the persistent shell session."""
         if on_finished is not None and self._command_marker:
             return False
-        if cwd is not None and not self.ensure_session(cwd):
-            return False
+        if cwd is not None:
+            if not self.ensure_session(cwd):
+                return False
+            # one line: a `cd` typed in the terminal since is invisible to `_cwd`
+            command = f"{self._cd_command(os.path.abspath(cwd))} && {command}"
         if cwd is None and not self.is_running():
             start_cwd = self._cwd or os.getcwd()
             if not self.ensure_session(start_cwd):
@@ -77,7 +82,7 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
             return True
         self._command_marker = f"__MHM_QGIS_DONE_{uuid.uuid4().hex}__="
         self._command_callback = on_finished
-        self._append_text(f"$ {command}\n")
+        self._append_text(f"{self._cwd}: $ {command}\n")
         tracked = (
             f"{command}\r\necho {self._command_marker}%errorlevel%\r\n"
             if os.name == "nt"
@@ -89,6 +94,7 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
     def ensure_session(self, cwd: str) -> bool:
         """Start or reuse the shell session for the requested directory."""
         cwd = os.path.abspath(cwd)
+        self.setWindowTitle(f"Project Terminal — {cwd}")
         if self.is_running():
             if self._cwd != cwd:
                 self._write_command(self._cd_command(cwd))
@@ -124,8 +130,9 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         if os.name == "posix":
             with contextlib.suppress(ProcessLookupError):
                 os.killpg(int(self._process.processId()), signal.SIGTERM)
-        else:
-            self._process.kill()
+        else:  # kill() ends cmd.exe alone: its mhm.exe would keep writing output/
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(int(self._process.processId()))],  # the shell this dialog started
+                           capture_output=True, check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         QtCore.QTimer.singleShot(2000, self._kill_if_running)
 
     def _kill_if_running(self):
@@ -141,6 +148,10 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         """Send the command line contents to the shell."""
         command = self.command_edit.text()
         if not command.strip():
+            return
+        if command.strip() in ("clear", "cls"):  # the shell has no terminal to clear
+            self.command_edit.clear()
+            self.output.clear()
             return
         if not self.is_running():
             self.ensure_session(self._cwd or os.getcwd())
@@ -187,7 +198,7 @@ class ProjectTerminalDialog(QtWidgets.QDialog, Ui_ProjectTerminalDialog):
         if not self.is_running():
             self._append_text("No active shell session.\n")
             return
-        self._append_text(f"$ {command}\n")
+        self._append_text(f"{self._cwd}: $ {command}\n")
         self._process.write((command + "\n").encode("utf-8"))
 
     def _read_output(self) -> None:

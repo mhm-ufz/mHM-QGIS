@@ -1,12 +1,13 @@
 """Small, network-free checks for the private QGIS runtime bootstrap."""
 from __future__ import annotations
 
-import hashlib
 import io
 import json
+import os
 import subprocess
 import sys
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -27,97 +28,89 @@ def test_supported_platforms_and_user_roots(tmp_path):
         runtime.platform_tag("Linux", "arm64")
 
 
-def test_micromamba_download_requires_expected_hash(monkeypatch, tmp_path):
-    payload = b"micromamba"
-    spec = {
-        "url": "https://example.invalid/micromamba",
-        "size": len(payload),
-        "sha256": hashlib.sha256(payload).hexdigest(),
-    }
-    monkeypatch.setattr(
-        runtime, "_manifest", lambda: {"platforms": {"linux-64": spec}}
-    )
+@pytest.mark.skipif(os.name == "nt", reason="the POSIX installer script")
+def test_pixi_from_path_or_else_its_official_installer(monkeypatch, tmp_path):
+    """No pinned binary: pixi on PATH, or ~/.pixi from pixi.sh with the shell profile untouched."""
+    monkeypatch.setenv("PIXI_HOME", str(tmp_path / "pixi-home"))
+    monkeypatch.setattr(runtime.shutil, "which", lambda _name: "/usr/bin/pixi")
+    assert runtime.ensure_pixi(opener=lambda _request: pytest.fail("no download")) == Path("/usr/bin/pixi")
 
-    target = runtime.ensure_micromamba(
-        tmp_path, "linux-64", opener=lambda request: io.BytesIO(payload)
-    )
-    assert target.read_bytes() == payload
+    calls = []
 
-    target.unlink()
-    spec["sha256"] = "0" * 64
-    with pytest.raises(runtime.RuntimeSetupError, match="checksum"):
-        runtime.ensure_micromamba(
-            tmp_path, "linux-64", opener=lambda request: io.BytesIO(payload)
-        )
+    def install(command, **kwargs):
+        calls.append((command, kwargs["input"], kwargs["env"]))
+        binary = tmp_path / "pixi-home/bin/pixi"
+        binary.parent.mkdir(parents=True)
+        binary.touch()
+
+    monkeypatch.setattr(runtime.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(runtime.subprocess, "run", install)
+    assert runtime.ensure_pixi(opener=lambda _request: io.BytesIO(b"echo install")) == tmp_path / "pixi-home/bin/pixi"
+    [(command, script, environment)] = calls
+    assert (command, script) == (["sh"], "echo install")
+    assert environment["PIXI_NO_PATH_UPDATE"] == "1"
+
+
+def _install_fakes(monkeypatch, tmp_path, commands):
+    pixi = tmp_path / "pixi"
+    monkeypatch.setattr(runtime, "platform_tag", lambda: "linux-64")
+    monkeypatch.setattr(runtime, "active_runtime", lambda *args: None)
+    monkeypatch.setattr(runtime, "ensure_pixi", lambda *args: pixi)
+    monkeypatch.setattr(runtime, "_smoke_test", lambda *args: "4.2.3")
+    monkeypatch.setattr(runtime, "_local_wheels", lambda target: target)
+    monkeypatch.setattr(runtime, "_run", lambda command, **kwargs: commands.append(list(command)))
+    return pixi
 
 
 def test_install_records_exact_commands(monkeypatch, tmp_path):
-    micromamba = tmp_path / "bin/micromamba"
     commands = []
-
-    monkeypatch.setattr(runtime, "platform_tag", lambda: "linux-64")
-    monkeypatch.setattr(runtime, "active_runtime", lambda *args: None)
+    pixi = _install_fakes(monkeypatch, tmp_path, commands)
     monkeypatch.setattr(runtime, "_confirm", lambda *args: None)
-    monkeypatch.setattr(runtime, "ensure_micromamba", lambda *args: micromamba)
-    monkeypatch.setattr(runtime, "_smoke_test", lambda *args: "3.44.14")
-    monkeypatch.setattr(runtime, "_local_wheels", lambda target: target)
-    monkeypatch.setattr(
-        runtime, "_run", lambda command, **kwargs: commands.append(list(command))
-    )
-    previous = tmp_path / "envs/old"
-    previous.mkdir(parents=True)
-    (tmp_path / runtime.MARKER).write_text(json.dumps({"prefix": str(previous)}))
+    legacy = tmp_path / "mamba/pkgs"  # the micromamba runtime's layout goes
+    legacy.mkdir(parents=True)
 
     marker = runtime.install_runtime(yes=True, root=tmp_path)
-    assert not previous.exists()
-    assert marker["prefix"] == str(tmp_path / "envs/mhm-qgis")
-
-    assert "create" in commands[0]
-    assert commands[0][-2] == "--file"
+    assert not legacy.parent.exists()
+    assert marker["prefix"] == str(tmp_path / ".pixi/envs/default")
+    manifest = tmp_path / "pixi.toml"
+    assert manifest.read_bytes() == runtime._manifest()
+    assert commands[0] == [pixi, "install", "--manifest-path", manifest]
+    assert commands[1][:5] == [pixi, "run", "--frozen", "--manifest-path", manifest]
     # the user's own mhm-qgis, repacked under the runtime root, not looked up on PyPI
     assert commands[1][-3] == "--find-links"
     assert commands[1][-2].parent == tmp_path
     assert commands[1][-1] == f"mhm-qgis[full]=={runtime.__version__}"
-    assert marker["qgis_version"] == "3.44.14"
+    assert marker["qgis_version"] == "4.2.3"
     assert json.loads((tmp_path / runtime.MARKER).read_text()) == marker
 
 
-def test_an_unchanged_lock_only_reinstalls_mhm_qgis(monkeypatch, tmp_path):
-    """An upgrade with the same lock keeps the environment: no create, no download."""
+def test_an_unchanged_manifest_only_reinstalls_mhm_qgis(monkeypatch, tmp_path):
+    """An upgrade with the same pixi.toml keeps the environment: no solve, no download."""
     commands = []
-    monkeypatch.setattr(runtime, "platform_tag", lambda: "linux-64")
-    monkeypatch.setattr(runtime, "active_runtime", lambda *args: None)
+    _install_fakes(monkeypatch, tmp_path, commands)
     monkeypatch.setattr(runtime, "_confirm", lambda *args: pytest.fail("no download to confirm"))
-    monkeypatch.setattr(runtime, "ensure_micromamba", lambda *args: tmp_path / "bin/micromamba")
-    monkeypatch.setattr(runtime, "_smoke_test", lambda *args: "3.44.14")
-    monkeypatch.setattr(runtime, "_local_wheels", lambda target: target)
-    monkeypatch.setattr(runtime, "_run", lambda command, **kwargs: commands.append(list(command)))
-    prefix = tmp_path / "envs/mhm-qgis"
+    prefix = tmp_path / ".pixi/envs/default"
     (prefix / "bin").mkdir(parents=True)
     (prefix / "bin/python").touch()
     (tmp_path / runtime.MARKER).write_text(json.dumps(
-        {"app_version": "0.0.0", "lock_sha256": runtime._lock_digest("linux-64"), "prefix": str(prefix)}))
+        {"app_version": "0.0.0", "manifest_sha256": runtime._manifest_digest(), "prefix": str(prefix)}))
 
     marker = runtime.install_runtime(yes=True, root=tmp_path)
-    assert len(commands) == 1
-    assert "pip" in commands[0]
-    assert "create" not in commands[0]
-    assert (prefix / "bin/python").is_file()
+    [command] = commands
+    assert command[1] == "run"
+    assert "pip" in command
     assert marker["app_version"] == runtime.__version__
 
 
-def test_relaunch_uses_private_prefix(monkeypatch, tmp_path):
+def test_relaunch_runs_through_pixi(monkeypatch, tmp_path):
     calls = []
-    marker = {"platform": "linux-64", "prefix": str(tmp_path / "env")}
     monkeypatch.setenv("PYTHONPATH", "/host/src")
-    monkeypatch.setattr(
-        runtime.subprocess,
-        "call",
-        lambda command, env: calls.append((command, env)) or 7,
-    )
+    monkeypatch.setattr(runtime, "ensure_pixi", lambda *args: tmp_path / "pixi")
+    monkeypatch.setattr(runtime.subprocess, "call", lambda command, env: calls.append((command, env)) or 7)
 
-    assert runtime.relaunch(marker, ["--help"], tmp_path) == 7
+    assert runtime.relaunch(["--help"], tmp_path) == 7
     command, environment = calls[0]
+    assert command[:5] == [str(tmp_path / "pixi"), "run", "--frozen", "--manifest-path", str(tmp_path / "pixi.toml")]
     assert command[-4:] == ["python", "-m", "mhm_qgis_runtime.app", "--help"]
     assert environment[runtime.IN_RUNTIME] == "1"
     assert environment["PYTHONNOUSERSITE"] == "1"
@@ -150,7 +143,7 @@ def _installed(site, name, version, files, purelib=True, requires=()):
 
 def test_runtime_repacks_the_installed_pure_packages_for_pip(monkeypatch, tmp_path):
     """The runtime takes mhm-qgis and its pure-Python packages from this install
-    (TestPyPI, a local wheel, unreleased ones); compiled ones come from the lock or PyPI."""
+    (TestPyPI, a local wheel, unreleased ones); compiled ones come from pixi.toml or PyPI."""
     site = tmp_path / "site"
     _installed(site, "mhm-qgis", "9.9", ["mhm_qgis_fake/__init__.py", "mhm_qgis_fake/__pycache__/a.pyc"],
                requires=["pure-dep>=1", "compiled-dep", 'absent-dep[x]>=1; extra == "full"'])

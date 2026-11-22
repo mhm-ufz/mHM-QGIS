@@ -14,6 +14,7 @@ from ...core import multi_domain
 from ...core.handlers.state import nml_settings
 from ...core.handlers.store.layout import ensure_multi_structure
 from ..dialogs.file_picker import open_directory
+from . import post_context
 from .version import selected as selected_version
 from .workflow_state import switch_busy
 
@@ -27,6 +28,14 @@ def populate_setups(dialog, selected=None):
                 combo.addItem(path.name, path.name)
         combo.addItem("<new>", None)
         combo.setCurrentIndex(max(0, combo.findData(selected) if selected else 0))
+    chosen(dialog)
+
+
+def chosen(dialog):
+    """`<new>` creates a combined setup, a listed one opens: the button says which."""
+    new = dialog.comboBox_multiDomainFolderSelector.currentData() is None
+    dialog.pushButton_createorLoadMultiDomainStructure.setText("New" if new else "Open")
+    return new
 
 
 def create_or_load(dialog):
@@ -49,7 +58,8 @@ def create_or_load(dialog):
         else:
             root = multi_domain.multi_folder(directory, name)
         dialog.save_input_state()  # the setup being left
-        dialog.project_folder = str(root)
+        dialog.setup_folder = str(root)
+        post_context.clear(dialog)  # the run of the setup being left
         if name is None:
             dialog._multi_domains = []
             dialog.save_input_state()
@@ -77,7 +87,7 @@ def add_domain(dialog):
         QMessageBox.warning(dialog, "Add domain", "Create or open a multi-domain setup first.")
         return False
     path = dialog.lineEdit_domainFolder.text().strip()
-    root = dialog.project_folder
+    root = dialog.setup_folder
     existing = multi_domain.resolve(root, dialog._multi_domains)
     reason = multi_domain.validate_domain(path, selected_version(dialog), root, existing) if path \
         else "Choose a domain folder first."
@@ -103,7 +113,7 @@ def refresh_table(dialog):
     table.setRowCount(len(domains))
     for row, stored in enumerate(domains):
         item = QTableWidgetItem(stored)
-        item.setToolTip(str(multi_domain.resolve(dialog.project_folder, [stored])[0]))
+        item.setToolTip(str(multi_domain.resolve(dialog.setup_folder, [stored])[0]))
         table.setItem(row, 0, item)
         button = QToolButton(text="✕")
         button.setStyleSheet("color: #c0392b; font-weight: bold;")
@@ -118,7 +128,7 @@ def prepare(dialog):
     if dialog._multi_domains is None:
         QMessageBox.warning(dialog, "Prepare", "Create or open a multi-domain setup first.")
         return False
-    root, version = dialog.project_folder, selected_version(dialog)
+    root, version = dialog.setup_folder, selected_version(dialog)
     paths = multi_domain.resolve(root, dialog._multi_domains)
     errors, warnings = multi_domain.validate_set(paths, version, root)
     for warning in warnings:
@@ -129,6 +139,9 @@ def prepare(dialog):
         return False
     copied = multi_domain.prepare(paths, version, root)
     nml_settings.update_section(root, multi_domain.SECTION, {"domains": list(dialog._multi_domains)})
+    if not version.startswith("6"):
+        for note in multi_domain.combined_inputs(root):
+            dialog.log_message(f"Combined inputs: {note}")
     names = ", ".join(Path(path).name for path in paths)
     dialog.log_message(f"Combined run prepared for {names}. Open Edit Namelists to review it.")
     if copied:

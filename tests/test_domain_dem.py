@@ -170,22 +170,22 @@ def test_an_unchanged_export_is_kept_and_a_changed_or_linked_one_rewritten(tmp_p
     task = type("Task", (), {"isCanceled": lambda self: False,
                              "setProgress": lambda self, value: progress.append(value)})()
 
-    write_domain_dem_ascii(dem, output, L0, None, project_folder=tmp_path, task=TaskShare(task, 50, 100))
+    write_domain_dem_ascii(dem, output, L0, None, setup_folder=tmp_path, task=TaskShare(task, 50, 100))
     written = output.stat().st_mtime_ns
     assert progress == [100.0]  # One 64-row block, reported inside its 50-100 % share.
     os.utime(output, ns=(written - 10**9, written - 10**9))       # Would change on a rewrite.
     kept = output.stat().st_mtime_ns
-    write_domain_dem_ascii(dem, output, L0, None, project_folder=tmp_path)
+    write_domain_dem_ascii(dem, output, L0, None, setup_folder=tmp_path)
     assert output.stat().st_mtime_ns == kept                        # unchanged input: skipped
 
     os.utime(dem, ns=(written + 10**9, written + 10**9))
-    write_domain_dem_ascii(dem, output, L0, None, project_folder=tmp_path)
+    write_domain_dem_ascii(dem, output, L0, None, setup_folder=tmp_path)
     assert output.stat().st_mtime_ns != kept                        # changed input: rewritten
 
     elsewhere = tmp_path / "source_domain.asc"
     output.rename(elsewhere)
     output.symlink_to(elsewhere)
-    write_domain_dem_ascii(dem, output, L0, None, project_folder=tmp_path)
+    write_domain_dem_ascii(dem, output, L0, None, setup_folder=tmp_path)
     assert not output.is_symlink()                                   # a clone's link is replaced
     assert output.read_bytes() == elsewhere.read_bytes()
 

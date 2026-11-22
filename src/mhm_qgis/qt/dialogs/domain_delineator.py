@@ -49,6 +49,7 @@ from ..ui import load_form
 from ..workflows import hydrology
 from .discharge_assignment import discharge_table
 from .file_picker import open_file
+from .input_selection import elide_named_left
 
 Ui_DomainDelineatorDialog = load_form("domain_delineator_dialog.ui")
 
@@ -69,13 +70,14 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
     ):
         super().__init__(main_dialog)
         self.setupUi(self)
+        elide_named_left(self)  # long paths keep their file name in sight
         self.main_dialog = main_dialog
-        self.project_folder = str(main_dialog.project_folder)
+        self.setup_folder = str(main_dialog.setup_folder)
         self.pour_points_layer = pour_points_layer
         self.outlet_id_field = str(outlet_id_field)
         self.outlet_ids = [str(value) for value in outlet_ids]
         self.workflow = DomainWorkflow(
-            self.project_folder,
+            self.setup_folder,
             pour_points_layer,
             outlet_id_field,
             self.outlet_ids,
@@ -272,6 +274,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         self._stage_current_outlet()
         self._stop_picking()
         self.current_outlet_id = str(outlet_id or "")
+        self.pushButton_nextGaugePoint.setEnabled(
+            self.listWidget_outlets.currentRow() + 1 < self.listWidget_outlets.count())
         if not self.current_outlet_id:
             self._outlet_marker.hide()
             return
@@ -348,7 +352,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
     def _path_label(self, path):
         try:
             return Path(path).resolve().relative_to(
-                Path(self.project_folder).resolve()).as_posix()
+                Path(self.setup_folder).resolve()).as_posix()
         except ValueError:
             return str(Path(path).resolve())
 
@@ -441,7 +445,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
 
     def eventFilter(self, watched, event):
         if self._picking and event.type() == QEvent.Type.MouseButtonPress:
-            position = self.canvas.mapFromGlobal(event.globalPos())
+            point = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()  # Qt6/Qt5
+            position = self.canvas.mapFromGlobal(point)
             if not self.canvas.rect().contains(position):
                 self._stop_picking()
                 QMessageBox.warning(
@@ -506,14 +511,14 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         self.main_dialog.task_coordinator.submit(
             "domain-watershed-preview",
             f"Preview watershed {outlet_id}",
-            partial(delineation.show, project_folder=self.project_folder,
+            partial(delineation.show, setup_folder=self.setup_folder,
                     filled_dem=self.workflow.filled_dem_path, outlet=options),
             controls=(
                 self.pushButton_showDelineation,
                 self.pushButton_pickLocation,
                 self.pushButton_generateChannelNetwork,
-                self.pushButton_nextPourPoint,
-                self.pushButton_save,
+                self.pushButton_nextGaugePoint,
+                self.pushButton_setDomainDefinition,
                 self.listWidget_outlets,
             ),
             on_success=lambda result: self._watershed_preview_ready(
@@ -529,7 +534,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         if outlet_id != self.current_outlet_id:
             return
         try:
-            save_preview(self.project_folder, self.state["pour_points_source"],
+            save_preview(self.setup_folder, self.state["pour_points_source"],
                          self.outlet_id_field, outlet_id, result)
             record = self._draft_state["outlets"][outlet_id]
             record["delineation"] = result
@@ -621,13 +626,13 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 dem_domain = (
                     int(proposed_state["dem_domain_id"]),
                     self.workflow.dem_mask_path(),
-                    domain_dem_path(self.project_folder, "dem_extent"),
+                    domain_dem_path(self.setup_folder, "dem_extent"),
                 )
-            merged_path = DomainWorkflow.merged_mask_path(self.project_folder)
+            merged_path = DomainWorkflow.merged_mask_path(self.setup_folder)
             self._watershed_layer = None
             self._refresh_canvas()
             options = {
-                "project_folder": self.project_folder,
+                "setup_folder": self.setup_folder,
                 "filled_dem": self.workflow.filled_dem_path,
                 "outlets": outlets,
                 "dem_domain": dem_domain,
@@ -639,8 +644,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 partial(delineation.save, **options),
                 controls=(
                     self.pushButton_showDelineation,
-                    self.pushButton_nextPourPoint,
-                    self.pushButton_save,
+                    self.pushButton_nextGaugePoint,
+                    self.pushButton_setDomainDefinition,
                     self.pushButton_pickLocation,
                     self.pushButton_generateChannelNetwork,
                     self.listWidget_outlets,
@@ -677,8 +682,8 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                     "mask_value": saved["mask_value"],
                     "catchment_area_m2": saved["catchment_area_m2"],
                     "mask_path": saved["raster_path"],
-                    "domain_directory": morph_folder(self.project_folder),
-                    "dem_path": domain_dem_path(self.project_folder, outlet_id),
+                    "domain_directory": morph_folder(self.setup_folder),
+                    "dem_path": domain_dem_path(self.setup_folder, outlet_id),
                 }
             )
             if record.get("is_gauged"):
@@ -688,10 +693,10 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         proposed_state["merged_mask_path"] = result["merged_path"]
         proposed_state["dem_mask_path"] = result.get("dem_mask_path") or ""
         if result.get("dem_domain_path"):
-            proposed_state["dem_domain_directory"] = morph_folder(self.project_folder)
+            proposed_state["dem_domain_directory"] = morph_folder(self.setup_folder)
             proposed_state["dem_domain_path"] = result["dem_domain_path"]
         registry.register(
-            self.project_folder,
+            self.setup_folder,
             result["merged_path"],
             name="4_watershed_merged",
             loaded=False,
@@ -700,13 +705,13 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
             proposed_state, self.pour_points_layer
         )
         self.workflow.write_gauges(prepared)
-        save_state(self.project_folder, proposed_state)
+        save_state(self.setup_folder, proposed_state)
         self.workflow.remove_deselected_gauges(
             previously_gauged, proposed_state
         )
         from ...core.handlers.state.nml_settings import sync_domain_settings
 
-        sync_domain_settings(self.project_folder)
+        sync_domain_settings(self.setup_folder)
         self._domain_state_saved(proposed_state)
 
     def _domain_files_ready(
@@ -729,7 +734,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
     def _domain_state_saved(self, proposed_state):
         self.state = proposed_state
         self._draft_state = copy.deepcopy(proposed_state)
-        sync_domain_settings(self.main_dialog.project_folder)
+        sync_domain_settings(self.main_dialog.setup_folder)
         self.main_dialog.save_input_state()
         self.main_dialog.update_gauged_outlet_count()
         self._show_saved_watershed(
@@ -762,7 +767,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
         result = None
         try:
             options = self._outlet_options(self.current_outlet_id)
-            result = cached_delineation(self.project_folder, self.workflow.filled_dem_path,
+            result = cached_delineation(self.setup_folder, self.workflow.filled_dem_path,
                                         options["x"], options["y"], record.get("delineation"))
             if result:
                 self._watershed_layer = self._mask_layer(
@@ -840,6 +845,7 @@ class DomainDelineatorDialog(QDialog, Ui_DomainDelineatorDialog):
                 self.canvas.scene().removeItem(self._outlet_marker)
             self._outlet_marker = None
         self.canvas.setLayers([])
+        self._watershed_layer = self._filled_dem_layer = self._flow_accumulation_layer = self._channel_layer = None
 
     def closeEvent(self, event):
         if self._domain_jobs_busy():

@@ -44,7 +44,7 @@ def test_dialog_prerequisites_keep_required_and_optional_input_checks(monkeypatc
     )
     layers = {}
     dialog = SimpleNamespace(
-        project_folder="",
+        setup_folder="",
         input_combo=lambda name: SimpleNamespace(currentLayer=lambda: layers.get(name)),
     )
     for folder, dem, points, needs_points, expected_message in (
@@ -54,7 +54,7 @@ def test_dialog_prerequisites_keep_required_and_optional_input_checks(monkeypatc
         ("project", object(), None, False, None),
         ("project", object(), object(), True, None),
     ):
-        dialog.project_folder = folder
+        dialog.setup_folder = folder
         layers.update(dem=dem, pour_points=points)
         messages.clear()
         assert MhmQgisDialog.check_prerequisites(dialog, needs_points) is (expected_message is None)
@@ -66,7 +66,7 @@ def test_dialog_maps_new_combos_and_lists_no_project_files(tmp_path):
     (tmp_path / "dem.tif").touch()
 
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.refresh_input_sources()
 
     assert isinstance(dialog.input_combo("dem"), InputComboAdapter)
@@ -123,7 +123,7 @@ def test_the_land_use_eye_shows_the_prepared_periods(tmp_path, monkeypatch):
 
     processing.mark_workflow(tmp_path, "execute_all_morphology", "completed")  # A's files count once A has run
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     project_tree.refresh(dialog)
     assert project_tree.item(dialog, "lc").text(project_tree.STATUS_COLUMN) == "✅"
     project_tree.view(dialog, "lc", True)
@@ -142,7 +142,7 @@ def test_project_without_saved_state_clears_previous_project_inputs(tmp_path):
     raster.touch()
 
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(first_project)
+    dialog.setup_folder = str(first_project)
     dialog._categorical_ready_configs["soil"] = {"input_path": str(raster)}
     dialog._categorical_modes["soil"] = "Single Categorical Layer (with Lookup Table)"
     main.check(dialog, "soil", dialog._categorical_modes["soil"])
@@ -156,7 +156,7 @@ def test_project_without_saved_state_clears_previous_project_inputs(tmp_path):
         "class_field": "class",
     }
 
-    dialog.project_folder = str(second_project)
+    dialog.setup_folder = str(second_project)
     dialog.load_input_state()
 
     assert dialog._categorical_ready_configs == {}
@@ -178,7 +178,7 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     layer = QgsVectorLayer(str(pour_points), "pour points", "ogr")
 
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.input_combo("pour_points").setLayer(layer)
 
     fields = [
@@ -207,7 +207,7 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     save_state(tmp_path, {"outlet_id_field": "outlet_name"})
 
     restored = MhmQgisDialog()
-    restored.project_folder = str(tmp_path)
+    restored.setup_folder = str(tmp_path)
     restored.load_input_state()
 
     assert main.selected_outlet_id_field(restored) == "outlet_name"
@@ -215,30 +215,37 @@ def test_pour_point_fields_and_domain_choice_round_trip(tmp_path):
     assert restored.buttonGroup_domainDefinition.checkedButton().text() == main.DOMAIN_TYPES[0]
     restored.close()
 
+    state["domain_definition_type"] = "Select Catchments in Domain [using Domain Delineator]"  # an earlier label
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    restored = MhmQgisDialog()
+    restored.setup_folder = str(tmp_path)
+    restored.load_input_state()
+    assert restored._domain_definition_mode == main.DOMAIN_TYPES[1] == "Delineate Domain"
+    assert restored.buttonGroup_domainDefinition.checkedButton() is restored.radioButton_domainDefinitionDelineator
+    restored.close()
+
 
 
 def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
     from dataclasses import asdict
 
-    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
-    from mhm_qgis.qt.controllers import forcing, grid
+    from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec
+    from mhm_qgis.qt.controllers import forcing
     folder = tmp_path / "forcing"
     folder.mkdir()
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog._loading_input_state = True
-    grid.refresh_precipitation_folder(dialog)
-    grid.select_precipitation_folder(dialog, str(folder))
     dialog._meteo_inputs = {v: asdict(MeteoFolderSpec(v, str(folder), unit=unit))
                             for v, unit in (("pre", "mm"), ("tavg", "K"))}
-    dialog.spinBox_L2ResolutionMultiplier.setValue(4)
+    dialog.lineEdit_L2Resolution.setText("4000.0")
     dialog._loading_input_state = False
     dialog.save_input_state()
     dialog.close()
     restored = MhmQgisDialog()
-    restored.project_folder = str(tmp_path)
+    restored.setup_folder = str(tmp_path)
     restored.load_input_state()
-    assert restored.spinBox_L2ResolutionMultiplier.value() == 4
+    assert restored.lineEdit_L2Resolution.text() == "4000.0"
     assert restored.tableWidget_meteoInputs.rowCount() == 2
     assert [s.kind for s in forcing.selected_meteo_specs(restored)] == ["pre", "tavg"]
     assert restored._meteo_inspections == {}
@@ -248,10 +255,10 @@ def test_meteo_variable_and_multiplier_state_round_trip(tmp_path):
 def test_meteo_requires_pre_but_not_unconfigured_variables(tmp_path):
     from dataclasses import asdict
 
-    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+    from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec
     from mhm_qgis.qt.controllers import forcing
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     with pytest.raises(ValueError, match="precipitation"):
         forcing.selected_meteo_specs(dialog)
     dialog._meteo_inputs = {"pre": asdict(MeteoFolderSpec("pre", str(tmp_path), unit="mm"))}
@@ -262,10 +269,10 @@ def test_meteo_requires_pre_but_not_unconfigured_variables(tmp_path):
 def test_meteo_runs_only_the_variables_the_process_cases_read(tmp_path):
     from dataclasses import asdict
 
-    from mhm_qgis.core.meteorology.forcing import MeteoFolderSpec
+    from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec
     from mhm_qgis.qt.controllers import forcing
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.comboBox_mHMversion.setCurrentText("5.13")
     dialog._process_cases = {"pet": 0}  # pet is read, not estimated from tmin/tmax
     dialog._meteo_inputs = {v: asdict(MeteoFolderSpec(v, str(tmp_path), unit="mm"))
@@ -280,12 +287,12 @@ def test_a_geopackage_pour_point_layer_is_restored(tmp_path):
     gpkg.parent.mkdir(parents=True)
     gpkg.touch()
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     main.add_file_input(dialog, "pour_points", f"{gpkg}|layername=gauges", manual=True)
     dialog.save_input_state()
     dialog.close()
     restored = MhmQgisDialog()
-    restored.project_folder = str(tmp_path)
+    restored.setup_folder = str(tmp_path)
     restored.load_input_state()
     assert restored.comboBox_pourPointInput.currentData()["path"] == f"{gpkg}|layername=gauges"
     restored.close()
@@ -297,7 +304,7 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     latlon.parent.mkdir(parents=True)
     latlon.touch()
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     processing.mark_workflow(
         tmp_path,
         "execute_all_meteo",
@@ -306,17 +313,26 @@ def test_combined_workflow_green_state_restores_from_workspace(tmp_path):
     dialog.close()
 
     restored = MhmQgisDialog()
-    restored.project_folder = str(tmp_path)
+    restored.setup_folder = str(tmp_path)
     workflow_state.refresh_all(restored)
 
-    assert "#2e7d32" in project_tree.button(restored, "meteorology").styleSheet()
+    assert "#a5d6a7" in project_tree.button(restored, "meteorology").styleSheet()
     restored.close()
 
 
+
+def test_observations_green_state_restores_on_its_tree_button(tmp_path):
+    _app()
+    processing.mark_workflow(tmp_path, "execute_all_observations", "completed")
+    dialog = MhmQgisDialog()
+    dialog.setup_folder = str(tmp_path)
+    workflow_state.refresh_all(dialog)
+
+    assert "#a5d6a7" in project_tree.button(dialog, "observations").styleSheet()
+    dialog.close()
+
 @pytest.mark.parametrize(("workflow", "button"), [
     ("project_structure", "pushButton_createOrLoadDomainStructure"),
-    ("scan_precipitation", "pushButton_scanPrecipitationFiles"),
-    ("execute_all_observations", "pushButton_executeAllObservation"),
     ("run_mhm", "pushButton_execute_mHM"),
 ])
 def test_additional_workflow_green_state_restores(
@@ -324,17 +340,17 @@ def test_additional_workflow_green_state_restores(
     _app()
     processing.mark_workflow(tmp_path, workflow, "completed")
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     workflow_state.refresh_all(dialog)
 
-    assert "#2e7d32" in getattr(dialog, button).styleSheet()
+    assert "#a5d6a7" in getattr(dialog, button).styleSheet()
     dialog.close()
 
 
 def test_meteorology_completion_is_independent_of_latlon(tmp_path):
     _app()
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     processing.mark_workflow(
         tmp_path,
         "execute_all_meteo",
@@ -343,10 +359,10 @@ def test_meteorology_completion_is_independent_of_latlon(tmp_path):
     dialog.close()
 
     restored = MhmQgisDialog()
-    restored.project_folder = str(tmp_path)
+    restored.setup_folder = str(tmp_path)
     workflow_state.refresh_all(restored)
 
-    assert "#2e7d32" in project_tree.button(restored, "meteorology").styleSheet()
+    assert "#a5d6a7" in project_tree.button(restored, "meteorology").styleSheet()
     assert processing.workflow(tmp_path, "execute_all_meteo")["status"] == "completed"
     restored.close()
 
@@ -364,7 +380,7 @@ def test_qgis_removing_layers_keeps_the_saved_grid_and_outlet_field(tmp_path):
     points = QgsVectorLayer(str(pour_points), "pour points", "ogr")
     QgsProject.instance().addMapLayers([dem, points])
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.input_combo("dem").setLayer(dem)
     dialog.input_combo("pour_points").setLayer(points)
     assert main.selected_outlet_id_field(dialog) == "station_id"
@@ -408,10 +424,34 @@ def test_a_geotiff_without_a_crs_asks_for_one_like_an_ascii_grid(tmp_path, monke
     assert (details.variable, details.source_crs) == ("dem", "EPSG:4326")
 
     dialog = MhmQgisDialog()  # a DEM saved before it was asked: Set Gauges asks once
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     main.add_file_input(dialog, "dem", str(plain), manual=True)
     dialog.check_prerequisites = lambda: True
     assert hydrology.dem_options(dialog)["source_crs"] == "EPSG:4326"
     assert hydrology.dem_options(dialog)["source_crs"] == "EPSG:4326"
     assert len(seen) == 2
+    dialog.close()
+
+
+def test_a_long_path_shows_its_file_name(monkeypatch):
+    from qgis.PyQt import QtWidgets
+    from qgis.PyQt.QtCore import Qt
+
+    shown = []
+
+    class Painter(QtWidgets.QStylePainter):  # records the label each combo paints
+        def drawControl(self, element, option):
+            shown.append(option.currentText)
+            super().drawControl(element, option)
+
+    monkeypatch.setattr(QtWidgets, "QStylePainter", Painter)
+    dialog = MhmQgisDialog()
+    combo = dialog.comboBox_gaugeRaterInput
+    combo.addItem("/data/" + "a-long-folder/" * 20 + "idgauges.asc")
+    combo.setCurrentIndex(combo.count() - 1)
+    combo.resize(220, 30)
+    combo.grab()
+    assert shown[-1].startswith("\N{HORIZONTAL ELLIPSIS}")
+    assert shown[-1].endswith("idgauges.asc")
+    assert combo.view().textElideMode() == Qt.TextElideMode.ElideLeft
     dialog.close()

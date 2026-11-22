@@ -10,7 +10,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
 ## Configuration And Morphology
 
 - Setups live at `<project>/mhm-qgis/<domain-name>`. The main dialog keeps the
-  outer folder in `project_directory`; `project_folder` is the active domain
+  outer folder in `project_directory`; `setup_folder` is the active domain
   root passed to core APIs. Never pass the outer folder to a new setup's state API.
 - Browse Project populates `comboBox_domainFolderSelector` with named setups and
   `<new>` last; it does not restore inputs or scan forcing. Create Project Structure
@@ -29,6 +29,10 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   `page_singleDomain` (work type 0) and `page_multiDomain` (work type 1, combine
   domains); the mRM-only type 2 stays disabled. Do not restore the removed steps
   stacked widget.
+- **Post processing only** (work type 3, `page_postProcessingOnly`): the project folder is an
+  mHM setup that has run. Set checks its namelists and `output/`; the page's CRS Set makes the
+  folder itself `setup_folder` and loads `output/`. No mhm-qgis structure is created; only the
+  input state (version, CRS) is written. The tree keeps Introduction, Domain Setup and Outputs.
 - **Multi-domain setups** live at `<project>/mhm-qgis-multi/<name>/` (`.temp/`, `output/`,
   `restart/` and the combined namelists only). They prepare nothing: they combine
   single-domain setups that already run on their own, and **domains are read, never
@@ -54,17 +58,15 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
     ragged arrays): the editor dimension `nGaugesTotal` is the widest row, while the value
     `nGaugesTotal` is the sum, which mHM needs for its discharge buffers.
   - Switching the work type closes an open setup of the other kind.
-- `pushButton_scanPrecipitationFiles` is the explicit metadata scan boundary.
-  The selected folder and relative `lineEdit_precipitationGlobDefinition` determine
-  the file set, never a recursive search of every NetCDF in the project. No scan
-  runs during project restoration. The worker returns metadata; the controller
-  updates coverage, the multiplier default, and the persisted common grid.
-- Precipitation Scan and Add/Edit Meteorology open `meteo_var_details_input.ui`.
-  Only OK (Set, when embedded on a forcing row's page) starts metadata inspection; Cancel
-  leaves saved inputs unchanged. The
-  variable table is populated after successful inspection and restores without scanning.
+- A forcing's Set (`meteo_var_details_input.ui`, embedded on its row's page; precipitation
+  has its own `page_precipitation`, which also holds the simulation period) is the explicit
+  metadata scan boundary: the folder and relative glob fix the file set, never a recursive
+  search. No scan runs during project restoration. A Set input must cover the common extent
+  once the grid is Set; the form's `label_description` says whether it is copied, shifted or
+  resampled onto L2 (`format_meteo.grid_note`). Add/Edit in the variable table opens the same
+  form; Cancel leaves saved inputs unchanged.
 - Forcings: `pre`, `tavg`, `tmin`, `tmax`, `tann`, `pet`, `ssrd`, `strd`, `netrad`, `eabs`,
-  `windspeed` (`layout.METEO_VARIABLES`, `forcing/temporal.VARIABLES`, `forcing/types`,
+  `windspeed` (`layout.METEO_VARIABLES`, `mhm_tools.pre.format_meteo.VARIABLES` and `_KINDS`,
   `state/nml_outputs.METEO_FIELDS`, and `comboBox_meteoVar` must list the same names;
   `test_meteo_combo_offers_every_prepared_forcing` checks the form). `netrad` (W m-2) is
   what PET Priestley-Taylor (case 2) and Penman-Monteith (case 3) read, with `eabs` and
@@ -83,23 +85,52 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   during execution, in that order. Cumulative sequences must be continuous across files;
   missing prefixes or ambiguous interval conventions fail rather than guessing.
   CF bounds describe intervals; recognized ERA cumulative variables use interval ends.
+  Any other stamp stands for the calendar period holding it, so month-end or 23:00 stamps
+  (mHM's own observation files) are whole months and days.
+  - `cumulative_reset` (`groupBox_cumulative`) is the last hour, day or month a cycle
+    covers; the default is the period's last, so ERA5-Land is Daily/23.
+  - `comboBox_varName` sets `MeteoFolderSpec.variable` when no alias names the source.
+  - The form picks a file (`comboBox_inputFile`; its name becomes the glob); the input is still saved as
+    `folder` + `pattern`. Scan Files reads every matching file's metadata through the cached
+    inspection that Set reuses. A meteo Set needs the saved Time Period first and checks it.
+  - The Time Period page (`controllers/time.py`, `time_period_netcdf_input.ui`) takes its
+    proposal from `format_meteo.get_meteo_time_window`: a glob's time variable alone. `spinBox_warmingDays`
+    and the evaluation start follow each other.
+  - Observations are prepared on L1, and their Set checks coverage as meteo does.
+  - A cumulative record's window starts at its first cycle start (ERA5-Land's first 00:00
+    stamp is the previous day's total); output is always stamped at interval starts, the
+    only coordinate v5.13 reads.
+  - Continuity is one stamp per consecutive calendar period. Data cover up to the end of
+    their last period: v6 runs to `sim_end` exclusive, v5.13 through the day `sim_end`.
+  - v5.13 needs one forcing step for all variables (Daily or Hourly). Its files are
+    `<var>/<var>.nc` except `netrad/net_rad.nc`, `ssrd/strd.nc` and `tavg/tann.nc`
+    (`layout.meteo_file`); a file's variable is named after its stem.
   Fingerprints include all options and files. Display selects actual timestamps,
   not arithmetic day offsets.
 - `dateTimeEdit_simulationStartTimeInput`, `dateTimeEdit_evaluationStartTimeInput`
   and `dateTimeEdit_simulationEndTimeInput` persist under `nml-settings.json:time`.
   Core validates start <= evaluation <= end, whole dates for v5 and whole hours
   for v6, then hands periods to nml-tools. Meteorology validates input coverage.
-- Scan establishes the common grid before either execution. `core/grid/raster.py`
-  reads DEM metadata only (a warped VRT when CRS conversion is necessary).
-- The ▶ of A. Morphology schedules `EXECUTE_ALL_STAGES`: NetCDF DEM
+- The Resolution page's Set establishes the common grid before either execution.
+  `core/grid/raster.raster_grid` reads a reference file's or the DEM's grid only (a warped VRT
+  when CRS conversion is necessary).
+- The ▶ of A. Morphology (on its `Process` row, as is the ↺) enters `core/executions/morphology.main`,
+  which schedules `EXECUTE_ALL_STAGES`: NetCDF DEM
   derivatives, saved gauge positions, morphology mask, categorical inputs, LAI,
   then one version-aware publication stage. Snapping and delineation must already
   be saved by Domain Delineator. There are no late crop, per-outlet link or
   per-outlet DEM stages.
-- The ▶ of B. Meteorology runs only `core/executions/meteo`, never morphology.
-- A DEM derivative's row can replace it in `dem_derivatives.nc` with a raster on the same
-  grid covering the whole DEM (`core/handlers/raster/tasks.override_derivative`); a new DEM
-  rebuilds the bundle and drops it.
+- The ▶ of B. Meteorology (on its `Process` row) runs only `core/executions/meteo.main`, never
+  morphology; C. Observations' enters `core/executions/observations.main`.
+- The derivatives the process cases need (slope, aspect, fdir, facc) have their own tree rows
+  after DEM, all on `page_dem_derivatives_var`. Unticking "Derived from the DEM grid" takes a
+  replacement raster: its Set (`grid.set_derivative`) wants the domain CRS (derivatives are never
+  resampled), L0's cells and the whole DEM covered. The ▶ places it as the DEM, shifted under half
+  a cell, then cropped or padded with no data (`dem_derivative_files(replacements=)`, which
+  fingerprints it). Replacing fdir leaves facc derived from the DEM's directions; Set warns. The
+  morphology summary gives each input's own grid, extent modification and regridding
+  (`grid.summary`); the inline Replace box is `ReplaceBox`, the reference-file form's logic on
+  the main dialog's widgets.
 - DEM processing does not modify mHM-tools. Derive terrain on the real DEM first, then place all
   variables once on the common L0 extent in `.temp/Morphology/dem_derivatives.nc`.
   Extract `dem_filled` as the single raster variable `dem` in `filled_dem.nc` with
@@ -137,34 +168,47 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   alignment gaps, coordinate axes and array matching. Its local `Resolution` does
   no file I/O or rounding; `Grid` adds per-level extents and one common extent.
   Core accepts plain values/paths/CRS strings, never widgets or QGIS objects.
-- The common extent covers the **study extent**: the Custom L0 Extent Set on the DEM page
-  (`groupBox_customExtent`, which must lie inside the DEM; `grid.study_bounds`), else the
-  whole DEM -- never the catchment bounds. Saved catchments must lie inside it (the mask
-  stage refuses a cut catchment), and every meteo input must cover it
-  (`forcing.validate_coverage`: precipitation at Scan, the rest at Execute All Meteo; 1% of
-  an L0 cell absorbs lat/lon rounding, never a real shortfall -- the data are not moved to fit).
-  Meteo cell centres come from `forcing/api._centre_axes`, shared by Scan and Execute: 2-D
+- The Resolution page (`qt/controllers/grid.py`) takes each level from a reference raster
+  (`browse_resolution_*.ui`; L0 is required, optionally upscaled by a whole factor) or a typed
+  resolution / multiplier of L0. The **common extent is the study extent**: the intersection
+  of the ticked files' extents (`checkBox_extent{L}enforce`; a file in another CRS gives the
+  inner box of its footprint, `grid.inner_bounds`; shrunk by 1% of an L0 cell for lat/lon
+  rounding), snapped **outward** to whole blocks of lcm(L1, L11, L2 factors) L0 cells on the L2
+  lattice (`Grid.for_meteorology(block=)`), so every level nests exactly -- v5 anchors coarse
+  grids NW, v6 LL; they agree only then. Meteo cells are never padded: Set refuses an extent that
+  leaves the L2 file's cells (`grid._inside_meteo`), and every meteo input must cover it
+  (`forcing.validate_coverage`: at its Set and at Execute All Meteo; 1% of an L0 cell absorbs
+  lat/lon rounding, never a real shortfall). The DEM's cell (x the DEM page factor) must equal L0;
+  off the lattice it is shifted onto it by under half a cell (`copy_rasters(shift=True)` in
+  `dem_derivative_files`, never resampled), then cropped or padded with no data to the extent,
+  which it must overlap (`grid.check_dem`). Saved
+  catchments must lie inside it (the mask stage refuses a cut catchment).
+  `grid.validate_mhm_grid` adds mHM's rules: every level a whole multiple of L0, L11 and L1
+  nested, and v5.13 only takes an even L11/L1 ratio (`mo_common_mHM_mRM_read_config.f90`).
+  Meteo cell centres come from `format_meteo._centre_axes` (mhm-tools), shared by Scan and Execute: 2-D
   lat/lon centres projected to the meteo CRS place the 1-D axes (which keep the row order --
   the mHM test domain stores lat south-to-north against north-to-south data); without them,
   `xc`/`yc` are the left/upper cell edges (that domain's `header.txt` confirms it).
-  Snap it outward to an L0-aligned L2 lattice. Derive L0 from L2 (same corners,
-  `ncols*n`, `nrows*n`) so n x n cells per L2 cell holds by construction.
-  `validate_l0_l2_alignment()` checks every header pair.
-- The exact raw L2/L0 integer factor is a spin-box default only. Once the user
-  chooses a multiplier it wins, including after rescans or project restoration.
+  Derive L0 from L2 (same corners, `ncols*n`, `nrows*n`) so n x n cells per L2 cell holds
+  by construction. `validate_l0_l2_alignment()` checks every header pair.
+- A level's file rounds its multiplier to the nearest whole factor of L0 (a non-whole ratio
+  is logged and its data resampled); after that the typed multiplier wins. Set shows the
+  common headers in Updated Headers: a value that differs from its file's is blue with an ⓘ
+  giving the reason, and the Description column lists what happens to each file.
 - Compare cell-edge origins when measuring alignment. Meteo with L2's spacing and the
   processing CRS is shifted onto the L0 lattice (under half an L0 cell,
   `grid.shift_onto_header`) and window-copied -- meteo files are huge, so they are never
-  resampled for that. Only another spacing or CRS resamples (nearest). Prepared L0 is
-  never shifted. Expand boundaries outward only; never shrink a misaligned boundary.
+  resampled for that. Only another spacing or CRS resamples (nearest). Only the DEM is
+  shifted onto L0 (see above); other prepared L0 rasters never are.
 - Never round a grid-defining cell size. 1/1200 degree and 120 times that value
   must be carried verbatim: display rounding can introduce cumulative drift or
   make an exact 0.1-degree ratio fail validation. `floor_cellsize`/`ceil_cellsize`
   are display-only. Persist both exact headers and the multiplier in processing
   state's `grid` section; restore those, not rounded widget text.
-- Grid validity includes DEM file fingerprint, CRS, precipitation selection/files,
-  multiplier and study extent. Changing any requires a new scan. Changing catchment
-  selection invalidates morphology, not the DEM-wide common extent.
+- Grid validity (`grid.grid_fingerprint`) covers the reference files, their variables,
+  CRS and factor, the ticked extents, the domain CRS and the L1/L11/L2 resolutions. Changing
+  any clears Updated Headers until the next Set. Changing catchment selection invalidates
+  morphology, not the common extent.
 - Prepared L0 rasters use integer window copies and padding, never resampling.
   `crop_aligned_l0_raster()`/`mask_aligned_l0_raster()` remain low-level APIs and
   reject a misaligned or wrong-CRS source; they are not a late crop workflow.
@@ -244,7 +288,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   A staged non-NetCDF raster whose ASCII name a staged NetCDF also produces is
   skipped with a log line; the NetCDF is the product.
 - Every ASCII export (`write_domain_dem_ascii`) is reused when its source, reference,
-  mask and options are unchanged: publication passes `project_folder`, and the
+  mask and options are unchanged: publication passes `setup_folder`, and the
   fingerprint is recorded per output path in the `exports` section. An output that is
   a symlink (a cloned domain's link into its source) is always rewritten. On
   Karnali-v5 an unchanged re-publication fell from about 57 s to 0.1 s.
@@ -279,10 +323,10 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   every input (`outputs_newer_than_inputs`), only when that stage has no recorded fingerprint, so changed configuration
   cannot adopt its own stale outputs. An output older than an input is certainly stale
   and is rebuilt instead.
-- `core/meteorology/forcing/cache.py` wraps `inspect_meteo_folder`, which opens every
+- `core/meteorology/forcing/cache.py` wraps mhm-tools' `read_meteo_metadata`, which opens every
   NetCDF in a folder **twice**. On a 552-file ERA5-Land record that froze project load for
   ~22 s per folder; reusing an unchanged inspection brings the whole `load_input_state`
-  from 22.6 s to 0.26 s. Do not call `inspect_meteo_folder` directly from the dialog.
+  from 22.6 s to 0.26 s. Do not call `read_meteo_metadata` directly from the dialog.
 - That cache has **two** digests, and they are not interchangeable.
   `inspection_fingerprint` covers only what inspection reads (files, kind, source,
   CRS, pattern, input and output cadence, unit, cumulative settings); it deliberately
@@ -308,7 +352,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   interval that straddles a file boundary. The read block is sized only by the
   64 MiB budget: the old hard cap of 32 steps split every month file into 24
   chunks and made whole-interval reduction impossible.
-- Aggregated intervals are stacked into batches of `api.INTERVAL_BATCH` before
+- Aggregated intervals are stacked into batches of `format_meteo.INTERVAL_BATCH` before
   they are aligned and written, and the output NetCDF is opened **once** per
   variable. Doing either per output interval meant one resample, one Dataset
   build and one file append per day, and the append cost grew with the unlimited
@@ -403,7 +447,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   - Do not look up lat/lon by variable name here; mhm-tools owns that detection.
 - **Execute All has one plan.** The ▶ of A. Morphology goes to
   `MorphologyTaskBridge.start_execute_all()`, which schedules
-  `core/executions/morphology.EXECUTE_ALL_STAGES`. Every user-visible execution command,
+  `core/executions/morphology.EXECUTE_ALL_STAGES` through its `main`. Every user-visible execution command,
   including snapping and gauge-position creation, must be represented in that API plan;
   do not create a synchronous twin.
 - The Execute All Rasterio warp fills cells the source cannot supply with **0**: a

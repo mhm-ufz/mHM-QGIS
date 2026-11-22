@@ -95,7 +95,7 @@ def test_jobs_run_off_the_qgstask_thread_and_still_report_failures():
     # A raw QgsTask thread is not created by Python, so it reports as
     # `_DummyThread`; a real one means the job ran off the QgsTask thread.
     assert kinds == ["Thread"]
-    assert errors == ["ValueError: boom"]  # the message, not the traceback
+    assert errors == ["boom"]  # the message, not the traceback or its type
 
 
 class _Ambiguous:
@@ -117,6 +117,49 @@ def test_falsy_and_ambiguous_results_reach_on_success():
     assert [] in results
     assert any(result is ambiguous for result in results)
     assert not coordinator.is_busy()
+
+
+def test_finished_tasks_release_what_their_callbacks_and_failures_held():
+    """A kept layer keeps its file open, and GDAL in QGIS then reads the old file at that path (khara-murin)."""
+    import gc
+    import weakref
+
+    class Held:
+        pass
+
+    _app()
+    coordinator = TaskCoordinator(max_threads=2)
+    held, refs, done = Held(), [], []
+    refs.append(weakref.ref(held))
+
+    def failing(_task):
+        local = Held()
+        refs.append(weakref.ref(local))
+        raise ValueError("boom")
+
+    gc.disable()  # only the coordinator may release them
+    try:
+        coordinator.submit("ok", "Ok", lambda _task: None, on_success=lambda _result, held=held: done.append(1))
+        coordinator.submit("bad", "Bad", failing, on_error=lambda _message: done.append(1))
+        del held
+        _wait(lambda: len(done) == 2)
+        assert [ref() for ref in refs] == [None, None]
+    finally:
+        gc.enable()
+
+
+def test_a_control_disabled_only_by_its_parent_comes_back_enabled():
+    """Its own flag is restored, not isEnabled(), which a disabled parent also makes False."""
+    _app()
+    coordinator = TaskCoordinator(max_threads=1)
+    parent = QtWidgets.QWidget()
+    button = QtWidgets.QPushButton(parent)
+    parent.setEnabled(False)  # e.g. the steps tab during a ▶ workflow
+    done = []
+    coordinator.submit("job", "Job", lambda _task: 1, controls=(button,), on_success=done.append)
+    _wait(lambda: done)
+    parent.setEnabled(True)
+    assert button.isEnabled()
 
 
 def _until_cancelled(task):
@@ -186,6 +229,31 @@ def test_main_dialog_cancel_waits_for_workers_then_closes():
     assert not dialog.isVisible()
 
 
+def test_cancel_stops_a_running_mhm_and_closes(monkeypatch):
+    """Cancel ends mHM (the terminal's command) so the plugin closes and QGIS is free again."""
+    from types import SimpleNamespace
+
+    from mhm_qgis.qt.controllers import workflow_state
+    from mhm_qgis.qt.dialogs import mhm_qgis_main
+
+    warned, stopped, closed = [], [], []
+    monkeypatch.setattr(mhm_qgis_main.QMessageBox, "warning", lambda *args: warned.append(args[1]))
+    dialog = mhm_qgis_main.MhmQgisDialog()
+    dialog._terminal_dialog = SimpleNamespace(command_running=lambda: not stopped, is_running=lambda: not stopped,
+                                              stop=lambda: stopped.append(True))
+    assert workflow_state.running_key(dialog) == "run_mhm"
+    dialog.finished.connect(closed.append)
+    dialog.show()
+    dialog.reject()
+    _wait(lambda: closed)
+    assert dialog._closing
+    assert stopped
+    assert not warned
+    assert not dialog.isVisible()
+    dialog._terminal_dialog = None
+    dialog.deleteLater()
+
+
 def test_cancelled_dialog_is_replaced_when_plugin_reopens(monkeypatch):
     from types import SimpleNamespace
 
@@ -213,12 +281,10 @@ def test_cancelled_dialog_is_replaced_when_plugin_reopens(monkeypatch):
     assert plugin.dlg is fresh
 
 
-def test_plugin_unload_shuts_down_and_deletes_its_dialog(monkeypatch):
+def test_plugin_unload_shuts_down_and_deletes_its_dialog():
     from types import SimpleNamespace
 
     from mhm_qgis.mhm_qgis import MhmQgis
-    from mhm_qgis.qt.controllers import post_context
-    from mhm_qgis.qt.docks import host
 
     calls = []
 
@@ -231,8 +297,6 @@ def test_plugin_unload_shuts_down_and_deletes_its_dialog(monkeypatch):
         deleteLater=lambda: calls.append("delete"),
         shutdown=lambda: calls.append("shutdown"),
     )
-    monkeypatch.setattr(post_context, "end_workspace", lambda owner: calls.append(("end", owner)))
-    monkeypatch.setattr(host, "drop_time_toolbar", lambda owner: calls.append(("toolbar", owner)))
     iface = SimpleNamespace(
         removePluginMenu=lambda _menu, action: calls.append(("menu", action)),
         removeToolBarIcon=lambda action: calls.append(("icon", action)),
@@ -245,8 +309,6 @@ def test_plugin_unload_shuts_down_and_deletes_its_dialog(monkeypatch):
     plugin.unload()
 
     assert "shutdown" in calls
-    assert ("end", dialog) in calls
-    assert ("toolbar", dialog) in calls
     assert ("menu", "action") in calls
     assert ("icon", "action") in calls
     assert plugin.dlg is None
@@ -277,7 +339,7 @@ def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_pat
     failures = []
     monkeypatch.setattr(workflow_state.QMessageBox, "critical",
                         lambda _parent, _title, message: failures.append(message))
-    monkeypatch.setattr(meteo, "prepare_forcing", prepare)
+    monkeypatch.setattr(meteo, "main", prepare)
     monkeypatch.setattr(meteo, "MeteorologyRun", lambda **_kwargs: None)
     monkeypatch.setattr(grid, "require_common_grid", lambda _dialog: {"l2_header": {}})
     monkeypatch.setattr(meteorology, "target_grid_from_header",
@@ -285,7 +347,7 @@ def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_pat
     monkeypatch.setattr(forcing, "selected_meteo_specs", lambda _dialog: ())
     monkeypatch.setattr(time, "values", lambda _dialog: {})
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.check_prerequisites = lambda: True
     dialog.task_coordinator.set_progress = lambda key, value: progress.append((key, value))
 
@@ -300,4 +362,54 @@ def test_meteorology_runs_as_a_cancellable_coordinator_task(monkeypatch, tmp_pat
     assert "preparing" in dialog.LogText.toPlainText()
     assert workflow_state.running_key(dialog) is None
     assert dialog.tabWidget_steps.isEnabled()
+    dialog.close()
+
+
+@pytest.mark.parametrize("answer", ["Yes", "No"])
+def test_small_negative_forcing_asks_then_reruns_clipped_or_fails(monkeypatch, tmp_path, answer):
+    from types import SimpleNamespace
+
+    from mhm_qgis.core.executions import meteo
+    from mhm_qgis.core.handlers.state import processing
+    from mhm_qgis.externals.mhm_tools_handler import MeteoFolderSpec, NegativeAmounts
+    from mhm_qgis.qt.controllers import forcing, grid, time, workflow_state
+    from mhm_qgis.qt.dialogs.mhm_qgis_main import MhmQgisDialog
+    from mhm_qgis.qt.workflows import meteorology
+
+    calls, questions, failures = [], [], []
+
+    def prepare(run, _state, **_options):
+        calls.append(run.inputs[0].clip_negative)
+        if not run.inputs[0].clip_negative:
+            raise NegativeAmounts("pre", -6.3e-5)
+        return True
+
+    monkeypatch.setattr(meteo, "main", prepare)
+    monkeypatch.setattr(grid, "require_common_grid", lambda _dialog: {"l2_header": {}})
+    monkeypatch.setattr(meteorology, "target_grid_from_header",
+                        lambda *_args: SimpleNamespace(validate=lambda: None))
+    monkeypatch.setattr(forcing, "selected_meteo_specs", lambda _dialog: (MeteoFolderSpec("pre", tmp_path),))
+    monkeypatch.setattr(time, "values", lambda _dialog: {})
+    monkeypatch.setattr(meteorology.QMessageBox, "question", lambda _parent, _title, text: questions.append(text)
+                        or getattr(QtWidgets.QMessageBox.StandardButton, answer))
+    monkeypatch.setattr(workflow_state.QMessageBox, "critical",
+                        lambda _parent, _title, message: failures.append(message))
+    dialog = MhmQgisDialog()
+    dialog.setup_folder = str(tmp_path)
+    dialog.check_prerequisites = lambda: True
+    dialog._meteo_inputs = {"pre": {"kind": "pre", "folder": str(tmp_path)}}
+
+    assert meteorology.start(dialog)
+    _wait(lambda: workflow_state.running_key(dialog) is None)
+    assert questions == [("Precipitation has small negative amounts (down to -6.3e-05 mm), most likely rounding "
+                          "noise of the source data.\n\nClip the negative values to 0 and continue?")]
+    status = processing.workflow(tmp_path, "execute_all_meteo")["status"]
+    if answer == "Yes":
+        assert calls == [False, True]
+        assert status == "completed"
+        assert dialog._meteo_inputs["pre"]["clip_negative"] is True
+    else:
+        assert calls == [False]
+        assert status == "failed"
+        assert failures[0].endswith("Fix the input, or run again and accept the clipping.")
     dialog.close()

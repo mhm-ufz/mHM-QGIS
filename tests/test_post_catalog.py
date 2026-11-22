@@ -225,7 +225,7 @@ def test_v5_multi_lists_and_archives_each_domain(tmp_path):
         (tmp_path / f"run_{name}" / "output").rename(root / "output" / name)
     refs = runs.list_runs(root)
     assert [(r.index, r.domain.name, r.label) for r in refs] == [
-        (1, "a", "Current (output/) · a"), (2, "b", "Current (output/) · b")]
+        (1, "a", "Default (output/) · a"), (2, "b", "Default (output/) · b")]
     assert catalog.open_run(refs[1], values).files["mhm"] == root / "output" / "b" / "mHM_Fluxes_States.nc"
     runs.archive(root, "two", values=values)
     assert sorted(p.name for p in (root / "output").iterdir()) == ["a", "b"]  # dir_Out kept
@@ -241,87 +241,24 @@ def test_rapti_run_is_sound():
     assert run.findings() == []
 
 
-def test_a_named_run_writes_into_its_folder_and_is_listed(tmp_path):
-    """The namelists point a named run's outputs into runs/<name>/; afterwards it is
-    listed by name and its files resolve from the setup folder."""
-    make_run(tmp_path)
+def test_a_backup_copies_the_namelists_with_their_outputs_in_its_folder(tmp_path):
     nml = tmp_path / "mhm.nml"
-    nml.write_text('&directories_general\n  dirConfigOut = "output/"\n  dir_Out(1) = "output/"\n'
-                   '  dir_Total_Runoff(1) = "output/"\n  mhm_file_RestartOut(1) = "restart/r.nc"\n/\n')
-    made = runs.link_outputs(tmp_path, "case1")
-    text = nml.read_text()
-    assert 'dir_Out(1) = "runs/.mhm-qgis/pending/case1/output/"' in text
-    assert 'dirConfigOut = "runs/.mhm-qgis/pending/case1/output/"' in text
-    assert 'dir_Total_Runoff(1) = "output/"' in text  # an input
-    assert 'mhm_file_RestartOut(1) = "restart/r.nc"' in text
-    staged_output = tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1" / "output"
-    assert staged_output in made
-    source = tmp_path / "output" / "mHM_Fluxes_States.nc"
-    source.replace(staged_output / source.name)  # as mHM would have written it
-    [ref] = runs.finish_named(tmp_path, "case1")
-    assert 'dir_Out(1) = "runs/case1/output/"' in nml.read_text()
-    assert ref.label == f"case1 · {tmp_path.name}"
-    assert ref.root == tmp_path
-    assert runs.run_meta(ref)["linked"] is True
-    values = {**V5, "directories_general": {**V5["directories_general"], "dir_out": ["runs/case1/output/"]}}
-    assert catalog.open_run(ref, values).files["mhm"] == tmp_path / "runs" / "case1" / "output" / "mHM_Fluxes_States.nc"
-    make_run(tmp_path)  # an older unnamed run in output/, the setup's namelists still linked to case1
-    current = next(ref for ref in runs.list_runs(tmp_path) if not ref.name)
-    assert catalog.open_run(current, values).files["mhm"] == tmp_path / "output" / "mHM_Fluxes_States.nc"
-    runs.link_outputs(tmp_path, "")  # an unnamed run writes to output/ again
-    assert 'dir_Out(1) = "output/"' in nml.read_text()
+    text = ('&directories_general\n  dirConfigOut = "output/"\n  dir_Out(1) = "output/"\n'
+            '  dir_Total_Runoff(1) = "output/"\n  mhm_file_RestartOut(1) = "restart/r.nc"\n/\n')
+    nml.write_text(text)
+    (tmp_path / "mrm_outputs.nml").write_text("&NLoutputResults\n/\n")
+    runs.backup_namelists(tmp_path, "case1")
+    copy = (tmp_path / "runs" / "case1" / "mhm.nml").read_text()
+    assert 'dir_Out(1) = "runs/case1/output/"' in copy
+    assert 'dirConfigOut = "runs/case1/output/"' in copy
+    assert 'dir_Total_Runoff(1) = "output/"' in copy  # an input
+    assert 'mhm_file_RestartOut(1) = "restart/r.nc"' in copy
+    assert (tmp_path / "runs" / "case1" / "mrm_outputs.nml").is_file()
+    assert (tmp_path / "runs" / "case1" / "run.json").is_file()
+    assert nml.read_text() == text  # mHM still runs the setup's own namelists into output/
     for unsafe in ("a b", "..", ".mhm-qgis"):
         with pytest.raises(ValueError, match="letters"):
-            runs.link_outputs(tmp_path, unsafe)
-
-
-def test_a_failed_named_rerun_keeps_the_published_run(tmp_path):
-    make_run(tmp_path)
-    nml = tmp_path / "mhm.nml"
-    nml.write_text('&directories_general\n  dir_Out(1) = "output/"\n/\n')
-    runs.link_outputs(tmp_path, "case1")
-    stage = tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1"
-    source = tmp_path / "output" / "mHM_Fluxes_States.nc"
-    source.replace(stage / "output" / source.name)
-    runs.finish_named(tmp_path, "case1")
-    published = tmp_path / "runs" / "case1" / "output" / source.name
-    original = published.read_bytes()
-
-    runs.link_outputs(tmp_path, "case1")
-    (stage / "output" / "partial.nc").write_bytes(b"partial")
-    runs.fail_named(tmp_path, "case1")
-
-    assert published.read_bytes() == original
-    assert not stage.exists()
-    assert 'dir_Out(1) = "runs/case1/output/"' in nml.read_text()
-
-
-def test_failed_named_publication_restores_the_previous_run(tmp_path, monkeypatch):
-    make_run(tmp_path)
-    nml = tmp_path / "mhm.nml"
-    nml.write_text('&directories_general\n  dir_Out(1) = "output/"\n/\n')
-    runs.link_outputs(tmp_path, "case1")
-    stage = tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1"
-    source = tmp_path / "output" / "mHM_Fluxes_States.nc"
-    source.replace(stage / "output" / source.name)
-    runs.finish_named(tmp_path, "case1")
-    published = tmp_path / "runs" / "case1" / "output" / source.name
-    original = published.read_bytes()
-
-    runs.link_outputs(tmp_path, "case1")
-    (stage / "output" / "replacement.nc").write_bytes(b"replacement")
-    monkeypatch.setattr(
-        runs,
-        "_write_meta",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
-    )
-
-    with pytest.raises(OSError, match="disk full"):
-        runs.finish_named(tmp_path, "case1")
-
-    assert published.read_bytes() == original
-    assert not stage.exists()
-    assert [ref.name for ref in runs.list_runs(tmp_path) if ref.name] == ["case1"]
+            runs.backup_namelists(tmp_path, unsafe)
 
 
 def test_a_run_that_wrote_no_output_variable_says_so(tmp_path):
@@ -339,3 +276,14 @@ def test_a_run_that_wrote_no_output_variable_says_so(tmp_path):
     assert "no time axis" in finding
     with pytest.raises(ValueError, match="Turn on outputs"):
         post_exec.scan_job(ref, run=run)
+
+
+def test_a_run_written_where_its_namelists_say_is_listed(tmp_path):
+    """A setup made outside mhm-qgis may write its outputs into another folder than output/."""
+    make_run(tmp_path)
+    (tmp_path / "output").rename(tmp_path / "results")
+    assert runs.list_runs(tmp_path) == []  # no namelists to say where
+    (tmp_path / "mhm.nml").write_text('&directories_general\n  dirConfigOut = "results/"\n'
+                                      '  dir_Out(1) = "results/"\n/\n')
+    [ref] = runs.list_runs(tmp_path)
+    assert catalog.open_run(ref).files["mhm"].parent.name == "results"

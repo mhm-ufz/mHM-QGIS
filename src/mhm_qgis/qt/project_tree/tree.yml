@@ -1,27 +1,32 @@
-# One entry per row of treeWidget_projectStructure, matched to the Designer item by title.
+# One entry per row of treeWidget_projectStructure, matched to the Designer item by its title
+# and its parent's (both `Process` rows share a title).
 # `page`: the stackedWidget_project page it shows (a row without one shows its first
 # child's); `status`: a key of STATUS in __init__.py (added or empty); `children`: nested rows.
 # `input`: data-model id(s); the row shows only when the process cases need one.
 # `display`: a `resolve_display_output` key, processed when its file exists, shown by the eye.
-# `action: run`: ▶ in the status column prepares the children.
-# `summary`: a table on its page listing the rows below with their status and prepared file.
+# `action: run`: ▶ prepares the children; ▶ and ↺ sit on its `<key>_process` row, else on it.
+# `summary`: a table on its page listing the rows below with their status and prepared file
+# (a row without children, i.e. Process, lists its group's).
 # `grid`: the model grid levels its eye shows; `view`: the button its eye clicks.
+# `set`: the label right of the page's Set button; it shows the row's status.
+# `map`: an analysis row's output groups (outputs.yml) the Map dock offers; all without it.
 nodes:
   - {key: intro, title: Introduction, page: page_projectIntro, status: intro}
   - key: project_configuration
     title: 1. Project Configuration
     page: page_projectSetup
     status: project_setup
+    set: label_setProjectStatus
     children:
       - key: domain_setup
         title: Domain Setup
-        page: tab
+        page: page_setup
         status: domain_setup
+        set: label_setCRSStatus
         children:
-          - {key: l0_reference, title: L0 Reference (DEM), page: page_l0Reference, status: l0, grid: [L0]}
-          - {key: l2_reference, title: L2 Reference (Precipitation), page: page_l2Reference, status: l2, grid: [L2]}
-          - {key: resolution, title: Resolution, page: page_resolution, status: resolution, grid: [L1, L11]}
-          - {key: settings, title: Settings, page: page_settings, status: namelists, view: pushButton_editNmlsFinal}
+          - {key: resolution, title: Resolution, page: page_resolution, status: resolution, grid: [L0, L1, L11, L2], set: label_setLatLonStatus}
+          - {key: time_period, title: Time Period, page: page_timePeriod, status: time_period, set: label_setTimePeriodInputStatus}
+          - {key: settings, title: Processes, page: page_processes, status: namelists, view: pushButton_editNmlsFinal}
   - key: inputs
     title: 2. Inputs
     page: page_inputs
@@ -33,19 +38,24 @@ nodes:
         summary: tableWidget_morphologySummary
         action: run
         children:
-          - {key: dem, title: DEM, page: page_demDerivatives, display: dem, status: dem}
-          - {key: lc, title: Land use, page: page_landUse, display: land_cover, status: categorical}
-          - {key: soil, title: Soil, page: page_soil, input: soil_class, display: soil, status: categorical}
-          - {key: geology, title: Geology, page: page_geology, input: geo_class, display: geology, status: categorical}
-          - {key: lai, title: LAI, page: page_lai, input: [lai_class, lai_gridded], display: lai, status: categorical}
-          - {key: gauges, title: Gauges, page: page_gauges, display: idgauges, status: gauges}
+          - {key: dem, title: DEM, page: page_dem, display: dem, status: dem, set: label_setDEMStatus}
+          - {key: slope, title: Slope, page: page_dem_derivatives_var, input: slope, display: slope, status: derivative}
+          - {key: aspect, title: Aspect, page: page_dem_derivatives_var, input: aspect, display: aspect, status: derivative}
+          - {key: flow_direction, title: Flow direction, page: page_dem_derivatives_var, input: fdir, display: flow_direction, status: derivative}
+          - {key: flow_accumulation, title: Flow accumulation, page: page_dem_derivatives_var, input: facc, display: flow_accumulation, status: derivative}
+          - {key: lc, title: Land use, page: page_landUse, display: land_cover, status: categorical, set: label_setLandUseStatus}
+          - {key: soil, title: Soil, page: page_soil, input: soil_class, display: soil, status: categorical, set: label_setSoilStatus}
+          - {key: geology, title: Geology, page: page_geology, input: geo_class, display: geology, status: categorical, set: label_setGeologyStatus}
+          - {key: lai, title: LAI, page: page_lai, input: [lai_class, lai_gridded], display: lai, status: categorical, set: label_setLaiStatus}
+          - {key: gauges, title: Gauges, page: page_gauges, display: idgauges, status: gauges, set: label_setGaugesStatus}
           - {key: domain_definition, title: Domain Definition, page: page_domainDefinition, display: domain_mask, status: domain}
+          - {key: morphology_process, title: Process, page: page_morphology, summary: tableWidget_morphologySummary}
       - key: meteorology
         title: B. Meteorology
-        page: tab_meteo
+        page: page_meteo
         action: run
         children:
-          - {key: meteo_pre, title: Precipitation, page: page_meteoVar, input: pre, status: meteo}
+          - {key: meteo_pre, title: Precipitation, page: page_precipitation, input: pre, status: meteo}
           - {key: meteo_pet, title: Potential evapotranspiration, page: page_meteoVar, input: pet, status: meteo}
           - {key: meteo_tavg, title: Mean air temperature, page: page_meteoVar, input: tavg, status: meteo}
           - {key: meteo_tmin, title: Minimum air temperature, page: page_meteoVar, input: tmin, status: meteo}
@@ -56,32 +66,34 @@ nodes:
           - {key: meteo_ssrd, title: Shortwave radiation, page: page_meteoVar, input: ssrd, status: meteo}
           - {key: meteo_strd, title: Longwave radiation, page: page_meteoVar, input: strd, status: meteo}
           - {key: meteo_tann, title: Annual mean air temperature, page: page_meteoVar, input: tann, status: meteo}
-      - {key: observations, title: C. Observations, page: tab_hydro}
-  - {key: execution, title: 3. Execution, page: tab_execution}
+          - {key: meteorology_process, title: Process, page: page_meteo}
+      - {key: observations, title: C. Observations, page: page_hydro, action: run}
+  - {key: execution, title: 3. Execution, page: page_execution}
   - key: outputs
     title: 4. Outputs
-    page: tab_outputs
+    page: page_outputs
     # `analysis`: the view key in qt/docks/layouts.yml; enabled once a run is open
     children:
       - key: basics
         title: A. Basics
         children:
-          - {key: map_explorer, title: Map Explorer, page: tab_outputs, analysis: map_explorer}
-          - {key: hydrograph, title: Hydrograph, page: tab_outputs, analysis: hydrograph}
-          - {key: water_balance, title: Water balance, page: tab_outputs, analysis: water_balance}
-          - {key: processes, title: Processes, page: tab_outputs, analysis: processes}
+          - {key: map_explorer, title: Map Explorer, page: page_outputs, analysis: map_explorer}
+          - {key: hydrograph, title: Hydrograph, page: page_outputs, analysis: hydrograph, map: [runoff, routing, snow, soil]}
+          - {key: water_balance, title: Water balance, page: page_outputs, analysis: water_balance, map: [evapotranspiration, soil, groundwater, snow, interception, meteorology]}
+          - {key: processes, title: Processes, page: page_outputs, analysis: processes, map: [runoff, groundwater, soil, snow, interception]}
       - key: diagnostics
         title: B. Diagnostics
         children:
-          - {key: signatures, title: Signatures, page: tab_outputs, analysis: signatures}
-          - {key: events, title: Events, page: tab_outputs, analysis: events}
-          - {key: validation, title: Validation, page: tab_outputs, analysis: validation}
-          - {key: climatology, title: Climatology, page: tab_outputs, analysis: climatology}
+          - {key: signatures, title: Signatures, page: page_outputs, analysis: signatures, map: [runoff, routing, snow]}
+          - {key: events, title: Events, page: page_outputs, analysis: events, map: [runoff, routing, snow]}
+          # - {key: validation, title: Validation, page: page_outputs, analysis: validation, map: [soil, evapotranspiration]}
+          - {key: climatology, title: Climatology, page: page_outputs, analysis: climatology}
       - key: advanced
         title: C. Advanced
         children:
-          - {key: compare, title: Compare, page: tab_outputs, analysis: compare}
-          - {key: extremes, title: Extremes, page: tab_outputs, analysis: extremes}
-          - {key: drought, title: Drought, page: tab_outputs, analysis: drought}
-          - {key: anomalies, title: Anomalies, page: tab_outputs, analysis: anomalies}
-          - {key: summary, title: Summary, page: tab_outputs, analysis: summary}
+          # Compare and Anomalies are hidden for now (their Designer rows are gone):
+          # - {key: compare, title: Compare, page: page_outputs, analysis: compare}
+          - {key: extremes, title: Extremes, page: page_outputs, analysis: extremes, map: [runoff, routing, meteorology]}
+          - {key: drought, title: Drought, page: page_outputs, analysis: drought, map: [soil, evapotranspiration, groundwater]}
+          # - {key: anomalies, title: Anomalies, page: page_outputs, analysis: anomalies}
+          - {key: summary, title: Summary, page: page_outputs, analysis: summary}

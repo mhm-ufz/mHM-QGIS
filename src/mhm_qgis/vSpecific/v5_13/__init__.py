@@ -128,6 +128,15 @@ def build_initial_values(dialog: Any) -> dict[str, Any]:
                                 "dStart": evaluation.day, "yEnd": end.year,
                                 "mEnd": end.month, "dEnd": end.day}, count),
         }
+    observations = settings.get("observations") or {}
+    if observations:  # mHM 5.13 reads <dir>/<kind>.nc; the plugin writes them all to observation/
+        optional = {key: repeat(f"{data}/observation/", count) for kind, key in (
+            ("sm", "dir_soil_moisture"), ("neutrons", "dir_neutrons"), ("et", "dir_evapotranspiration"),
+            ("twsa", "dir_tws")) if kind in observations}
+        optional.update({key: observations[kind]["time_step"] for kind, key in (
+            ("sm", "timeStep_sm_input"), ("et", "timeStep_et_input"), ("twsa", "timeStep_tws_input"))
+            if (observations.get(kind) or {}).get("time_step")})
+        values["main"]["optional_data"] = optional
     apply_registered(values, settings, v6=False)
     return values
 

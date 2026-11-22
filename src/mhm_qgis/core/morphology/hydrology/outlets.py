@@ -38,11 +38,11 @@ def selected_outlet_id_field(dialog) -> str | None:
         return None
 
 
-def configured_domain_state(project_folder):
+def configured_domain_state(setup_folder):
     """Return saved domain state, or None when no domain setup is configured."""
-    if not project_folder or not state_path(project_folder).is_file():
+    if not setup_folder or not state_path(setup_folder).is_file():
         return None
-    state = load_state(project_folder)
+    state = load_state(setup_folder)
     if (
             state.get("outlets")
             or state.get("pour_points_source")
@@ -52,17 +52,17 @@ def configured_domain_state(project_folder):
     return None
 
 
-def configured_gauged_outlet_ids(project_folder) -> list[str] | None:
+def configured_gauged_outlet_ids(setup_folder) -> list[str] | None:
     """Return configured gauge IDs, using None for the legacy workflow."""
-    state = configured_domain_state(project_folder)
+    state = configured_domain_state(setup_folder)
     if state is None:
         return None
     return gauged_outlet_ids(state)
 
 
-def configured_gauge_points(project_folder) -> tuple[tuple[int, float, float, str], ...]:
+def configured_gauge_points(setup_folder) -> tuple[tuple[int, float, float, str], ...]:
     """Return saved snapped gauge locations without reopening a QGIS layer."""
-    state = configured_domain_state(project_folder)
+    state = configured_domain_state(setup_folder)
     if state is None:
         raise StationIdError("Save the Domain Delineator configuration first.")
     points = []

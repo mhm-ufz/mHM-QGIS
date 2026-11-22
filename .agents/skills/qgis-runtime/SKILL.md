@@ -53,11 +53,14 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
   accept categorical and DEM rasters as ASCII, GeoTIFF or NetCDF and align categories to
   the DEM with nearest-neighbour resampling.
 - Shared raster I/O and alignment live in `mhm_tools.common.file_handler`; lookup-table
-  reading in `mhm_tools.common.lookup_handler` (it moved there from `format_data` --
+  reading in `mhm_tools.common.lookup_handler` (it moved there from what is now
+  `categorical_raster` --
   patch the plugin's own boundary in tests, not mhm-tools' internals);
   `mhm_tools.common.rasterize` is deliberately limited to `rasterize_vector`.
-- The matching CLI commands are `data-converter rasterize-map` and
-  `data-converter format-data`.
+- The matching CLI commands are `data-converter rasterize-map`, `format-morph-categorical`,
+  `format-soilgrids`, `format-lai-netcdf` and `format-meteo`. Meteo and observation
+  forcing is formatted by `mhm_tools.pre.format_meteo`; the plugin keeps the
+  multi-variable run, staging, publication and fingerprints (`core/meteorology/forcing`).
 - QGIS-specific layer selection, materialization, logging and output placement stay in
   `mhm_qgis`.
 - Do not copy external `mhm_tools` source back into this repository. Put generally

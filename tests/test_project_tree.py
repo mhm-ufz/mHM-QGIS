@@ -1,9 +1,11 @@
 """The project tree: Designer rows with tree.yml keys, pages in the Project tab, statuses."""
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
-from qgis.PyQt.QtCore import QCoreApplication, QDateTime, QEvent, Qt
+from qgis.PyQt.QtCore import QCoreApplication, QDateTime, QEvent, QSignalBlocker, Qt
 from qgis.PyQt.QtWidgets import QDialog
 
 from mhm_qgis.qt import project_tree
@@ -23,7 +25,8 @@ def dialog():
 def test_rows_match_tree_yml_and_open_on_project_configuration(dialog):
     tree = dialog.treeWidget_projectStructure
     rows = list(project_tree._rows(dialog))
-    assert sorted(row.text(0) for row in rows) == sorted(project_tree.load())  # Designer and tree.yml agree
+    assert sorted(((row.parent() and row.parent().text(0), row.text(0)) for row in rows), key=str) == sorted(
+        project_tree.load(), key=str)  # Designer and tree.yml agree
     assert tree.columnCount() == len(project_tree.COLUMNS)
     assert [tree.headerItem().text(c) for c in (1, 2, 3)] == ["", "", ""]
     assert [tree.columnWidth(c) for c in (1, 2, 3)] == [28, 28, 28]  # one symbol each
@@ -38,16 +41,18 @@ def test_rows_match_tree_yml_and_open_on_project_configuration(dialog):
 
 def test_each_row_shows_its_page_titled_after_it(dialog):
     tree = dialog.treeWidget_projectStructure
-    for key, page, title in (("domain_setup", dialog.tab, "Domain Setup"),
+    for key, page, title in (("domain_setup", dialog.page_setup, "Domain Setup"),
+                             ("resolution", dialog.page_resolution, "Resolution"),
                              ("inputs", dialog.page_inputs, "2. Inputs"),
                              ("morphology", dialog.page_morphology, "A. Morphology"),
-                             ("dem", dialog.page_demDerivatives, "DEM"),
+                             ("dem", dialog.page_dem, "DEM"),
                              ("lc", dialog.page_landUse, "Land use"),
                              ("domain_definition", dialog.page_domainDefinition, "Domain Definition"),
-                             ("meteorology", dialog.tab_meteo, "B. Meteorology"),
-                             ("meteo_pre", dialog.page_meteoVar, "Precipitation"),
-                             ("observations", dialog.tab_hydro, "C. Observations"),
-                             ("outputs", dialog.tab_outputs, "4. Outputs")):
+                             ("meteorology", dialog.page_meteo, "B. Meteorology"),
+                             ("meteo_pre", dialog.page_precipitation, "Precipitation"),
+                             ("meteo_tavg", dialog.page_meteoVar, "Mean air temperature"),
+                             ("observations", dialog.page_hydro, "C. Observations"),
+                             ("outputs", dialog.page_outputs, "4. Outputs")):
         tree.setCurrentItem(project_tree.item(dialog, key))
         assert dialog.stackedWidget_project.currentWidget() is page
         assert dialog.tabWidget_steps.tabText(0) == title
@@ -58,9 +63,114 @@ def test_project_setup_status_follows_the_folder(dialog, tmp_path):
     assert row.text(project_tree.STATUS_COLUMN) == "⚪"
     assert row.toolTip(project_tree.STATUS_COLUMN) == "Empty: no inputs added"
     dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
-    assert row.text(project_tree.STATUS_COLUMN) == "🟢"  # browsed, not yet Set
+    assert row.text(project_tree.STATUS_COLUMN) == "🟡"  # browsed, not yet Set
     dialog.pushButton_setProject.click()
     assert row.text(project_tree.STATUS_COLUMN) == "✅"
+
+
+def test_each_set_button_is_followed_by_its_rows_status(dialog, tmp_path):
+    dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
+    dialog.pushButton_setProject.click()
+    nodes = [node for node in project_tree.load().values() if "set" in node]
+    assert len(nodes) == 10
+    for node in nodes:
+        row, label = project_tree.item(dialog, node["key"]), getattr(dialog, node["set"])
+        assert (node["key"], label) in dialog._indicators
+        assert label.text() == row.text(project_tree.STATUS_COLUMN)
+        assert label.toolTip() == row.toolTip(project_tree.STATUS_COLUMN)
+    assert dialog.label_setProjectStatus.text() == "✅"
+
+
+def test_the_stack_pages_follow_the_tree_order(dialog):
+    pages = [dialog.stackedWidget_project.widget(i).objectName() for i in range(dialog.stackedWidget_project.count())]
+    used = list(dict.fromkeys(project_tree._node(row)["page"] for row in project_tree._rows(dialog)
+                              if "page" in project_tree._node(row)))
+    assert [page for page in pages if page in used] == used
+
+
+def test_the_meteo_form_shows_its_variables_status_right_of_set(dialog):
+    from mhm_qgis.qt.controllers import forcing, main
+
+    forcing.show_meteo_input(dialog, "pre")
+    form, row = main.form_on(dialog, "precipitation"), project_tree.item(dialog, "meteo_pre")
+    assert dialog.widget_hostPrecipitationMeteoVarInput.isAncestorOf(form)  # its own page
+    label = form.label_setStatus
+    assert ("meteo_pre", label) in dialog._indicators
+    assert (label.text(), label.toolTip()) == (row.text(project_tree.STATUS_COLUMN),
+                                               row.toolTip(project_tree.STATUS_COLUMN))
+    assert form.label_description.text().startswith("Set the resolutions")  # no grid, no scan yet
+    forcing.show_meteo_input(dialog, "tavg")
+    assert ("meteo_tavg", main.form_on(dialog, "meteoVar").label_setStatus) in dialog._indicators
+    project_tree.refresh(dialog)
+
+
+def test_the_time_period_is_complete_once_set_and_precipitation_by_its_own_set(dialog, tmp_path):
+    def status(key):
+        project_tree.refresh(dialog)
+        return project_tree.item(dialog, key).text(project_tree.STATUS_COLUMN)
+
+    _set_up(dialog, tmp_path)
+    assert (status("time_period"), status("meteo_pre")) == ("⚪", "⚪")
+    dialog._meteo_inputs["pre"] = {"kind": "pre", "folder": str(tmp_path)}
+    assert status("meteo_pre") == "🟡"  # its Set scanned
+    dialog.pushButton_setTimePeriod.click()
+    assert (status("time_period"), dialog.label_setTimePeriodInputStatus.text()) == ("✅", "✅")
+
+
+def test_the_time_window_proposes_the_period_after_its_warm_up(dialog, tmp_path, monkeypatch):
+    from qgis.PyQt.QtWidgets import QDialog
+
+    from mhm_qgis.qt.controllers import time
+    from mhm_qgis.qt.dialogs.time_period_netcdf_input import TimePeriodDialog
+
+    _set_up(dialog, tmp_path)
+    found = {"start": "2001-01-01T00:00", "end": "2002-12-31T00:00", "step": "Daily"}
+    monkeypatch.setattr(TimePeriodDialog, "exec", lambda prompt: setattr(prompt, "found", found)
+                        or QDialog.DialogCode.Accepted)
+    dialog.spinBox_warmingDays.setValue(365)
+    time.open_window_dialog(dialog)
+    assert dialog.label_fileEndTimeValue.text() == "2002-12-31T00:00"
+    assert [getattr(dialog, name).dateTime().toString("yyyy-MM-dd") for name in time.TIME_WIDGETS.values()] == [
+        "2001-01-01", "2002-01-01", "2003-01-01"]  # v6 runs up to the end of the last day
+
+
+def test_set_crs_without_an_open_setup_asks_to_create_or_open_one(dialog, monkeypatch):
+    from qgis.core import QgsCoordinateReferenceSystem
+
+    from mhm_qgis.qt.controllers import grid
+
+    warnings = []
+    monkeypatch.setattr(grid.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
+    before = dialog._set_crs
+    dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:3035"))
+    dialog.pushButton_setCRS.click()
+    assert warnings == ["Create a new domain setup or open an existing one (Open) before setting the CRS."]
+    assert dialog._set_crs == before
+
+
+def test_a_finished_meteo_run_rechecks_the_inputs_without_a_click(dialog, tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import process_cases, workflow_state
+
+    checks = []
+    monkeypatch.setattr(process_cases, "inputs", checks.append)
+    dialog.setup_folder = str(tmp_path)
+    dialog._running_workflow = "execute_all_meteo"
+    workflow_state.finish(dialog, "execute_all_meteo", True, "")
+    assert checks == [dialog]
+
+
+def test_a_coloured_text_workflow_button_keeps_its_native_size(dialog):
+    from qgis.PyQt.QtWidgets import QPushButton
+
+    from mhm_qgis.qt.controllers import workflow_state
+
+    button = dialog.pushButton_createOrLoadDomainStructure
+    native = QPushButton(button.text()).sizeHint()
+    workflow_state.set_button_state(dialog, "project_structure", "completed")
+    button.adjustSize()
+    assert button.width() >= native.width()
+    assert button.height() >= native.height()
+    assert "#a5d6a7" in button.styleSheet()
 
 
 def test_introduction_embeds_the_wizard_and_finish_applies_it(dialog):
@@ -100,34 +210,21 @@ def test_output_rows_wait_for_a_run_and_groups_select_their_first_view(dialog):
     project_tree.outputs_shown(dialog, True)
     dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "diagnostics"))
     assert dialog.treeWidget_projectStructure.currentItem() is project_tree.item(dialog, "signatures")
-    assert dialog.stackedWidget_project.currentWidget() is dialog.tab_outputs
+    assert dialog.stackedWidget_project.currentWidget() is dialog.page_outputs
     assert dialog._post.chosen == "signatures"
 
 
 def test_domain_setup_pages_reference_buttons_and_combined_domains(dialog):
     tree = dialog.treeWidget_projectStructure
-    for key, page in (("l0_reference", dialog.page_l0Reference), ("l2_reference", dialog.page_l2Reference),
-                      ("resolution", dialog.page_resolution), ("settings", dialog.page_settings)):
+    for key, page in (("resolution", dialog.page_resolution), ("settings", dialog.page_processes)):
         tree.setCurrentItem(project_tree.item(dialog, key))
         assert dialog.stackedWidget_project.currentWidget() is page
-    assert dialog.page_l0Reference.isAncestorOf(dialog.label_L0Resolution)
-    assert dialog.page_settings.isAncestorOf(dialog.pushButton_edit_nmls)
-    tree.setCurrentItem(project_tree.item(dialog, "resolution"))
-    dialog.pushButton_refL2.click()
-    assert tree.currentItem() is project_tree.item(dialog, "l2_reference")
-    dialog.comboBox_mhmWorkType.setCurrentIndex(1)  # combine existing domains
-    assert [project_tree.item(dialog, key).isHidden() for key in ("l0_reference", "l2_reference", "resolution", "settings")] \
-        == [True, True, True, False]
-
-
-def test_resolution_summary_is_l0_times_the_multiplier(dialog):
-    dialog._grid_l0_info = {"resolution": 100.0}
-    dialog.label_L0ResolutionUnit.setText("m")
-    dialog.spinBox_L2ResolutionMultiplier.setValue(5)
-    dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "resolution"))
-    assert (dialog.label_resL0Value.text(), dialog.label_resL2Value.text(), dialog.label_resL2Unit.text()) == ("100", "500", "m")
-    assert dialog.spinBox_resL2Multiplier.value() == 5
-    assert dialog.spinBox_resL2Multiplier.isReadOnly()
+    assert dialog.scrollArea_resolution.widget().isAncestorOf(dialog.lineEdit_L0Resolution)  # scrolls both ways
+    assert dialog.page_processes.isAncestorOf(dialog.pushButton_edit_nmls)
+    dialog.pushButton_refPageDem.click()
+    assert tree.currentItem() is project_tree.item(dialog, "dem")
+    dialog.comboBox_mhmWorkType.setCurrentIndex(1)  # combine existing domains: their periods and processes
+    assert [project_tree.item(dialog, key).isHidden() for key in ("resolution", "settings")] == [True, True]
 
 
 def _set_up(dialog, tmp_path):
@@ -141,7 +238,7 @@ def _set_up(dialog, tmp_path):
     (tmp_path / ".temp").mkdir()
     (tmp_path / ".temp" / "mhm_qgis_input_state.json").write_text(json.dumps({"mhm_version": "6.0"}))
     layout.forget_project_version()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     processing.mark_workflow(tmp_path, "project_structure", "completed")
 
 
@@ -152,7 +249,7 @@ def test_input_rows_wait_for_domain_setup(dialog, tmp_path):
     rows = [group.child(i) for group in groups for i in range(group.childCount())]
     assert not any(group.isHidden() for group in groups)
     assert all(row.isHidden() for row in rows)
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     process_cases.inputs(dialog)
     assert all(row.isHidden() for row in rows)  # a project, but no Domain Setup yet
     (tmp_path / ".temp").mkdir()
@@ -161,10 +258,9 @@ def test_input_rows_wait_for_domain_setup(dialog, tmp_path):
     processing.mark_workflow(tmp_path, "project_structure", "completed")
     process_cases.inputs(dialog)
     assert not project_tree.item(dialog, "meteo_pre").isHidden()
-    gauges = [project_tree.item(dialog, key) for key in ("gauges", "domain_definition")]
-    assert all(row.isHidden() for row in gauges)  # gauges are optional
-    dialog.checkBox_gaugeOption.setChecked(True)
-    assert not any(row.isHidden() for row in gauges)
+    assert dialog.checkBox_gaugeOption.isChecked()  # gauges are required
+    assert not dialog.checkBox_gaugeOption.isEnabled()
+    assert not any(project_tree.item(dialog, key).isHidden() for key in ("gauges", "domain_definition"))
 
 
 def test_process_cases_are_kept_in_the_state_and_the_namelists(dialog, tmp_path):
@@ -185,8 +281,7 @@ def test_process_cases_are_kept_in_the_state_and_the_namelists(dialog, tmp_path)
     assert all(row.isHidden() for row in temperatures)
     process_cases.changed(dialog, {"pet": 1})  # Hargreaves-Samani: tavg, tmin, tmax and aspect
     assert not any(row.isHidden() for row in temperatures)
-    dialog.treeWidget_projectStructure.setCurrentItem(project_tree.item(dialog, "dem"))
-    assert not dialog.tableWidget_demDerivatives.isRowHidden(2)  # aspect, now needed
+    assert not project_tree.item(dialog, "aspect").isHidden()  # now needed
     state = json.loads((tmp_path / ".temp" / "mhm_qgis_input_state.json").read_text())
     assert state["process_cases"]["pet"] == 1
     assert nml_settings.load_settings(tmp_path)["intro_values"]["main"]["config_processes"]["pet"] == 1  # no namelist yet
@@ -206,20 +301,18 @@ def test_summary_tables_on_the_inputs_morphology_and_dem_derivative_pages(dialog
     table = dialog.tableWidget_inputsSummary
     names = [table.item(row, 0).text() for row in range(table.rowCount())]
     assert {"DEM", "Precipitation"} <= set(names)
-    assert table.item(names.index("Precipitation"), 1).text().startswith("⚪")
+    assert table.item(names.index("Precipitation"), 1).text() == "every run"  # Needed by (the tree has the status)
     tree.setCurrentItem(project_tree.item(dialog, "morphology"))
     table = dialog.tableWidget_morphologySummary
     assert "Precipitation" not in [table.item(row, 0).text() for row in range(table.rowCount())]
-    tree.setCurrentItem(project_tree.item(dialog, "dem"))
-    table = dialog.tableWidget_demDerivatives
-    needed = [not table.isRowHidden(row) for row in range(table.rowCount())]
-    assert needed == [True] + [name in dialog._input_findings for name in ("slope", "aspect", "fdir", "facc")]
-    assert not dialog.widget_demOverride.isVisibleTo(dialog)
-    table.cellClicked.emit(1, 0)
-    assert dialog._dem_override == "slope"
-    assert dialog.widget_demOverride.isVisibleTo(dialog)
-    dialog.pushButton_refL0Derivatives.click()
-    assert tree.currentItem() is project_tree.item(dialog, "l0_reference")
+    names = [table.item(row, 0).text() for row in range(table.rowCount())]
+    shown = [title for key, title, name in (("slope", "Slope", "slope"), ("aspect", "Aspect", "aspect"),
+                                            ("flow_direction", "Flow direction", "fdir"),
+                                            ("flow_accumulation", "Flow accumulation", "facc"))
+             if name in dialog._input_findings]
+    assert names[:1 + len(shown)] == ["DEM", *shown]  # the derivatives the process cases need, after DEM
+    assert table.columnCount() == 9
+    assert table.item(0, 6).text() == "Select the DEM."  # Extent Modification
 
 
 def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_path, monkeypatch):
@@ -230,7 +323,7 @@ def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_pa
 
     _set_up(dialog, tmp_path)
     process_cases.inputs(dialog)
-    keys = ("l0_reference", "l2_reference", "resolution", "settings", "dem")
+    keys = ("resolution", "settings", "dem")
 
     def statuses():
         project_tree.refresh(dialog)
@@ -239,30 +332,33 @@ def test_domain_setup_and_dem_derivative_rows_show_status_and_eye(dialog, tmp_pa
     def eye(key):
         return not project_tree.item(dialog, key).icon(project_tree.VIEW).isNull()
 
-    assert statuses() == ["⚪"] * 5
-    assert not any(eye(key) for key in keys[:4])
+    assert statuses() == ["⚪"] * 3
+    assert not any(eye(key) for key in keys[:2])
     dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
-    dialog._grid_l2_header = {"ncols": 4, "nrows": 4, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1000.0}
-    dialog._grid_l2_metadata = {"configuration_fingerprint": "scanned"}
-    monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "scanned")
-    dialog.lineEdit_L1Resolution.setText("1000")
-    dialog.lineEdit_L11Resolution.setText("1000")
+    assert statuses()[0] == "🟡"  # an L0 file, no Set grid yet
+    dialog._grid_l2_metadata = {"l1_header": {"ncols": 1}, "configuration_fingerprint": "set"}
+    monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "set")
     (tmp_path / "mhm.nml").write_text("")
-    assert statuses() == ["✅", "✅", "✅", "✅", "🟢"]  # the DEM is read, ▶ fills it and derives
-    assert all(eye(key) for key in keys[:4])
+    monkeypatch.setattr(dialog.input_combo("dem"), "currentLayer", object)
+    assert statuses() == ["✅", "✅", "🟡"]  # the DEM Set fits the grid, ▶ fills it and derives
+    assert all(eye(key) for key in keys[:2])
+    dialog._dem_error = "The DEM does not cover the common extent."
+    assert statuses()[2] == "⚪"
     dialog._input_findings["latlon"] = SimpleNamespace(ok=False)  # v5.13 also needs latlon.nc
-    assert statuses()[2] == "🟢"
+    assert statuses()[0] == "🟡"
     del dialog._input_findings["latlon"]
-    monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "changed")  # e.g. new precipitation files
-    assert statuses()[1] == "⚪"  # the saved grid no longer counts; no folder to scan
+    monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "changed")  # e.g. another L2 file
+    assert statuses()[0] == "🟡"  # the Set grid no longer counts
 
+    monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "set")
     shown, opened = [], []
-    monkeypatch.setattr(grid_display, "display_grids", lambda _dialog, levels: shown.append(levels) or ["L1", "L11/L3"])
+    monkeypatch.setattr(grid_display, "display_grids", lambda _dialog, levels: shown.append(levels) or ["L0", "L2"])
     monkeypatch.setattr(dialog.pushButton_editNmlsFinal, "click", lambda: opened.append(True))
     resolution = project_tree.item(dialog, "resolution")
+    statuses()
     project_tree.clicked(dialog, resolution, project_tree.VIEW)
-    assert shown == [["L1", "L11"]]  # one eye, both grids
-    assert dialog._viewed["resolution"] == ["L1", "L11/L3"]
+    assert shown == [["L0", "L1", "L11", "L2"]]  # one eye, every grid
+    assert dialog._viewed["resolution"] == ["L0", "L2"]
     project_tree.clicked(dialog, resolution, project_tree.VIEW)
     assert "resolution" not in dialog._viewed
     project_tree.clicked(dialog, project_tree.item(dialog, "settings"), project_tree.VIEW)
@@ -354,6 +450,16 @@ def test_columns_the_run_buttons_and_the_next_step(dialog, tmp_path, monkeypatch
     assert (run.text(), run.toolTip(), run.isEnabled()) == ("▶", "Run", False)  # nothing added, no setup
     assert project_tree.button(dialog, "lc") is None  # no add or edit buttons
     assert {button.size().width() for button in (run, project_tree.button(dialog, "outputs"))} == {24}
+    observe = project_tree.button(dialog, "observations")
+    assert not observe.isEnabled()  # no additional observation
+    dialog._observation_inputs["sm"] = {}
+    project_tree.refresh(dialog)
+    assert observe.isEnabled()
+    dialog._observation_inputs.clear()
+    assert {tree.itemWidget(project_tree.item(dialog, key), project_tree.VIEW).text()
+            for key in ("morphology_process", "meteorology_process", "observations")} == {"↺"}
+    assert tree.itemWidget(project_tree.item(dialog, "morphology"), project_tree.STATUS_COLUMN) is None
+    assert run is tree.itemWidget(project_tree.item(dialog, "morphology_process"), project_tree.STATUS_COLUMN)
 
     def pointed():
         project_tree.refresh(dialog)
@@ -365,20 +471,23 @@ def test_columns_the_run_buttons_and_the_next_step(dialog, tmp_path, monkeypatch
     _set_up(dialog, tmp_path)
     dialog.lineEdit_ProjectFolder.setText(str(tmp_path))
     dialog.project_directory = str(tmp_path)  # as Set does
-    assert pointed() == ["l0_reference"]
+    assert pointed() == ["resolution"]
     dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
-    dialog._grid_l2_header = {"cellsize": 1000.0}
-    dialog._grid_l2_metadata = {"configuration_fingerprint": "scanned"}
-    monkeypatch.setattr(grid, "precipitation_folder", lambda _dialog: str(tmp_path))
+    dialog._grid_l2_metadata = {"l1_header": {"ncols": 1}, "configuration_fingerprint": "set"}
+    monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "set")
+    assert pointed() == ["time_period"]  # the next Setup step
     monkeypatch.setattr(grid, "grid_fingerprint", lambda _dialog: "changed")
-    assert pointed() == ["l2_reference"]  # scan the precipitation again
+    assert pointed() == ["resolution"]  # an input changed: Set the grid again
 
 
 def test_type_radios_are_designer_widgets_with_the_saved_mode_texts(dialog):
     from mhm_qgis.qt.controllers import categorical, main
 
-    for kind, page in categorical.PAGES.items():
-        assert [radio.text() for radio in getattr(dialog, f"buttonGroup_{page}").buttons()] == list(categorical.MODES[kind])
+    for kind, page in categorical.PAGES.items():  # the labels may differ from the saved mode texts
+        group = getattr(dialog, f"buttonGroup_{page}")
+        assert [main.mode_of(radio) for radio in group.buttons()] == list(categorical.MODES[kind])
+        assert all(categorical.is_ready(main.mode_of(radio)) == radio.objectName().endswith("Ready")
+                   for radio in group.buttons())
     assert [radio.text() for radio in dialog.buttonGroup_domainDefinition.buttons()] == list(main.DOMAIN_TYPES)
     assert dialog.radioButton_domainDefinitionDelineator.text() == main.DOMAIN_TYPES[1]
 
@@ -416,7 +525,9 @@ def test_a_forcing_row_embeds_its_details_and_steps_on_the_time_toolbar(dialog):
     assert dialog._post.axis[1] is print
 
 
-def test_next_step_waits_on_domain_setup_then_on_nesting_resolutions(dialog, tmp_path):
+def test_next_step_waits_on_domain_setup_then_on_a_set_grid(dialog, tmp_path, monkeypatch):
+    from mhm_qgis.qt.controllers import grid
+
     def status(key):
         project_tree.refresh(dialog)
         return project_tree.item(dialog, key).text(project_tree.STATUS_COLUMN)
@@ -427,12 +538,10 @@ def test_next_step_waits_on_domain_setup_then_on_nesting_resolutions(dialog, tmp
     assert project_tree.item(dialog, "domain_setup").text(project_tree.NEXT) == "➤"
     _set_up(dialog, tmp_path)
     assert status("domain_setup") == "✅"
+    assert status("resolution") == "⚪"
     dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
-    dialog._grid_l2_header = {"ncols": 4, "nrows": 4, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1000.0}
-    dialog.lineEdit_L11Resolution.setText("1000")
-    dialog.lineEdit_L1Resolution.setText("300")  # 3 x L0, but not a whole factor of L2
-    assert status("resolution") == "🟢"
-    dialog.lineEdit_L1Resolution.setText("500")
+    assert status("resolution") == "🟡"
+    monkeypatch.setattr(grid, "grid_current", lambda _dialog: True)
     assert status("resolution") == "✅"
 
 
@@ -467,9 +576,13 @@ def test_forcing_must_cover_the_simulation_period_shown_on_the_time_bar(dialog, 
     time.save(dialog)
     assert dialog._post.ui.horizontalSlider_postTime.maximum() == 9  # ten days
     short = SimpleNamespace(start_time="2000-01-01T00:00", end_time="2000-01-05T00:00")
-    assert "not the simulation period 2000-01-01 to 2000-01-10" in forcing._outside_period(dialog, "tavg", short)
+    daily = SimpleNamespace(output_temporal_resolution="Daily", temporal_resolution="Daily")
+    assert "not the simulation period 2000-01-01 to 2000-01-10" in forcing._outside_period(dialog, "tavg", short, daily)
     long = SimpleNamespace(start_time="1999-12-31T00:00", end_time="2000-01-10T00:00")
-    assert forcing._outside_period(dialog, "tavg", long) is None
+    assert forcing._outside_period(dialog, "tavg", long, daily) is None
+    yearly = SimpleNamespace(start_time="2000-01-01T00:00", end_time="2000-01-01T00:00")  # one whole year
+    assert forcing._outside_period(dialog, "tann", yearly, SimpleNamespace(
+        output_temporal_resolution="Yearly", temporal_resolution="Yearly")) is None
 
 
 def test_inputs_count_after_their_run_until_a_new_crs_and_a_failed_stage_gets_the_pointer(dialog, tmp_path, monkeypatch):
@@ -488,16 +601,22 @@ def test_inputs_count_after_their_run_until_a_new_crs_and_a_failed_stage_gets_th
         project_tree.refresh(dialog)
         return dem.text(project_tree.STATUS_COLUMN)
 
-    dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}
-    assert status() == "🟢"  # A has not run: its files do not count
+    gdal = pytest.importorskip("osgeo.gdal")
+    from mhm_qgis.qt.controllers import main
+
+    dem_path = str(tmp_path / "dem.tif")
+    gdal.GetDriverByName("GTiff").Create(dem_path, 2, 2, 1).FlushCache()
+    main.add_file_input(dialog, "dem", dem_path, manual=True, source_crs="EPSG:32632")
+    dialog._dem_error = None  # as a DEM Set on the common grid leaves it
+    assert status() == "🟡"  # A has not run: its files do not count
     processing.mark_workflow(tmp_path, "execute_all_morphology", "completed")
     assert status() == "✅"
     dialog.mProjectionSelectionWidget_crs.setCrs(QgsCoordinateReferenceSystem("EPSG:3035"))
     assert status() == "✅"  # nothing applies before Set
     dialog.pushButton_setCRS.click()
     assert processing.workflow(tmp_path, "execute_all_morphology")["status"] == "pending"
-    dialog._grid_l0_info = {"resolution": 100.0, "unit": "m"}  # re-read from the DEM, which this test has not
-    assert status() == "🟢"
+    assert status() == "⚪"  # the grid must be Set again in the new CRS before the DEM fits it
+    assert dialog.label_demDescription.text().startswith("Set the resolutions first")
     dialog._failed_step = "dem"
     project_tree.refresh(dialog)
     assert dem.text(project_tree.NEXT) == "➤"
@@ -511,10 +630,150 @@ def test_set_gauges_builds_the_network_the_delineator_opens_on(dialog, tmp_path,
     monkeypatch.setattr(main, "_selected_outlets", lambda *_args: ["1"])
     monkeypatch.setattr(hydrology, "start_domain_preflight", lambda *args: started.append(args) or True)
     monkeypatch.setattr(main.QMessageBox, "information", lambda *args: notes.append(args[2]))
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     assert main.open_domain_delineator(dialog) is False  # Set the Gauges first
     assert not started
     assert "Set on the Gauges page" in notes[-1]
     dialog.pushButton_setGauges.click()
     assert started
     assert len(notes) == 1  # no popup over the running task: a failure's message must show alone
+
+
+def test_an_embedded_form_drops_its_window_minimum(dialog):
+    """The delineator's .ui minimum (800 x 560) is a window's: embedded, it would push the page past
+    the dialog's right edge, so only the form's layout minimum counts."""
+    from mhm_qgis.qt.controllers import main
+
+    form = QDialog()
+    form.setMinimumSize(800, 560)
+    main.embed(dialog, "domainDefinition", form)
+    assert (form.minimumSize().width(), form.minimumSize().height()) == (0, 0)
+    assert dialog.widget_domainDefinitionForm.minimumSizeHint().width() < 800
+    main.embed(dialog, "domainDefinition", None)
+
+
+def test_the_time_window_dialog_closes_on_ok_once_scanned(dialog, monkeypatch):
+    from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox
+
+    from mhm_qgis.qt.dialogs import time_period_netcdf_input
+    from mhm_qgis.qt.dialogs.time_period_netcdf_input import TimePeriodDialog
+
+    warned = []
+    monkeypatch.setattr(time_period_netcdf_input.QMessageBox, "warning", lambda *args: warned.append(args[2]))
+    prompt = TimePeriodDialog({}, dialog)
+    prompt.show()
+    ok = prompt.buttonBox.button(QDialogButtonBox.StandardButton.Ok)
+    ok.click()
+    assert (warned, prompt.isVisible()) == (["Scan the files first."], True)
+    prompt.found = {"start": "2001-01-01T00:00", "end": "2001-12-31T00:00", "step": "Daily"}
+    ok.click()
+    assert (prompt.result(), prompt.isVisible()) == (QDialog.DialogCode.Accepted, False)
+
+
+def test_forcing_tables_show_how_each_input_reaches_the_grid(dialog):
+    from mhm_qgis.qt.controllers import forcing
+
+    for table in (dialog.tableWidget_meteoInputs, dialog.tableWidget_observationVarInputs):
+        headers = [table.horizontalHeaderItem(column).text() for column in range(table.columnCount())]
+        assert headers[7:] == ["Cell Size", "nRows", "nCols", "Extent", "Extent Modification",
+                               "Unit Conversion", "Regridding", "Edit"]
+        assert len(forcing.scan_details(dialog, "pre", {}, None, "L2")) == len(headers) - 8
+
+
+def test_reset_and_the_dem_step_unload_the_layers_of_the_files_they_replace(dialog, tmp_path, monkeypatch):
+    """A layer left on a deleted or rewritten file makes GDAL in QGIS read the old file (south-johnstone-river)."""
+    from qgis.PyQt.QtWidgets import QDialog, QMessageBox
+
+    from mhm_qgis.core.executions import reset
+    from mhm_qgis.qgis_bridge.layers import project as layer_project
+    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt.workflows import hydrology
+
+    unloaded = []
+    monkeypatch.setattr(layer_project, "remove_under", lambda folder, log=None: unloaded.append(Path(folder).name))
+    monkeypatch.setattr(hydrology, "remove_under", lambda folder, log=None: unloaded.append(Path(folder).name))
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *_args: QMessageBox.StandardButton.Yes))
+    monkeypatch.setattr(reset, "clear", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(hydrology, "dem_options", lambda _dialog: {})
+    monkeypatch.setattr(dialog.task_coordinator, "submit", lambda *_args, **_kwargs: True)
+    dialog.setup_folder = str(tmp_path)
+
+    form = dialog.verticalLayout_domainDefinitionForm
+    main.embed(dialog, "domainDefinition", QDialog())  # the delineator: its canvas layers are outside the project
+    project_tree._reset(dialog, "morphology")
+    assert unloaded == ["Morphology", "morph", "lai"]
+    assert not form.count()
+    main.embed(dialog, "domainDefinition", QDialog())
+    assert hydrology.start_dem_derivatives(dialog)
+    assert unloaded[-1] == "Morphology"
+    assert not form.count()
+
+
+def test_set_gauges_checks_the_delineator_inputs_against_the_current_grid(dialog, monkeypatch):
+    """Existing files may lie on the previous common grid: the DEM step reuses or rebuilds them."""
+    from mhm_qgis.qt.workflows import hydrology
+
+    started = []
+    monkeypatch.setattr(hydrology, "dem_options", lambda _dialog: {})
+    monkeypatch.setattr(hydrology, "domain_prepared", lambda _dialog: True)
+    monkeypatch.setattr(hydrology, "start_dem_derivatives", lambda *_args, **kwargs: started.append(kwargs) or True)
+    assert hydrology.start_domain_preflight(dialog, (), lambda _result: None)
+    assert started
+
+
+def test_a_new_l0_grid_forgets_the_watershed_saved_on_the_old_one(dialog, tmp_path, monkeypatch):
+    from mhm_qgis.core.handlers.state import processing
+    from mhm_qgis.core.handlers.state.domain_state import load_state, save_state
+    from mhm_qgis.qt.controllers import grid
+
+    def header(xll):
+        return {"ncols": 2, "nrows": 2, "xllcorner": xll, "yllcorner": 0.0, "cellsize": 1.0}
+
+    for name, value in {"_require_crs": True, "reload_files": None, "current_l0_resolution": 1.0,
+                        "resolution": 1.0, "grid_fingerprint": "f", "show_headers": None, "check_dem": None}.items():
+        monkeypatch.setattr(grid, name, lambda *_args, value=value, **_kwargs: value)
+    monkeypatch.setattr(grid.rules, "resolutions", lambda *_args: [])
+    monkeypatch.setattr(grid.morphology_setup, "latlon", lambda *_args, **_kwargs: ())
+    dialog.setup_folder = str(tmp_path)
+    for xll, cleared in ((0.0, False), (0.5, True)):
+        save_state(tmp_path, {"merged_mask_path": "mask.tif", "outlets": {}})
+        processing.save_grid_metadata(tmp_path, {"l0_header": header(0.0), "configuration_fingerprint": "f"})
+        new = header(xll)
+        monkeypatch.setattr(grid, "build_grid", lambda _dialog, new=new: {
+            "l0_header": new, "l1_header": new, "l11_header": new, "l2_header": new, "l2_resolution": 1.0,
+            "l2_unit": "m", "l2_ratio_to_l0": 1, "extent_note": "", "configuration_fingerprint": "f"})
+        grid.set_resolution(dialog)
+        assert (load_state(tmp_path)["merged_mask_path"] == "") is cleared
+
+
+def test_a_form_that_refuses_to_close_stays_and_the_dem_step_waits(dialog, monkeypatch):
+    """The Domain Delineator refuses to close while it saves: deleting it would break that save."""
+    from qgis.PyQt.QtWidgets import QDialog
+
+    from mhm_qgis.qt.controllers import main
+    from mhm_qgis.qt.workflows import hydrology
+
+    class Busy(QDialog):
+        def closeEvent(self, event):
+            event.ignore()
+
+    busy, failures = Busy(), []
+    main.embed(dialog, "domainDefinition", busy)
+    monkeypatch.setattr(hydrology, "dem_options", lambda _dialog: {})
+    assert not main.embed(dialog, "domainDefinition", None)
+    assert not hydrology.start_dem_derivatives(dialog, failed=failures.append)
+    assert dialog.verticalLayout_domainDefinitionForm.itemAt(0).widget() is busy
+    assert failures
+    busy.closeEvent = lambda event: event.accept()
+    assert main.embed(dialog, "domainDefinition", None)
+
+
+def test_a_combined_run_hides_the_time_period_and_processes_rows(dialog):
+    """A combined run takes each domain's periods and their common process cases."""
+    from mhm_qgis.qt.controllers import project
+
+    for index, hidden in ((1, True), (0, False)):
+        with QSignalBlocker(dialog.comboBox_mhmWorkType):
+            dialog.comboBox_mhmWorkType.setCurrentIndex(index)
+        project.show_work_type(dialog)
+        assert [project_tree.item(dialog, key).isHidden() for key in ("time_period", "settings")] == [hidden] * 2

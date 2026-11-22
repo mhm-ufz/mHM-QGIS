@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from .signatures import baseflow
+from .signatures import baseflow, filled
 
 RANKINGS = ("rainfall", "observed peak", "abs peak error", "abs volume error")
 
@@ -28,7 +28,7 @@ def detect(q, f_on=None, f_off=None, merge_gap=None, min_peak=None):
     f_on, f_off = f_on or options["f_on"], f_off or options["f_off"]
     merge_gap = options["merge_gap"] if merge_gap is None else merge_gap
     min_peak = options["min_peak"] if min_peak is None else min_peak
-    flow = np.nan_to_num(np.asarray(q, float))
+    flow = filled(q)
     quick = flow - baseflow(flow)
     on = f_on * np.percentile(quick, 99)
     off = f_off * on

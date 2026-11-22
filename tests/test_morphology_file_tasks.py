@@ -311,7 +311,7 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
     second = dict(first, outlet_id="2", x=950, y=50, basin_id=8,
                   picked={"x": 950, "y": 50, "crs": "EPSG:32632", "source": "snapped"},
                   raster_path=str(folder / "second.tif"), domain_id=None)
-    preview = delineation.show(None, project_folder=tmp_path, filled_dem=source, outlet=first)
+    preview = delineation.show(None, setup_folder=tmp_path, filled_dem=source, outlet=first)
     domain_state.save_preview(tmp_path, "points.shp", "id", "1", preview)
     state = domain_state.load_state(tmp_path)
     assert not any(r.get("is_domain") for r in state["outlets"].values())  # Show does not commit choices.
@@ -320,7 +320,7 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
     assert domain_state.cached_delineation(tmp_path, source, 850, 150, entry)
     assert domain_state.cached_delineation(tmp_path, source, 851, 150, entry) is None
     first["cached"] = entry
-    result = delineation.save(None, project_folder=tmp_path, filled_dem=source,
+    result = delineation.save(None, setup_folder=tmp_path, filled_dem=source,
                               outlets=[first, second], merged_path=folder / "merged.tif")
     assert set(result["outlets"]) == {"1", "2"}
     assert result["outlets"]["1"]["raster_path"] == preview["raster_path"]
@@ -333,8 +333,8 @@ def test_show_cache_and_save_all_outlets_without_redelineating(tmp_path, monkeyp
     second["domain_id"] = 1
     second["cached"] = result["outlets"]["2"]
     monkeypatch.setattr(delineation.raster, "_flow_context", lambda *args: pytest.fail("Unexpected delineation"))
-    assert delineation.show(None, project_folder=tmp_path, filled_dem=source, outlet=first)["mask_value"] == 7
-    result = delineation.save(None, project_folder=tmp_path, filled_dem=source,
+    assert delineation.show(None, setup_folder=tmp_path, filled_dem=source, outlet=first)["mask_value"] == 7
+    result = delineation.save(None, setup_folder=tmp_path, filled_dem=source,
                               outlets=[first, second], merged_path=folder / "merged.tif",
                               dem_domain=(2, str(folder / "dem-mask.tif"), str(folder / "dem.asc")))
     assert result["outlets"]["2"]["mask_value"] == 8
@@ -462,6 +462,32 @@ def test_dem_derivatives_rebuild_when_the_source_grid_changes(tmp_path):
     dataset = None
 
 
+def test_a_replacement_derivative_is_shifted_and_padded_onto_the_header(tmp_path):
+    from mhm_qgis.core.handlers.file.netcdf.raster import source as raster_source
+
+    source, slope, folder = tmp_path / "dem.tif", tmp_path / "slope.tif", tmp_path / "geometry"
+    _dem(source)
+    raster = gdal.GetDriverByName("GTiff").Create(str(slope), 4, 3, 1, gdal.GDT_Float32)
+    raster.SetGeoTransform((230, 100, 0, 830, 0, -100))  # 0.3 cell off the L0 lattice
+    crs = osr.SpatialReference()
+    crs.ImportFromEPSG(32632)
+    raster.SetProjection(crs.ExportToWkt())
+    raster.GetRasterBand(1).Fill(7)
+    raster.GetRasterBand(1).SetNoDataValue(-9999)
+    raster = None
+    header = {"ncols": 12, "nrows": 12, "xllcorner": -100.0, "yllcorner": -100.0, "cellsize": 100.0,
+              "nodata_value": -9999.0}
+    options = {"log": lambda _m: None, "header": header, "source_crs": "EPSG:32632", "target_crs": "EPSG:32632"}
+    dem_derivative_files(str(source), str(folder), **options)
+    result = dem_derivative_files(str(source), str(folder), replacements={"slope": (str(slope), "EPSG:32632")},
+                                  **options)
+    assert result["reused"] is False  # the replacement is in the fingerprint
+    values = gdal.Open(raster_source(folder / "dem_derivatives.nc", "slope")).ReadAsArray()
+    assert (values[3:6, 3:7] == 7).all()  # shifted by -30 m to x 200..600, y 500..800
+    assert (values == 7).sum() == 12
+    assert values[2, 3] == values[0, 0] == -9999  # the DEM's slope is not kept beyond the raster
+
+
 def test_dem_derivatives_delegate_the_expensive_pass_to_the_caller(tmp_path):
     """The bridge injects a worker-backed `compute`; the hook must be honoured."""
     source = tmp_path / "dem.tif"
@@ -501,6 +527,53 @@ def test_a_dem_without_crs_gets_its_assigned_one_even_in_the_target_crs(tmp_path
     assert _prepared_dem_source(own, "EPSG:32632", "EPSG:32632", str(tmp_path / "x.nc")) == str(own)
 
 
+def test_an_assigned_crs_replaces_a_wrong_label_even_when_it_is_the_target(tmp_path):
+    """A DEM labelled 4326 whose coordinates are 32632: assigning 32632 must relabel it, or the gauges
+    are transformed into 4326 and fall outside the grid."""
+    from osgeo import osr
+
+    from mhm_qgis.core.handlers.raster.tasks import _prepared_dem_source
+
+    own, mislabelled = tmp_path / "own.tif", tmp_path / "mislabelled.tif"
+    _dem(own)
+    gdal.Translate(str(mislabelled), str(own), outputSRS="EPSG:4326")
+    prepared = _prepared_dem_source(mislabelled, "EPSG:32632", "EPSG:32632", str(tmp_path / "prepared.nc"))
+    assert prepared != str(mislabelled)
+    label, utm = osr.SpatialReference(gdal.Open(prepared).GetProjection()), osr.SpatialReference()
+    utm.ImportFromEPSG(32632)
+    assert label.IsSame(utm)
+
+
+
+def test_a_blank_source_crs_means_the_dem_files_own_and_is_still_reprojected(tmp_path):
+    from mhm_qgis.core.handlers.raster.tasks import _prepared_dem_source
+
+    own = tmp_path / "own.tif"
+    _dem(own)
+    prepared = _prepared_dem_source(own, "", "EPSG:3035", str(tmp_path / "prepared.nc"))
+    assert osr.SpatialReference(wkt=gdal.Open(prepared).GetProjection()).GetAuthorityCode(None) == "3035"
+
+
+def test_native_worker_relays_the_warnings_of_a_successful_job(tmp_path, monkeypatch):
+    import json
+
+    from mhm_qgis.core.executions.morphology import commands
+
+    class Worker:  # what the child writes: mHM-tools' warnings among other output, then its result
+        returncode = 0
+
+        def __init__(self, args, stdout, **_):
+            stdout.write("noise\nWARNING: 5 cells were not in the lookup table\n")
+            Path(args[-1]).write_text(json.dumps({"result": {"kind": "lc"}}), encoding="utf-8")
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(commands.subprocess, "Popen", Worker)
+    messages = []
+    assert commands.native_worker(None, {"mode": "lookup"}, tmp_path, messages.append) == {"kind": "lc"}
+    assert messages == ["WARNING: 5 cells were not in the lookup table"]
+
 def test_native_worker_runs_the_dem_derivative_job(tmp_path):
     from mhm_qgis.core.native_worker import run
 
@@ -537,3 +610,84 @@ def test_gauge_positions_use_saved_points_in_a_native_worker(tmp_path):
         values = dataset.variables["idgauges"][:].filled(-9999)
     assert values[2, 3] == 42
     assert np.count_nonzero(values != -9999) == 1
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 4])
+def test_the_dem_is_padded_to_blocks_on_the_l0_lattice(tmp_path, n):
+    from mhm_qgis.core.handlers.raster.tasks import _padded_to_blocks
+
+    header = {"xllcorner": 0.0, "yllcorner": 0.0, "cellsize": float(n)}
+    for k in range(n):
+        source = tmp_path / f"dem_{n}_{k}.tif"
+        dataset = gdal.GetDriverByName("GTiff").Create(str(source), 7, 5, 1, gdal.GDT_Float32)
+        dataset.SetGeoTransform((k, 1.0, 0.0, k + 5, 0.0, -1.0))  # lower-left corner (k, k)
+        dataset.GetRasterBand(1).Fill(1.0)
+        dataset = None
+        padded = _padded_to_blocks(source, n, tmp_path / f"padded_{n}_{k}.nc", header)
+        if n == 1:
+            assert padded == source
+            continue
+        result = gdal.Open(str(padded))
+        x0, _, _, y1, _, height = result.GetGeoTransform()
+        cols, rows = result.RasterXSize, result.RasterYSize
+        assert (x0 % n, (y1 + rows * height) % n) == (0, 0)  # block edges on the L0 lattice
+        assert (cols % n, rows % n) == (0, 0)
+
+
+def test_a_filled_dem_on_another_grid_is_rebuilt_despite_its_fingerprint(tmp_path):
+    from netCDF4 import Dataset
+
+    source, folder = tmp_path / "dem.tif", tmp_path / "geometry"
+    _dem(source)
+    dem_derivative_files(str(source), str(folder))
+    with Dataset(folder / "filled_dem.nc", "r+") as filled:  # odzi: the previous grid, the current fingerprint
+        filled["x"][:] = filled["x"][:] + 100.0
+
+    again = dem_derivative_files(str(source), str(folder))
+
+    assert again["reused"] is False
+    with Dataset(folder / "filled_dem.nc") as filled, Dataset(folder / "dem_derivatives.nc") as bundle:
+        np.testing.assert_allclose(filled["x"][:], bundle["x"][:])
+
+
+@pytest.mark.parametrize(("factor", "with_header"), [(1, False), (1, True), (2, True)])
+def test_the_filled_dem_is_not_read_back_from_the_replaced_bundle(tmp_path, monkeypatch, factor, with_header):
+    """A read of the bundle path just replaced can return the old file in QGIS (odzi, south-johnstone-river)."""
+    from mhm_qgis.core.handlers.file.netcdf import raster
+
+    source, folder = tmp_path / "dem.tif", tmp_path / "geometry"
+    _dem(source)
+    reads, copy = [], raster.copy_rasters
+    monkeypatch.setattr(raster, "copy_rasters",
+                        lambda path, sources, *args, **kwargs: reads.append((Path(path).name, sources))
+                        or copy(path, sources, *args, **kwargs))
+    header = {"ncols": 10 // factor, "nrows": 10 // factor, "xllcorner": 0.0, "yllcorner": 0.0,
+              "cellsize": 100.0 * factor} if with_header else None
+
+    dem_derivative_files(str(source), str(folder), header=header, upscale_factor=factor)
+
+    filled = [sources for name, sources in reads if name == "filled_dem.nc"]
+    assert filled
+    bundle = f'"{folder / "dem_derivatives.nc"}"'  # the staged copy has the same name in its own folder
+    assert all(bundle not in str(uri) for sources in filled for uri in sources.values())
+
+
+def test_mapped_soil_horizons_keep_their_own_crs(monkeypatch, tmp_path):
+    """A vector horizon is burnt in the DEM's CRS: the table's source CRS would relabel it (all -9999)."""
+    from mhm_qgis.core.executions.morphology import commands
+    from mhm_qgis.core.morphology.layers import categorical
+
+    seen = {}
+
+    def stack(*_args, **kwargs):
+        seen.update(kwargs)
+        raise RuntimeError("stacked")
+
+    monkeypatch.setattr(categorical, "lookup_soil_layers", lambda *_args, **_kwargs: ([("h.tif", 0, 5)], "d.txt"))
+    monkeypatch.setattr(categorical, "stack_ready_layers", stack)
+    job = {"input_path": "", "source_crs": "EPSG:4326", "layers": [("soil.gpkg", 0, 5)], "setup_folder": str(tmp_path),
+           "lookup": {"lookup_table": "t.csv", "mapping_field": "m", "class_field": "c"}, "kind": "soil",
+           "target_crs": "EPSG:32632", "target_header": {}}
+    with pytest.raises(RuntimeError, match="stacked"):
+        commands.ready(None, job)
+    assert seen["source_crs"] == ""

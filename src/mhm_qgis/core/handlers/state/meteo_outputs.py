@@ -13,15 +13,15 @@ PathInput = str | Path
 class MeteorologyOutputState:
     """Small helper for recording prepared meteorology outputs."""
 
-    def __init__(self, project_folder, log=None) -> None:
+    def __init__(self, setup_folder, log=None) -> None:
         """Take the project folder, not a dialog: `core` must not hold Qt objects."""
-        self.project_folder = project_folder
+        self.setup_folder = setup_folder
         self.log = log
 
     def state_path(self) -> Path | None:
-        if not self.project_folder:
+        if not self.setup_folder:
             return None
-        return processing.state_path(self.project_folder)
+        return processing.state_path(self.setup_folder)
 
     #: The only sections this writer owns in the shared processing state.
     OWNED_SECTIONS = ("version", "outputs")
@@ -30,7 +30,7 @@ class MeteorologyOutputState:
         path = self.state_path()
         if not path:
             return {"version": 1, "outputs": {}}
-        state = processing.load(self.project_folder)
+        state = processing.load(self.setup_folder)
         state.setdefault("version", 1)
         state.setdefault("outputs", {})
         return state
@@ -47,7 +47,7 @@ class MeteorologyOutputState:
             return
         owned = {k: state[k] for k in self.OWNED_SECTIONS if k in state}
         try:
-            processing.overlay(self.project_folder, owned)
+            processing.overlay(self.setup_folder, owned)
         except OSError as error:
             self._log(
                 f"WARNING: Could not save processing state: {error}")
@@ -63,6 +63,6 @@ class MeteorologyOutputState:
         owner; this class keeps only the meteorology-specific label.
         """
         register(
-            self.project_folder, path,
+            self.setup_folder, path,
             name=name, category="meteorology",
         )

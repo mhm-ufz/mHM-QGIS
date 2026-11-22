@@ -1,5 +1,5 @@
 """The standalone `mhm-qgis` command: run the app with an importable QGIS, or install a
-private micromamba QGIS runtime and relaunch the app inside it.
+private pixi QGIS runtime and relaunch the app inside it.
 
 Only in the PyPI wheel. The QGIS plugin (`mhm_qgis`) never imports this package."""
 from __future__ import annotations
@@ -19,7 +19,7 @@ import sys
 import tempfile
 import zipfile
 from importlib import metadata
-from importlib.resources import as_file, files
+from importlib.resources import files
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -71,64 +71,57 @@ def runtime_root(system=None, environ=None, home=None) -> Path:
     return base / APP_NAME
 
 
-def _manifest() -> dict:
-    return json.loads(files(__package__).joinpath("micromamba.json").read_text())
+def _manifest() -> bytes:
+    return files(__package__).joinpath("pixi.toml").read_bytes()
 
 
-def _lock_resource(tag: str):
-    return files(__package__).joinpath("locks", f"{tag}.lock")
-
-
-def _lock_digest(tag: str) -> str:
-    return hashlib.sha256(_lock_resource(tag).read_bytes()).hexdigest()
+def _manifest_digest() -> str:
+    return hashlib.sha256(_manifest()).hexdigest()
 
 
 def _prefix(root: Path) -> Path:
-    """One environment, reused while the lock is unchanged (an upgrade only reinstalls mhm-qgis)."""
-    return root / "envs" / APP_NAME
+    """pixi's environment, reused while pixi.toml is unchanged (an upgrade only reinstalls mhm-qgis)."""
+    return root / ".pixi" / "envs" / "default"
 
 
 def _python(prefix: Path, tag: str) -> Path:
     return prefix / ("python.exe" if tag == "win-64" else "bin/python")
 
 
-def _micromamba(root: Path, tag: str) -> Path:
-    suffix = ".exe" if tag == "win-64" else ""
-    return root / "bin" / f"micromamba{suffix}"
+def find_pixi() -> Path | None:
+    """pixi on PATH, or where its installer puts it (`$PIXI_HOME`, by default ~/.pixi)."""
+    home = Path(os.environ.get("PIXI_HOME") or Path.home() / ".pixi")
+    installed = home / "bin" / ("pixi.exe" if os.name == "nt" else "pixi")
+    found = shutil.which("pixi") or (installed if installed.is_file() else None)
+    return Path(found) if found else None
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def ensure_micromamba(root: Path, tag: str, opener=urlopen) -> Path:
-    """Download the pinned micromamba executable after checksum validation."""
-    spec = _manifest()["platforms"][tag]
-    target = _micromamba(root, tag)
-    if target.is_file() and _sha256(target) == spec["sha256"]:
-        return target
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(dir=target.parent)
-    temporary = Path(temporary_name)
+def ensure_pixi(opener=urlopen) -> Path:
+    """Return pixi, installing it with the official installer when missing; shell profiles stay untouched."""
+    if found := find_pixi():
+        return found
+    environment = {**os.environ, "PIXI_NO_PATH_UPDATE": "1"}
+    if os.name == "nt":
+        command, script = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                           "irm -useb https://pixi.sh/install.ps1 | iex"], None
+    else:  # the script itself, so neither curl nor wget is needed
+        request = Request("https://pixi.sh/install.sh", headers={"User-Agent": f"{APP_NAME}/{__version__}"})
+        with opener(request) as response:
+            script = response.read().decode()
+        command = ["sh"]
     try:
-        request = Request(spec["url"], headers={"User-Agent": f"{APP_NAME}/{__version__}"})
-        size = 0
-        with os.fdopen(descriptor, "wb") as output, opener(request) as response:
-            for block in iter(lambda: response.read(1024 * 1024), b""):
-                size += len(block)
-                output.write(block)
-        if size != spec["size"] or _sha256(temporary) != spec["sha256"]:
-            raise RuntimeSetupError("Downloaded micromamba failed size/checksum validation.")
-        temporary.chmod(0o755)
-        os.replace(temporary, target)
-    finally:
-        temporary.unlink(missing_ok=True)
-    return target
+        subprocess.run(command, input=script, text=True, check=True, env=environment)
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise RuntimeSetupError(f"Installing pixi failed ({error}). Install it from https://pixi.sh and retry.") \
+            from error
+    if found := find_pixi():
+        return found
+    raise RuntimeSetupError("pixi was installed but is not in ~/.pixi/bin. Install it from https://pixi.sh and retry.")
+
+
+def _pixi_run(root: Path) -> list:
+    """Run in the runtime with its activation, from the lock its install wrote: no solve, no network."""
+    return [ensure_pixi(), "run", "--frozen", "--manifest-path", root / "pixi.toml"]
 
 
 def _marker(root: Path) -> dict:
@@ -139,39 +132,35 @@ def active_runtime(root=None, tag=None) -> dict | None:
     """Return the current matching runtime marker, or ``None``."""
     root = Path(root) if root is not None else runtime_root()
     tag = tag or platform_tag()
-    digest = _lock_digest(tag)
     marker = _marker(root)
     prefix = _prefix(root)
     expected = {
         "app_version": __version__,
         "platform": tag,
-        "lock_sha256": digest,
+        "manifest_sha256": _manifest_digest(),
         "prefix": str(prefix),
     }
     if not all(marker.get(key) == value for key, value in expected.items()):
         return None
-    python = _python(prefix, tag)
-    micromamba = _micromamba(root, tag)
-    return marker if python.is_file() and micromamba.is_file() else None
+    return marker if _python(prefix, tag).is_file() and find_pixi() else None
 
 
-def _environment(root: Path) -> dict:
+def _environment() -> dict:
     environment = os.environ.copy()
-    environment["MAMBA_ROOT_PREFIX"] = str(root / "mamba")
     environment["PYTHONNOUSERSITE"] = "1"
     environment.pop("PYTHONPATH", None)
     environment.pop("PYTHONHOME", None)
     return environment
 
 
-def _run(command, *, root: Path, capture=False):
+def _run(command, *, capture=False):
     try:
         return subprocess.run(
             [str(part) for part in command],
             check=True,
             text=True,
             capture_output=capture,
-            env=_environment(root),
+            env=_environment(),
         )
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or error.stdout or "").strip()
@@ -198,14 +187,9 @@ finally:
 """
 
 
-def _smoke_test(micromamba: Path, root: Path, prefix: Path) -> str:
-    command = [
-        micromamba,
-        "--root-prefix", root / "mamba",
-        "run", "--prefix", prefix,
-        "python", "-c", _SMOKE_TEST,
-    ]
-    environment = _environment(root)
+def _smoke_test(root: Path) -> str:
+    command = [*_pixi_run(root), "python", "-c", _SMOKE_TEST]
+    environment = _environment()
     environment["QT_QPA_PLATFORM"] = "offscreen"
     try:
         result = subprocess.run(
@@ -220,21 +204,20 @@ def _smoke_test(micromamba: Path, root: Path, prefix: Path) -> str:
     except (subprocess.CalledProcessError, IndexError, KeyError, ValueError) as error:
         detail = getattr(error, "stderr", "") or getattr(error, "stdout", "")
         raise RuntimeSetupError(
-            f"Private QGIS runtime smoke test failed in {prefix}. {detail}\n"
+            f"Private QGIS runtime smoke test failed in {_prefix(root)}. {detail}\n"
             "Retry with: mhm-qgis-runtime install"
         ) from error
 
 
-def _confirm(root: Path, tag: str, yes: bool) -> None:
-    spec = _manifest()["platforms"][tag]
+def _confirm(root: Path, yes: bool) -> None:
     print(
-        f"mHM-QGIS {__version__} will install a private QGIS 3.44 runtime.\n"
+        f"mHM-QGIS {__version__} will install a private QGIS 4.2 runtime with pixi.\n"
         f"Location: {root}\n"
-        f"Micromamba download: {spec['size'] / 1024 / 1024:.1f} MiB\n"
+        f"pixi: {find_pixi() or 'installed into ~/.pixi from https://pixi.sh'}\n"
         "QGIS environment: approximately 1 GiB download and several GiB installed.\n"
         "Sources: conda-forge and PyPI. Licenses include QGIS GPL-2.0 and each "
         "dependency's own license.",
-        flush=True,  # before micromamba's own output, also in a log file
+        flush=True,  # before pixi's own output, also in a log file
     )
     if yes:
         return
@@ -276,7 +259,7 @@ def _repack(dist, target: Path) -> Path:
 def _local_wheels(target: Path) -> Path:
     """Repack the installed mhm-qgis and the pure-Python packages it requires, so the
     runtime gets exactly these, wherever they came from (TestPyPI, a local wheel, an
-    editable checkout, an unreleased dependency). Compiled ones come from the lock or PyPI."""
+    editable checkout, an unreleased dependency). Compiled ones come from pixi.toml or PyPI."""
     seen, names = set(), [APP_NAME]
     while names:
         key = re.sub(r"[-_.]+", "-", names.pop()).lower()
@@ -302,56 +285,40 @@ def install_runtime(*, yes=False, root=None) -> dict:
     if current:
         return current
 
-    digest = _lock_digest(tag)
+    digest = _manifest_digest()
     prefix = _prefix(root)
     previous = _marker(root)
-    # Same lock, environment in place: only mhm-qgis changes, no download or relinking.
-    reuse = (previous.get("lock_sha256") == digest and previous.get("prefix") == str(prefix)
+    # Same pixi.toml, environment in place: only mhm-qgis changes, no solve or download.
+    reuse = (previous.get("manifest_sha256") == digest and previous.get("prefix") == str(prefix)
              and _python(prefix, tag).is_file())
     if not reuse:
-        _confirm(root, tag, yes)
-    micromamba = ensure_micromamba(root, tag)
+        _confirm(root, yes)
+    pixi = ensure_pixi()
     if not reuse:
-        _safe_remove(prefix, root)
-
-    try:
-        if not reuse:
-            with as_file(_lock_resource(tag)) as lock:
-                _run(
-                    [
-                        micromamba,
-                        "--root-prefix", root / "mamba",
-                        "create", "--yes", "--prefix", prefix, "--file", lock,
-                    ],
-                    root=root,
-                )
-        # under the runtime root: /tmp can be small (an HPC)
-        with tempfile.TemporaryDirectory(dir=root) as wheels:
-            _run([
-                micromamba,
-                "--root-prefix", root / "mamba",
-                "run", "--prefix", prefix,
-                "python", "-m", "pip", "install",
-                "--find-links", _local_wheels(Path(wheels)), f"{APP_NAME}[full]=={__version__}",
-            ], root=root)
-        qgis_version = _smoke_test(micromamba, root, prefix)
-    except Exception:
-        if not reuse:
-            _safe_remove(prefix, root)
-        raise
-
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "pixi.toml").write_bytes(_manifest())
+        try:
+            _run([pixi, "install", "--manifest-path", root / "pixi.toml"])
+        except RuntimeSetupError as error:
+            raise RuntimeSetupError(f"{error}\nAn older pixi may not read this manifest: pixi self-update") \
+                from error
+    # under the runtime root: /tmp can be small (an HPC)
+    with tempfile.TemporaryDirectory(dir=root) as wheels:
+        _run([
+            *_pixi_run(root), "python", "-m", "pip", "install",
+            "--find-links", _local_wheels(Path(wheels)), f"{APP_NAME}[full]=={__version__}",
+        ])
     marker = {
         "app_version": __version__,
         "platform": tag,
-        "lock_sha256": digest,
+        "manifest_sha256": digest,
         "prefix": str(prefix),
-        "qgis_version": qgis_version,
+        "qgis_version": _smoke_test(root),
     }
     write(root / MARKER, marker, newline=True, fsync=True)
-    if previous.get("prefix") and previous["prefix"] != marker["prefix"]:
-        # An older per-version environment; a still-running one is left for `remove`.
+    for legacy in ("envs", "mamba", "bin"):  # the micromamba runtime's layout
         with contextlib.suppress(OSError, RuntimeSetupError):
-            _safe_remove(Path(previous["prefix"]), root)
+            _safe_remove(root / legacy, root)
     return marker
 
 
@@ -365,18 +332,12 @@ def remove_runtime(root=None) -> bool:
     return existed
 
 
-def relaunch(marker: dict, argv=None, root=None) -> int:
+def relaunch(argv=None, root=None) -> int:
     """Run the existing Qt application inside the private environment."""
     root = Path(root) if root is not None else runtime_root()
-    tag = marker["platform"]
-    command = [
-        _micromamba(root, tag),
-        "--root-prefix", root / "mamba",
-        "run", "--prefix", marker["prefix"],
-        "python", "-m", "mhm_qgis_runtime.app",
-        *(sys.argv[1:] if argv is None else argv),
-    ]
-    environment = _environment(root)
+    command = [*_pixi_run(root), "python", "-m", "mhm_qgis_runtime.app",
+               *(sys.argv[1:] if argv is None else argv)]
+    environment = _environment()
     environment[IN_RUNTIME] = "1"
     try:
         return subprocess.call([str(part) for part in command], env=environment)
@@ -417,8 +378,9 @@ def launch(argv=None) -> int:
                 f"Repair it with: {RECOVERY}"
             )
         root = runtime_root()
-        marker = active_runtime(root) or install_runtime(root=root)
-        return relaunch(marker, argv, root)
+        if not active_runtime(root):
+            install_runtime(root=root)
+        return relaunch(argv, root)
     except (OSError, RuntimeSetupError) as error:
         print(f"mhm-qgis: {error}", file=sys.stderr)
         return 1
@@ -455,7 +417,8 @@ def main(argv=None) -> int:
 
 __all__ = [
     "active_runtime",
-    "ensure_micromamba",
+    "ensure_pixi",
+    "find_pixi",
     "install_runtime",
     "launch",
     "main",

@@ -66,6 +66,7 @@ class LaiNetcdfConfig:
     target_timestep: str
     variable: str = ""
     source_crs: str = ""
+    method: str = "bilinear"  # mhm-tools' LAI resampling: bilinear or nearest
 
 
 @dataclass(frozen=True)
@@ -257,7 +258,7 @@ class InputComboAdapter(QtCore.QObject):
         data = self.combo_box.currentData()
         if isinstance(data, dict) and data.get("origin") == "file":
             path = data.get("path")
-            return str(Path(path).expanduser().resolve()) if path else ""
+            return os.path.abspath(os.path.expanduser(path)) if path else ""
         layer = self.currentLayer()
         return str(layer.source() or "") if layer is not None else ""
 
@@ -318,17 +319,17 @@ def _combo_path(combo_box) -> str:
     return str(value or combo_box.currentText().strip())
 
 
-def _populate_file_combo(combo_box, project_folder, kind, initial=""):
+def _populate_file_combo(combo_box, setup_folder, kind, initial=""):
     combo_box.clear()
     combo_box.addItem("", "")
     selected = 0
     if initial and Path(initial).is_file():
-        combo_box.addItem(str(Path(initial).resolve()), str(Path(initial).resolve()))
+        combo_box.addItem(os.path.abspath(initial), os.path.abspath(initial))
         selected = combo_box.count() - 1
     combo_box.setCurrentIndex(selected)
 
 
-def _populate_layer_combo(adapter, project_folder, kind, initial=""):
+def _populate_layer_combo(adapter, setup_folder, kind, initial=""):
     """Populate a categorical input with the layers loaded in QGIS."""
     combo_box = adapter.combo_box
     combo_box.clear()
@@ -340,10 +341,10 @@ def _populate_layer_combo(adapter, project_folder, kind, initial=""):
         source = str(item.data.get("source") or item.data.get("path") or "")
         if initial and source == initial:
             selected = combo_box.count() - 1
-    if initial and selected == 0 and Path(initial).is_file():
+    if initial and selected == 0 and Path(initial.split("|", 1)[0]).is_file():  # a GeoPackage names its layer
         adapter.addItem(
-            str(Path(initial).resolve()),
-            {"origin": "file", "kind": kind, "path": str(Path(initial).resolve())},
+            os.path.abspath(initial),
+            {"origin": "file", "kind": kind, "path": os.path.abspath(initial)},
         )
         selected = combo_box.count() - 1
     combo_box.setCurrentIndex(selected)
@@ -394,6 +395,32 @@ def _asks(path) -> bool:
     return readable and layers.crs_of(path) is None
 
 
+def elide_left(*combos) -> None:
+    """Show a long text from its end (`…/folder/file.tif`): the box and its list elide on the left."""
+    from qgis.PyQt.QtWidgets import QStyle, QStyleOptionComboBox, QStylePainter
+
+    for combo in combos:
+        combo.view().setTextElideMode(QtCore.Qt.TextElideMode.ElideLeft)
+
+        def paint(_event, combo=combo):  # QComboBox.paintEvent, its label elided on the left
+            painter, option = QStylePainter(combo), QStyleOptionComboBox()
+            combo.initStyleOption(option)
+            painter.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, option)
+            field = combo.style().subControlRect(QStyle.ComplexControl.CC_ComboBox, option,
+                                                 QStyle.SubControl.SC_ComboBoxEditField, combo)
+            option.currentText = combo.fontMetrics().elidedText(
+                option.currentText, QtCore.Qt.TextElideMode.ElideLeft, field.width())
+            painter.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, option)
+
+        combo.paintEvent = paint
+
+
+def elide_named_left(form) -> None:
+    """`elide_left` for a form's `comboBox_*` (a CRS widget's inner combo keeps its names whole)."""
+    elide_left(*(combo for combo in form.findChildren(QtWidgets.QComboBox)
+                 if combo.objectName().startswith("comboBox_")))
+
+
 def init_group_crs(widget) -> None:
     """A multi-layer group's CRS widget: not set until the CRS of its layers is chosen."""
     from qgis.gui import QgsProjectionSelectionWidget
@@ -423,7 +450,7 @@ def group_crs(widget, paths) -> str:
 
 def raster_details(parent, path):
     """Return file metadata, prompting for NetCDF and ASCII rasters and any raster without a CRS."""
-    path = str(Path(path).resolve())
+    path = os.path.abspath(path)
     if Path(path).suffix.lower() in VECTOR_EXTENSIONS:
         path = _vector_layer(parent, path)
         crs = layers.crs_of(path, is_raster=False) if path else None
@@ -507,7 +534,7 @@ def _browse_into_combo(parent, combo_box, title, file_filter):
     path, _ = open_file(parent, title, file_filter)
     if not path:
         return
-    path = str(Path(path).resolve())
+    path = os.path.abspath(path)
     for index in range(combo_box.count()):
         if _combo_path_at(combo_box, index) == path:
             combo_box.setCurrentIndex(index)
@@ -532,6 +559,8 @@ __all__ = [
     "RasterInputConfig",
     "ReadyInputConfig",
     "SingleLayerLookupConfig",
+    "elide_left",
+    "elide_named_left",
     "group_crs",
     "init_group_crs",
     "is_point_layer",

@@ -8,7 +8,6 @@ from __future__ import annotations
 from qgis.core import QgsProject
 from qgis.PyQt.QtWidgets import QMessageBox, QToolButton
 
-from ...qgis_bridge.display import grid as grid_display
 from .. import project_tree, tooltip
 from ..controllers import (
     categorical,
@@ -20,11 +19,10 @@ from ..controllers import (
     post_context,
     process_cases,
     project,
+    time,
     version,
 )
-from ..controllers.workflow_state import invalidate
 from ..dialogs.input_selection import _browse_raster_into_combo
-from ..workflows import observations
 
 
 def _bind_input_sources(dialog):
@@ -44,11 +42,12 @@ def _bind_input_sources(dialog):
     # Land use, soil, geology and LAI: radios → their stacked page, Set → categorical.set_input
     categorical.bind(dialog)
     # Gauge Point/Raster radios → their page; the raster browse → its combo
-    main.radios(dialog, "gauges", lambda _text: main.show_gauge_type(dialog))
+    main.radios(dialog, "gauges", lambda _text: main.show_gauge_type(dialog), ("Point Input", "Raster Input"))
     dialog.pushButton_browsegaugeRasterInput.clicked.connect(lambda: _browse_raster_into_combo(
         dialog, dialog.comboBox_gaugeRaterInput, "Select gauge-ID raster",
         "Raster files (*.asc *.nc *.tif *.tiff);;All files (*)"))
-    main.radios(dialog, "domainDefinition", lambda text: main.handle_domain_definition_type(dialog, text))
+    main.radios(dialog, "domainDefinition", lambda text: main.handle_domain_definition_type(dialog, text),
+                main.DOMAIN_TYPES)
     # toolButton_*Info → its plain-text toolTip in a message box, as in nml-tools
     for info in dialog.findChildren(QToolButton):
         if info.objectName().endswith("Info"):
@@ -73,30 +72,30 @@ def bind(dialog):
     dialog.lineEdit_ProjectFolder.textChanged.connect(lambda _text: project_tree.refresh(dialog))
     dialog.comboBox_mHMversion.currentIndexChanged.connect(lambda _index: project_tree.refresh(dialog))
     dialog.comboBox_mHMversion.currentIndexChanged.connect(lambda _index: process_cases.inputs(dialog))
-    # pushButton_refL0/L2 → the L0/L2 Reference rows the Resolution page's values come from;
-    # pushButton_refL0Derivatives → L0 Reference, the grid of the DEM derivatives
-    for button in (dialog.pushButton_refL0, dialog.pushButton_refL0Derivatives):
-        button.clicked.connect(lambda: project_tree.go_to(dialog, "l0_reference"))
-    dialog.pushButton_refL2.clicked.connect(lambda: project_tree.go_to(dialog, "l2_reference"))
+    # pushButton_refPageDem → DEM, whose grid the derivatives are derived from or replaced on
+    dialog.pushButton_refPageDem.clicked.connect(lambda: project_tree.go_to(dialog, "dem"))
+    # checkBox_isDerivedFromDemGrid unticked → the Replace box (its raster: ReplaceBox); Set → grid.set_derivative
+    dialog.checkBox_isDerivedFromDemGrid.toggled.connect(
+        lambda derived: dialog.groupBox_replaceDemDerivativesVar.setEnabled(not derived))
+    dialog.pushButton_setDemDerivativesVar.clicked.connect(lambda: grid.set_derivative(dialog))
 
     # Project management
     # pushButton_BrowseProjectFolder → project.browse_folder; pushButton_setProject → project.set_folder
     dialog.pushButton_BrowseProjectFolder.clicked.connect(lambda: project.browse_folder(dialog))
     dialog.pushButton_setProject.clicked.connect(lambda: project.set_folder(dialog))
+    # pushButton_setPostCrs → project.set_post_crs; its label shows Domain Setup's status
+    dialog.pushButton_setPostCrs.clicked.connect(lambda: project.set_post_crs(dialog))
+    project_tree.indicate(dialog, "domain_setup", dialog.label_setPostCrsStatus)
     # pushButton_createOrLoadDomainStructure → project.create_structure
     dialog.pushButton_createOrLoadDomainStructure.clicked.connect(
         lambda: project.create_structure(dialog)
     )
-    dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(
-        lambda: dialog.comboBox_mHMversion.setEnabled(
-            dialog.comboBox_domainFolderSelector.currentData() is None
-        )
-    )
+    # comboBox_domainFolderSelector → project.domain_chosen: New or Open, the version for a new one
+    dialog.comboBox_domainFolderSelector.currentIndexChanged.connect(lambda: project.domain_chosen(dialog))
     # Multi-domain setup
+    # comboBox_multiDomainFolderSelector → multi_domain.chosen: New or Open, the version for a new one
     dialog.comboBox_multiDomainFolderSelector.currentIndexChanged.connect(
-        lambda: dialog.comboBox_mHMversion.setEnabled(
-            dialog.comboBox_multiDomainFolderSelector.currentData() is None
-        )
+        lambda: dialog.comboBox_mHMversion.setEnabled(multi_domain.chosen(dialog))
     )
     # pushButton_createorLoadMultiDomainStructure → multi_domain.create_or_load
     dialog.pushButton_createorLoadMultiDomainStructure.clicked.connect(
@@ -111,18 +110,18 @@ def bind(dialog):
     dialog.comboBox_mhmWorkType.currentIndexChanged.connect(
         lambda: project.work_type_changed(dialog)
     )
-    # pushButton_scanPrecipitationFiles → forcing.scan_precipitation
-    dialog.pushButton_scanPrecipitationFiles.clicked.connect(lambda: forcing.scan_precipitation(dialog))
     # pushButton_addMeteoInput → forcing.edit_meteo_input
     dialog.pushButton_addMeteoInput.clicked.connect(lambda: forcing.edit_meteo_input(dialog))
     # pushButton_addObservationVar → forcing.edit_observation_input
     dialog.pushButton_addObservationVar.clicked.connect(
         lambda: forcing.edit_observation_input(dialog))
-    # pushButton_executeAllObservation → observations.start
-    dialog.pushButton_executeAllObservation.clicked.connect(
-        lambda: observations.start(dialog))
-    # pushButton_setPrecipitationInput → the L2 multiplier and the simulation period
-    dialog.pushButton_setPrecipitationInput.clicked.connect(lambda: grid.set_precipitation_input(dialog))
+    # pushButton_setTimePeriod → time.set_period; pushButton_dialogTimePeriodNetcdfFile → time.open_window_dialog
+    dialog.pushButton_setTimePeriod.clicked.connect(lambda: time.set_period(dialog))
+    dialog.pushButton_dialogTimePeriodNetcdfFile.clicked.connect(lambda: time.open_window_dialog(dialog))
+    dialog.spinBox_warmingDays.setMaximum(36600)  # Designer's 99 is shorter than a usual warm-up
+    dialog.spinBox_warmingDays.valueChanged.connect(lambda _days: time.warming_changed(dialog))
+    dialog.dateTimeEdit_simulationStartTimeInput.dateTimeChanged.connect(lambda _when: time.warming_changed(dialog))
+    dialog.dateTimeEdit_evaluationStartTimeInput.dateTimeChanged.connect(lambda _when: time.evaluation_changed(dialog))
     # pushButton_setGauges → main.set_gauges: the drainage network and flow accumulation
     dialog.pushButton_setGauges.clicked.connect(lambda: main.set_gauges(dialog))
     dialog.stackedWidget_project.currentChanged.connect(
@@ -135,12 +134,6 @@ def bind(dialog):
     dialog.pushButton_observationDisplay_discharge.clicked.connect(
         lambda checked=False: main.display_observation_discharge(dialog)
     )
-
-    # pushButton_browseDemOverride / pushButton_demOverride → main.browse_dem_override / override_dem_derivative
-    dialog.pushButton_browseDemOverride.clicked.connect(lambda: main.browse_dem_override(dialog))
-    dialog.pushButton_demOverride.clicked.connect(lambda: main.override_dem_derivative(dialog))
-    dialog.tableWidget_demDerivatives.cellClicked.connect(lambda row, _column: main.show_dem_derivatives(
-        dialog, dialog.tableWidget_demDerivatives.item(row, 0).text()))
 
     pour_points = dialog.input_combo("pour_points")
     pour_points.layerChanged.connect(
@@ -157,11 +150,6 @@ def bind(dialog):
     _bind_grid(dialog)
 
     # Configuration/execution processing
-    # pushButton_gridDisplay → grid_display.display_selected_grid
-    dialog.pushButton_gridDisplay.clicked.connect(
-        lambda checked=False: grid_display.display_selected_grid(dialog)
-    )
-    dialog.pushButton_gridDisplay.setToolTip("Display the selected model grid")
     dialog.pushButton_edit_nmls.setToolTip("Edit mHM namelists")
     # pushButton_edit_nmls → model.edit_namelists
     dialog.pushButton_edit_nmls.clicked.connect(
@@ -195,6 +183,13 @@ def bind(dialog):
     dialog.pushButton_mapCanvas.clicked.connect(dialog.open_map_canvas)
     # pushButton_terminal → dialog.open_project_terminal
     dialog.pushButton_terminal.clicked.connect(dialog.open_project_terminal)
+    # pushButton_log → dialog.open_log
+    dialog.pushButton_log.clicked.connect(dialog.open_log)
+    # pushButton_pythonConsole → dialog.open_python_console; QGIS Desktop only
+    dialog.pushButton_pythonConsole.clicked.connect(dialog.open_python_console)
+    if dialog.iface is None:
+        dialog.pushButton_pythonConsole.setEnabled(False)
+        dialog.pushButton_pythonConsole.setToolTip("Available in QGIS Desktop")
     dialog.comboBox_mHMversion.currentIndexChanged.connect(
         lambda index=None: model.version_changed(dialog)
     )
@@ -202,40 +197,33 @@ def bind(dialog):
 
 
 def _bind_grid(dialog):
-    """Refresh or invalidate the common grid when one of its inputs changes."""
-    dem = dialog.input_combo("dem")
-    dem.layerChanged.connect(lambda layer=None: grid.update_l0_resolution_from_dem(dialog, layer))
-    dem.layerChanged.connect(lambda layer=None: grid.invalidate_grid(dialog))
-    dem.layerChanged.connect(lambda layer=None: grid.show_dem_extent(dialog, layer))
-    if dialog.iface is not None:
-        dialog.mExtentGroupBox_customExtent.setMapCanvas(dialog.iface.mapCanvas())
-    # pushButton_setDEM → grid.set_dem
+    """The Resolution page and the DEM page's Set."""
+    # pushButton_browseL{0,1,11,2}File → grid.browse_file
+    for level in grid.LEVELS:
+        getattr(dialog, f"pushButton_browse{level}File").clicked.connect(
+            lambda _checked=False, level=level: grid.browse_file(dialog, level))
+        getattr(dialog, f"checkBox_extent{level}enforce").toggled.connect(lambda _on: grid.changed(dialog))
+        # label_display{level}File / GridCommon eyes → grid.toggle_display (the file, the Set grid)
+        for label in (f"label_display{level}File", f"label_display{level}GridCommon"):
+            getattr(dialog, label).linkActivated.connect(lambda key: grid.toggle_display(dialog, key))
+        for name, _key in (*grid.CORNERS, ("cellSize", "cellsize")):
+            getattr(dialog, f"label_{name}{level}Common").linkActivated.connect(
+                lambda href: grid.explain(dialog, href))
+    dialog.lineEdit_L0Resolution.editingFinished.connect(lambda: grid.snap_l0(dialog))
+    for level in ("L1", "L11", "L2"):
+        getattr(dialog, f"lineEdit_{level}Resolution").textChanged.connect(
+            lambda _text, level=level: grid.sync_multiplier(dialog, level))
+        getattr(dialog, f"lineEdit_{level}Resolution").editingFinished.connect(
+            lambda level=level: (grid.sync_multiplier(dialog, level, snap=True), grid.changed(dialog)))
+        getattr(dialog, f"spinBox_{level}ResolutionMultiplier").valueChanged.connect(
+            lambda n, level=level: (grid.multiplier_changed(dialog, level, n), grid.changed(dialog)))
+    # pushButton_setLatLon → grid.set_resolution
+    dialog.pushButton_setLatLon.clicked.connect(lambda: grid.set_resolution(dialog))
+    # pushButton_setDEM → grid.set_dem; a new DEM is checked against the common L0 grid at once
     dialog.pushButton_setDEM.clicked.connect(lambda: grid.set_dem(dialog))
+    dialog.input_combo("dem").layerChanged.connect(lambda _layer=None: grid.check_dem(dialog))
     # pushButton_setCRS → grid.set_crs; the CRS widget alone applies nothing
     dialog.pushButton_setCRS.clicked.connect(lambda: grid.set_crs(dialog))
-    # pushButton_browsePrecipitationFile → grid.browse_precipitation_folder
-    dialog.pushButton_browsePrecipitationFile.clicked.connect(
-        lambda: grid.browse_precipitation_folder(dialog)
-    )
-    dialog.comboBox_precipitationFile.currentIndexChanged.connect(
-        lambda: grid.precipitation_changed(dialog)
-    )
-    dialog.lineEdit_precipitationGlobDefinition.textChanged.connect(
-        lambda: grid.precipitation_changed(dialog)
-    )
-    dialog.lineEdit_L1Resolution.textChanged.connect(
-        lambda _text: (
-            dialog._observation_inputs and invalidate(dialog, "execute_all_observations", "run_mhm"),
-            grid.sync_multiplier(dialog, "L1"),
-            grid.update_l1_resolution_label(dialog),
-            grid.update_l11_resolution_label(dialog),
-        )
-    )
-    dialog.lineEdit_L11Resolution.textChanged.connect(
-        lambda _text: (grid.sync_multiplier(dialog, "L11"), grid.update_l11_resolution_label(dialog))
-    )
-    # pushButton_createLatLon → grid.process_lat_lon
-    dialog.pushButton_createLatLon.clicked.connect(lambda: grid.process_lat_lon(dialog))
 
 
 def _bind_input_state(dialog):
@@ -243,8 +231,3 @@ def _bind_input_state(dialog):
     changed = lambda *_args: main.handle_model_input_changed(dialog)  # noqa: E731
     for _, combo_box in main.input_layer_widgets(dialog):
         combo_box.layerChanged.connect(changed)
-    for level in ("L1", "L11"):
-        getattr(dialog, f"lineEdit_{level}Resolution").editingFinished.connect(
-            lambda level=level: (grid.sync_multiplier(dialog, level, snap=True), changed()))
-        getattr(dialog, f"spinBox_{level}ResolutionMultiplier").valueChanged.connect(
-            lambda n, level=level: (grid.multiplier_changed(dialog, level, n), changed()))

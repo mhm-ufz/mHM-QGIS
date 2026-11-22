@@ -11,16 +11,11 @@ import mhm_qgis_runtime as runtime
 
 def main(argv=None) -> int:
     root = runtime.runtime_root()
-    marker = runtime.active_runtime(root)
-    if marker is None:
+    if runtime.active_runtime(root) is None:
         print("No private runtime is installed; run `mhm-qgis-runtime install` first.", file=sys.stderr)
         return 1
-    run = [
-        str(runtime._micromamba(root, marker["platform"])),
-        "--root-prefix", str(root / "mamba"), "run", "--prefix", marker["prefix"],
-    ]
-    command = list(sys.argv[1:] if argv is None else argv)
-    return subprocess.run(run + command, env=runtime._environment(root), check=False).returncode
+    command = [str(part) for part in runtime._pixi_run(root)] + list(sys.argv[1:] if argv is None else argv)
+    return subprocess.run(command, env=runtime._environment(), check=False).returncode
 
 
 if __name__ == "__main__":

@@ -74,17 +74,15 @@ def _apply_work_type(dialog, index):
 
 
 def _apply_resolutions(dialog, effects):
-    l0 = grid.current_l0_resolution(dialog)
-    if not l0:
+    if not grid.current_l0_resolution(dialog):
         if "defaults.l1_factor" in effects:
-            dialog.log_message("Introduction: the L1/L11 resolutions are suggested once a DEM is chosen; "
-                               "run the wizard again then, or pick them from the list.")
+            dialog.log_message("Introduction: the L1/L11 resolutions are set once the L0 reference file is "
+                               "chosen (Resolution page); run the wizard again then, or set the multipliers.")
         return
-    if "defaults.l1_factor" in effects:
-        dialog._preferred_l1_resolution = l0 * effects["defaults.l1_factor"]
-    if "defaults.l11_factor" in effects:
-        dialog._preferred_l11_resolution = l0 * effects["defaults.l11_factor"]
-    grid.refresh_l1_l11_resolution_options(dialog)
+    for key, level in (("defaults.l1_factor", "L1"), ("defaults.l11_factor", "L11")):
+        if key in effects:
+            grid.set_multiplier(dialog, level, int(effects[key]))
+    grid.changed(dialog)
 
 
 def _mark_meteo_variables(dialog, version, effects):
@@ -113,12 +111,12 @@ def _mark_meteo_variables(dialog, version, effects):
 
 def write_pending(dialog):
     """Hand the wizard's process and output choices to the open setup, once."""
-    if not dialog._intro_pending or not dialog.project_folder:
+    if not dialog._intro_pending or not dialog.setup_folder:
         return
     version = selected_version(dialog)
     effects = intro.effects(intro.load_questions(), dialog._intro_answers, version)
     try:
-        saved = datamodel.read_namelists(dialog.project_folder)
+        saved = datamodel.read_namelists(dialog.setup_folder)
     except ValueError as error:
         dialog.log_message(f"WARNING: {error}; the wizard's choices start from the defaults.")
         saved = {}
@@ -126,7 +124,7 @@ def write_pending(dialog):
 
     project = namelist_project(version, dialog._multi_domains is not None)
     values = intro.handoff(version, effects, saved, project)
-    nml_settings.update_section(dialog.project_folder, "intro_values", values)
+    nml_settings.update_section(dialog.setup_folder, "intro_values", values)
     dialog._intro_pending = False
     if values:
         dialog.log_message("Introduction: process and output choices are ready for Edit Namelists.")

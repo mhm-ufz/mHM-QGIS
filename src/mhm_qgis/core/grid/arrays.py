@@ -26,56 +26,6 @@ def header_center_arrays(header: Mapping):
     )
 
 
-def axis_resolution(values, label: str = "coordinate") -> float:
-    """Return the spacing of a regular one-dimensional coordinate axis."""
-    import numpy as np
-
-    values = np.asarray(values)
-    unique = np.unique(values[np.isfinite(values)])
-    if len(unique) < 2:
-        raise ValueError(f"{label} needs at least two values.")
-    if len(unique) != len(values):
-        raise ValueError(f"{label} contains duplicates.")
-    diffs = np.abs(np.diff(np.sort(unique)))
-    resolution = float(np.nanmedian(diffs))
-    if not np.allclose(diffs, resolution, rtol=1e-6, atol=1e-9):
-        raise ValueError(f"{label} is not regularly spaced.")
-    return resolution
-
-
-def mesh_resolution(values, axis: int, label: str = "coordinate") -> float:
-    """Return the representative spacing along one axis of a 2-D mesh."""
-    import numpy as np
-
-    diffs = np.abs(np.diff(values, axis=axis))
-    diffs = diffs[np.isfinite(diffs) & (diffs > 0)]
-    if not diffs.size:
-        raise ValueError(f"{label} needs at least two values.")
-    return float(np.nanmedian(diffs))
-
-
-def header_from_coordinate_axes(x_values, y_values, *, unit="", nodata_value=-9999.0):
-    """Build a square-cell header from one-dimensional centre coordinates."""
-    import numpy as np
-
-    x_values = np.asarray(x_values, dtype="float64")
-    y_values = np.asarray(y_values, dtype="float64")
-    x_resolution = axis_resolution(x_values, "x coordinate")
-    y_resolution = axis_resolution(y_values, "y coordinate")
-    cellsize = (x_resolution + y_resolution) / 2
-    if not np.isclose(x_resolution, y_resolution, rtol=1e-6, atol=1e-12):
-        raise ValueError("A grid header requires equal x and y resolution.")
-    return {
-        "ncols": int(x_values.size),
-        "nrows": int(y_values.size),
-        "xllcorner": float(np.min(x_values)) - cellsize / 2,
-        "yllcorner": float(np.min(y_values)) - cellsize / 2,
-        "cellsize": cellsize,
-        "nodata_value": float(nodata_value),
-        "unit": str(unit or ""),
-    }
-
-
 def axes_match_header(x_values, y_values, header: Mapping) -> bool:
     import numpy as np
 
@@ -92,24 +42,6 @@ def axes_match_header(x_values, y_values, header: Mapping) -> bool:
         if abs(offset - round(offset)) > 1e-6:
             return False
     return True
-
-
-def shift_onto_header(x_values, y_values, header: Mapping):
-    """An axis with the header's spacing moved onto its lattice (by under half a cell): the
-    cells a nearest-neighbour pick would take, without interpolating. Other axes are kept."""
-    import numpy as np
-
-    cellsize = float(header["cellsize"])
-
-    def shift(axis, origin):
-        values = np.asarray(axis, dtype="float64")
-        steps = np.abs(np.diff(values))
-        if steps.size and float(np.abs(steps - cellsize).max()) <= cellsize * 1e-6:
-            return origin + np.floor((values - origin) / cellsize + 0.5) * cellsize  # one shift, ties too
-        return values
-
-    target_x, target_y = header_center_coordinates(header)
-    return shift(x_values, target_x[0]), shift(y_values, target_y[0])
 
 
 def reindex_to_header(da, x_dim: str, y_dim: str, header: Mapping, fill_value=None):
@@ -174,10 +106,6 @@ def assert_source_covers_header(dataset, x_dim: str, y_dim: str, header: Mapping
         )
 
 
-def slice_and_pad(da, x_dim: str, y_dim: str, header: Mapping):
-    return reindex_to_header(da, x_dim, y_dim, header)
-
-
 def assert_matches_header(dataset, variable: str, header: Mapping[str, Any]) -> None:
     rows, cols = int(header["nrows"]), int(header["ncols"])
     sizes = dataset[variable].sizes
@@ -235,86 +163,6 @@ def target_grid_from_header(header: Mapping, crs: str | None = None) -> TargetGr
         crs=crs,
         sample_lon=lon_mesh,
         sample_lat=lat_mesh,
-    )
-
-
-def nearest_rectilinear(
-    da,
-    source_x,
-    source_y,
-    target_x,
-    target_y,
-    output_x,
-    output_y,
-):
-    """Sample a rectilinear source at exact two-dimensional target points."""
-    import numpy as np
-
-    source_x_mesh, source_y_mesh = np.meshgrid(source_x, source_y)
-    return nearest_curvilinear(
-        da,
-        source_x_mesh,
-        source_y_mesh,
-        output_x,
-        output_y,
-        target_x,
-        target_y,
-    )
-
-
-def nearest_curvilinear(
-    da,
-    source_x,
-    source_y,
-    output_x,
-    output_y,
-    sample_x=None,
-    sample_y=None,
-):
-    """Nearest-neighbour sample a curvilinear source onto an output grid."""
-    import numpy as np
-    import xarray as xr
-
-    try:
-        from scipy.spatial import cKDTree
-    except Exception as exc:
-        raise RuntimeError(
-            "scipy is required to resample curvilinear data."
-        ) from exc
-
-    spatial_dims = [
-        dim for dim in da.dims
-        if dim not in {"time", "valid_time", "bnds"} and da.sizes[dim] > 1
-    ]
-    if len(spatial_dims) != 2:
-        raise ValueError(f"Variable {da.name!r} must have exactly two spatial dimensions.")
-    y_dim, x_dim = spatial_dims
-    source_points = np.column_stack(
-        [np.asarray(source_x).reshape(-1), np.asarray(source_y).reshape(-1)]
-    )
-    if sample_x is None or sample_y is None:
-        x_mesh, y_mesh = np.meshgrid(output_x, output_y)
-    else:
-        x_mesh = np.asarray(sample_x, dtype="float64")
-        y_mesh = np.asarray(sample_y, dtype="float64")
-    target_points = np.column_stack([x_mesh.reshape(-1), y_mesh.reshape(-1)])
-    finite = np.isfinite(source_points).all(axis=1)
-    if not finite.any():
-        raise ValueError("Source grid has no finite coordinates.")
-    _, indices = cKDTree(source_points[finite]).query(target_points)
-    indices = np.flatnonzero(finite)[indices]
-    values = np.asarray(da.transpose("time", y_dim, x_dim).values)
-    sampled = values.reshape(values.shape[0], -1)[:, indices]
-    sampled = sampled.reshape(values.shape[0], len(output_y), len(output_x)).astype("float64")
-    dx = mesh_resolution(source_x, axis=1) / 2
-    dy = mesh_resolution(source_y, axis=0) / 2
-    inside = ((x_mesh >= np.nanmin(source_x) - dx) & (x_mesh <= np.nanmax(source_x) + dx)
-              & (y_mesh >= np.nanmin(source_y) - dy) & (y_mesh <= np.nanmax(source_y) + dy))
-    sampled[:, ~inside] = np.nan
-    return xr.DataArray(
-        sampled,
-        dims=("time", "lat", "lon"),
-        coords={"time": da["time"], "lat": output_y, "lon": output_x},
     )
 
 

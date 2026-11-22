@@ -8,6 +8,6 @@ from ...handlers.store.layout import (
 )
 
 
-def streamflow_observation_folder(project_folder) -> Path:
+def streamflow_observation_folder(setup_folder) -> Path:
     """Return the project-local mHM streamflow observation folder."""
-    return Path(project_streamflow_observation_folder(project_folder))
+    return Path(project_streamflow_observation_folder(setup_folder))

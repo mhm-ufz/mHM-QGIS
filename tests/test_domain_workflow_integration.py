@@ -10,9 +10,12 @@ pytest.importorskip("qgis.core", reason="QGIS runtime libraries are required")
 
 from qgis.core import QgsCoordinateReferenceSystem
 
-from mhm_qgis.core.executions.morphology.reset import clear_geometry
+from mhm_qgis.core.executions.reset import clear
+from mhm_qgis.core.handlers.state import processing
+from mhm_qgis.core.handlers.state.nml_settings import load_settings, update_section
 from mhm_qgis.core.handlers.state.domain_state import load_state, save_state
-from mhm_qgis.core.handlers.store.layout import temp_morphology_folder
+from mhm_qgis.core.handlers.store.layout import meteo_output_root, morph_folder, temp_morphology_folder
+from mhm_qgis.core.handlers.store.registry import register
 from mhm_qgis.qgis_bridge.layers import gauges
 from mhm_qgis.qt.controllers.main import update_gauged_outlet_count
 from mhm_qgis.vSpecific.common import domain_count
@@ -111,7 +114,7 @@ def test_saved_state_controls_gauge_and_domain_counts(tmp_path: Path, monkeypatc
         "Dialog",
         (),
         {
-            "project_folder": str(tmp_path),
+            "setup_folder": str(tmp_path),
             "input_combo": lambda self, kind: selector,
             "label_numberOfGaugedOutletsValue": label,
         },
@@ -127,7 +130,7 @@ def test_configured_project_keeps_one_domain_minimum(tmp_path: Path) -> None:
         tmp_path,
         {"outlet_id_field": "outlet_id", "outlets": {"1": {"is_domain": False}}},
     )
-    dialog = type("Dialog", (), {"project_folder": str(tmp_path)})()
+    dialog = type("Dialog", (), {"setup_folder": str(tmp_path)})()
 
     assert domain_count(dialog) == 1
 
@@ -197,7 +200,24 @@ def test_geometry_reset_invalidates_only_derived_domain_outputs(tmp_path: Path) 
         },
     )
 
-    assert clear_geometry(tmp_path) == 1
+    published = Path(morph_folder(tmp_path)) / "dem.asc"
+    latlon = tmp_path / "data" / "latlon.nc"
+    for path in (published, latlon):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x", encoding="utf-8")
+    register(tmp_path, published)
+    processing.overlay(tmp_path, {"grid": {"l0_resolution": 100}, "stages": {"lc": {}}})
+    processing.mark_workflow(tmp_path, "project_structure", "completed")
+    processing.mark_workflow(tmp_path, "execute_all_morphology", "completed")
+    update_section(tmp_path, "time", {"sim_start": "2000-01-01T00:00"})
+
+    assert clear(tmp_path, "morphology") == 2
+
+    state = processing.load(tmp_path)
+    assert [path.exists() for path in (generated, published, latlon)] == [False, False, True]
+    assert (state["grid"], state["stages"], state["outputs"]) == ({"l0_resolution": 100}, {}, {})
+    assert list(state["workflows"]) == ["project_structure"]
+    assert load_settings(tmp_path)["time"] == {"sim_start": "2000-01-01T00:00"}
 
     record = load_state(tmp_path)["outlets"]["7"]
     assert record["is_gauged"] is True
@@ -208,3 +228,19 @@ def test_geometry_reset_invalidates_only_derived_domain_outputs(tmp_path: Path) 
     assert "catchment_area_m2" not in record
     assert "mask_path" not in record
     assert "vector_path" not in record
+
+
+def test_meteorology_reset_deletes_its_forcing_and_forgets_its_fingerprint(tmp_path: Path) -> None:
+    forcing = meteo_output_root(tmp_path) / "pre" / "pre.nc"
+    forcing.parent.mkdir(parents=True)
+    forcing.write_text("x", encoding="utf-8")
+    register(tmp_path, forcing, category="meteorology")
+    processing.overlay(tmp_path, {"meteo_source_fingerprint": ["abc"], "meteo_period": {"start": "2000"}})
+    processing.mark_workflow(tmp_path, "execute_all_meteo", "completed")
+
+    assert clear(tmp_path, "meteorology") == 1
+
+    state = processing.load(tmp_path)
+    assert (forcing.exists(), forcing.parent.is_dir()) == (False, True)
+    assert (state["meteo_source_fingerprint"], state["meteo_period"]) == (None, None)
+    assert (state["outputs"], state["workflows"]) == ({}, {})

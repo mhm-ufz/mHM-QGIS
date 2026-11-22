@@ -45,8 +45,8 @@ class Terminal:
 
 
 class Dialog:
-    def __init__(self, project_folder: Path, version: str = "6.0") -> None:
-        self.project_folder = str(project_folder)
+    def __init__(self, setup_folder: Path, version: str = "6.0") -> None:
+        self.setup_folder = str(setup_folder)
         self.comboBox_mHMversion = ComboBox(version)
         stamp = SimpleNamespace(toString=lambda _format: "2001-01-01T00:00")
         for name in TIME_WIDGETS.values():
@@ -55,9 +55,11 @@ class Dialog:
         self.saved = 0
         self.terminal = Terminal()
         self._loading_input_state = False
+        self._running_workflow = None
         self.groupBox_editCalibrationNamelists = SimpleNamespace(setEnabled=lambda _enabled: None)
-        self.run_name = ""
+        self.run_name, self.backup = "", False
         self.comboBox_runName = SimpleNamespace(currentText=lambda: self.run_name)
+        self.groupBox_backupNamelists = SimpleNamespace(isChecked=lambda: self.backup)
         self.parameter = None  # the -p path once its checkbox is checked
         self.checkBox_enableParameterArgument = SimpleNamespace(isChecked=lambda: self.parameter is not None)
         self.lineEdit_pathParameterArgument = SimpleNamespace(text=lambda: self.parameter or "")
@@ -144,8 +146,9 @@ def test_edit_namelists_opens_the_setups_v6_project(tmp_path: Path, monkeypatch,
     assert selections == [expected]
 
 def _no_buttons(monkeypatch):
-    from mhm_qgis.qt.controllers import workflow_state
+    from mhm_qgis.qt.controllers import post_context, workflow_state
 
+    monkeypatch.setattr(post_context, "populate", lambda _dialog, **_options: None)  # the Outputs tab
     monkeypatch.setattr(workflow_state, "set_button_state", lambda *_args: None)
     monkeypatch.setattr(controller_module, "set_button_state", lambda *_args: None)
     monkeypatch.setattr(controller_module, "populate_run_names", lambda *_args: None)
@@ -198,56 +201,31 @@ def test_run_mhm_uses_project_terminal(tmp_path: Path, monkeypatch) -> None:
     assert dialog.terminal.calls[-1][0] == f"{executable} -p {tmp_path / 'other.nml'}"
 
 
-def test_a_named_run_points_the_namelists_at_its_folder(tmp_path: Path, monkeypatch) -> None:
+def test_a_run_case_backs_up_the_namelists_and_runs_into_output(tmp_path: Path, monkeypatch) -> None:
     from mhm_qgis.core.post import runs
     from mhm_qgis.qt.controllers import post_context
 
     dialog = Dialog(tmp_path)
-    dialog.run_name = "case1"
+    dialog.run_name, dialog.backup = "case1", True
     _no_buttons(monkeypatch)
     monkeypatch.setattr(controller_module, "ensure_project_structure", lambda path, version: [])
     monkeypatch.setattr(controller_module, "require_v6_executable", lambda owner: str(tmp_path / "mhmv6"))
     monkeypatch.setattr(controller_module, "inputs_ready", lambda owner, folder: True)
-    monkeypatch.setattr(post_context, "populate", lambda _dialog: None)
+    monkeypatch.setattr(post_context, "populate", lambda _dialog, **_options: None)
     from mhm_qgis.externals import mhm_handler
     monkeypatch.setattr(mhm_handler, "executable", lambda version, v6_path=None: Path(v6_path))
-    (tmp_path / "mhm.nml").write_text('&config_mhm\n  output_path(1) = "output/mhm_output.nc"\n/\n')
+    # an earlier version's named run left the setup pointing into runs/
+    (tmp_path / "mhm.nml").write_text('&config_mhm\n  output_path(1) = "runs/old/output/mhm_output.nc"\n/\n')
 
     assert controller_module.run(dialog) is True
-    assert 'output_path(1) = "runs/.mhm-qgis/pending/case1/output/mhm_output.nc"' in (
-        tmp_path / "mhm.nml"
-    ).read_text()
-    assert (tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1" / "output").is_dir()
+    assert 'output_path(1) = "output/mhm_output.nc"' in (tmp_path / "mhm.nml").read_text()
+    assert 'output_path(1) = "runs/case1/output/mhm_output.nc"' in (
+        tmp_path / "runs" / "case1" / "mhm.nml").read_text()
+    assert (tmp_path / "runs" / "case1" / "run.json").is_file()
+    assert not (tmp_path / "runs" / "case1" / "namelists").exists()
     dialog.terminal.calls[0][1]["on_finished"](0)
-    assert [ref.name for ref in runs.list_runs(tmp_path)] == ["case1"]
-
-
-def test_named_run_is_not_completed_when_publication_fails(tmp_path: Path, monkeypatch) -> None:
-    from mhm_qgis.core.post import runs
-
-    dialog = Dialog(tmp_path)
-    dialog.run_name = "case1"
-    _no_buttons(monkeypatch)
-    monkeypatch.setattr(controller_module, "ensure_project_structure", lambda *_args: [])
-    monkeypatch.setattr(controller_module, "require_v6_executable", lambda _owner: str(tmp_path / "mhmv6"))
-    monkeypatch.setattr(controller_module, "inputs_ready", lambda *_args: True)
-    from mhm_qgis.externals import mhm_handler
-    monkeypatch.setattr(mhm_handler, "executable", lambda _version, v6_path=None: Path(v6_path))
-    monkeypatch.setattr(
-        runs,
-        "finish_named",
-        lambda *_args: (_ for _ in ()).throw(OSError("disk full")),
-    )
-    errors = []
-    monkeypatch.setattr(controller_module.QMessageBox, "critical", lambda *_args: errors.append(_args[2]))
-    (tmp_path / "mhm.nml").write_text('&config_mhm\n  output_path(1) = "output/mhm.nc"\n/\n')
-
-    assert controller_module.run(dialog)
-    dialog.terminal.calls[0][1]["on_finished"](0)
-
-    assert processing.workflow(tmp_path, "run_mhm")["status"] == "failed"
-    assert "could not be published" in errors[0]
-    assert not (tmp_path / "runs" / ".mhm-qgis" / "pending" / "case1").exists()
+    assert processing.workflow(tmp_path, "run_mhm")["status"] == "completed"
+    assert [ref.name for ref in runs.list_runs(tmp_path)] == ["case1"]  # the run-name list; no output/ yet
 
 
 def test_run_name_combo_lists_runs_and_prompts_for_new_name(tmp_path, monkeypatch):
@@ -255,7 +233,7 @@ def test_run_name_combo_lists_runs_and_prompts_for_new_name(tmp_path, monkeypatc
 
     from mhm_qgis.core.post import runs
 
-    dialog = SimpleNamespace(project_folder=str(tmp_path), comboBox_runName=QComboBox())
+    dialog = SimpleNamespace(setup_folder=str(tmp_path), comboBox_runName=QComboBox())
     monkeypatch.setattr(
         runs,
         "list_runs",
@@ -299,9 +277,9 @@ def test_version_change_prepares_project_and_saves_state(
 
 def test_configuration_defaults_and_missing_project(monkeypatch):
     dialog = Dialog("", " ")
-    assert selected_version(dialog) == "6.0"
+    assert selected_version(dialog) == "5.13"
     del dialog.comboBox_mHMversion
-    assert selected_version(dialog) == "6.0"
+    assert selected_version(dialog) == "5.13"
     warnings = []
     monkeypatch.setattr(
         controller_module.QMessageBox, "warning",

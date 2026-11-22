@@ -57,7 +57,7 @@ def test_discharge_button_opens_reusable_plot_and_project_change_clears_stations
     path = _observation(Path(streamflow_observation_folder(tmp_path)) / "00350.txt")
     save_state(tmp_path, {"outlets": {"00350": {"is_gauged": True}}})
     dialog = MhmQgisDialog()
-    dialog.project_folder = str(tmp_path)
+    dialog.setup_folder = str(tmp_path)
     dialog.load_input_state()
     assert dialog.comboBox_displayOutletStation.currentText() == "00350"
     assert dialog.comboBox_displayOutletStation.currentData() == str(path)
@@ -70,7 +70,7 @@ def test_discharge_button_opens_reusable_plot_and_project_change_clears_stations
     assert math.isnan(plot.curve.getData()[1][1])
     dialog.pushButton_observationDisplay_discharge.click()
     assert dialog._discharge_plot is plot
-    dialog.project_folder = str(tmp_path / "other")
+    dialog.setup_folder = str(tmp_path / "other")
     dialog.load_input_state()
     assert dialog.comboBox_displayOutletStation.count() == 0
     assert not dialog.pushButton_observationDisplay_discharge.isEnabled()

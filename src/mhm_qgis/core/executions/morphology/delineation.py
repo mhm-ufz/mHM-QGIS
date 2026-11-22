@@ -5,7 +5,7 @@ from ...handlers.raster import tasks as raster
 from ...handlers.state.domain_state import cached_delineation, delineation_fingerprint
 
 
-def domain_mask(task, project_folder, filled_dem, crs):
+def domain_mask(task, setup_folder, filled_dem, crs):
     """Rebuild one model mask from saved catchments, or valid DEM cells."""
     from pyproj import Transformer
 
@@ -13,9 +13,9 @@ def domain_mask(task, project_folder, filled_dem, crs):
     from ...handlers.store.layout import MERGED_MASK_NAME, domain_dem_path
     from ...handlers.store.paths import temp_morphology_folder
 
-    state = domain_state.load_state(project_folder)
+    state = domain_state.load_state(setup_folder)
     domain_state.assign_domain_ids(state)
-    folder = Path(temp_morphology_folder(project_folder)) / "Watersheds"
+    folder = Path(temp_morphology_folder(setup_folder)) / "Watersheds"
     folder.mkdir(parents=True, exist_ok=True)
     outlets = []
     for index, (outlet_id, record) in enumerate(state["outlets"].items(), 1):
@@ -34,27 +34,27 @@ def domain_mask(task, project_folder, filled_dem, crs):
                             **{key: record.get(key, record.get("delineation", {}).get(key))
                                for key in ("confidence", "snap_count", "snap_distance_m")}))
     dem_domain = None if outlets else (1, str(folder / "4_watershed_DEM.tif"),
-                                       domain_dem_path(project_folder, "master"))
-    result = save(task, project_folder=project_folder, filled_dem=filled_dem,
+                                       domain_dem_path(setup_folder, "master"))
+    result = save(task, setup_folder=setup_folder, filled_dem=filled_dem,
                   outlets=outlets, merged_path=str(folder / MERGED_MASK_NAME), dem_domain=dem_domain)
     for outlet_id, item in result["outlets"].items():
         state["outlets"][outlet_id].update(delineation=item, mask_path=item["raster_path"])
     state["merged_mask_path"] = result["merged_path"]
     state["dem_mask_path"] = result.get("dem_mask_path") or ""
-    domain_state.save_state(project_folder, state)
-    nml_settings.sync_domain_settings(project_folder)
+    domain_state.save_state(setup_folder, state)
+    nml_settings.sync_domain_settings(setup_folder)
     from ...handlers.state import processing
     from ...handlers.store.layout import morph_folder
-    processing.save_domains(project_folder, [{
+    processing.save_domains(setup_folder, [{
         "domain_id": 1, "outlet_id": "", "name": "master", "mask": result["merged_path"],
-        "directory": morph_folder(project_folder), "dem_path": domain_dem_path(project_folder, "master")}])
+        "directory": morph_folder(setup_folder), "dem_path": domain_dem_path(setup_folder, "master")}])
     return result["merged_path"]
 
 
-def _outlet(project_folder, filled_dem, outlet, context, task):
+def _outlet(setup_folder, filled_dem, outlet, context, task):
     raster._cancelled(task)
     x, y = outlet["x"], outlet["y"]
-    result = cached_delineation(project_folder, filled_dem, x, y, outlet.get("cached"))
+    result = cached_delineation(setup_folder, filled_dem, x, y, outlet.get("cached"))
     if result is None:
         if context is None:
             context = raster._flow_context(filled_dem)
@@ -71,19 +71,19 @@ def _outlet(project_folder, filled_dem, outlet, context, task):
     return result, context
 
 
-def show(task, *, project_folder, filled_dem, outlet):
+def show(task, *, setup_folder, filled_dem, outlet):
     """Delineate only on explicit request, or return a valid cached mask."""
-    result, _context = _outlet(project_folder, filled_dem, outlet, None, task)
+    result, _context = _outlet(setup_folder, filled_dem, outlet, None, task)
     raster._progress(task, 100)
     return result
 
 
-def save(task, *, project_folder, filled_dem, outlets, merged_path, dem_domain=None):
+def save(task, *, setup_folder, filled_dem, outlets, merged_path, dem_domain=None):
     """Prepare every listed outlet, merging only the active domain masks."""
     context = None
     results, masks = {}, []
     for index, outlet in enumerate(outlets):
-        result, context = _outlet(project_folder, filled_dem, outlet, context, task)
+        result, context = _outlet(setup_folder, filled_dem, outlet, context, task)
         results[outlet["outlet_id"]] = result
         if outlet.get("domain_id"):
             masks.append((outlet["domain_id"], result["raster_path"]))

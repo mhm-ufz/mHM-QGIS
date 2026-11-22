@@ -11,7 +11,6 @@ from qgis.PyQt.QtWidgets import (
     QDialog,
     QMessageBox,
     QRadioButton,
-    QTableWidgetItem,
 )
 
 from ...core.handlers.store.morphology import resolve_display_output
@@ -20,9 +19,12 @@ from ..dialogs.file_picker import open_file
 from ..dialogs.input_selection import (
     INPUT_EXTENSIONS,
     InputComboAdapter,
+    _populate_layer_combo,
+    _restore_raster_details,
     is_point_layer,
     loaded_qgis_items,
     raster_details,
+    raster_draft,
 )
 from ..reporting import error_detail
 from ..workflows import hydrology
@@ -58,7 +60,7 @@ def refresh_input_sources(dialog):
             and isinstance(previous, dict)
             and previous.get("origin") == "file"
             and previous.get("manual")
-            and os.path.isfile(previous.get("path", ""))
+            and os.path.isfile(previous.get("path", "").split("|", 1)[0])  # a GeoPackage path names its layer
         ):
             combo.addItem(previous.get("label") or previous["path"], previous)
             index = combo.count() - 1
@@ -66,6 +68,14 @@ def refresh_input_sources(dialog):
         combo.blockSignals(False)
         if isinstance(previous, dict) and index < 0:
             adapter.layerChanged.emit(adapter.currentLayer())
+    for adapter in getattr(dialog, "_lookup_adapters", {}).values():  # the categorical layers keep their choice
+        combo, draft = adapter.combo_box, raster_draft(adapter.combo_box)
+        browsed = (combo.currentData() or {}).get("origin") == "file"
+        combo.blockSignals(True)
+        _populate_layer_combo(adapter, dialog.setup_folder, adapter.kind, draft["input_path"])
+        if browsed:
+            _restore_raster_details(combo, draft)
+        combo.blockSignals(False)
 
 
 def _matching_input_index(combo, previous):
@@ -186,8 +196,8 @@ def handle_model_input_changed(dialog, value=None):
 
     dialog.save_input_state()
     invalidate_meteo(dialog)
-    if dialog.project_folder:
-        processing.mark_workflow(dialog.project_folder, "execute_all_morphology", "pending")
+    if dialog.setup_folder:
+        processing.mark_workflow(dialog.setup_folder, "execute_all_morphology", "pending")
 
 
 # --- Outlets and domain definition ----------------------------------------
@@ -240,7 +250,7 @@ def update_gauged_outlet_count(dialog, layer=None):
 
     if layer is None:
         layer = dialog.input_combo("pour_points").currentLayer()
-    configured_ids = configured_gauged_outlet_ids(dialog.project_folder)
+    configured_ids = configured_gauged_outlet_ids(dialog.setup_folder)
     count = (
         str(len(configured_ids))
         if configured_ids is not None
@@ -251,17 +261,26 @@ def update_gauged_outlet_count(dialog, layer=None):
     return count
 
 
-DOMAIN_TYPES = ("Entire DEM extent in Domain", "Select Catchments in Domain [using Domain Delineator]")
+DOMAIN_TYPES = ("Entire DEM extent as Domain", "Delineate Domain")  # saved for the radios, in order
 
 
-def radios(dialog, name, chosen):
-    """Group the Designer radios `radioButton_<name>*`, wherever laid out; a click calls `chosen(text)`."""
+def radios(dialog, name, chosen, modes=()):
+    """Group the Designer radios `radioButton_<name>*`, wherever laid out; a click calls `chosen(text)`.
+    With `modes`, the radios in order stand for those saved texts, so their labels may differ."""
     group = QButtonGroup(dialog)
     for radio in dialog.findChildren(QRadioButton):
         if radio.objectName().startswith(f"radioButton_{name}"):
             group.addButton(radio)
-    group.buttonClicked.connect(lambda button: chosen(button.text()))
+    if modes:
+        for radio, mode in zip(group.buttons(), modes, strict=True):
+            radio.setProperty("mode", mode)
+    group.buttonClicked.connect(lambda button: chosen(mode_of(button)))
     setattr(dialog, f"buttonGroup_{name}", group)
+
+
+def mode_of(button) -> str:
+    """The saved text a radio stands for: its mode, else its label."""
+    return button.property("mode") or button.text()
 
 
 def check(dialog, name, text):
@@ -269,7 +288,7 @@ def check(dialog, name, text):
     group = getattr(dialog, f"buttonGroup_{name}")
     group.setExclusive(False)
     for button in group.buttons():
-        button.setChecked(button.text().lower() == str(text or "").lower().replace("_", " "))
+        button.setChecked(mode_of(button).lower() == str(text or "").lower().replace("_", " "))
     group.setExclusive(True)
 
 
@@ -277,19 +296,27 @@ def embed(dialog, name, child):
     """Show the dialog `child` (or nothing) in `widget_<name>Form`.
 
     The form it replaces is closed silently: its own close handling runs, but not the
-    `rejected`/`finished` slots that would show a form again.
+    `rejected`/`finished` slots that would show a form again. False when that form refuses to
+    close (the Domain Delineator while it saves): it stays, and `child` is dropped.
     """
     layout = getattr(dialog, f"verticalLayout_{name}Form")
     while layout.count():
         old = layout.takeAt(0).widget()
         if old is not None:
             old.blockSignals(True)
-            old.close()
+            if not old.close():
+                old.blockSignals(False)
+                layout.insertWidget(0, old)
+                if child is not None:
+                    child.deleteLater()
+                return False
             old.deleteLater()
     if child is not None:
         child.setWindowFlags(Qt.WindowType.Widget)
+        child.setMinimumSize(0, 0)  # a window's minimum: embedded, its layout's own minimum decides
         layout.addWidget(child)
         child.show()
+    return True
 
 
 def form_on(dialog, name):
@@ -349,7 +376,7 @@ def show_domain_definition(dialog):
 
 def _selected_outlets(dialog, title):
     """Return the outlet IDs, or None after telling the user what is missing."""
-    if not dialog.project_folder:
+    if not dialog.setup_folder:
         QMessageBox.warning(dialog, title, "Select a project folder first.")
         return None
     try:
@@ -376,7 +403,7 @@ def open_domain_assignment(dialog):
         from ..dialogs.discharge_assignment import DischargeTableAssignmentDialog
 
         workflow = DomainWorkflow(
-            dialog.project_folder,
+            dialog.setup_folder,
             dialog.input_combo("pour_points").currentLayer(),
             selected_outlet_id_field(dialog),
             outlet_ids,
@@ -392,6 +419,9 @@ def open_domain_assignment(dialog):
         return False
     assignment.accepted.connect(lambda: _assign(dialog, workflow, assignment))
     embed(dialog, "domainDefinition", assignment)
+    from .. import project_tree
+
+    project_tree.indicate(dialog, "domain_definition", assignment.label_setStatusDomainDefinitionDemExtent)
     return True
 
 
@@ -400,7 +430,7 @@ def _assign(dialog, workflow, assignment):
 
     try:
         workflow.apply_dem_extent(assignment.selected_assignments())
-        sync_domain_settings(dialog.project_folder)
+        sync_domain_settings(dialog.setup_folder)
     except Exception as error:
         _assignment_failed(dialog, error)
         return
@@ -444,7 +474,7 @@ def _gauges_from_raster(dialog):
     try:
         output = points_from_gauge_raster(
             source(path, details.get("variable", "")),
-            Path(temp_morphology_folder(dialog.project_folder)) / "gauges_from_raster.gpkg",
+            Path(temp_morphology_folder(dialog.setup_folder)) / "gauges_from_raster.gpkg",
             details.get("source_crs", ""))
     except (OSError, ValueError, RuntimeError) as error:
         QMessageBox.warning(dialog, "Gauges", str(error))
@@ -457,21 +487,32 @@ def _gauges_from_raster(dialog):
 def set_gauges(dialog):
     """Gauges' Set: build the drainage network and flow accumulation the Domain Delineator opens on."""
     if dialog.radioButton_gaugesRasterInput.isChecked() and (
-            not dialog.project_folder or not _gauges_from_raster(dialog)):
+            not dialog.setup_folder or not _gauges_from_raster(dialog)):
         return
     if _selected_outlets(dialog, "Gauges") is None:
         return
 
+    box = QMessageBox(QMessageBox.Icon.Information, "Set Gauges", "Preparing the channel network and flow "
+                      "accumulation…\nThis closes when they are ready.", parent=dialog)
+    box.setModal(False)
+
     def ready(_context):
+        box.close()
         dialog.log_message("The drainage network and flow accumulation are ready.")
         dialog.save_input_state()
         from .. import project_tree
 
         project_tree.refresh(dialog)
 
-    if hydrology.start_domain_preflight(dialog, (dialog.page_gauges,), ready,
-                                        lambda message: _domain_delineator_preflight_failed(dialog, message)):
+    def failed(message):
+        box.close()
+        _domain_delineator_preflight_failed(dialog, message)
+
+    prepared = hydrology.domain_prepared(dialog)
+    if hydrology.start_domain_preflight(dialog, (dialog.page_gauges,), ready, failed):
         dialog.log_message("Creating the drainage network and flow accumulation…")
+        if not prepared:
+            box.show()
 
 
 def open_domain_delineator(dialog):
@@ -514,6 +555,9 @@ def _show_domain_delineator(dialog, context, pour_points_layer, outlet_id_field,
         QMessageBox.critical(dialog, "Domain Delineator", str(error))
         return
     embed(dialog, "domainDefinition", delineator)
+    from .. import project_tree
+
+    project_tree.indicate(dialog, "domain_definition", delineator.label_setStatusDomainDefinition)
 
 
 def _domain_delineator_preflight_failed(dialog, message):
@@ -521,61 +565,11 @@ def _domain_delineator_preflight_failed(dialog, message):
     QMessageBox.critical(dialog, "Gauges", error_detail(message))
 
 
-# --- DEM derivatives ------------------------------------------------------
-
-DEM_BUNDLE_VARIABLES = {"dem": "dem_filled", "slope": "slope", "aspect": "aspect", "fdir": "fdir", "facc": "facc"}
-
-
-def show_dem_derivatives(dialog, variable=None):
-    """The DEM page: the DEM and the derivatives the data model needs, from dem_derivatives.nc;
-    `variable`, a clicked row, gets the Replace row."""
-    from ...core.handlers.file.netcdf.raster import describe
-    from ...core.handlers.store.paths import temp_morphology_folder
-
-    path = os.path.join(temp_morphology_folder(dialog.project_folder), "dem_derivatives.nc") \
-        if dialog.project_folder else ""
-    present, table = describe(path) if path else {}, dialog.tableWidget_demDerivatives
-    table.setRowCount(len(DEM_BUNDLE_VARIABLES))
-    for row, (key, name) in enumerate(DEM_BUNDLE_VARIABLES.items()):
-        shape, units = present.get(name, ((), ""))
-        file = os.path.relpath(path, dialog.project_folder) if name in present else "—"
-        for column, text in enumerate((key, name, " \N{MULTIPLICATION SIGN} ".join(map(str, shape[-2:])) or "—", units, file)):
-            table.setItem(row, column, QTableWidgetItem(text))
-        table.setRowHidden(row, key != "dem" and key not in dialog._input_findings)
-    for column in range(table.columnCount() - 1):  # the last one stretches
-        table.resizeColumnToContents(column)
-    dialog._dem_override = variable
-    dialog.widget_demOverride.setVisible(variable is not None)
-    dialog.widget_demOverride.setEnabled(DEM_BUNDLE_VARIABLES.get(variable) in present)
-
-
-def browse_dem_override(dialog):
-    path, _ = open_file(dialog, "Replacement raster", "Rasters (*.tif *.tiff *.nc *.asc);;All files (*)")
-    if path:
-        dialog.lineEdit_demOverride.setText(path)
-
-
-def override_dem_derivative(dialog):
-    """Replace the page's derivative with the chosen raster (same grid, whole DEM)."""
-    from ...core.handlers.raster.tasks import override_derivative
-    from ...core.handlers.store.paths import temp_morphology_folder
-    from .. import project_tree
-
-    path, variable = dialog.lineEdit_demOverride.text().strip(), dialog._dem_override
-    try:
-        override_derivative(temp_morphology_folder(dialog.project_folder), DEM_BUNDLE_VARIABLES[variable], path)
-    except (OSError, RuntimeError, ValueError) as error:
-        QMessageBox.warning(dialog, "Replace DEM Derivative", str(error))
-        return
-    dialog.log_message(f"Replaced {variable} in dem_derivatives.nc with {path}.")
-    project_tree.refresh(dialog)
-
-
 # --- Result display -------------------------------------------------------
 
 def display_morphology(dialog, key) -> str:
     """Show the prepared output for a `resolve_display_output` key: its layer name, "" when there is none."""
-    output = resolve_display_output(dialog.project_folder, key) if dialog.project_folder else None
+    output = resolve_display_output(dialog.setup_folder, key) if dialog.setup_folder else None
     if output is None:
         return ""
     from ...qgis_bridge.display.morphology import show_output
@@ -592,7 +586,7 @@ def refresh_observation_stations(dialog):
     blocked = combo.blockSignals(True)
     try:
         combo.clear()
-        for station in stations(dialog.project_folder):
+        for station in stations(dialog.setup_folder):
             combo.addItem(station["id"], station["path"])
         index = combo.findText(selected)
         if index >= 0:
@@ -630,7 +624,7 @@ def on_page_changed(dialog, page):
     dialog.log_message(f"Switched to '{dialog.tabWidget_steps.tabText(0)}'.")
     # mHM reports nothing when it finishes, so the Outputs page re-reads the
     # runs each time it is shown.
-    if page is dialog.tab_outputs:
+    if page is dialog.page_outputs:
         from . import post_context
 
         post_context.populate(dialog)

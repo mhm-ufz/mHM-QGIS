@@ -7,30 +7,33 @@ from __future__ import annotations
 
 import os
 
-from qgis.core import QgsCoordinateReferenceSystem, QgsMapLayer, QgsRectangle
+from qgis.core import QgsCoordinateReferenceSystem, QgsMapLayer
 from qgis.PyQt.QtCore import QSignalBlocker
 
 from ...core.handlers.file import json as jsonio
 from ...core.handlers.store.layout import input_state_path
-from ...core.handlers.store.paths import version_key
+from ...externals.mhm_tools_handler import VARIABLES
 from ...qgis_bridge import layers as qgis_layers
 from ..dialogs.input_selection import _combo_path, _populate_file_combo
 from . import categorical, forcing, grid, main, model, process_cases, time, version
 
 
 def _state_path(dialog):
-    return input_state_path(dialog.project_folder) if dialog.project_folder else None
+    return input_state_path(dialog.setup_folder) if dialog.setup_folder else None
 
 
 def save(dialog):
     """Save selected inputs to a JSON file in the project folder."""
     if (
-        not dialog.project_folder
+        not dialog.setup_folder
         or dialog._loading_input_state
         or dialog._suspend_input_state_saves
     ):
         return
     path = _state_path(dialog)
+    if dialog.setup_folder == dialog.project_directory:  # post processing only: the setup's own inputs stay
+        jsonio.merge_sections(path, {"mhm_version": version.selected(dialog), "crs_authid": dialog._set_crs})
+        return
     if dialog._multi_domains is not None:
         # A combined setup holds no inputs of its own, only its domains.
         jsonio.write(path, {
@@ -71,23 +74,13 @@ def save(dialog):
             "origin": "qgis",
         }
 
-    meteo_inputs = {
-        "l2_multiplier": int(dialog.spinBox_L2ResolutionMultiplier.value()),
-        "l2_multiplier_user_selected": bool(dialog._l2_multiplier_user_selected),
-        "precipitation": {
-            "folder": grid.precipitation_folder(dialog),
-            "pattern": dialog.lineEdit_precipitationGlobDefinition.text(),
-        },
-        "variables": dialog._meteo_inputs,
-    }
     state = {
-        "version": 4,
+        "version": 5,
         "mhm_version": version.selected(dialog),
         "layers": layers,
-        "grid_resolutions": {
-            "l1_resolution": grid.current_l1_resolution(dialog),
-            "l11_resolution": grid.current_l11_resolution(dialog),
-        },
+        "resolution_files": dialog._resolution_files,  # by level: path, variable, crs (L0: factor)
+        "extent_levels": grid.ticked(dialog),
+        "grid_resolutions": {level.lower(): grid.entered(dialog, level) for level in ("L1", "L11", "L2")},
         "lai_input_type": categorical.categorical_input_mode(dialog, "lai"),
         "categorical_types": {
             kind: categorical.categorical_input_mode(dialog, kind)
@@ -109,16 +102,16 @@ def save(dialog):
         },
         "land_cover_ready_source": dialog._land_cover_ready_source,
         "drafts": dialog._drafts,
-        "meteo_inputs": meteo_inputs,
+        "meteo_inputs": {"variables": dialog._meteo_inputs},
         "observation_inputs": dialog._observation_inputs,
+        "time_period_source": dialog._time_source,
         "pour_point_outlet_id_field": main.selected_outlet_id_field(dialog),
         "domain_definition_type": dialog._domain_definition_mode,
-        "gauges": dialog.checkBox_gaugeOption.isChecked(),
         "gauge_input": "raster" if dialog.radioButton_gaugesRasterInput.isChecked() else "point",
         "gauge_raster": _combo_path(dialog.comboBox_gaugeRaterInput),
         "crs_authid": dialog._set_crs,  # a CRS not yet Set is not kept
-        "study_extent": dialog._study_extent,  # in that CRS
-        "upscale_factor": dialog._upscale_factor,  # L0 = DEM x this, see grid.set_dem
+        "upscale_factor": dialog._upscale_factor,  # the DEM x this lies on L0, see grid.set_dem
+        "dem_replacements": dialog._dem_replacements,  # derivative row -> raster, see grid.set_derivative
         "intro": dialog._intro_answers,
         "process_cases": process_cases.current(dialog),
     }
@@ -137,7 +130,6 @@ def load(dialog):
         clear(dialog)
         if not path or not os.path.exists(path):
             main.refresh_input_sources(dialog)
-            grid.refresh_precipitation_folder(dialog)
             dialog.log_message("No saved input state found for this project.")
             return
         state = jsonio.read(path)
@@ -149,13 +141,6 @@ def load(dialog):
         if crs.isValid():  # first and painted now: the rest of the load holds the event loop
             dialog.mProjectionSelectionWidget_crs.setCrs(crs)
             dialog.mProjectionSelectionWidget_crs.repaint()
-        if version_key(state.get("mhm_version")) == "v5.13":
-            from ...externals.mhm_handler import recover_v5_mrm_outputs
-
-            try:
-                recover_v5_mrm_outputs(dialog.project_folder)
-            except (OSError, RuntimeError) as error:
-                dialog.log_message(f"WARNING: Could not recover mrm_outputs.nml: {error}")
         _restore_combo_text(dialog.comboBox_mHMversion, state.get("mhm_version", ""))
         # A setup without saved answers keeps the ones given before it was opened.
         dialog._intro_answers = state.get("intro") or dialog._intro_answers
@@ -169,28 +154,24 @@ def load(dialog):
             project.show_work_type(dialog)
             multi_domain.refresh_table(dialog)
             return
-        _restore_resolution_preferences(dialog, state.get("grid_resolutions", {}))
-        dialog._set_crs = dialog.get_crs().authid()
-        dialog._upscale_factor = max(1, int(state.get("upscale_factor") or 1))  # before the DEM: L0 follows it
+        dialog._set_crs = crs.authid() if crs.isValid() else ""  # never the previous domain's
+        dialog._upscale_factor = max(1, int(state.get("upscale_factor") or 1))
         dialog.groupBox_upscaleTopography.setChecked(dialog._upscale_factor > 1)
         dialog.spinBox_upscaleTopographyFactor.setMaximum(max(dialog.spinBox_upscaleTopographyFactor.maximum(),
                                                               dialog._upscale_factor))
         dialog.spinBox_upscaleTopographyFactor.setValue(dialog._upscale_factor)
         _restore_categorical_inputs(dialog, state)
         main.refresh_input_sources(dialog)
-        grid.refresh_precipitation_folder(dialog)
         _restore_input_layers(dialog, state.get("layers", {}))
         _restore_domain_inputs(dialog, state)
-        if extent := state.get("study_extent"):
-            dialog._study_extent = list(extent)
-            dialog.groupBox_customExtent.setChecked(True)
-            dialog.mExtentGroupBox_customExtent.setOutputExtentFromUser(
-                QgsRectangle(extent[0], extent[2], extent[1], extent[3]), dialog.get_crs())
         _restore_meteo_inputs(dialog, state.get("meteo_inputs", {}))
-        dialog._observation_inputs = dict(state.get("observation_inputs", {}))
+        dialog._observation_inputs = {key: value for key, value in state.get("observation_inputs", {}).items()
+                                      if key in VARIABLES}  # a kind since removed (Q_bkfl) is dropped
         forcing.populate_observation_table(dialog)
         time.restore(dialog)
-        grid.refresh_grid_resolution_controls(dialog)
+        dialog._time_source = state.get("time_period_source") or {}
+        time.show_source(dialog)
+        grid.restore(dialog, state)
     finally:
         dialog._loading_input_state = False
         process_cases.inputs(dialog)
@@ -206,29 +187,22 @@ def clear(dialog):
     dialog._multi_domains = None
     for _, combo in main.input_layer_widgets(dialog):
         combo.setCurrentIndex(-1)
-    with QSignalBlocker(dialog.comboBox_precipitationFile):
-        dialog.comboBox_precipitationFile.setCurrentIndex(-1)
     for name in (*categorical.PAGES.values(), "domainDefinition"):
         main.check(dialog, name, "")
     main.embed(dialog, "domainDefinition", None)
     with QSignalBlocker(dialog.comboBox_pourPointOutletID):
         dialog.comboBox_pourPointOutletID.clear()
         dialog.comboBox_pourPointOutletID.addItem("")
-    dialog.lineEdit_precipitationGlobDefinition.setText("*.nc")
-    dialog._grid_l2_metadata = None
-    dialog._grid_l2_header = None
     time.restore(dialog)
-    with QSignalBlocker(dialog.spinBox_L2ResolutionMultiplier):
-        dialog.spinBox_L2ResolutionMultiplier.setValue(1)
-    dialog._l2_multiplier_user_selected = False
     dialog._meteo_inspections = {}
     dialog._meteo_inputs = {}
     dialog._observation_inspections = {}
     dialog._observation_inputs = {}
-    dialog._grid_l0_info = None
+    dialog._time_source = {}
+    time.show_source(dialog)
+    grid.clear(dialog)
     forcing.populate_meteo_table(dialog)
     forcing.populate_observation_table(dialog)
-    grid.clear_precipitation_resolution_labels(dialog)
     dialog._categorical_lookup_configs = {}
     dialog._categorical_ready_configs = {}
     dialog._lai_input_config = {}
@@ -236,20 +210,15 @@ def clear(dialog):
     dialog._advanced_inputs = {}
     dialog._drafts = {}
     dialog._failed_step = None
-    dialog._set_crs = dialog.get_crs().authid()
-    dialog._study_extent = None
-    dialog.groupBox_customExtent.setChecked(False)
+    dialog._set_crs = ""
     dialog._upscale_factor = 1
     dialog.groupBox_upscaleTopography.setChecked(False)
     dialog._land_cover_ready_source = ""
     categorical.fill(dialog)
     dialog._domain_definition_mode = ""
-    dialog.checkBox_gaugeOption.setChecked(False)
     main.check(dialog, "gauges", "Point Input")
     main.show_gauge_type(dialog)
-    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.project_folder, "gauges", "")
-    dialog._preferred_l1_resolution = None
-    dialog._preferred_l11_resolution = None
+    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.setup_folder, "gauges", "")
     dialog.task_coordinator.set_max_threads(2)
 
 
@@ -257,19 +226,6 @@ def _restore_combo_text(combo, text):
     index = combo.findText(str(text)) if text else -1
     if index >= 0:
         combo.setCurrentIndex(index)
-
-
-def _restore_resolution_preferences(dialog, saved):
-    """Remember saved L1/L11 choices for the next combo population."""
-    for key, attribute in (
-        ("l1_resolution", "_preferred_l1_resolution"),
-        ("l11_resolution", "_preferred_l11_resolution"),
-    ):
-        try:
-            value = float(saved[key]) if saved.get(key) is not None else None
-        except (TypeError, ValueError):
-            value = None
-        setattr(dialog, attribute, value)
 
 
 def _restore_categorical_inputs(dialog, state):
@@ -345,7 +301,9 @@ def _find_or_load_layer(dialog, layer_info):
     return layer
 
 
-_OLD_DOMAIN_TYPES = ("Single Domain [DEM extent]", "Select Domains [using Domain Delineator]")  # saved before the rename
+_OLD_DOMAIN_TYPES = {  # saved under earlier radio labels → the index of today's in main.DOMAIN_TYPES
+    "Single Domain [DEM extent]": 0, "Entire DEM extent in Domain": 0,
+    "Select Domains [using Domain Delineator]": 1, "Select Catchments in Domain [using Domain Delineator]": 1}
 
 
 def _restore_domain_inputs(dialog, state):
@@ -354,45 +312,23 @@ def _restore_domain_inputs(dialog, state):
     if not preferred:
         from ...core.handlers.state.domain_state import load_state
 
-        preferred = str(load_state(dialog.project_folder).get("outlet_id_field", ""))
+        preferred = str(load_state(dialog.setup_folder).get("outlet_id_field", ""))
     main.populate_pour_point_outlet_fields(
         dialog, preferred=preferred
     )
     text = str(state.get("domain_definition_type", "") or "")
     if not text and state.get("dem_domain"):
         text = main.DOMAIN_TYPES[0]
-    text = dict(zip(_OLD_DOMAIN_TYPES, main.DOMAIN_TYPES, strict=True)).get(text, text)
+    text = main.DOMAIN_TYPES[_OLD_DOMAIN_TYPES[text]] if text in _OLD_DOMAIN_TYPES else text
     main.check(dialog, "domainDefinition", text)
     dialog._domain_definition_mode = text
-    dialog.checkBox_gaugeOption.setChecked(bool(state.get("gauges", text)))  # older setups: gauges if a domain was defined
     main.check(dialog, "gauges", "Raster Input" if state.get("gauge_input") == "raster" else "Point Input")
     main.show_gauge_type(dialog)
-    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.project_folder, "gauges", state.get("gauge_raster", ""))
+    _populate_file_combo(dialog.comboBox_gaugeRaterInput, dialog.setup_folder, "gauges", state.get("gauge_raster", ""))
 
 
 def _restore_meteo_inputs(dialog, state):
-    """Restore configured variables and grid preferences without scanning."""
-    if not isinstance(state, dict):
-        return
-    try:
-        multiplier = max(1, int(state.get("l2_multiplier", 1)))
-    except (TypeError, ValueError):
-        multiplier = 1
-    with QSignalBlocker(dialog.spinBox_L2ResolutionMultiplier):
-        dialog.spinBox_L2ResolutionMultiplier.setValue(multiplier)
-    dialog._l2_multiplier_user_selected = bool(
-        state.get("l2_multiplier_user_selected", "l2_multiplier" in state)
-    )
-    dialog._meteo_inputs = dict(state.get("variables", {}))
+    """Restore the configured variables without scanning."""
+    if isinstance(state, dict):
+        dialog._meteo_inputs = dict(state.get("variables", {}))
     forcing.populate_meteo_table(dialog)
-
-    saved = state.get("precipitation", {})
-    if not isinstance(saved, dict):
-        return
-    folder = str(saved.get("folder", "") or "")
-    combo = dialog.comboBox_precipitationFile
-    if folder and (os.path.isdir(folder) or grid.folder_combo_index(combo, folder) >= 0):
-        grid.select_precipitation_folder(dialog, folder)
-    else:
-        combo.setCurrentIndex(0)
-    dialog.lineEdit_precipitationGlobDefinition.setText(saved.get("pattern", "*.nc"))

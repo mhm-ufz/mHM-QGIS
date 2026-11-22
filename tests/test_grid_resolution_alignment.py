@@ -38,7 +38,7 @@ def test_resolution_and_grid_keep_exact_values_and_level_extents():
 
     grid = Grid.for_meteorology(
         {**L0_ANCHOR, "ncols": 100, "nrows": 100},
-        ((115, 985, 218, 812),),
+        (115, 985, 218, 812),
         3,
         crs="EPSG:32632",
         unit="m",
@@ -50,14 +50,14 @@ def test_resolution_and_grid_keep_exact_values_and_level_extents():
     assert grid.l0 == 10
     assert grid.l2 == 30
     assert grid.l0_extent == Extent(100, 1100, 200, 1200)
-    assert grid.l2_extent == grid.common_extent
+    assert grid.l2_extent == grid.common_extent == Extent(100, 1000, 200, 830)  # whole L2 cells covering it
     assert not grid.requires_l2_resampling
 
 
 def test_user_multiplier_remains_authoritative_over_exact_raw_factor():
     grid = Grid.for_meteorology(
         {**L0_ANCHOR, "ncols": 100, "nrows": 100},
-        ((115, 985, 218, 812),),
+        (115, 985, 218, 812),
         4,
         crs="EPSG:32632",
         unit="m",
@@ -75,7 +75,7 @@ def test_user_multiplier_remains_authoritative_over_exact_raw_factor():
 def test_a_gap_below_half_an_l0_cell_shifts_and_another_crs_resamples():
     base = {
         "l0_header": {**L0_ANCHOR, "ncols": 100, "nrows": 100},
-        "domain_extents": ((115, 985, 218, 812),),
+        "bounds": (115, 985, 218, 812),
         "multiplier": 3,
         "crs": "EPSG:32632",
         "unit": "m",
@@ -89,10 +89,10 @@ def test_a_gap_below_half_an_l0_cell_shifts_and_another_crs_resamples():
     assert other.requires_l2_resampling
 
 
-def test_a_study_extent_inside_the_dem_takes_the_precipitation_cells_around_it():
+def test_the_common_extent_takes_the_precipitation_cells_around_it():
     grid = Grid.for_meteorology(
         {**L0_ANCHOR, "ncols": 100, "nrows": 100},
-        ((415, 585, 418, 512),),
+        (415, 585, 418, 512),
         3,
         crs="EPSG:32632",
         unit="m",
@@ -101,10 +101,55 @@ def test_a_study_extent_inside_the_dem_takes_the_precipitation_cells_around_it()
         raw_l2_crs="EPSG:32632",
     )
 
-    assert grid.common_extent == Extent(400, 610, 410, 530)  # whole 30 m precipitation cells
+    assert grid.common_extent == Extent(400, 610, 410, 530)  # whole 30 m precipitation cells around it
     assert grid.l0_header["ncols"] == 3 * grid.l2_header["ncols"]
     assert grid.l0_header["xllcorner"] == 400
     assert grid.l0_header["cellsize"] == 10
+
+
+def test_blocks_of_the_lcm_snap_outward_so_every_level_nests():
+    grid = Grid.for_meteorology({**L0_ANCHOR, "ncols": 100, "nrows": 100}, (115, 985, 218, 812), 3, block=6,
+                                crs="EPSG:32632", unit="m")
+
+    assert grid.common_extent == Extent(100, 1000, 200, 860)  # 60 m blocks from the L0 corner, around it
+    assert (grid.l2_header["ncols"], grid.l0_header["ncols"]) == (30, 90)
+    with pytest.raises(ValueError, match="not a multiple"):
+        Grid.for_meteorology({**L0_ANCHOR, "ncols": 100, "nrows": 100}, (115, 985, 218, 812), 3, block=4)
+
+
+def test_extents_intersect_or_share_nothing():
+    assert Extent(0, 10, 0, 10).intersect(Extent(5, 15, 5, 15)) == Extent(5, 10, 5, 10)
+    assert Extent(0, 10, 0, 10).intersect(Extent(10, 15, 0, 10)) is None
+
+
+def test_mhm_rules_on_the_four_levels():
+    from mhm_qgis.core.grid import validate_mhm_grid
+
+    def headers(l1, l11, l2):
+        return {level: {"cellsize": size} for level, size in (("L0", 1.0), ("L1", l1), ("L11", l11), ("L2", l2))}
+
+    validate_mhm_grid(headers(2, 6, 4), "6.0")  # v6 takes any nested L11/L1 ratio
+    with pytest.raises(ValueError, match="even L11/L1 ratio"):
+        validate_mhm_grid(headers(2, 6, 4), "5.13")
+    validate_mhm_grid(headers(2, 4, 4), "5.13")
+    with pytest.raises(ValueError, match=r"L1 .* whole multiple of L0"):
+        validate_mhm_grid(headers(0.5, 4, 4), "6.0")
+    with pytest.raises(ValueError, match="must nest"):
+        validate_mhm_grid(headers(2, 3, 4), "6.0")
+
+
+def test_inner_bounds_drop_the_curved_corners_of_a_transformed_box():
+    pytest.importorskip("pyproj")
+    from pyproj import Transformer
+
+    from mhm_qgis.core.grid import inner_bounds
+
+    box = (10.0, 12.0, 47.0, 50.0)
+    inner = inner_bounds(box, "EPSG:4326", "EPSG:32632")
+    outer = Transformer.from_crs("EPSG:4326", "EPSG:32632", always_xy=True).transform_bounds(10, 47, 12, 50)
+    assert outer[0] < inner[0] < inner[1] < outer[2]
+    assert outer[1] < inner[2] < inner[3] < outer[3]
+    assert inner_bounds(box, "EPSG:4326", "EPSG:4326") == box
 
 
 def test_aligned_extent_is_minimal_and_has_integer_l0_l2_dimensions():
@@ -125,7 +170,7 @@ def test_aligned_extent_is_minimal_and_has_integer_l0_l2_dimensions():
         "cellsize": 30.0,
         "nodata_value": -9999.0,
         "unit": "m",
-        "cellsize_precision": 8,
+        "cellsize_precision": 12,
     }
     assert l0["ncols"] == 3 * l2["ncols"]
     assert l0["nrows"] == 3 * l2["nrows"]
@@ -260,10 +305,7 @@ DEGREE_ANCHOR = {
 
 
 def test_repeating_degree_l2_cell_size_is_never_rounded_away():
-    from mhm_qgis.core.grid import (
-        floor_cellsize,
-        possible_resolutions,
-    )
+    from mhm_qgis.core.grid import floor_cellsize
 
     bounds = (78.99958333333333, 90.00041666666226, 26.0, 31.000416666666666)
     l0, l2 = aligned_l0_l2_headers(bounds, DEGREE_ANCHOR, multiplier=120, unit="deg")
@@ -276,13 +318,11 @@ def test_repeating_degree_l2_cell_size_is_never_rounded_away():
     # Every downstream consumer must accept the exact pair.
     validate_l0_l2_alignment(l0, l2, 120)
     assert l0_header_from_l2(l2, DEGREE_L0, 120) == l0
-    assert possible_resolutions(DEGREE_L0, l2["cellsize"], "deg")
 
 
 def test_all_four_levels_validate_on_a_repeating_degree_grid(tmp_path):
     from mhm_qgis.core.grid import (
         header_for_existing_bounds,
-        possible_resolutions,
         read_header_file,
         write_header_file,
     )
@@ -290,8 +330,7 @@ def test_all_four_levels_validate_on_a_repeating_degree_grid(tmp_path):
 
     bounds = (78.99958333333333, 90.00041666666226, 26.0, 31.000416666666666)
     l0, l2 = aligned_l0_l2_headers(bounds, DEGREE_ANCHOR, multiplier=120, unit="deg")
-    options = possible_resolutions(DEGREE_L0, l2["cellsize"], "deg")
-    l1 = header_for_existing_bounds(l2, options[len(options) // 2], "deg")
+    l1 = header_for_existing_bounds(l2, 60 * DEGREE_L0, "deg")
 
     _standardized, ratios = validate_grid_headers(
         {"L0": l0, "L1": l1, "L11": l1, "L2": l2}
@@ -303,3 +342,126 @@ def test_all_four_levels_validate_on_a_repeating_degree_grid(tmp_path):
     path = tmp_path / "header.txt"
     write_header_file(path, l2)
     assert read_header_file(path, unit="deg")["cellsize"] == l2["cellsize"]
+
+
+def test_raster_grid_upscales_from_the_corner_and_reads_mhm_netcdf_as_the_forcing_does(tmp_path):
+    pytest.importorskip("osgeo")
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
+    from mhm_qgis.core.grid.raster import raster_grid
+
+    asc = tmp_path / "dem.asc"
+    asc.write_text("ncols 4\nnrows 2\nxllcorner 100\nyllcorner 200\ncellsize 10\nNODATA_value -9999\n" + "1 2 3 4\n" * 2)
+    header = raster_grid(asc, "EPSG:32632", "EPSG:32632", "m", factor=3)["header"]
+    assert (header["ncols"], header["nrows"], header["xllcorner"], header["yllcorner"], header["cellsize"]) == (
+        2, 1, 100, 200, 30)  # the top and right padded to whole blocks
+    nc = tmp_path / "pre.nc"  # mHM's layout: xc/yc are the left/upper cell edges, no CF grid for GDAL
+    xr.Dataset({"pre": (("time", "yc", "xc"), np.ones((1, 2, 3)))},
+               coords={"time": np.array(["2001-01-01"], dtype="datetime64[ns]"), "yc": [230., 220.],
+                       "xc": [100., 110., 120.]}).to_netcdf(nc)
+    header = raster_grid(f'NETCDF:"{nc}":pre', "EPSG:32632", "EPSG:32632", "m")["header"]
+    assert (header["ncols"], header["nrows"], header["xllcorner"], header["yllcorner"]) == (3, 2, 100, 210)
+
+
+def test_a_netcdf_grid_is_read_from_its_axes_never_through_gdal(tmp_path, monkeypatch):
+    gdal = pytest.importorskip("osgeo.gdal")
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
+    from mhm_qgis.core.grid.raster import raster_grid
+
+    nc = tmp_path / "tp.nc"
+    xr.Dataset({"tp": (("time", "latitude", "longitude"), np.ones((2, 2, 3))), "q": (("time",), [1., 2.])},
+               coords={"time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"),
+                       "latitude": [50.95, 50.85], "longitude": [9.05, 9.15, 9.25]}).to_netcdf(nc)
+    monkeypatch.setattr(gdal, "Open", lambda *_args: pytest.fail("GDAL builds a band per time step"))
+    header = raster_grid(f'NETCDF:"{nc}":tp', "EPSG:4326", "EPSG:4326", "deg")["header"]
+    assert (header["ncols"], header["nrows"]) == (3, 2)
+    assert header["xllcorner"] == pytest.approx(9.0) and header["yllcorner"] == pytest.approx(50.8)  # noqa: PT018
+    assert raster_grid(f'NETCDF:"{nc}":tp', "EPSG:4326", "EPSG:32632", "m")["header"]["cellsize"] > 1000
+    with pytest.raises(ValueError, match=r"tp.nc: no grid information .* Select another file"):
+        raster_grid(f'NETCDF:"{nc}":q', "EPSG:4326", "EPSG:4326", "deg")
+
+
+def test_a_window_copy_shifts_a_source_off_the_lattice_only_when_asked():
+    from mhm_qgis.core.grid import aligned_window
+
+    target = {"ncols": 10, "nrows": 10, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 10.0}
+    source = {**target, "xllcorner": 23.0, "yllcorner": -4.0}  # 2.3 and -0.4 cells off
+    with pytest.raises(ValueError, match="not aligned"):
+        aligned_window(source, target)
+    window = aligned_window(source, target, shift=True)  # moved by -3 and +4: under half a cell
+    assert (window["target_x"], window["source_y"], window["copy_cols"]) == (2, 0, 8)
+
+
+def test_the_first_netcdf_slice_is_north_first(tmp_path):
+    np = pytest.importorskip("numpy")
+    xr = pytest.importorskip("xarray")
+    from mhm_qgis.externals.mhm_tools_handler import read_netcdf_first_slice
+
+    values = np.arange(12, dtype="float32").reshape(2, 2, 3)
+    xr.Dataset({"tp": (("time", "latitude", "longitude"), values)},
+               coords={"time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[ns]"),
+                       "latitude": [50.0, 51.0], "longitude": [9.0, 10.0, 11.0]}).to_netcdf(tmp_path / "tp.nc")
+    assert read_netcdf_first_slice(tmp_path / "tp.nc", "tp").tolist() == values[0][::-1].tolist()
+
+
+def test_a_half_cell_offset_shifts_the_whole_axis_one_way():
+    import numpy as np
+    from mhm_tools.pre.format_meteo import _shift_onto_header as shift_onto_header
+
+    header = {"ncols": 40, "nrows": 40, "xllcorner": 10.0, "yllcorner": 50.0, "cellsize": 0.1}
+    x = np.round(10.0 + np.arange(40) * 0.1, 2)  # ERA5-Land centres on the edges of the target cells
+    y = np.round(54.0 - np.arange(40) * 0.1, 2)
+    sx, sy = shift_onto_header(x, y, header)
+    assert (np.unique(sx).size, np.unique(sy).size) == (40, 40)
+    assert (np.allclose(np.diff(sx), 0.1), np.allclose(np.diff(sy), -0.1)) == (True, True)
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 4])
+def test_an_upscaled_l0_starts_its_blocks_on_the_meteo_grid(n):
+    """However many DEM cells (k) the DEM corner lies off the meteo edge, the n x n blocks start on it."""
+    cell, l2 = 10.0, 30.0 * n  # DEM cell, meteo cell (3 L0 cells)
+    for k in range(n):
+        grid = Grid.for_meteorology(
+            {"xllcorner": 100.0 + k * cell, "yllcorner": 200.0 + k * cell, "cellsize": n * cell, "unit": "m",
+             "ncols": 100, "nrows": 100},
+            (100 + 2.2 * l2, 100 + 20.7 * l2, 200 + 2.2 * l2, 200 + 20.7 * l2), 3, crs="EPSG:32632", unit="m",
+            raw_l2_resolution=(l2, l2), raw_l2_extent=Extent(100, 100 + 40 * l2, 200, 200 + 40 * l2),
+            raw_l2_crs="EPSG:32632", lattice_cell=cell)
+        assert grid.alignment_gap == pytest.approx((0, 0))
+        for key, edge in (("xllcorner", 100), ("yllcorner", 200)):
+            assert (grid.l2_header[key] - edge) / l2 == pytest.approx(round((grid.l2_header[key] - edge) / l2))
+
+
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_a_meteo_edge_between_dem_cells_moves_the_meteo_by_the_leftover(n):
+    """Whole DEM cells of padding cannot reach it: the meteo moves under half a DEM cell, and the
+    coverage checks compare the meteo file with the extent in its own cells."""
+    cell, l2 = 10.0, 30.0 * n
+    raw = Extent(100, 100 + 40 * l2, 200, 200 + 40 * l2)
+    grid = Grid.for_meteorology(
+        {"xllcorner": 100.0 + 0.3 * cell, "yllcorner": 200.0 + 0.3 * cell, "cellsize": n * cell, "unit": "m",
+         "ncols": 100, "nrows": 100},
+        (100 + 2.2 * l2, 100 + 20.7 * l2, 200 + 2.2 * l2, 200 + 20.7 * l2), 3, crs="EPSG:32632", unit="m",
+        raw_l2_resolution=(l2, l2), raw_l2_extent=raw, raw_l2_crs="EPSG:32632", lattice_cell=cell)
+    dx, dy = grid.alignment_gap
+    assert (dx, dy) == pytest.approx((0.3 * cell, 0.3 * cell))
+    meteo, common = grid.meteo_extent, grid.common_extent
+    assert (meteo.xmin - raw.xmin) / l2 == pytest.approx(round((meteo.xmin - raw.xmin) / l2))
+    assert raw.intersect(meteo) == meteo  # inside the meteo file's cells
+    assert (common.xmin, common.ymin) == pytest.approx((meteo.xmin + dx, meteo.ymin + dy))
+
+
+def test_a_header_written_over_a_cloned_domains_link_leaves_the_source_alone(tmp_path):
+    """Clones link data/ file by file: writing through the link would change the source domain."""
+    from mhm_qgis.core.grid.model import write_header_file
+
+    source, link = tmp_path / "source.txt", tmp_path / "clone" / "header.txt"
+    source.write_text("source header\n")
+    link.parent.mkdir()
+    link.symlink_to(source)
+    write_header_file(link, {"ncols": 2, "nrows": 1, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1.0,
+                             "nodata_value": -9999.0})
+    assert source.read_text() == "source header\n"
+    assert not link.is_symlink()
+    assert "ncols" in link.read_text()

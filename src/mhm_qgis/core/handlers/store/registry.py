@@ -63,7 +63,7 @@ def outputs_in(folder, suffix: str = ".nc") -> list[Path]:
     return sorted(folder.glob(f"*{suffix}"), key=lambda p: -p.stat().st_mtime)
 
 
-def register(project_folder, path, *, name=None, loaded=False, algorithm=None,
+def register(setup_folder, path, *, name=None, loaded=False, algorithm=None,
              category=None):
     """Record that an output has been produced.
 
@@ -87,10 +87,10 @@ def register(project_folder, path, *, name=None, loaded=False, algorithm=None,
         entry["category"] = category
 
     return processing.set_entry(
-        project_folder, SECTION, key, entry, merge=True)
+        setup_folder, SECTION, key, entry, merge=True)
 
 
-def available(project_folder, path) -> bool:
+def available(setup_folder, path) -> bool:
     """Return whether an output is on disk, keeping the journal honest.
 
     The filesystem decides. The journal is corrected either way, so a file that
@@ -100,21 +100,21 @@ def available(project_folder, path) -> bool:
     if not path:
         return False
     key = os.path.abspath(str(path))
-    outputs = registered(project_folder)
+    outputs = registered(setup_folder)
 
     if os.path.exists(str(path)):
         if key not in outputs or not outputs[key].get("exists"):
-            register(project_folder, path, name=os.path.basename(str(path)))
+            register(setup_folder, path, name=os.path.basename(str(path)))
         return True
     if key in outputs and outputs[key].get("exists"):
         processing.set_entry(
-            project_folder, SECTION, key, {"exists": False}, merge=True)
+            setup_folder, SECTION, key, {"exists": False}, merge=True)
     return False
 
 
-def registered(project_folder) -> dict:
+def registered(setup_folder) -> dict:
     """Return every recorded output, keyed by its registry key."""
-    outputs = processing.section(project_folder, SECTION, {})
+    outputs = processing.section(setup_folder, SECTION, {})
     return outputs if isinstance(outputs, dict) else {}
 
 

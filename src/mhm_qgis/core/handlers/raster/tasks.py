@@ -8,7 +8,6 @@ from pathlib import Path
 from ....externals import pyflwdir_handler
 from ...grid import (
     aligned_window,
-    crs_equal,
     geotransform_from_header,
     header_bounds,
     header_from_geotransform,
@@ -447,18 +446,18 @@ def write_domain_dem_ascii(
         fill_value=None,
         band_index=1,
         task=None,
-        project_folder=None):
+        setup_folder=None):
     """Write one domain DEM as Arc/Info ASCII on the common L0 grid.
 
     The source is the cropped L0 DEM, so every domain shares the model extent and
     matches the other inputs cell for cell; only the cells inside the domain
     mask keep their value. Rows stream to text a block at a time, so memory stays
-    flat whatever the grid size. With `project_folder`, an output whose inputs
+    flat whatever the grid size. With `setup_folder`, an output whose inputs
     and options are unchanged since it was written is kept as it is.
     """
     output = Path(output_path)
     digest = None
-    if project_folder:
+    if setup_folder:
         from ..file.netcdf.raster import file_path
         from ..state.cache import cached_payload, fingerprint, outputs_present
 
@@ -469,7 +468,7 @@ def write_domain_dem_ascii(
         )
         # A cloned domain's output is a link into its source domain: rewrite it.
         if not output.is_symlink() and outputs_present(
-                cached_payload(project_folder, "exports", str(output), digest)):
+                cached_payload(setup_folder, "exports", str(output), digest)):
             _progress(task, 100)
             return str(output)
 
@@ -548,7 +547,7 @@ def write_domain_dem_ascii(
     if digest:
         from ..state.cache import store_payload
 
-        store_payload(project_folder, "exports", str(output), digest, {"outputs": [str(output)]})
+        store_payload(setup_folder, "exports", str(output), digest, {"outputs": [str(output)]})
     return str(output)
 
 
@@ -584,18 +583,17 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
         source = source.split("|", 1)[0]
     selected_netcdf_variable = source.startswith('NETCDF:"')
     dataset = gdal.Open(source)
-    own_crs = bool(dataset is not None and dataset.GetProjection())  # an ASC without .prj has none
+    projection = dataset.GetProjection() if dataset is not None else ""  # an ASC without .prj has none
     dataset = None
-    if not selected_netcdf_variable and own_crs and (
-        not target_crs or source_crs == target_crs
-    ):
-        return source
-    source_ref = osr.SpatialReference()
-    target_ref = osr.SpatialReference()
+    own_crs = bool(projection)
+    source_crs = source_crs or projection  # a blank CRS field means the file's own, still reprojected
+    source_ref, target_ref, own_ref = osr.SpatialReference(), osr.SpatialReference(), osr.SpatialReference()
     source_valid = source_ref.SetFromUserInput(str(source_crs or "")) == 0
     target_valid = target_ref.SetFromUserInput(str(target_crs or "")) == 0
     reproject = source_valid and target_valid and not source_ref.IsSame(target_ref)
-    if not selected_netcdf_variable and not reproject and own_crs:
+    # an assigned CRS other than the file's own label: the prepared DEM must carry the assigned one
+    relabel = own_crs and source_valid and own_ref.SetFromUserInput(projection) == 0 and not own_ref.IsSame(source_ref)
+    if not selected_netcdf_variable and own_crs and not reproject and not relabel:
         return source
     os.makedirs(os.path.dirname(reprojected_path), exist_ok=True)
     if Path(reprojected_path).is_symlink():
@@ -618,16 +616,23 @@ def _prepared_dem_source(source, source_crs, target_crs, reprojected_path):
     return str(reprojected_path)
 
 
-def _padded_to_blocks(source, factor, path):
-    """`source` with nodata rows on top and columns on the right up to whole factor x factor blocks,
-    the lower-left corner kept: the upscaling takes no partial block, and drops no DEM cell."""
+def _padded_to_blocks(source, factor, path, header=None):
+    """`source` padded with nodata to whole factor x factor blocks starting on `header`'s lattice (the
+    common L0 grid's; without one, at the lower-left corner): the upscaling takes no partial block, drops
+    no DEM cell, and its blocks are the L0 cells."""
     gdal = _dependencies()[3]
     dataset = gdal.Open(str(source))
     cols, rows = dataset.RasterXSize, dataset.RasterYSize
-    if not (cols % factor or rows % factor):
+    west = south = 0
+    if header:  # whole DEM cells on the west and south, so a block edge falls on the L0 lattice
+        xmin, cell, _, ymax, _, height = dataset.GetGeoTransform()
+        west, south = (round((edge - float(header[key])) / abs(cell)) % factor
+                       for edge, key in ((xmin, "xllcorner"), (ymax + rows * height, "yllcorner")))
+    east, north = -(cols + west) % factor, -(rows + south) % factor
+    if not (west or south or east or north):
         return source
     nodata = dataset.GetRasterBand(1).GetNoDataValue()
-    if gdal.Translate(str(path), dataset, srcWin=[0, -(-rows % factor), cols + -cols % factor, rows + -rows % factor],
+    if gdal.Translate(str(path), dataset, srcWin=[-west, -north, cols + west + east, rows + south + north],
                       noData=-9999.0 if nodata is None else nodata, format="netCDF") is None:
         raise RuntimeError("Padding the DEM to whole upscaling blocks failed.")
     return str(path)
@@ -641,10 +646,12 @@ DEM_DERIVATIVE_VARIABLES = {
 
 def dem_derivative_files(
     source, output_folder, *, source_crs="", target_crs="",
-    reprojected_path="", compute=None, log=None, task=None, header=None, upscale_factor=1,
+    reprojected_path="", compute=None, log=None, task=None, header=None, upscale_factor=1, replacements=None,
 ):
     """Prepare one derivative dataset and a single-variable filled DEM; with `upscale_factor`, on the
-    upscaled topography grid (`core.grid.raster.dem_grid` with that factor)."""
+    upscaled topography grid (`core.grid.raster.raster_grid` with that factor). `replacements`
+    ({bundle variable: (GDAL source, CRS)}, in the target CRS with L0's cells) take the place of
+    derivatives, placed like the DEM."""
     from netCDF4 import Dataset
 
     from ..file.netcdf.raster import copy_rasters, file_path
@@ -660,9 +667,11 @@ def dem_derivative_files(
         "filled_dem": str(filled), "dem_derivatives": str(bundle),
         **{key: raster_source(bundle, var) for key, var in DEM_DERIVATIVE_VARIABLES.items()},
     }
-    digest = fingerprint((file_path(source),), {
+    replacements = replacements or {}
+    digest = fingerprint((file_path(source), *(file_path(uri) for uri, _crs in replacements.values())), {
         "source": str(source), "source_crs": source_crs, "target_crs": target_crs,
-        "format": "dem-netcdf-2", "header": header, "upscale_factor": upscale_factor,
+        "format": "dem-netcdf-3", "header": header, "upscale_factor": upscale_factor,
+        "replacements": {name: list(value) for name, value in replacements.items()},
     })
     try:
         with Dataset(bundle) as dataset:
@@ -673,13 +682,18 @@ def dem_derivative_files(
     except (OSError, RuntimeError):
         reusable = False
     if reusable:
-        try:
-            with Dataset(filled) as dataset:
-                filled_valid = getattr(dataset, "input_fingerprint", "") == digest and "dem" in dataset.variables
-        except (OSError, RuntimeError):
+        import numpy as np
+
+        try:  # the fingerprint alone once let a filled DEM on another grid through
+            with Dataset(filled) as dataset, Dataset(bundle) as reference:
+                filled_valid = getattr(dataset, "input_fingerprint", "") == digest and "dem" in dataset.variables \
+                    and all(dataset[axis].shape == reference[axis].shape
+                            and np.allclose(dataset[axis][:], reference[axis][:]) for axis in ("x", "y"))
+        except (OSError, RuntimeError, IndexError):
             filled_valid = False
         if filled_valid:
             return {**result, "reused": True}
+        copy_rasters(filled, {"dem": raster_source(bundle, "dem_filled")}, task=task)  # the bundle was not replaced
     else:
         from tempfile import TemporaryDirectory
 
@@ -688,7 +702,7 @@ def dem_derivative_files(
             reprojected_path or str(folder / "dem_reprojected.nc"),
         )
         if upscale_factor > 1:
-            prepared = _padded_to_blocks(prepared, upscale_factor, folder / "dem_upscale_input.nc")
+            prepared = _padded_to_blocks(prepared, upscale_factor, folder / "dem_upscale_input.nc", header)
         with TemporaryDirectory(prefix="dem_derivatives_", dir=folder) as staging:
             written = (compute or _compute_dem_derivatives)(prepared, staging, log, upscale_factor)
             _cancelled(task)
@@ -700,46 +714,21 @@ def dem_derivative_files(
                 # Derive only on real terrain, then pad all variables once.
                 # Padding cannot create sinks or flow paths outside the DEM.
                 names = ("dem", "dem_filled", *DEM_DERIVATIVE_VARIABLES.values())
-                copy_rasters(bundle, {name: raster_source(written, name) for name in names}, header, task=task)
+                given = {name: _prepared_dem_source(uri, crs, target_crs, folder / f"{name}_replacement.nc")
+                         for name, (uri, crs) in replacements.items()}  # only gives a CRS-less file its CRS
+                sources = {name: given.get(name) or raster_source(written, name) for name in names}
+                copy_rasters(bundle, sources, header, task=task, shift=True)  # off the L0 lattice: moved onto it
                 with Dataset(bundle, "r+") as dataset:
                     dataset.input_fingerprint = digest
+                # from the staged source, never the bundle path just replaced: QGIS may still answer for its old file
+                copy_rasters(filled, {"dem": sources["dem_filled"]}, header, task=task, shift=True)
             else:
+                copy_rasters(filled, {"dem": raster_source(written, "dem_filled")}, task=task)
                 os.replace(written, bundle)
-    copy_rasters(filled, {"dem": raster_source(bundle, "dem_filled")}, task=task)
     with Dataset(filled, "r+") as dataset:
         dataset.input_fingerprint = digest
     _progress(task, 100)
     return {**result, "reused": False}
-
-
-def override_derivative(folder, variable, raster):
-    """Write `raster` over `variable` of `folder`/dem_derivatives.nc. It must be on the
-    bundle's grid (CRS, cell size, alignment) and cover all of it."""
-    from netCDF4 import Dataset
-    from osgeo import gdal
-
-    from ..file.netcdf.raster import source
-
-    bundle = Path(folder) / "dem_derivatives.nc"
-    target, given = gdal.Open(source(bundle, variable)), gdal.Open(str(raster))
-    if target is None or given is None:
-        raise ValueError(f"Cannot open {raster} or {variable} of {bundle}.")
-    if not crs_equal(given.GetProjection(), target.GetProjection()):
-        raise ValueError(f"{Path(raster).name} is not in the DEM's CRS.")
-    window = aligned_window(
-        header_from_geotransform(given.GetGeoTransform(), given.RasterXSize, given.RasterYSize),
-        header_from_geotransform(target.GetGeoTransform(), target.RasterXSize, target.RasterYSize),
-        label=Path(raster).name,
-    )
-    if (window["copy_rows"], window["copy_cols"]) != (window["target_rows"], window["target_cols"]):
-        raise ValueError(f"{Path(raster).name} does not cover the whole DEM.")
-    values = given.GetRasterBand(1).ReadAsArray(
-        window["source_x"], window["source_y"], window["target_cols"], window["target_rows"])
-    target = given = None
-    with Dataset(bundle, "a") as handle:
-        stored = handle[variable]
-        y = handle[stored.dimensions[-2]][:]
-        stored[:] = (values[::-1] if y[0] < y[-1] else values).astype(stored.dtype)  # GDAL reads north first
 
 
 def _compute_dem_derivatives(prepared, staging, log, factor=1):

@@ -91,7 +91,7 @@ def navigation(folder):  # noqa: PLR0915
     assert raster_window_range(workflow.flow_accumulation_path, (0, 0, 1000, 1000))[1] > 1
     hydrology_files(workflow.filled_dem_path, channel_path=workflow.channel_network_path, threshold_cells=1)
     main = QDialog()
-    main.project_folder = str(folder)
+    main.setup_folder = str(folder)
     main.get_crs = lambda: QgsCoordinateReferenceSystem("EPSG:32632")
     main.log_message = Mock()
     main.selected_input_file_paths = list
@@ -118,7 +118,7 @@ def navigation(folder):  # noqa: PLR0915
         dialog.listWidget_outlets.setCurrentRow(1)
         assert dialog._draft_state["outlets"]["1"]["is_domain"]
         dialog.listWidget_outlets.setCurrentRow(0)
-        dialog.pushButton_nextPourPoint.click()
+        dialog.pushButton_nextGaugePoint.click()
         main.task_coordinator.submit.assert_not_called()
         dialog._point_picked(QgsPointXY(950, 50), Qt.MouseButton.LeftButton)
         main.task_coordinator.submit.assert_not_called()
@@ -134,7 +134,7 @@ def navigation(folder):  # noqa: PLR0915
         dialog.listWidget_outlets.setCurrentRow(1)
         main.task_coordinator.submit.assert_not_called()
         assert dialog._watershed_layer.isValid()
-        dialog.pushButton_save.click()
+        dialog.pushButton_setDomainDefinition.click()
         call = main.task_coordinator.submit.call_args
         assert call.args[0] == "domain-final-save"
         saved = call.args[2](None)

@@ -1,7 +1,7 @@
 """Post P3: series, aggregation, water balance and metrics (Tier A engine)."""
 import numpy as np
 import pytest
-from post_fixtures import make_run
+from post_fixtures import _forcing, make_run
 
 from mhm_qgis.core.executions import post as post_exec
 from mhm_qgis.core.post import (
@@ -113,6 +113,9 @@ def test_coarser_output_refuses_finer_aggregation(tmp_path):
     with pytest.raises(ValueError, match="coarser than a day"):
         aggregate.temporal(root, "aET", "sum", "day")
     assert aggregate.temporal(root, "aET", "sum", "month").notna().sum() == 2  # March lacks its last day
+    np.save(root / "bounds_mhm.npy", series.bounds(root) + np.timedelta64(15, "D"))
+    with pytest.raises(ValueError, match="spans two months"):
+        aggregate.temporal(root, "aET", "sum", "month")
 
 
 def test_statistic_maps(tmp_path):
@@ -133,6 +136,37 @@ def test_statistic_maps(tmp_path):
     scan.derive({"what": "statistic", "path": str(truth.files["mhm"]), "variable": "aET", "stat": "max",
                  "kind": "flux", "period": odd, "out": str(out)})
     np.testing.assert_allclose(np.load(out)[mask], aet[4:19].max(0)[mask])
+    with pytest.raises(ValueError, match="series cache of pre"):  # derive cannot read P
+        aggregate.statistic(root, "pre", "percentile", q=50)
+    with pytest.raises(ValueError, match="whole months"):  # nor anomalies
+        aggregate.statistic(root, "aET", "anomaly", odd)
+
+
+def test_state_mean_weights_unequal_intervals(tmp_path):
+    truth, root = _scanned(tmp_path, days=90, step="month")
+    with netCDF4.Dataset(truth.files["mhm"]) as handle:
+        snow = np.ma.filled(handle["snowpack"][:], np.nan)
+    days = np.array([b - a for a, b in truth.intervals], float)
+    np.testing.assert_allclose(aggregate.statistic(root, "snowpack", "mean")[truth.mask],
+                               ((snow * days[:, None, None]).sum(0) / days.sum())[truth.mask])
+
+
+def test_whole_run_sums_need_every_interval(tmp_path):
+    truth = make_run(tmp_path, days=62)
+    _forcing(tmp_path / "data" / "meteo", truth.days[:40], truth.p[:40], truth.mask, False, 2000.0, False)
+    ref = runs.list_runs(tmp_path)[0]
+    scan.run_scan(post_exec.scan_job(ref, values=V5, series=()))
+    root = cache.folder(ref)
+    assert np.isnan(aggregate.statistic(root, "pre", "sum")).all()  # the forcing ends on day 40
+    assert np.isfinite(aggregate.statistic(root, "pre", "sum", ("2000-01-01", "2000-02-01"))[truth.mask]).all()
+
+
+def test_cell_anomaly_leaves_out_partial_months(tmp_path):
+    _truth, root = _scanned(tmp_path, days=800)  # March 2002 holds 10 days
+    period = ("2001-01-01", "2002-03-01")
+    intervals, values = series.bounds(root), series.cell(root, "aET", 1, 2).to_numpy()
+    cell = aggregate.cell_statistic(values, intervals, "flux", "anomaly", period)
+    assert cell == pytest.approx(aggregate.statistic(root, "aET", "anomaly", period)[1, 2], rel=1e-4)
 
 
 def test_metrics_against_hand_values():
@@ -175,3 +209,16 @@ def test_gauge_series_masks_missing_observations(tmp_path):
     np.testing.assert_allclose(frame["sim"], q)
     with pytest.raises(ValueError, match="not in"):
         series.gauge(run, 7)
+
+
+def test_a_combined_setup_without_domains_lists_no_runs(tmp_path):
+    """A new multi-domain setup has no domains yet: opening it must not crash on the run list."""
+    import json
+    from pathlib import Path
+
+    from mhm_qgis.core.handlers.store import layout
+
+    state = Path(layout.input_state_path(tmp_path))
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(json.dumps({"setup": "multi"}))
+    assert runs.list_runs(tmp_path) == []

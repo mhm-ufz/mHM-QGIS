@@ -94,7 +94,7 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
     docks' tables (CSV, as shown minus thousands separators), plots (pyqtgraph PNG, SVG
     and each plot's curves as CSV) and maps (every raster on a visible canvas, the shown
     band of an instant map, as GeoTIFF and CF netCDF by `gdal.Translate` on a task: the
-    VRT reads the netCDF output). The menu also archives the current run.
+    VRT reads the netCDF output).
   - **Observation operators** (`core/post/observe.py`, a `derive("observe")` worker
     job): windows are the coarser record's intervals, used only when the finer one covers
     them completely; fluxes are summed and states time-weighted. mhm-tools'
@@ -116,16 +116,20 @@ Part of the mhm-qgis agent instructions; the index is in `AGENTS.md`.
     files resolve alike current or archived. A v5.13 multi run lists one run per
     domain (`output/<domain>/`); v6 domains are listed and archived one by one. The
     caller refuses archiving while mHM runs.
-  - **Named runs** (the Execute tab's `lineEdit_runName`): before mHM starts,
-    `runs.link_outputs` rewrites the output keys of `mhm.nml` (`dir_Out`, `dirConfigOut`,
-    `output_path`, `output_node_path`, `output_poi_path`, `diagnostics_path`; never
-    `dir_Total_Runoff`, an input, nor restart paths) to `runs/<name>/…` and creates the
-    folders; an unnamed run points them back to `output/`. After a successful run,
-    `finish_named` copies the namelists and writes `run.json` with `linked: true`: its
-    paths resolve from the setup folder (`RunRef.root` = setup), an archived run's from
-    its own folder. `run.json` is read beside the run's `namelists/`. The current run
-    (`output/`) resolves its paths without a named run's `runs/<name>/` prefix, which the
-    setup's namelists keep after a named run (`runs.unlinked`).
+  - **Run cases** (the Execute tab's checkable `groupBox_backupNamelists` with
+    `comboBox_runName`) are backups only: mHM always runs the setup's own namelists into
+    `output/` (`runs.link_outputs` strips any `runs/<name>/` prefix an earlier version's
+    named run left). `runs.backup_namelists` copies `*.nml` into `runs/<name>/` (no
+    `namelists/` subfolder) with the copy's output keys of `mhm.nml` (`dir_Out`,
+    `dirConfigOut`, `output_path`, `output_node_path`, `output_poi_path`,
+    `diagnostics_path`; never `dir_Total_Runoff`, an input, nor restart paths) pointed at
+    `runs/<name>/…`, plus `run.json`. Nothing runs the copies. **For now the Outputs tab
+    lists `output/` only** (`post_context.populate`), the archive menu is unbound, and
+    Compare and Anomalies are hidden (rows removed, commented out in `tree.yml`; code kept).
+  - **v5.13 `mrm_outputs.nml`:** a run renames its group to mHM's `&NLoutputResults` and
+    leaves it (`mhm_handler.name_mrm_group`), so the folder runs with plain `mhm`;
+    `model.edit_namelists` renames it back to the schema's `NLoutputResults_mrm`, and
+    `nml_tools_handler.read_namelists` reads either name (nml-tools skips unknown groups).
   - **A run with every output off** writes only the grid (no time axis): `read_bounds`
     raises a `ValueError` saying so, the run's findings show it in the Overview, and Run
     mHM asks before such a run (`datamodel.outputs_on`).

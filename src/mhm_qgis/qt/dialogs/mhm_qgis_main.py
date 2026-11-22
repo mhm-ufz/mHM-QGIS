@@ -10,7 +10,7 @@ import sys
 
 from qgis.core import QgsProject
 from qgis.PyQt import QtCore
-from qgis.PyQt.QtWidgets import QDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QDialog, QMessageBox, QTextBrowser, QVBoxLayout
 
 from ...core.handlers.store.paths import workspace_folder
 from ...qgis_bridge import layers as qgis_layers
@@ -19,9 +19,12 @@ from ..bindings.main import bind as bind_main_form
 from ..controllers import categorical, grid, input_state
 from ..controllers import main as main_controller
 from ..controllers import post_context, process_cases, workflow_state
+from ..docks import host
 from ..threads.task_coordinator import TaskCoordinator
 from ..ui import load_form
 from ..workflows.morphology import MorphologyTaskBridge
+from .browse_resolution_L2_L1_L11_file import ReplaceBox
+from .input_selection import elide_named_left
 from .map_canvas import MapCanvasWindow
 from .project_terminal import ProjectTerminalDialog
 from .thread_display import ThreadDisplayDialog
@@ -34,8 +37,11 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Constructor; `iface` is QGIS Desktop's interface, None when standalone."""
         super().__init__(parent)
         self.setupUi(self)
+        # a window, not a dialog: Windows and some Linux desktops give a parentless dialog no minimize
+        self.setWindowFlags(QtCore.Qt.WindowType.Window)
+        elide_named_left(self)  # long paths keep their file name in sight
         self.iface = iface
-        self.project_folder = None  # Active domain root, passed to core APIs.
+        self.setup_folder = None  # Active domain root, passed to core APIs.
         self.project_directory = None  # Outer folder shown in the project selector.
 
         # Per-domain form state; `controllers/input_state.clear` resets it.
@@ -46,8 +52,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._lai_input_config = {}
         self._drafts = {}  # unsaved form values by form key, see main.stash
         self._set_crs = ""  # the domain CRS last Set, see grid.set_crs
-        self._study_extent = None  # the Custom L0 Extent last Set, see grid.set_dem
-        self._upscale_factor = 1  # L0 = DEM x this factor, last Set, see grid.set_dem
+        self._upscale_factor = 1  # the DEM x this lies on L0, last Set, see grid.set_dem
         self._failed_step = None  # the tree row of a failed Execute All stage, for ➤
         self._land_cover_ready_source = ""
         self._domain_definition_mode = ""
@@ -55,16 +60,20 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._meteo_inspections = {}
         self._observation_inputs = {}
         self._observation_inspections = {}
-        self._grid_l0_info = None
-        self._grid_l2_metadata = None
-        self._grid_l2_header = None
-        self._l2_multiplier_user_selected = False
+        self._time_source = {}  # Time Period page: the scanned NetCDF glob and its time window
+        self._resolution_files = {}  # Resolution page: level -> path, variable, crs (L0: factor)
+        self._level_file_info = {}  # level -> that file's grid and extent in the domain CRS
+        self._grid_l0_info = None  # the L0 file's grid x its factor
+        self._grid_l2_metadata = None  # the Set common grid, see grid.set_resolution
+        self._header_notes = {}  # Updated Headers: why a value differs from its file
+        self._displayed = {}  # Resolution page eyes: `L2` (a file) or `grid:L2` -> its layer name
+        self._dem_error = None  # why the DEM cannot fill the common L0 grid, see grid.check_dem
+        self._dem_replacements = {}  # derivative row key -> its Set raster {path, variable, crs}
+        self._replace_box = ReplaceBox(self)  # the DEM-derivative page's raster input
         self._intro_answers = {}
         self._multi_domains = None
         self._intro_pending = False
         self._process_cases = {}  # Settings page: process -> case chosen this session
-        self._preferred_l1_resolution = None
-        self._preferred_l11_resolution = None
 
         # Save guards, see `connect_input_state_teardown_guards`.
         self._loading_input_state = False
@@ -75,6 +84,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self._map_window = None
         self._terminal_dialog = None
         self._thread_display_dialog = None
+        self._log_dialog = None
         self._discharge_plot = None
         self._closing = False
         self._running_workflow = None  # See `controllers/workflow_state.running_key`.
@@ -85,9 +95,9 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         main_controller.configure_input_adapters(self)
         for level in ("L2", "L1", "L11"):
             getattr(self, f"spinBox_{level}ResolutionMultiplier").setRange(1, 1_000_000)
-        self.lineEdit_precipitationGlobDefinition.setText("*.nc")
         self.comboBox_mhmWorkType.setCurrentIndex(0)
         self.comboBox_mhmWorkType.model().item(2).setEnabled(False)  # mRM only: not yet
+        self.comboBox_mHMversion.model().item(self.comboBox_mHMversion.findText("6.0")).setEnabled(False)  # mHM 6: not yet
         self.stackedWidget_configuration.setCurrentWidget(self.page_singleDomain)
         self.morphology_tasks = MorphologyTaskBridge(self)
         project_tree.build(self)  # before the styles: its ▶ buttons are workflow buttons
@@ -101,8 +111,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         self.refresh_input_sources()
         self.update_gauged_outlet_count()
         post_context.clear(self)
-        grid.refresh_precipitation_folder(self)
-        grid.refresh_grid_resolution_controls(self)
+        grid.clear(self)
 
     def log_message(self, message):
         """Append to the UI log without feeding back into captured stdout."""
@@ -116,7 +125,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
     def check_prerequisites(self, needs_pour_points=False):
         """Check if the project folder and necessary layers are selected."""
-        if not self.project_folder:
+        if not self.setup_folder:
             QMessageBox.critical(
                 self, "Missing Input", "Please select a project folder before proceeding.")
             return False
@@ -134,7 +143,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Print selected layer/file inputs for easier debugging from QGIS."""
         log = self.log_message
         log(f"\n--- Input selections before {action_name} ---")
-        log(f"Project folder: {self.project_folder or '<not selected>'}")
+        log(f"Project folder: {self.setup_folder or '<not selected>'}")
         for label, kind in (("DEM", "dem"), ("Pour points", "pour_points")):
             layer = self.input_combo(kind).currentLayer()
             log(f"{label}: {layer.name()} | {layer.source()}" if layer else f"{label}: <not selected>")
@@ -147,7 +156,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             if config.get("lookup_table"):
                 log(f"{label} lookup: {config['lookup_table']} | "
                     f"{config['mapping_field']} -> {config['class_field']}")
-        log(f"Precipitation folder: {grid.precipitation_folder(self) or '<not selected>'}")
+        for level, selection in self._resolution_files.items():
+            log(f"{level} reference file: {selection['path']}")
 
     # --- Names other packages call ----------------------------------------
 
@@ -165,7 +175,9 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         return main_controller.update_gauged_outlet_count(self, layer)
 
     def get_crs(self):
-        return self.mProjectionSelectionWidget_crs.crs()
+        from ..controllers.project import post_only
+
+        return (self.mProjectionSelectionWidget_postCrs if post_only(self) else self.mProjectionSelectionWidget_crs).crs()
 
     def selected_meteo_crs(self):
         """Return the processing CRS in a form accepted by pyproj."""
@@ -240,19 +252,15 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         """Cancel active work before closing through Cancel or Escape."""
         if self._closing:
             return
-        terminal = self._terminal_dialog
         running_key = workflow_state.running_key(self)
         busy = running_key is not None or self.task_coordinator.is_busy()
+        terminal = self._terminal_dialog
         if int(result) == int(QDialog.DialogCode.Rejected) and (
-            busy or (terminal is not None and terminal.is_running())
-        ):
-            self.shutdown(result)
+                busy or (terminal is not None and terminal.is_running())):
+            self.shutdown(result)  # stops the tasks, mHM and the terminal's command, then closes
             return
-        terminal_busy = terminal is not None and terminal.command_running()
-        if busy or terminal_busy:
-            spec = workflow_state.specs(self).get(
-                running_key or ("run_mhm" if terminal_busy else ""), {}
-            )
+        if busy:
+            spec = workflow_state.specs(self).get(running_key or "", {})
             QMessageBox.warning(
                 self,
                 spec.get("label", "Morphology Processing"),
@@ -270,6 +278,8 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             return
         self._closing = True
         self._close_result = result
+        post_context.end_workspace(self)  # docks and toolbar live in QGIS's window, not in this dialog
+        host.drop_time_toolbar(self)
         self.suspend_input_state_saves()
         self.task_coordinator.cancel_all()
         if self._terminal_dialog is not None:
@@ -307,6 +317,28 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
         window.activateWindow()
         return window
 
+    def open_python_console(self, checked=False):
+        """Show QGIS Desktop's Python console."""
+        action = self.iface.actionShowPythonDialog()
+        if not action.isChecked():
+            action.trigger()
+
+    def open_log(self, checked=False):
+        """Show the log in a larger window; it views LogText's own document."""
+        if self._log_dialog is None:
+            self._log_dialog = QDialog(self)
+            self._log_dialog.setWindowTitle("mHM QGIS Log")
+            self._log_dialog.resize(900, 600)
+            view = QTextBrowser(self._log_dialog)
+            view.setDocument(self.LogText.document())
+            bar = view.verticalScrollBar()
+            view.textChanged.connect(lambda: bar.setValue(bar.maximum()))
+            QVBoxLayout(self._log_dialog).addWidget(view)
+        self._log_dialog.show()
+        self._log_dialog.raise_()
+        self._log_dialog.activateWindow()
+        return self._log_dialog
+
     def map_displayed(self, when=None):
         """Show the standalone map with the displayed layer's time; Desktop needs nothing."""
         if self.iface is None:
@@ -325,7 +357,7 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
 
     def open_project_terminal(self, checked=False):
         """Open the persistent terminal in the plugin-owned workspace."""
-        if not self.project_folder:
+        if not self.setup_folder:
             QMessageBox.warning(
                 self,
                 "Project Folder Required",
@@ -334,5 +366,5 @@ class MhmQgisDialog(QDialog, Ui_MhmQgisDialog):
             return None
         if self._terminal_dialog is None:
             self._terminal_dialog = ProjectTerminalDialog(self)
-        self._terminal_dialog.show_for_directory(workspace_folder(self.project_folder))
+        self._terminal_dialog.show_for_directory(workspace_folder(self.setup_folder))
         return self._terminal_dialog

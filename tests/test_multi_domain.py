@@ -70,14 +70,28 @@ def test_add_domain_checks(tmp_path):
     assert "no saved mhm.nml" in multi_domain.validate_domain(a, "5.13", root)
 
 
-def test_v513_blocks_different_land_cover_and_combines_the_arrays(tmp_path):
+def test_v513_combines_land_cover_periods_and_the_arrays(tmp_path):
+    import re
+
     root = tmp_path / "mhm-qgis-multi" / "M"
     root.mkdir(parents=True)
     a, b = _v5(tmp_path, "A"), _v5(tmp_path, "B", ids="7", start=2000)
+    # each domain fits its scenes to its own run: the shared periods span both, under new names
+    assert multi_domain.validate_set([a, b], "5.13", root) == ([], [])
+    lcover = multi_domain.v5_values([a, b], root)[0]["main"]["LCover"]
+    assert (lcover["LCoverYearStart"], lcover["LCoverYearEnd"], lcover["LCoverfName"]) == (
+        [1990], [2020], ["lc_1990_2020.asc"])
+    two = ("&LCover\n  nLCoverScene = 2\n  LCoverYearStart(1) = 1990\n  LCoverYearStart(2) = {cut}\n"
+           "  LCoverYearEnd(1) = {last}\n  LCoverYearEnd(2) = 2020\n  LCoverfName(1) = \"a.asc\"\n"
+           "  LCoverfName(2) = \"b.asc\"\n/")
+    for path, cut in ((a, 2000), (b, 2005)):  # another boundary inside: different scenes
+        text = (path / "mhm.nml").read_text()
+        (path / "mhm.nml").write_text(re.sub(r"&LCover\n.*?\n/", two.format(cut=cut, last=cut - 1), text, flags=re.S))
     errors, _warnings = multi_domain.validate_set([a, b], "5.13", root)
-    assert any(error.startswith("Different land-cover scenes") for error in errors)
+    assert any(error.startswith("Land-cover periods differ: A 1990-1999, 2000-2020; B") for error in errors)
     assert multi_domain.validate_set([a], "5.13", root)[0] == ["Combine at least two domains."]
 
+    (a / "mhm.nml").write_text(V5_MAIN.format(ids="1, 2", count=2, start=1990))
     (b / "mhm.nml").write_text(V5_MAIN.format(ids="7", count=1, start=1990))
     assert multi_domain.validate_set([a, b], "5.13", root) == ([], [])
     values, dimensions = multi_domain.v5_values([a, b], root)
@@ -169,7 +183,7 @@ def test_multi_page_creates_lists_prepares_and_runs(tmp_path, monkeypatch):
     dialog.lineEdit_domainFolder.setText(str(b))
     page.add_domain(dialog)
     assert page.prepare(dialog)
-    root = Path(dialog.project_folder)
+    root = Path(dialog.setup_folder)
     saved = json.loads((root / ".temp" / "mhm_qgis_input_state.json").read_text())
     assert saved["setup"] == "multi"
     assert saved["domains"] == ["../../mhm-qgis/A", "../../mhm-qgis/B"]
@@ -191,8 +205,48 @@ def test_multi_page_creates_lists_prepares_and_runs(tmp_path, monkeypatch):
     assert commands == ["/opt/mhm-driver -n combine.nml"]
 
     dialog.comboBox_mhmWorkType.setCurrentIndex(0)  # back to single: the combined setup closes
-    assert dialog.project_folder is None
+    assert dialog.setup_folder is None
     assert dialog._multi_domains is None
     dialog.close()
     dialog.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def test_v513_soil_classes_of_each_domain_are_merged_into_one_table(tmp_path):
+    """mHM 5.13 reads one soil table for all domains, but each numbers its classes 1..N."""
+    from mhm_qgis.core.handlers.state import nml_settings
+
+    root = tmp_path / "mhm-qgis-multi" / "M"
+    root.mkdir(parents=True)
+    a, b = _v5(tmp_path, "A"), _v5(tmp_path, "B", ids="7")
+    header = "ncols 2\nnrows 1\nxllcorner 0\nyllcorner 0\ncellsize 1\nNODATA_value -9999\n"
+    for path, rows in ((a, ["1\t10\t40\t1.2", "2\t11\t41\t1.3"]), (b, ["1\t20\t30\t1.4"])):
+        morph = path / "data" / "static" / "morph"
+        morph.mkdir(parents=True)
+        (morph / "soil_classdefinition_iFlag_soilDB_1.txt").write_text(
+            f"nSoil_Types {len(rows)}\nID\tCLAY\tSAND\tBD\n" + "\n".join(rows) + "\n")
+        (morph / "soil_class_horizon_01.asc").write_text(header + "1 -9999\n")
+        (morph / "dem.asc").write_text(header + "5 6\n")
+    nml_settings.update_section(root, multi_domain.SECTION, {"domains": multi_domain.store_paths(root, [a, b])})
+
+    assert multi_domain.combined_inputs(root) == ["B: soil classes +2"]
+    table = (root / "common" / "soil_classdefinition_iFlag_soilDB_1.txt").read_text().splitlines()
+    assert table[0] == "nSoil_Types 3"
+    assert [row.split()[:2] for row in table[2:]] == [["1", "10"], ["2", "11"], ["3", "20"]]
+    assert (root / "morph" / "B" / "soil_class_horizon_01.asc").read_text().splitlines()[-1] == "3 -9999"
+    assert (root / "morph" / "B" / "dem.asc").read_text() == (b / "data/static/morph/dem.asc").read_text()
+    assert multi_domain.combined_inputs(root) == []  # still current: nothing rewritten
+    general = multi_domain.v5_values([a, b], root)[0]["main"]["directories_general"]
+    assert general["dirCommonFiles"] == "common/"
+    assert general["dir_Morpho"] == ["../../mhm-qgis/A/data/static/morph/", "morph/B/"]
+
+
+def test_v513_names_the_differing_process_and_lai_input(tmp_path):
+    root = tmp_path / "mhm-qgis-multi" / "M"
+    root.mkdir(parents=True)
+    a, b = _v5(tmp_path, "A"), _v5(tmp_path, "B", ids="7")
+    text = (b / "mhm.nml").read_text().replace("1, 1, 1, 1, 0,", "1, 1, 1, 1, 1,")
+    (b / "mhm.nml").write_text(text + "&LAI_data_information\n  timeStep_LAI_input = 0\n/\n")
+    errors, _warnings = multi_domain.validate_set([a, b], "5.13", root)
+    assert any(error.startswith("PET (processCase 5): A 0, B 1.") for error in errors)
+    assert any("timeStep_LAI_input" in error for error in errors)

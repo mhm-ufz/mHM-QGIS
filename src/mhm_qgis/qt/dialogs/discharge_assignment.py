@@ -12,6 +12,7 @@ from ...core.handlers.file.discharge import records_from_layer
 from ...core.morphology.hydrology.outlets import OutletAssignment
 from ..ui import load_form
 from .file_picker import open_file
+from .input_selection import elide_named_left
 
 Ui_DischargeTableAssignmentDialog = load_form("discharge_table_assignment_dialog.ui")
 
@@ -30,6 +31,7 @@ class DischargeTableAssignmentDialog(QDialog, Ui_DischargeTableAssignmentDialog)
     ):
         super().__init__(parent)
         self.setupUi(self)
+        elide_named_left(self)  # long paths keep their file name in sight
         self._station_ids = [str(station) for station in station_ids]
         self._tables: dict[str, object] = {}  # station ID -> discharge layer
         self._browsed = []  # combo item data does not keep a layer alive

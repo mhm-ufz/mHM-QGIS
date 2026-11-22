@@ -16,7 +16,7 @@ from .loader import open_layer
 
 
 def gauge_coordinates(
-    project_folder,
+    setup_folder,
     snapped_points_path,
     filled_dem_path,
     *,
@@ -38,8 +38,8 @@ def gauge_coordinates(
             f"Could not read snapped pour points: {snapped_points_path}"
         )
 
-    configured = configured_domain_state(project_folder)
-    state = configured if configured is not None else load_state(project_folder)
+    configured = configured_domain_state(setup_folder)
+    state = configured if configured is not None else load_state(setup_folder)
     configured_ids = gauged_outlet_ids(state) if configured is not None else None
     requested_field = preferred_field or state.get("outlet_id_field") or None
     station_field = find_outlet_id_field(snapped_layer, requested_field)

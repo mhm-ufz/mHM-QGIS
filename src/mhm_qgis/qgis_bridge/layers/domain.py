@@ -270,7 +270,7 @@ class DomainWorkflow:
 
     def __init__(
         self,
-        project_folder,
+        setup_folder,
         pour_points_layer,
         outlet_id_field: str,
         outlet_ids: Iterable[str],
@@ -279,7 +279,7 @@ class DomainWorkflow:
         log: Callable[[str], None] | None = None,
         project_crs=None,
     ) -> None:
-        self.project_folder = str(project_folder)
+        self.setup_folder = str(setup_folder)
         self.pour_points_layer = pour_points_layer
         self.outlet_id_field = str(outlet_id_field)
         self.outlet_ids = [str(value) for value in outlet_ids]
@@ -289,20 +289,20 @@ class DomainWorkflow:
 
     @property
     def filled_dem_path(self) -> str:
-        return str(Path(temp_morphology_folder(self.project_folder)) / "filled_dem.nc")
+        return str(Path(temp_morphology_folder(self.setup_folder)) / "filled_dem.nc")
 
     @property
     def flow_accumulation_path(self) -> str:
-        return source(Path(temp_morphology_folder(self.project_folder)) / "dem_derivatives.nc", "facc")
+        return source(Path(temp_morphology_folder(self.setup_folder)) / "dem_derivatives.nc", "facc")
 
     @property
     def channel_network_path(self) -> str:
-        return str(Path(temp_morphology_folder(self.project_folder)) / "2_channel_network.shp")
+        return str(Path(temp_morphology_folder(self.setup_folder)) / "2_channel_network.shp")
 
     @property
     def snapped_points_path(self) -> str:
         return str(
-            Path(temp_morphology_folder(self.project_folder)) / "2_pour_points_snapped.shp"
+            Path(temp_morphology_folder(self.setup_folder)) / "2_pour_points_snapped.shp"
         )
 
     def _require_prepared(self, *paths: str) -> None:
@@ -321,7 +321,7 @@ class DomainWorkflow:
     ) -> dict:
         """Load state and align it with the current pour-point selection."""
         source = self.layer_source(self.pour_points_layer)
-        state = load_state(self.project_folder)
+        state = load_state(self.setup_folder)
         selection_changed = (
             state.get("pour_points_source")
             and state["pour_points_source"] != source
@@ -356,7 +356,7 @@ class DomainWorkflow:
         """Create one valid-DEM domain and commit optional gauges."""
         assignments = self._validated_assignment_list(assignments)
         prepared = self.validate_gauge_assignments(assignments)
-        previously_gauged = set(gauged_outlet_ids(load_state(self.project_folder)))
+        previously_gauged = set(gauged_outlet_ids(load_state(self.setup_folder)))
         state = self.load_synced_state(DOMAIN_MODE_DEM_EXTENT, True)
         self.apply_assignment_records(state, assignments, prepared)
         for record in state["outlets"].values():
@@ -364,7 +364,7 @@ class DomainWorkflow:
         assign_domain_ids(state)
 
         self._require_prepared(self.filled_dem_path)
-        dem_path = domain_dem_path(self.project_folder, "dem_extent")
+        dem_path = domain_dem_path(self.setup_folder, "dem_extent")
         result = delineate_domains_file(
             self.filled_dem_path,
             (),
@@ -373,19 +373,19 @@ class DomainWorkflow:
                 self.dem_mask_path(),
                 dem_path,
             ),
-            merged_path=self.merged_mask_path(self.project_folder),
+            merged_path=self.merged_mask_path(self.setup_folder),
         )
-        state["dem_domain_directory"] = morph_folder(self.project_folder)
+        state["dem_domain_directory"] = morph_folder(self.setup_folder)
         state["dem_domain_path"] = dem_path
         registry.register(
-            self.project_folder,
+            self.setup_folder,
             result["merged_path"],
             name="4_watershed_merged",
             loaded=False,
         )
         self.update_gauge_domain_ids(state)
         self.write_gauges(prepared)
-        save_state(self.project_folder, state)
+        save_state(self.setup_folder, state)
         self.remove_deselected_gauges(previously_gauged, state)
         return state
 
@@ -395,7 +395,7 @@ class DomainWorkflow:
         """Validate every selected gauge before writing any output."""
         prepared: dict[str, _PreparedGauge] = {}
         numeric_ids: dict[int, str] = {}
-        output_folder = Path(streamflow_observation_folder(self.project_folder))
+        output_folder = Path(streamflow_observation_folder(self.setup_folder))
         for assignment in assignments:
             if not assignment.is_gauge:
                 continue
@@ -482,7 +482,7 @@ class DomainWorkflow:
         if domain.get("is_dem_domain"):
             return self.dem_mask_path()
         value = domain.get("mask_path")
-        return str(resolve_output_path(self.project_folder, value)) if value else ""
+        return str(resolve_output_path(self.setup_folder, value)) if value else ""
 
     @staticmethod
     def _effective_gauge_geometry(record, feature, point_layer):
@@ -517,11 +517,11 @@ class DomainWorkflow:
             channel,
             self.snapped_points_path,
             project_crs=self.project_crs,
-            max_snap_buffer_distance=settings.read(self.project_folder)["max_snap_buffer_distance"],
+            max_snap_buffer_distance=settings.read(self.setup_folder)["max_snap_buffer_distance"],
             log=self.log,
         )
         registry.register(
-            self.project_folder,
+            self.setup_folder,
             result,
             name="2_pour_points_snapped",
             loaded=False,
@@ -558,18 +558,18 @@ class DomainWorkflow:
                 )
             masks.append((int(domain["domain_id"]), path))
 
-        merged_path = self.merged_mask_path(self.project_folder)
+        merged_path = self.merged_mask_path(self.setup_folder)
         if not masks:
             Path(merged_path).unlink(missing_ok=True)
             processing.remove_entry(
-                self.project_folder,
+                self.setup_folder,
                 registry.SECTION,
                 os.path.abspath(merged_path),
             )
             return None
         merge_domain_masks(masks, merged_path)
         registry.register(
-            self.project_folder,
+            self.setup_folder,
             merged_path,
             name="4_watershed_merged",
             loaded=False,
@@ -577,7 +577,7 @@ class DomainWorkflow:
         return merged_path
 
     def domain_output_folder(self) -> str:
-        path = Path(temp_morphology_folder(self.project_folder)) / "Watersheds" / "DomainDelineation"
+        path = Path(temp_morphology_folder(self.setup_folder)) / "Watersheds" / "DomainDelineation"
         path.mkdir(parents=True, exist_ok=True)
         return str(path)
 
@@ -597,9 +597,9 @@ class DomainWorkflow:
         return str(Path(self.domain_output_folder()) / "4_watershed_DEM.tif")
 
     @staticmethod
-    def merged_mask_path(project_folder) -> str:
+    def merged_mask_path(setup_folder) -> str:
         return str(
-            Path(temp_morphology_folder(project_folder)) / "Watersheds" / MERGED_MASK_NAME
+            Path(temp_morphology_folder(setup_folder)) / "Watersheds" / MERGED_MASK_NAME
         )
 
     @staticmethod
@@ -614,11 +614,11 @@ class DomainWorkflow:
         except ValueError as error:
             self.log(f"WARNING: Could not remove old discharge output: {error}")
             return
-        path = Path(streamflow_observation_folder(self.project_folder)) / filename
+        path = Path(streamflow_observation_folder(self.setup_folder)) / filename
         try:
             path.unlink(missing_ok=True)
             processing.remove_entry(
-                self.project_folder,
+                self.setup_folder,
                 registry.SECTION,
                 os.path.abspath(path),
             )
@@ -666,14 +666,24 @@ class DomainWorkflow:
             )
 
     def write_gauges(self, prepared: dict[str, _PreparedGauge]) -> None:
+        from ...core.handlers.state.nml_settings import load_settings
+
+        times = load_settings(self.setup_folder).get("time") or {}
+        start, end = str(times.get("sim_start", ""))[:10], str(times.get("sim_end", ""))[:10]
         for gauge in prepared.values():
             output = write_streamflow_observation(
                 gauge.assignment.discharge_layer,
                 gauge.assignment.outlet_id,
                 gauge.output_path.parent,
             )
+            first, last = ("{}-{}-{}".format(*line.split()[1:4])  # the file's start/end header lines
+                           for line in output.read_text(encoding="utf-8").splitlines()[3:5])
+            if start and end and (last < start or first > end):
+                self.log(f"WARNING: The discharge table {gauge.input_path.name} for gauge "
+                         f"{gauge.assignment.outlet_id} covers {first} to {last}, outside the simulation "
+                         f"{start} to {end}: its observed hydrograph will be empty.")
             registry.register(
-                self.project_folder, output, name=output.name, loaded=False
+                self.setup_folder, output, name=output.name, loaded=False
             )
 
     def remove_deselected_gauges(self, previous: set[str], state: dict) -> None:

@@ -201,3 +201,19 @@ def test_lai_on_x_y_axes_goes_to_mhm_tools_not_the_l0_copy(tmp_path, monkeypatch
                      l0_header={"ncols": 9, "nrows": 9, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1.0})
 
     assert seen == [tmp_path / "gimms.nc"]
+
+
+def test_lai_with_grid_coordinates_mhm_tools_rejects_keeps_its_reason(tmp_path):
+    """Only a file without grid coordinates is taken to be on the L0 grid."""
+    import numpy as np
+
+    pytest.importorskip("mhm_tools.pre.format_lai")
+    xr = pytest.importorskip("xarray")
+    times = np.arange("2001-01", "2002-01", dtype="datetime64[M]").astype("datetime64[ns]")
+    xr.DataArray(np.ones((12, 2, 3, 4)), dims=("time", "band", "lat", "lon"), name="lai",
+                 coords={"time": times, "band": [1, 2], "lat": [50.0, 50.5, 51.0], "lon": [10.0, 10.5, 11.0, 11.5]},
+                 ).to_netcdf(tmp_path / "lai.nc")
+    with pytest.raises(ValueError, match="temporal dimension") as error:
+        prepare_lai_file(tmp_path / "lai.nc", tmp_path / "dem.tif", tmp_path / "out.nc", source_variable="lai",
+                         l0_header={"ncols": 4, "nrows": 3, "xllcorner": 0.0, "yllcorner": 0.0, "cellsize": 1.0})
+    assert "Without grid coordinates" not in str(error.value)

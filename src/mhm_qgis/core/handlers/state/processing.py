@@ -24,33 +24,33 @@ STATE_VERSION = 1
 _LOCK = RLock()
 
 
-def state_path(project_folder) -> Path:
+def state_path(setup_folder) -> Path:
     """Return the processing-state path for one project."""
-    return Path(temp_folder(project_folder)) / STATE_FILENAME
+    return Path(temp_folder(setup_folder)) / STATE_FILENAME
 
 
-def load(project_folder) -> dict[str, Any]:
+def load(setup_folder) -> dict[str, Any]:
     """Return the latest usable processing state."""
     with _LOCK:
-        return jsonio.read_mapping(state_path(project_folder))
+        return jsonio.read_mapping(state_path(setup_folder))
 
 
-def overlay(project_folder, sections: Mapping[str, Any]) -> dict[str, Any]:
+def overlay(setup_folder, sections: Mapping[str, Any]) -> dict[str, Any]:
     """Atomically replace the named top-level sections and preserve all others."""
     with _LOCK:
-        state = jsonio.read_mapping(state_path(project_folder))
+        state = jsonio.read_mapping(state_path(setup_folder))
         state.update(sections)
-        jsonio.write(state_path(project_folder), state)
+        jsonio.write(state_path(setup_folder), state)
         return state
 
 
-def section(project_folder, name: str, default=None):
+def section(setup_folder, name: str, default=None):
     """Return one section from the latest state."""
-    return load(project_folder).get(name, default)
+    return load(setup_folder).get(name, default)
 
 
 def set_entry(
-    project_folder,
+    setup_folder,
     section_name: str,
     key: str,
     value: Mapping[str, Any],
@@ -59,7 +59,7 @@ def set_entry(
 ) -> dict[str, Any]:
     """Atomically set one entry in a mapping section."""
     with _LOCK:
-        path = state_path(project_folder)
+        path = state_path(setup_folder)
         state = jsonio.read_mapping(path)
         entries = state.get(section_name)
         if not isinstance(entries, dict):
@@ -73,10 +73,10 @@ def set_entry(
         return entry
 
 
-def remove_entry(project_folder, section_name: str, key: str) -> bool:
+def remove_entry(setup_folder, section_name: str, key: str) -> bool:
     """Atomically remove one entry, returning whether it existed."""
     with _LOCK:
-        path = state_path(project_folder)
+        path = state_path(setup_folder)
         state = jsonio.read_mapping(path)
         entries = state.get(section_name)
         if not isinstance(entries, dict) or key not in entries:
@@ -86,10 +86,10 @@ def remove_entry(project_folder, section_name: str, key: str) -> bool:
         return True
 
 
-def mark_workflow(project_folder, workflow, status, message="", **metadata) -> dict:
+def mark_workflow(setup_folder, workflow, status, message="", **metadata) -> dict:
     """Atomically record one workflow transition."""
     timestamp = utc_timestamp()
-    entry = section(project_folder, "workflows", {}).get(workflow, {})
+    entry = section(setup_folder, "workflows", {}).get(workflow, {})
     entry = dict(entry) if isinstance(entry, dict) else {}
     entry.update({"status": status, "updated_at": timestamp})
     if status == "running":
@@ -105,33 +105,33 @@ def mark_workflow(project_folder, workflow, status, message="", **metadata) -> d
     elif status == "running":
         entry.pop("message", None)
     entry.update({key: value for key, value in metadata.items() if value is not None})
-    return set_entry(project_folder, "workflows", workflow, entry)
+    return set_entry(setup_folder, "workflows", workflow, entry)
 
 
-def workflow(project_folder, name) -> dict:
+def workflow(setup_folder, name) -> dict:
     """Return one saved workflow entry."""
-    entries = section(project_folder, "workflows", {})
+    entries = section(setup_folder, "workflows", {})
     return dict(entries.get(name, {})) if isinstance(entries, dict) else {}
 
 
-def save_grid(project_folder, l0_header, l2_header, multiplier) -> dict:
+def save_grid(setup_folder, l0_header, l2_header, multiplier) -> dict:
     """Validate and persist the common L0/L2 grid contract."""
     from ...grid import validate_l0_l2_alignment
 
     ratio = int(multiplier)
     validate_l0_l2_alignment(l0_header, l2_header, ratio)
-    grid = dict(section(project_folder, "grid", {}) or {})
+    grid = dict(section(setup_folder, "grid", {}) or {})
     grid.update({
         "l0_header": dict(l0_header),
         "l2_header": dict(l2_header),
         "l2_ratio_to_l0": ratio,
         "updated_at": utc_timestamp(),
     })
-    overlay(project_folder, {"grid": grid})
+    overlay(setup_folder, {"grid": grid})
     return grid
 
 
-def save_grid_metadata(project_folder, metadata) -> dict:
+def save_grid_metadata(setup_folder, metadata) -> dict:
     """Persist the complete serializable grid result in processing state."""
     data = dict(metadata or {})
     l0_header, l2_header = data.get("l0_header"), data.get("l2_header")
@@ -140,26 +140,26 @@ def save_grid_metadata(project_folder, metadata) -> dict:
         from ...grid import validate_l0_l2_alignment
 
         validate_l0_l2_alignment(l0_header, l2_header, int(ratio))
-    current = dict(section(project_folder, "grid", {}) or {})
+    current = dict(section(setup_folder, "grid", {}) or {})
     current.update(data)
     current["updated_at"] = utc_timestamp()
-    overlay(project_folder, {"grid": current})
+    overlay(setup_folder, {"grid": current})
     return current
 
 
-def grid_metadata(project_folder) -> dict | None:
+def grid_metadata(setup_folder) -> dict | None:
     """Return saved grid metadata."""
-    current = section(project_folder, "grid", {}) or {}
+    current = section(setup_folder, "grid", {}) or {}
     if isinstance(current, dict) and current.get("l2_header"):
         return dict(current)
     return None
 
 
-def saved_grid(project_folder, *, log=None):
+def saved_grid(setup_folder, *, log=None):
     """Return a valid persisted grid contract, or ``None``."""
     from ...grid import validate_l0_l2_alignment
 
-    grid = grid_metadata(project_folder) or {}
+    grid = grid_metadata(setup_folder) or {}
     l0_header, l2_header = grid.get("l0_header"), grid.get("l2_header")
     if not isinstance(l0_header, dict) or not isinstance(l2_header, dict):
         return None
@@ -174,7 +174,7 @@ def saved_grid(project_folder, *, log=None):
     return dict(grid)
 
 
-def save_domains(project_folder, plan) -> list[dict]:
+def save_domains(setup_folder, plan) -> list[dict]:
     """Persist the domain inputs required by Morphology Setup."""
     domains = [
         {
@@ -190,7 +190,7 @@ def save_domains(project_folder, plan) -> list[dict]:
         }
         for entry in plan
     ]
-    overlay(project_folder, {"domains": domains})
+    overlay(setup_folder, {"domains": domains})
     return domains
 
 

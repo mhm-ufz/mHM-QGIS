@@ -12,11 +12,14 @@ from mhm_qgis.core.post import (
     checks,
     compare,
     drought,
+    events,
     explain,
     extremes,
     grid,
     runs,
     scan,
+    series,
+    signatures,
 )
 
 netCDF4 = pytest.importorskip("netCDF4")
@@ -93,6 +96,7 @@ def test_drought_events_and_smi():
     assert longest[0] == 12
     assert frequency[0] == pytest.approx(1 / 3)
     assert area[:12].tolist() == [1.0] * 12
+    assert drought.smi(np.full((36, 1), 3.0), labels) == pytest.approx(np.full((36, 1), 0.5))  # ties
 
 
 def test_checks_find_planted_problems(tmp_path):
@@ -133,6 +137,36 @@ def test_summary_has_a_row_per_basin(tmp_path):
     assert np.isfinite(table.loc["Domain", "P"])
     assert np.isnan(table.loc["Gauge 398", "area (km²)"])  # no catchment mask: blank, not zero
     assert 0 < table.loc["Gauge 398", "observed (%)"] < 100
+    observed = series.gauge(run, 398)["obs"]
+    assert table.loc["Gauge 398", "BFI"] == pytest.approx(signatures.signatures(observed)["Baseflow index"])
+    assert balance.per_year(pd.DataFrame()).empty  # basin() of a single interval
+
+
+def test_discharge_gaps_are_bridged():
+    t = np.arange(4 * 365)
+    flow = 5 + 4 * np.sin(2 * np.pi * t / 365)
+    gappy = flow.copy()
+    for start in range(150, len(t), 200):
+        gappy[start:start + 5] = np.nan
+    ok = np.isfinite(gappy)
+    assert len(events.detect(gappy)) == len(events.detect(flow))
+    base = signatures.baseflow(gappy)
+    assert np.isnan(base[~ok]).all()
+    np.testing.assert_allclose(base[ok], signatures.baseflow(flow)[ok], atol=0.01)
+    assert events.detect(np.full(10, np.nan)) == []
+
+
+def test_runoff_ratio_pairs_p_and_q():
+    days = pd.date_range("2000-01-01", periods=3 * 365, freq="D")
+    q = pd.Series(1.0, index=days)  # 1 m³/s over 86.4 km² is 1 mm/day
+    q.iloc[1::5] = np.nan
+    p = pd.Series(2.0, index=days)
+    assert signatures.signatures(q, p, 86.4)["Runoff ratio"] == pytest.approx(0.5)
+    p.iloc[::7] = np.nan
+    assert signatures.signatures(q, p, 86.4)["Runoff ratio"] == pytest.approx(0.5)
+    months = pd.date_range("2000-01-01", days[-1], freq="MS")
+    monthly = pd.Series(2.0 * months.days_in_month, index=months)
+    assert signatures.signatures(q, monthly, 86.4)["Runoff ratio"] == pytest.approx(0.5, rel=0.01)
 
 
 def test_bankfull_map_from_mrm(tmp_path):
@@ -145,3 +179,16 @@ def test_bankfull_map_from_mrm(tmp_path):
         q = np.ma.filled(handle["Q_bkfl"][:], np.nan)
     assert np.isfinite(q[truth.mask]).all()
     assert (q[truth.mask] > 1.0).all()
+
+
+def test_v6_lat_lon_output_labelled_in_metres_is_geographic(tmp_path):
+    import netCDF4
+
+    with netCDF4.Dataset(tmp_path / "mhm_output.nc", "w") as handle:
+        handle.createDimension("x", 3)
+        handle.createDimension("y", 2)
+        x, y = handle.createVariable("x", "f8", ("x",)), handle.createVariable("y", "f8", ("y",))
+        x.units = y.units = "m"
+        x[:], y[:] = [79.0, 79.1, 79.2], [28.1, 28.0]
+        handle.createVariable("lon", "f8", ("y", "x"))[:] = np.tile(x[:], (2, 1))
+    assert grid.axes(tmp_path / "mhm_output.nc").geographic

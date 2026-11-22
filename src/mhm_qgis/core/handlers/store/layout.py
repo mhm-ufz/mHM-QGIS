@@ -44,15 +44,15 @@ _VERSION_CACHE: dict[str, tuple[float, str]] = {}
 METEO_VARIABLES = ("pre", "tavg", "tmin", "tmax", "tann", "pet", "ssrd", "strd", "netrad", "eabs", "windspeed")
 
 
-def domain_folders(project_folder, workspace=WORKSPACE_FOLDER_NAME) -> tuple[Path, ...]:
+def domain_folders(project_directory, workspace=WORKSPACE_FOLDER_NAME) -> tuple[Path, ...]:
     """List named setups only; reserved data/output folders are not domains."""
-    container = Path(project_folder) / workspace
+    container = Path(project_directory) / workspace
     if not container.is_dir():
         return ()
     found = []
     for candidate in container.iterdir():
         try:
-            path = domain_folder(project_folder, candidate.name, workspace)
+            path = domain_folder(project_directory, candidate.name, workspace)
         except ValueError:
             continue
         if path.is_dir() and (
@@ -61,68 +61,70 @@ def domain_folders(project_folder, workspace=WORKSPACE_FOLDER_NAME) -> tuple[Pat
     return tuple(sorted(found, key=lambda path: path.name.casefold()))
 
 
-def input_state_path(project_folder) -> str:
+def input_state_path(setup_folder) -> str:
     """Return the saved input state path for one project."""
-    return os.path.join(temp_folder(project_folder), INPUT_STATE_FILENAME)
+    return os.path.join(temp_folder(setup_folder), INPUT_STATE_FILENAME)
 
 
-def project_version(project_folder) -> str:
+def project_version(setup_folder) -> str:
     """Return the mHM version the project was set up with.
 
     Read from the saved input state so the layout helpers can branch on version
     without every caller having to thread it through. Defaults to v5.13, which
     is the layout every existing project already uses.
     """
-    path = input_state_path(project_folder)
+    path = input_state_path(setup_folder)
     try:
         stamp = os.path.getmtime(path)
     except OSError:
         return "v5.13"
-    cached = _VERSION_CACHE.get(str(project_folder))
+    cached = _VERSION_CACHE.get(str(setup_folder))
     if cached is not None and cached[0] == stamp:
         return cached[1]
     state = jsonio.read(path)
     version = version_key(state.get("mhm_version")) if isinstance(state, dict) else "v5.13"
-    _VERSION_CACHE[str(project_folder)] = (stamp, version)
+    _VERSION_CACHE[str(setup_folder)] = (stamp, version)
     return version
 
 
-def forget_project_version(project_folder=None) -> None:
+def forget_project_version(setup_folder=None) -> None:
     """Drop the cached version, for when the input state has just been written."""
-    if project_folder is None:
+    if setup_folder is None:
         _VERSION_CACHE.clear()
     else:
-        _VERSION_CACHE.pop(str(project_folder), None)
+        _VERSION_CACHE.pop(str(setup_folder), None)
 
 
-def is_v6(project_folder) -> bool:
+def is_v6(setup_folder) -> bool:
     """Return True when the project uses the v6 input layout."""
-    return project_version(project_folder) == "v6"
+    return project_version(setup_folder) == "v6"
 
 
-def meteo_output_root(project_folder) -> Path:
+def meteo_output_root(setup_folder) -> Path:
     """Return the project-local mHM meteorology forcing root."""
-    return Path(meteo_folder(project_folder))
+    return Path(meteo_folder(setup_folder))
 
 
-def meteo_mask_path(project_folder) -> Path:
+def meteo_mask_path(setup_folder) -> Path:
     """Return the v6 meteorology mask path."""
-    return meteo_output_root(project_folder) / "mask.nc"
+    return meteo_output_root(setup_folder) / "mask.nc"
 
 
-def expected_meteo_outputs(project_folder) -> dict[str, dict[str, Path | None]]:
+# where mHM 5.13 reads them: net_rad from dir_NetRadiation, strd beside ssrd, tann beside tavg
+V5_METEO_FILES = {"netrad": "netrad/net_rad.nc", "strd": "ssrd/strd.nc", "tann": "tavg/tann.nc"}
+
+
+def meteo_file(variable, flat=False) -> str:
+    """The forcing file relative to the meteo root; its variable is named after its stem."""
+    return f"{variable}.nc" if flat else V5_METEO_FILES.get(variable, f"{variable}/{variable}.nc")
+
+
+def expected_meteo_outputs(setup_folder) -> dict[str, dict[str, Path | None]]:
     """Return final meteorology paths for the project's mHM version."""
-    root = meteo_output_root(project_folder)
-    if is_v6(project_folder):
-        return {
-            variable: {"netcdf": root / f"{variable}.nc", "header": None}
-            for variable in METEO_VARIABLES
-        }
+    root, flat = meteo_output_root(setup_folder), is_v6(setup_folder)
     return {
-        variable: {
-            "netcdf": root / variable / f"{variable}.nc",
-            "header": root / variable / "header.txt",
-        }
+        variable: {"netcdf": root / meteo_file(variable, flat),
+                   "header": None if flat else (root / meteo_file(variable)).with_name("header.txt")}
         for variable in METEO_VARIABLES
     }
 
@@ -158,42 +160,42 @@ def project_template_dir(version_text: str | None) -> str | None:
     return None
 
 
-def domain_dem_path(project_folder, outlet_id) -> str:
+def domain_dem_path(setup_folder, outlet_id) -> str:
     """Return the per-domain DEM: NetCDF for v6, Arc/Info ASCII for v5.13."""
-    name = "dem.nc" if is_v6(project_folder) else "dem.asc"
-    return os.path.join(morph_folder(project_folder), name)
+    name = "dem.nc" if is_v6(setup_folder) else "dem.asc"
+    return os.path.join(morph_folder(setup_folder), name)
 
 
-def morph_folder(project_folder, version: str | None = None) -> str:
+def morph_folder(setup_folder, version: str | None = None) -> str:
     """Return the static morphology data folder."""
-    if (version or project_version(project_folder)) == "v6":
-        return os.path.join(data_folder(project_folder), "morph")
-    return os.path.join(static_folder(project_folder), "morph")
+    if (version or project_version(setup_folder)) == "v6":
+        return os.path.join(data_folder(setup_folder), "morph")
+    return os.path.join(static_folder(setup_folder), "morph")
 
 
-def morph_mask_path(project_folder) -> Path:
-    return Path(morph_folder(project_folder)) / "morph_mask.nc"
+def morph_mask_path(setup_folder) -> Path:
+    return Path(morph_folder(setup_folder)) / "morph_mask.nc"
 
 
-def lai_folder(project_folder, version: str | None = None) -> str:
+def lai_folder(setup_folder, version: str | None = None) -> str:
     """Return the LAI data folder.
 
     v6 carries LAI inside the same morphology input, so the two coincide.
     """
-    resolved = version or project_version(project_folder)
+    resolved = version or project_version(setup_folder)
     if resolved == "v6":
-        return morph_folder(project_folder, version=resolved)
-    return os.path.join(data_folder(project_folder), "lai")
+        return morph_folder(setup_folder, version=resolved)
+    return os.path.join(data_folder(setup_folder), "lai")
 
 
-def streamflow_observation_folder(project_folder, version: str | None = None) -> str:
+def streamflow_observation_folder(setup_folder, version: str | None = None) -> str:
     """Return the streamflow observation folder."""
-    if (version or project_version(project_folder)) == "v6":
+    if (version or project_version(setup_folder)) == "v6":
         return os.path.join(
-            data_folder(project_folder), "gauge", "streamflow"
+            data_folder(setup_folder), "gauge", "streamflow"
         )
     return os.path.join(
-        data_folder(project_folder), "observation", "streamflow"
+        data_folder(setup_folder), "observation", "streamflow"
     )
 
 
@@ -203,7 +205,7 @@ def ensure_multi_structure(root) -> None:
         os.makedirs(os.path.join(str(root), name), exist_ok=True)
 
 
-def ensure_project_structure(project_folder, version_text=None) -> list[str]:
+def ensure_project_structure(setup_folder, version_text=None) -> list[str]:
     """
     Create the plugin workspace structure from project-template.
 
@@ -211,19 +213,19 @@ def ensure_project_structure(project_folder, version_text=None) -> list[str]:
     processing code does not mistake empty template files for prepared outputs.
     """
     created = []
-    os.makedirs(str(project_folder), exist_ok=True)
-    workspace = workspace_folder(project_folder)
+    os.makedirs(str(setup_folder), exist_ok=True)
+    workspace = workspace_folder(setup_folder)
     if not os.path.isdir(workspace):
         os.makedirs(workspace, exist_ok=True)
         created.append(workspace)
     from ..state.settings import ensure
 
-    ensure(project_folder)
+    ensure(setup_folder)
     for path in (
-        temp_folder(project_folder),
-        temp_morphology_folder(project_folder),
-        morph_staging_folder(project_folder),
-        lai_staging_folder(project_folder),
+        temp_folder(setup_folder),
+        temp_morphology_folder(setup_folder),
+        morph_staging_folder(setup_folder),
+        lai_staging_folder(setup_folder),
     ):
         os.makedirs(path, exist_ok=True)
 
@@ -231,7 +233,7 @@ def ensure_project_structure(project_folder, version_text=None) -> list[str]:
     # yet, so reading the version back would always answer v5.13 and build the
     # wrong tree for a v6 project.
     version = version_key(version_text) if version_text else project_version(
-        project_folder)
+        setup_folder)
 
     template = project_template_dir(version)
     if template:
@@ -254,14 +256,14 @@ def ensure_project_structure(project_folder, version_text=None) -> list[str]:
                     created.append(dst)
 
     for path in (
-            data_folder(project_folder),
-            static_folder(project_folder),
-            morph_folder(project_folder, version=version),
-            meteo_folder(project_folder),
-            lai_folder(project_folder, version=version),
-            streamflow_observation_folder(project_folder, version=version),
-            output_folder(project_folder),
-            restart_folder(project_folder)):
+            data_folder(setup_folder),
+            static_folder(setup_folder),
+            morph_folder(setup_folder, version=version),
+            meteo_folder(setup_folder),
+            lai_folder(setup_folder, version=version),
+            streamflow_observation_folder(setup_folder, version=version),
+            output_folder(setup_folder),
+            restart_folder(setup_folder)):
         if not os.path.isdir(path):
             os.makedirs(path, exist_ok=True)
             created.append(path)

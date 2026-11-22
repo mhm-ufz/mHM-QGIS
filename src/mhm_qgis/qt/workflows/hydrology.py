@@ -11,18 +11,18 @@ import os
 from functools import partial
 from pathlib import Path
 
-from qgis.PyQt import QtCore
-
 from ...core.executions.morphology import commands
+from ...core.handlers.file.netcdf.raster import source as raster_source
 from ...core.handlers.store.paths import temp_morphology_folder
 from ...qgis_bridge import layers
+from ...qgis_bridge.layers.project import remove_under
 from ..controllers import grid
 from . import lifecycle
 
 
 def path(dialog, name):
     """Return a fixed file in the domain's morphology workspace."""
-    return str(Path(temp_morphology_folder(dialog.project_folder)) / name)
+    return str(Path(temp_morphology_folder(dialog.setup_folder)) / name)
 
 
 def filled_dem_path(dialog):
@@ -39,7 +39,7 @@ def _dem_ready(dialog):
 
 def domain_prepared(dialog):
     """The drainage network and flow accumulation the Domain Delineator opens on exist (Set Gauges)."""
-    return bool(dialog.project_folder) and _dem_ready(dialog) and os.path.isfile(channel_network_path(dialog))
+    return bool(dialog.setup_folder) and _dem_ready(dialog) and os.path.isfile(channel_network_path(dialog))
 
 
 def _locked(dialog, controls):
@@ -64,7 +64,7 @@ def dem_options(dialog):
     data = combo.currentData()
     configured_crs = data.get("source_crs", "") if isinstance(data, dict) else ""
     layer = combo.currentLayer()
-    folder = Path(temp_morphology_folder(dialog.project_folder))
+    folder = Path(temp_morphology_folder(dialog.setup_folder))
     return {
         "source": source,
         "output_folder": str(folder),
@@ -75,6 +75,8 @@ def dem_options(dialog):
         "reprojected_path": str(folder / "dem_reprojected.nc"),
         "header": grid.common_l0_header(dialog),
         "upscale_factor": dialog._upscale_factor,
+        "replacements": {grid.DERIVATIVES[key]: (raster_source(value["path"], value["variable"]), value["crs"])
+                         for key, value in dialog._dem_replacements.items()},
     }
 
 
@@ -95,13 +97,20 @@ def start_dem_derivatives(dialog, *, key="execute-all-dem-derivatives", controls
     except Exception as error:
         lifecycle.fail(dialog, "DEM derivatives", error, failed)
         return False
+    # the step rewrites these files in place; a layer still holding the old one makes GDAL read it,
+    # and the delineator's canvas layers are outside the project
+    from ..controllers import main
+
+    if not main.embed(dialog, "domainDefinition", None):
+        lifecycle.fail(dialog, "DEM derivatives", "Wait for the Domain Delineator task to finish.", failed)
+        return False
+    remove_under(temp_morphology_folder(dialog.setup_folder), dialog.log_message)
 
     def ready(result):
         lifecycle.register(dialog, result["filled_dem"], "1_DEM_Filled")
         lifecycle.register(dialog, result["dem_derivatives"], "DEM derivatives")
         if not result.get("reused"):
             dialog.log_message("DEM derivatives prepared successfully.")
-        grid.update_l0_resolution_from_dem(dialog)
         if done is not None:
             done(result)
 
@@ -167,9 +176,6 @@ def start_domain_preflight(dialog, controls, done, failed=None):
     except Exception as error:
         lifecycle.fail(dialog, "Domain Delineator", error, failed)
         return False
-    if domain_prepared(dialog):
-        QtCore.QTimer.singleShot(0, lambda: done({"prepared": True}))
-        return True
 
     def channels(_result=None):
         return start_hydrology(

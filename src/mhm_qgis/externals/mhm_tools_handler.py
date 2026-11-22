@@ -9,6 +9,31 @@ from collections.abc import Callable, Generator
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from mhm_tools.pre.format_meteo import (  # noqa: F401 -- the plugin's meteo names, through this boundary
+    CADENCES,
+    RESETS,
+    VARIABLE_LABELS,
+    VARIABLES,
+    MeteoFolderSpec,
+    NegativeAmounts,
+    SpatialMetadata,
+    about_variable,
+    covered_until,
+    covers_end,
+    get_meteo_file_defaults,
+    get_meteo_files,
+    get_meteo_time_window,
+    get_netcdf_grid,
+    grid_note,
+    normalize_unit,
+    output_periods,
+    period_bounds,
+    read_meteo_metadata,
+    read_netcdf_first_slice,
+    validate_coverage,
+    validate_spec,
+)
+
 from ..core.handlers import lookup
 
 LogCallback = Callable[[str], None]
@@ -259,8 +284,8 @@ def prepare_land_cover_periods(
 ) -> tuple[Path, ...]:
     """Format a land-cover period manifest through the public mHM-tools API.
 
-    `input_file` is the `format-data` manifest itself, not its folder:
-    mHM-tools reads the CSV and resolves relative scene paths against it.
+    `input_file` is the land-cover period manifest (`format-morph-categorical`) itself,
+    not its folder: mHM-tools reads the CSV and resolves relative scene paths against it.
     """
     from mhm_tools import pre
 
@@ -305,7 +330,7 @@ def prepare_soil_horizons(
 ) -> tuple[Path, Path]:
     """Format a soil-horizon manifest through the public mHM-tools API.
 
-    `input_file` is the `format-data` manifest itself, not its folder:
+    `input_file` is the soil horizon manifest (`format-soilgrids`) itself, not its folder:
     mHM-tools reads the CSV and resolves relative layer paths against it.
     """
     from mhm_tools import pre
@@ -382,6 +407,17 @@ def _require_outputs(outputs: tuple[Path, ...]) -> tuple[Path, ...]:
     return outputs
 
 
+def format_meteo(spec, output_file, grid_file, grid_crs, *, window=None, metadata=None,
+                 progress=None, cancelled=None, log: LogCallback | None = None) -> int:
+    """Format one forcing variable onto the grid of `grid_file`; the number of time steps written."""
+    from mhm_tools.pre.format_meteo import format_meteo_data
+
+    start, end = window or (None, None)
+    with capture_messages(log):
+        return format_meteo_data(spec, output_file, grid_file, grid_crs=grid_crs, start_time=start, end_time=end,
+                                 metadata=metadata, progress_callback=progress, cancelled=cancelled)
+
+
 def prepare_lai_file(
     input_file: str | Path,
     dem_file: str | Path,
@@ -412,6 +448,8 @@ def prepare_lai_file(
         try:
             locate_lai_cube(dataset, source_variable)
         except ValueError as error:  # no grid mHM-tools can read: it must already be the L0 grid
+            if any(dim in dataset.coords for dim in _lai_variable(dataset, source_variable).dims[-2:]):
+                raise  # it has grid coordinates, which mHM-tools rejected for the reason it gives
             return _lai_on_l0(dataset, source_variable, output, l0_header, dem_crs, output_temporal_resolution,
                               dem_file, reason=error)
     with capture_messages(log):

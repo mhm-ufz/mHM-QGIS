@@ -76,7 +76,6 @@ def scan_job(ref, *, file="mhm", variables=None, series=SERIES_DEFAULT, budget_m
             job["forcing"] = {"path": str(forcing[0]), "variable": forcing[1]}
             specs.append({"name": "pre", "output": "precipitation", "kind": "flux", "weight": "cell",
                           "aggregate": ["sum", "mean"], "amount": True})
-            sources.append(forcing[0])
     names = [spec["name"] for spec in specs]
     job["series"] = [name for name in names if name in series]
     fingerprints = {spec["name"]: cache.variable_fingerprint(

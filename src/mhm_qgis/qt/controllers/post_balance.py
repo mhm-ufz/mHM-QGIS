@@ -28,6 +28,11 @@ def bind(dialog) -> None:
     dialog._post.ui.comboBox_timeBalance.activated.connect(lambda _index: refresh_balance(dialog, {"balance_time"}))
 
 
+def bind_processes(dialog) -> None:
+    dialog._post.ui.comboBox_processesResolution.activated.connect(
+        lambda _index: refresh_processes(dialog, {"resolution"}))
+
+
 def _basin(dialog):
     return dialog._post.context.get("basin") or "domain"
 
@@ -88,16 +93,9 @@ def _overview(dialog, table, gauge, gauge_scores) -> None:
     cells = "".join(f"<td style='padding:6px 14px;border:1px solid #ccc'><small>{escape(name)}</small><br>"
                     f"<b>{escape(value)}</b></td>" + ("</tr><tr>" if index % 4 == 3 else "")
                     for index, (name, value) in enumerate(tiles))
-    notes = [*state.findings, *state.index.get("problems", []), *table.attrs.get("notes", [])]
-    if not state.exact:
-        notes.append("Output intervals are longer than the model step: storage changes use interval means "
-                     "(the ± bound). Model-step outputs make the balance exact.")
-    if state.index.get("domain_source") != "restart":
-        notes.append("Set write_restart = .true. to use mHM's own cell areas and sealed fraction.")
     missing = [f"{v.name}: {v.message}" for v in state.run.variables if not v.present]
     dialog.textBrowser_postOverview.setHtml(
         f"<table style='border-collapse:collapse'><tr>{cells}</tr></table>"
-        + ("<h4>Findings</h4><ul>" + "".join(f"<li>{escape(n)}</li>" for n in notes) + "</ul>" if notes else "")
         + ("<h4>Not written by this run</h4><ul>" + "".join(f"<li>{escape(m)}</li>" for m in missing) + "</ul>"
            if missing else ""))
 
@@ -204,15 +202,18 @@ def refresh_processes(dialog, fields) -> None:
     if not fields & {"run", "basin", "cell", "period", "resolution"}:
         return
     view.clear()
-    from ...core.post import aggregate
+    from ...core.post import aggregate, series
 
     context = state.context
     cell, period = context.get("cell"), context.get("period")
-    resolution = context.get("resolution") or "native"
+    read, pending = post_map._cell_values(dialog) if cell else ({}, False)  # the inspector's one pass
+    resolution = dialog._post.ui.comboBox_processesResolution.currentText().lower()
     scanned = state.index["variables"]
     present = {v.name: v for v in state.run.variables}
     notes, first = [], None
     where = f"cell row {cell[0]}, column {cell[1]}" if cell else f"basin {_basin(dialog)}"
+    if pending:
+        notes.append(f"Reading {where}…")
     for title, outputs in PANELS:
         names = [name for name, info in scanned.items() if info.get("output") in outputs or name in outputs]
         missing = [v for v in present.values() if v.output in outputs and not v.present]
@@ -220,9 +221,14 @@ def refresh_processes(dialog, fields) -> None:
         curves = []
         for name in names:
             how = "sum" if scanned[name].get("kind") == "flux" else "mean"
+            if cell and name not in read:
+                if not pending:
+                    notes.append(f"{title}: {name} has no values in this cell.")
+                continue
+            given = series._select(series.bounds(state.root), read[name], period) if cell else None
             try:
                 values = aggregate.temporal(state.root, name, how, resolution, basin=_basin(dialog),
-                                            cell=cell, period=period)
+                                            cell=cell, period=period, values=given)
             except ValueError as error:
                 notes.append(f"{title}: {error}")
                 continue
@@ -233,7 +239,7 @@ def refresh_processes(dialog, fields) -> None:
         if not curves:
             continue
         plot = view.addPlot(title=title, axisItems={"bottom": pg.DateAxisItem(utcOffset=0)})
-        plot.addLegend(offset=(5, 5))
+        plot.addLegend(offset=(5, 5), colCount=len(curves))  # one row: a short panel clips a column
         plot.showGrid(x=True, y=True, alpha=0.2)
         if first is None:
             first = plot
@@ -246,7 +252,7 @@ def refresh_processes(dialog, fields) -> None:
             if stacked:
                 top = y if base is None else base + y
                 upper = plot.plot(x, top, pen=pg.mkPen(colour), name=name)
-                lower = plot.plot(x, base if base is not None else np.zeros_like(y), pen=None)
+                lower = pg.PlotCurveItem(x, base if base is not None else np.zeros_like(y))  # pen=None: no path
                 plot.addItem(pg.FillBetweenItem(lower, upper, brush=pg.mkBrush(colour + "80")))
                 base = top
             else:

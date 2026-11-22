@@ -48,8 +48,7 @@ def run(name: str, params: dict, *, log=None, report=None):
         if log is not None:
             log(f"ERROR: Algorithm '{name}' failed. Details: {error}")
         if report is not None:
-            report(CRITICAL, "Processing Error",
-                   f"Algorithm '{name}' failed.\nCheck the log for details.")
+            report(CRITICAL, "Processing Error", f"Algorithm '{name}' failed: {error}")
         return None
 
     if log is not None:

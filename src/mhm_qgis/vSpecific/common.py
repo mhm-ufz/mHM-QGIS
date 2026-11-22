@@ -24,7 +24,7 @@ def repeat(value: Any, count: int) -> list[Any]:
 
 def namelist_settings(dialog: Any) -> dict[str, Any]:
     """Return the project-local processing handoff, if configured."""
-    project = getattr(dialog, "project_folder", None)
+    project = getattr(dialog, "setup_folder", None)
     return load_settings(project) if project else {"version": 1}
 
 
@@ -47,7 +47,7 @@ def multi_values(dialog: Any, version: str) -> tuple[dict, dict] | None:
     section = settings.get(multi_domain.SECTION)
     if not section:
         return None
-    root = dialog.project_folder
+    root = dialog.setup_folder
     paths = multi_domain.resolve(root, section.get("domains", []))
     combine = multi_domain.v6_values if version.startswith("6") else multi_domain.v5_values
     values, dimensions = combine(paths, root)
@@ -61,7 +61,7 @@ def domain_count(dialog: Any) -> int:
 
 
 def geology_rows(dialog: Any) -> list[dict[str, Any]]:
-    project = getattr(dialog, "project_folder", None)
+    project = getattr(dialog, "setup_folder", None)
     if not project:
         return []
     path = Path(temp_morphology_folder(project)) / "geology_class_metadata.json"
@@ -86,7 +86,7 @@ def geology_count(dialog: Any) -> int:
     rows = geology_rows(dialog)
     if rows:
         return max(len(rows), *(row["index"] for row in rows))
-    project = getattr(dialog, "project_folder", None)
+    project = getattr(dialog, "setup_folder", None)
     # Published first, then the Execute All staging copy, so the count is
     # available before Morphology Setup has published anything.
     path = None

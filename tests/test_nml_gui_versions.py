@@ -96,8 +96,8 @@ PARAMETER_COMPONENT_LABELS = [
 
 
 class Dialog:
-    def __init__(self, project_folder: Path):
-        self.project_folder = str(project_folder)
+    def __init__(self, setup_folder: Path):
+        self.setup_folder = str(setup_folder)
         self._input_adapters = {}
 
     def input_combo(self, kind):
@@ -147,7 +147,7 @@ class LayerWidget:
 
 def _document(version: str, dialog: Dialog):
     key = "v5.13" if version.startswith("5") else "v6"
-    project = load_project(SCHEMAS / key, dialog.project_folder, namelist_project(key))
+    project = load_project(SCHEMAS / key, dialog.setup_folder, namelist_project(key))
     dimensions = build_dimensions(version, dialog)
     document = build_initial_values(version, dialog)
     return project, dimensions, document
@@ -314,6 +314,20 @@ def test_domain_dimensions_and_paths_follow_plugin_domains(tmp_path: Path) -> No
     assert v6_values["main"]["config_input"] == {}
 
 
+def test_v5_13_reads_the_prepared_observations_from_optional_data(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from mhm_qgis.core.handlers.state.nml_outputs import register_observations
+
+    dialog = Dialog(tmp_path)
+    dialog._input_adapters["pour_points"] = LayerWidget()
+    spec = SimpleNamespace(kind="sm", output_temporal_resolution="Daily", temporal_resolution="Daily")
+    register_observations(tmp_path, {"sm": tmp_path / "data/observation/sm.nc"}, [spec], v6=False)
+    optional = build_initial_values("5.13", dialog)["main"]["optional_data"]
+    assert optional == {"dir_soil_moisture": [optional["dir_soil_moisture"][0]], "timeStep_sm_input": -1}
+    assert optional["dir_soil_moisture"][0].endswith("/observation/")
+
+
 def test_geoparameter_orientation_is_version_specific(tmp_path: Path) -> None:
     metadata = Path(temp_morphology_folder(tmp_path)) / "geology_class_metadata.json"
     metadata.parent.mkdir(parents=True)
@@ -345,7 +359,7 @@ def test_geoparameter_orientation_is_version_specific(tmp_path: Path) -> None:
 def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
     pytest.importorskip("qgis.PyQt")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from nml_tools.gui.app import ProfileTab
+    from nml_tools.gui.dialog import NamelistPage
     from qtpy.QtWidgets import QApplication
 
     application = QApplication.instance() or QApplication([])
@@ -370,7 +384,7 @@ def test_every_profile_form_constructs_and_renders(tmp_path: Path) -> None:
         # The editor window normalizes names before building its tabs.
         dimensions = {name.lower(): size for name, size in dimensions.items()}
         for profile in project.profiles:
-            editor = ProfileTab(
+            editor = NamelistPage(
                 project,
                 profile,
                 profile_values(document, profile),

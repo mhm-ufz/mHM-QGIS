@@ -8,7 +8,7 @@ from __future__ import annotations
 from qgis.PyQt import QtCore
 
 FIELDS = ("run", "compare_run", "basin", "gauge", "cell", "variable", "layer", "period",
-          "current_time", "resolution", "statistic")
+          "current_time", "statistic")
 
 
 def _same(old, new) -> bool:

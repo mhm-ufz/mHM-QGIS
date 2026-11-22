@@ -45,24 +45,6 @@ def gridded_axes(handle, variable):
     raise ValueError(f"{variable} has no 1-D x/y, lon/lat or easting/northing axes.")
 
 
-def _bounds(path, variable):
-    try:
-        return read_bounds(path, "time")
-    except (ValueError, KeyError):
-        import netCDF4
-
-        with netCDF4.Dataset(path) as handle:
-            time = handle["time"]
-            stamps = np.asarray(netCDF4.num2date(time[:], " ".join(time.units.split()),
-                                                 getattr(time, "calendar", "standard"),
-                                                 only_use_cftime_datetimes=False,
-                                                 only_use_python_datetimes=True), dtype="datetime64[s]")
-        if len(stamps) < 2:
-            raise ValueError(f"{Path(path).name} has one time step and no time bounds.") from None
-        step = np.median(np.diff(stamps))
-        return np.stack([stamps, np.r_[stamps[1:], stamps[-1] + step]], axis=1)
-
-
 def windows_of(fine, coarse):
     """For each fine interval the coarse window holding it (-1: none), and which
     windows the fine record covers completely."""
@@ -151,7 +133,10 @@ def compare(job) -> str:
         ox, oy = gridded_axes(handle, obs_var)
         obs_x, obs_y = (np.asarray(handle[name][:], "f8") for name in (ox, oy))
         transposed = handle[obs_var].dimensions[-1] != ox
-    obs_bounds = _bounds(obs_path, obs_var)
+        if getattr(handle.variables.get("time"), "bounds", "time_bnds") not in handle.variables:
+            raise ValueError(f"{Path(obs_path).name} needs time_bnds (or a time 'bounds' attribute naming its "
+                             "bounds variable): a time stamp alone does not say which interval it covers.")
+    obs_bounds = read_bounds(obs_path)
     model_bounds = read_bounds(model_path)
     with netCDF4.Dataset(model_path) as handle:
         mx, my = next((x, y) for x, y in (("easting", "northing"), ("lon", "lat"), ("x", "y"))
@@ -215,7 +200,9 @@ def compare(job) -> str:
             maps[name] = np.where(enough, maps[name], np.nan)
         pattern = [tools.pattern_scores(s, o) for s, o in zip(sim, obs, strict=True)]
         basin_sim, basin_obs = np.nanmean(sim.reshape(len(sim), -1), 1), np.nanmean(obs.reshape(len(obs), -1), 1)
-    np.savez(out / "maps.npz", x=grid_x, y=grid_y, **{name: np.asarray(v, "f4") for name, v in maps.items()})
+    rows = slice(None, None, -1) if grid_y[0] < grid_y[-1] else slice(None)  # the canvas writes row 0 north
+    np.savez(out / "maps.npz", x=grid_x, y=grid_y[rows],
+             **{name: np.asarray(v, "f4")[rows] for name, v in maps.items()})
     scores = {
         "windows": [[str(a), str(b)] for a, b in windows],
         "pattern": {name: [row[name] for row in pattern] for name in (pattern[0] if pattern else {})},
@@ -260,7 +247,7 @@ def write_tws(job) -> str:
             handle.createDimension(name, None if name == "time" else source.dimensions[name].size)
         handle.createDimension("bnds", 2)
         for name in ("time", "lat", "lon"):
-            var = handle.createVariable(name, source[name].dtype, (name,))
+            var = handle.createVariable(name, "f8" if name == "time" else source[name].dtype, (name,))
             var.setncatts({key: source[name].getncattr(key) for key in source[name].ncattrs()})
             var[:] = source[name][:]
         bounds_name = getattr(source["time"], "bounds", "time_bnds")

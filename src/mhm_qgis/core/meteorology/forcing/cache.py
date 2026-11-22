@@ -1,6 +1,6 @@
 """Cache the meteorology folder inspection between sessions.
 
-`inspect_meteo_folder` opens every NetCDF in a folder twice: once for its
+`read_meteo_metadata` (mhm-tools) opens every NetCDF in a folder twice: once for its
 spatial signature and once to validate its time axis. On a multi-decade
 ERA5-Land record that is over a thousand file opens per folder, which froze the
 plugin for around half a minute on every project load. The result only depends
@@ -11,9 +11,14 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 
+from ....externals.mhm_tools_handler import (
+    MeteoFolderSpec,
+    SpatialMetadata,
+    about_variable,
+    get_meteo_files,
+    read_meteo_metadata,
+)
 from ...handlers.state.cache import cached_payload, fingerprint, store_payload
-from .api import _files_for_spec, inspect_meteo_folder
-from .types import MeteoFolderSpec, SpatialMetadata
 
 SECTION = "meteo_inspection"
 
@@ -23,7 +28,7 @@ SECTION = "meteo_inspection"
 _INSPECTED_FIELDS = (
     "kind", "source", "crs", "pattern",
     "temporal_resolution", "output_temporal_resolution", "unit",
-    "cumulative", "cumulative_resolution",
+    "cumulative", "cumulative_resolution", "variable",
 )
 
 
@@ -34,7 +39,7 @@ def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
     built from the listing plus each file's size and modification time.
     """
     values = asdict(spec)
-    files = _files_for_spec(spec)
+    files = get_meteo_files(spec)
     digest = fingerprint(files, {
         **{name: values[name] for name in _INSPECTED_FIELDS},
         "folder": str(spec.folder),
@@ -45,8 +50,12 @@ def inspection_fingerprint(spec: MeteoFolderSpec) -> tuple[str, list[Path]]:
 
 def preparation_fingerprint(spec: MeteoFolderSpec) -> str:
     """Return a digest covering every option the prepared forcing depends on."""
-    return fingerprint(_files_for_spec(spec), {
-        **asdict(spec), "folder": str(spec.folder), "preparation_version": 3})
+    values = asdict(spec)
+    values.pop("clip_negative")  # clipping only lets a run finish; it never changes a finished output
+    for name, default in (("variable", ""), ("cumulative_reset", None)):
+        if values[name] == default:  # forcing prepared before these options existed stays reusable
+            del values[name]
+    return fingerprint(get_meteo_files(spec), {**values, "folder": str(spec.folder), "preparation_version": 3})
 
 
 def _as_payload(metadata: SpatialMetadata) -> dict:
@@ -70,23 +79,25 @@ def _from_payload(payload) -> SpatialMetadata | None:
         return None
 
 
-def inspect_meteo_folder_cached(project_folder, spec, log=None, cancelled=None):
+def inspect_meteo_folder_cached(setup_folder, spec, log=None, cancelled=None):
     """Inspect one configured variable, reusing identical metadata options."""
     spec = spec.normalized()
-    if not project_folder:
-        return inspect_meteo_folder(spec, cancelled=cancelled)
+    if not setup_folder:
+        return read_meteo_metadata(spec, cancelled=cancelled)
     digest, _files = inspection_fingerprint(spec)
-    metadata = _from_payload(cached_payload(project_folder, SECTION, spec.kind, digest))
+    metadata = _from_payload(cached_payload(setup_folder, SECTION, spec.kind, digest))
     if metadata is not None:
         return metadata
-    metadata = inspect_meteo_folder(spec, cancelled=cancelled)
-    store_payload(project_folder, SECTION, spec.kind, digest, _as_payload(metadata))
+    metadata = read_meteo_metadata(spec, cancelled=cancelled)
+    store_payload(setup_folder, SECTION, spec.kind, digest, _as_payload(metadata))
     return metadata
 
 
-def inspect_meteo_inputs_cached(project_folder, inputs, log=None, cancelled=None):
+def inspect_meteo_inputs_cached(setup_folder, inputs, log=None, cancelled=None):
     """Inspect selected variables without preparing forcing."""
     options = {"cancelled": cancelled} if cancelled is not None else {}
-    return {spec.normalized().kind: inspect_meteo_folder_cached(
-                project_folder, spec, log=log, **options)
-            for spec in inputs}
+    inspected = {}
+    for spec in inputs:
+        with about_variable(spec.normalized().kind):
+            inspected[spec.normalized().kind] = inspect_meteo_folder_cached(setup_folder, spec, log=log, **options)
+    return inspected
