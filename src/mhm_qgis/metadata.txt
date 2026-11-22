@@ -2,17 +2,18 @@
 name=mHM QGIS
 qgisMinimumVersion=3.34
 qgisMaximumVersion=4.99
-description=Prepare, configure and run the mesoscale Hydrological Model (mHM) 5.13 and v6.
+description=Prepare, configure and run the mesoscale Hydrological Model (mHM) 5.13.
 version=0.1.0
 author=Sanjeev Bashyal
 email=sanjeev.bashyal@ufz.de
-about=Builds mHM model setups: domain delineation and outlet snapping, DEM derivatives, soil, land cover, geology and LAI, meteorological forcing on aligned model grids, namelist editing with nml-tools, multi-domain runs, and running mHM as named cases. The Outputs tab analyses runs: water balance, hydrographs, signatures, events, validation, comparison, extremes and droughts.
+about=Builds mHM model setups: domain delineation and outlet snapping, DEM derivatives, soil, land cover, geology and LAI, meteorological forcing on aligned model grids, namelist editing with nml-tools, multi-domain runs, and running mHM as named cases. The Outputs tab analyses runs: water balance, hydrographs, signatures, events, climatology, extremes and droughts.
  Python dependencies are listed in requirements.txt in the plugin folder. On first start the plugin offers to install missing ones with pip --user into the Python that QGIS uses. If that fails, install them manually with that Python: in the plugin folder run python -m pip install --user -r requirements.txt (on Windows from the OSGeo4W Shell; on Linux or macOS with QGIS's Python).
- mHM 5.13 comes from the mhm Python package (the mhm command); for mHM v6, select a compatible executable in the Configuration tab.
+ mHM 5.13 comes from the mhm Python package (the mhm command); mHM v6 support is in preparation.
 tracker=https://github.com/mhm-ufz/mHM-QGIS/issues
 repository=https://github.com/mhm-ufz/mHM-QGIS
 homepage=https://github.com/mhm-ufz/mHM-QGIS
 changelog=
+    0.1.0 First stable release for mHM 5.13: model grids aligned to the meteorological forcing, also with upscaled topography; multi-domain runs that merge each domain's soil classes and land-cover periods; faster LAI preparation with progress in the log; Cancel also stops a running mHM or terminal command; a quick hydrograph in Outputs; a new plugin icon.
     0.0.2 Project tree: one tree leads through the setup steps, showing the inputs the chosen process cases need and each step's status.
     0.0.1 First public experimental release: mHM 5.13 and v6 setup preparation, namelist editing, multi-domain runs, mHM execution as named cases, output analysis in the QGIS window, and a standalone map window.
 tags=hydrology,mhm,hydrological model,catchment,raster,modeling
